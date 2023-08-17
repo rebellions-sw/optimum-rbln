@@ -1,0 +1,48 @@
+name: Deploy package to internal PyPI
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+env:
+  PYTHON_VERSION: "3.10"
+
+jobs:
+  deploy:
+    runs-on: rebel-k8s-runner
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v4
+        with:
+          repository: rebellions-sw/optimum-rbln
+          fetch-depth: 0
+          ref: ${{ inputs.version }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Setup Python${{ env.PYTHON_VERSION }}
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --frozen --only-group deploy
+
+      - name: Build package (whl only)
+        run: uv build --wheel
+
+      # "uv publish" seems having problem, so use twine until it's fixed
+      - name: Publish package
+        run: |
+          uv run --no-sync \
+            twine upload \
+            --repository-url ${{ vars.REBEL_PYPI_INTERNAL_ENDPOINT }} \
+            -u ${{ secrets.REBEL_PYPI_USERNAME }} \
+            -p ${{ secrets.REBEL_PYPI_PASSWORD }} \
+            dist/*.whl

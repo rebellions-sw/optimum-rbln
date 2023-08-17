@@ -1,0 +1,125 @@
+[project]
+name = "optimum-rbln"
+description = """
+Optimum RBLN is the interface between the Hugging Face Transformers and Diffusers libraries and RBLN accelerators.
+It provides a set of tools enabling easy model loading and inference on single and multiple rbln device settings for different downstream tasks.
+"""
+authors = [
+    {name = "Rebellions Inc.", email = "support@rebellions.ai"},
+]
+requires-python = ">=3.9,<3.13"
+readme = "README.md"
+license = {text = "Apache"}
+dynamic = ["version"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "License :: OSI Approved :: Apache Software License",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+keywords = ["transformers", "diffusers", "inference", "rbln", "atom", "rebel"]
+dependencies = [
+    "torch<=2.5.1",
+    "torchaudio<=2.5.1",
+    "torchvision<=0.20.1",
+    "accelerate>=1.0.1",
+    "transformers==4.45.2",
+    "diffusers<=0.31.0",
+    "einops>=0.8.0",
+    "packaging>=24.1",
+    "halo>=0.0.31",
+]
+
+[project.urls]
+Homepage = "https://rebellions.ai"
+Documentation = "https://docs.rbln.ai"
+
+[dependency-groups]
+tests = [
+    "pytest>=8.1.1",
+    "psutil>=5.9.8",
+    "parameterized>=0.9.0",
+    "GitPython>=3.1.42",
+    "sentencepiece>=0.2.0",
+    "datasets>=2.18.0",
+    "sacremoses>=0.1.1",
+    "safetensors>=0.4.2",
+    "protobuf>=5.27.2",
+]
+quality = [
+    "ruff>=0.3.3",
+    "isort>=5.13.2",
+    "hf-doc-builder>=0.5.0",
+]
+deploy = [
+    "twine>=5.1.1",
+]
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/optimum/rbln/__version__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/optimum"]
+core-metadata-version = "2.3"
+
+[tool.uv]
+environments = [
+    "sys_platform == 'linux'"
+]
+cache-keys = [{ git = { commit = true } }]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu", marker = "platform_system != 'Darwin'" }
+torchaudio = { index = "pytorch-cpu", marker = "platform_system != 'Darwin'" }
+torchvision = { index = "pytorch-cpu", marker = "platform_system != 'Darwin'" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.isort]
+default_section = "FIRSTPARTY"
+ensure_newline_before_comments = true
+force_grid_wrap = 0
+include_trailing_comma = true
+known_first_party = "optimum.rbln"
+line_length = 119
+lines_after_imports = 2
+multi_line_output = 3
+use_parentheses = true
+
+[tool.pytest.ini_options]
+doctest_optionflags = "NUMBER NORMALIZE_WHITESPACE ELLIPSIS"
+
+[tool.ruff]
+line-length = 119
+
+[tool.ruff.lint]
+# Never enforce `E501` (line length violations).
+ignore = ["C901", "E501", "E741", "W605"]
+select = ["C", "E", "F", "I", "W"]
+
+[tool.ruff.lint.isort]
+lines-after-imports = 2
+known-first-party = ["optimum.rbln"]
+known-third-party = ["optimum"]
+
+[tool.ruff.lint.per-file-ignores]
+# Ignore import violations in all `__init__.py` files.
+"__init__.py" = ["E402", "F401", "F403", "F811"]

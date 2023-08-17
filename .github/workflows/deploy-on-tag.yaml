@@ -1,0 +1,14 @@
+name: Deploy package on tag released
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  deploy-on-tag:
+    uses: ./.github/workflows/deploy.yaml
+    with:
+      version: ${{ github.ref_name }}
+    secrets: inherit

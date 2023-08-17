@@ -1,0 +1,96 @@
+name: Optimum-rbln / PR
+
+on:
+  pull_request:
+    branches:
+      - main
+
+env:
+  REBEL_PYPI_ENDPOINT: ${{ vars.REBEL_PYPI_INTERNAL_ENDPOINT }}
+  REBEL_PYPI_USERNAME: ${{ secrets.REBEL_PYPI_USERNAME }}
+  REBEL_PYPI_PASSWORD: ${{ secrets.REBEL_PYPI_PASSWORD }}
+  REBEL_COMPILER_VERSION: 0.7.1.dev63+ge6c4fb68
+
+jobs:
+  check-rebel-compiler-version:
+    runs-on: rebel-k8s-runner
+    outputs:
+      is_deploy_version: ${{ steps.check_prod.outputs.IS_PROD }}
+      compiler_version: ${{ steps.install_compiler.outputs.COMPILER_VERSION }}
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install rebel-compiler
+        id: install_compiler
+        run: |
+          PYPI_URL=$(echo ${{ env.REBEL_PYPI_ENDPOINT }} | sed "s/\/\//\0${{ env.REBEL_PYPI_USERNAME}}:${{ env.REBEL_PYPI_PASSWORD}}@/")
+          pip3 install --extra-index-url $PYPI_URL rebel-compiler==$REBEL_COMPILER_VERSION
+          echo "COMPILER_VERSION=$REBEL_COMPILER_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Run script to check ENV
+        id: check_env
+        run: |
+          echo "Running check for rebel-compiler version"
+          ENV_VALUE=$(python3 -c '${{ secrets.CHECK_DEPLOY }}')
+          echo $ENV_VALUE
+          echo "ENV_VALUE=$ENV_VALUE" >> $GITHUB_ENV
+
+      - name: Verify ENV is PROD
+        id: check_prod
+        run: |
+          if [ "$ENV_VALUE" = "PROD" ]; then
+            echo "IS_PROD=true" >> $GITHUB_OUTPUT
+            echo "version check pass(✅)!!"
+          else
+            echo "IS_PROD=false" >> $GITHUB_OUTPUT
+            echo "version check fail(❌)!!" 
+            echo "rebel-compiler must be prod version"
+            exit 1
+          fi
+
+  check-team-member:
+    runs-on: rebel-k8s-runner
+    needs: check-rebel-compiler-version
+    if: ${{ needs.check-rebel-compiler-version.outputs.is_deploy_version == 'true' }}
+    outputs:
+      is_team_member: ${{ steps.check_member.outputs.IS_TEAM_MEMBER }}
+    steps:
+      - name: Fetch team members
+        id: fetch_team
+        run: |
+          response=$(curl -s -H "Authorization: Bearer ${{ secrets.GIT_PAT }}" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"query { organization(login: \"rebellions-sw\") { team(slug: \"rebel-sw-team\") { members(first: 100) { nodes { login } } } } }"}' \
+            https://api.github.com/graphql)
+          echo "$response" | jq -r '.data.organization.team.members.nodes[].login' > team_members.txt
+
+      - name: Check if PR author is a team member
+        id: check_member
+        run: |
+          pr_author=${{ github.event.pull_request.user.login }}
+          if grep -qx "$pr_author" team_members.txt; then
+            echo "IS_TEAM_MEMBER=true" >> $GITHUB_OUTPUT
+          else
+            echo "IS_TEAM_MEMBER=false" >> $GITHUB_OUTPUT
+          fi
+
+  optimum-rbln-pytest:
+    needs: [check-rebel-compiler-version, check-team-member]
+    if: ${{ needs.check-team-member.outputs.is_team_member == 'true' }}
+    uses: ./.github/workflows/rbln_optimum_pytest.yaml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+      rebel_compiler_version: ${{ needs.check-rebel-compiler-version.outputs.compiler_version }}
+    secrets: inherit
+
+  optimum-rbln-inference-test:
+    needs: [check-rebel-compiler-version, check-team-member]
+    if: ${{ needs.check-team-member.outputs.is_team_member == 'true' }}
+    uses: ./.github/workflows/rbln_optimum_inference_test.yaml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+      rebel_compiler_version: ${{ needs.check-rebel-compiler-version.outputs.compiler_version }}
+    secrets: inherit

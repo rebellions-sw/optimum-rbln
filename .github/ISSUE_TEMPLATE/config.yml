@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📚 Documentation
+    url: https://docs.rbln.ai/software/optimum/optimum_rbln.html
+    about: Check our documentation before creating an issue
+  - name: 🛠️ Developers Community
+    url: https://discuss.rebellions.ai/
+    about: Join our developers community
+  - name: 📧 Email Support
+    url: mailto:support@rebellions.ai
+    about: Contact our support team
