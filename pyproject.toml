@@ -41,6 +41,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://rebellions.ai"
 Documentation = "https://docs.rbln.ai"
+Repository = "https://github.com/rebellions-sw/optimum-rbln"
 
 [dependency-groups]
 tests = [
@@ -60,7 +61,7 @@ quality = [
     "hf-doc-builder>=0.5.0",
 ]
 deploy = [
-    "twine>=5.1.1",
+    "twine>=6.0.1",
 ]
 
 [build-system]
