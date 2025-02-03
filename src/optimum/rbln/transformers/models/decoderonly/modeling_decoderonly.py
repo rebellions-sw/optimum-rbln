@@ -298,7 +298,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_kvcache_partition_len = rbln_kwargs.get("kvcache_partition_len", None)
         rbln_quantization = QuantizationManager.validate_quantization_config(rbln_kwargs.get("quantization", None))
         rbln_prefill_chunk_size = rbln_kwargs.get("prefill_chunk_size", 128)
-        
+
         if rbln_max_seq_len is None:
             rbln_max_seq_len = getattr(model_config, "max_position_embeddings", None) or getattr(
                 model_config, "n_positions", None
