@@ -44,7 +44,7 @@ jobs:
 
       - name: Install optimum-rbln with tests group dependencies
         run: |
-          uv sync --frozen --group tests
+          uv sync --frozen --group tests --reinstall-package optimum-rbln
 
       - name: Install rebel-compiler
         run: |
