@@ -47,33 +47,169 @@ from .decoderonly_architecture import (
 logger = get_logger()
 
 if TYPE_CHECKING:
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
 
 
 class RBLNRuntimeModel(RBLNPytorchRuntime):
     mandatory_members = ["main_input_name", "embed_tokens"]
 
+    def __init__(
+        self,
+        runtime: rebel.Runtime,
+        phase: str,
+        batch_size: int,
+        dec_attn_mask: torch.Tensor,
+        **kwargs,
+    ) -> None:
+        super().__init__(runtime, **kwargs)
+        self.phase = phase
+        self.batch_size = batch_size
+
+        # shared tensor between prefill and decode phase
+        self.dec_attn_mask = dec_attn_mask
+
+        if self.phase == "prefill":
+            vocab_size = kwargs.pop("vocab_size")
+            self.max_seq_len = kwargs.pop("max_seq_len")
+            self.prefill_chunk_size = kwargs.pop("prefill_chunk_size")
+            self.out_buffers = [
+                torch.empty(
+                    size=[
+                        1,
+                        1,
+                        vocab_size,
+                    ],
+                    dtype=torch.float32,
+                    device="cpu",
+                )
+            ]
+
     def forward(
         self,
-        input_ids: torch.LongTensor,
-        inputs_embeds: torch.Tensor,
-        attention_mask: torch.Tensor,
-        cache_position: torch.Tensor,
-        **kwargs,
+        input_ids: Optional[torch.LongTensor] = None,
+        inputs_embeds: Optional[torch.Tensor] = None,
+        cache_position: torch.Tensor = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        batch_idx: Optional[int] = None,
     ):
-        if inputs_embeds is None:
-            inp = input_ids
-            if self.embed_tokens is not None:
-                inp = self.embed_tokens(inp)
-        else:
-            inp = inputs_embeds
+        if input_ids is None and inputs_embeds is None:
+            raise ValueError("Either `input_ids` or `inputs_embeds` must be provided.")
 
-        return super().forward(
-            inp,
-            attention_mask,
+        if inputs_embeds is None:
+            inputs = input_ids
+            if self.embed_tokens is not None:
+                inputs = self.embed_tokens(inputs)
+        else:
+            inputs = inputs_embeds
+
+        if self.phase == "decode":
+            return self.deocode_forward(
+                inputs,
+                cache_position,
+            )
+        else:
+            return self.prefill_forward(inputs, cache_position, attention_mask, batch_idx)
+
+    def deocode_forward(
+        self,
+        inputs: torch.Tensor,
+        cache_position: torch.Tensor = None,
+    ) -> torch.FloatTensor:
+        batch_size = inputs.shape[0]
+        if batch_size != self.batch_size:
+            raise RuntimeError(
+                f"Batch size mismatch: got {batch_size}, expected {self.batch_size} (compiled batch size)."
+            )
+
+        if batch_size != cache_position.shape[0]:
+            raise RuntimeError(f"Cache position size mismatch: got {cache_position.shape[0]}, expected {batch_size}.")
+
+        for b_idx in range(batch_size):
+            decoding_step = cache_position[b_idx].item()
+            if not (0 <= decoding_step < self.dec_attn_mask.shape[-1]):
+                raise ValueError(
+                    f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
+                )
+            self.dec_attn_mask[b_idx, :, :, decoding_step] = 1
+
+        logits = super().forward(
+            inputs,
+            self.dec_attn_mask,
             cache_position,
-            **kwargs,
         )
+
+        return logits
+
+    def prefill_forward(
+        self,
+        inputs: torch.Tensor,
+        cache_position: torch.Tensor = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        batch_idx: int = None,
+    ) -> torch.FloatTensor:
+        if batch_idx is None or batch_idx >= self.batch_size:
+            raise RuntimeError(
+                f"Invalid batch_idx ({batch_idx}). It must be a non-null value less than the batch size ({self.batch_size})."
+            )
+
+        inputs = inputs[:, attention_mask.bool()] if attention_mask is not None else inputs
+
+        query_length = inputs.shape[1]
+        if query_length > self.max_seq_len:
+            raise ValueError(
+                f"Input length ({query_length}) exceeds the maximum allowed sequence length ({self.max_seq_len})."
+            )
+
+        attention_mask = torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
+        causal_mask = 1 - torch.triu(torch.ones(1, 1, self.prefill_chunk_size, self.prefill_chunk_size), diagonal=1)
+
+        for step in range(0, query_length, self.prefill_chunk_size):
+            # pad inputs & cache_position for prefill_chunk
+            if (step + self.prefill_chunk_size) > query_length:
+                padding_size = step + self.prefill_chunk_size - query_length
+                if inputs.dim() == 3:
+                    inputs = torch.nn.functional.pad(inputs, (0, 0, 0, padding_size))
+                else:
+                    inputs = torch.nn.functional.pad(inputs, (0, padding_size))
+
+                cache_position = torch.cat(
+                    [
+                        cache_position,
+                        torch.arange(
+                            query_length,
+                            step + self.prefill_chunk_size,
+                            dtype=torch.int32,
+                        ).unsqueeze(0),
+                    ],
+                    dim=-1,
+                )
+
+            # slice input & cache_position with prefill_chunk_size
+            input_chunk = inputs[:, step : step + self.prefill_chunk_size]
+            cache_pos_chunk = cache_position[:, step : step + self.prefill_chunk_size]
+
+            # update attention_mask
+            if step >= self.prefill_chunk_size:
+                attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
+            attention_mask[:, :, :, step : step + self.prefill_chunk_size] = causal_mask
+
+            batch_position = torch.tensor(batch_idx, dtype=torch.int16)
+            query_position = torch.tensor((query_length - 1) % self.prefill_chunk_size, dtype=torch.int16)
+
+            logits = super().forward(
+                input_chunk,
+                attention_mask,
+                cache_pos_chunk,
+                batch_position,
+                query_position,
+                out=self.out_buffers,
+            )
+
+        # update decoder_attn_mask with preprocessed kv-cache length in prefill phase
+        self.dec_attn_mask[batch_idx].fill_(0)
+        self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
+
+        return logits
 
 
 @dataclass
@@ -112,13 +248,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         self.max_seq_len = self.rbln_config.model_cfg["max_seq_len"]
         self.prefill_chunk_size = self.rbln_config.model_cfg["prefill_chunk_size"]
 
-        self.prefill_attention_mask = torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
-        self.causal_mask = 1 - torch.triu(
-            torch.ones(1, 1, self.prefill_chunk_size, self.prefill_chunk_size), diagonal=1
-        )
-        self.dec_attn_mask_init = torch.zeros(1, 1, 1, self.max_seq_len, dtype=torch.float32)
-        self.dec_attn_mask = torch.zeros(self.batch_size, 1, 1, self.max_seq_len, dtype=torch.float32)
-
         main_input_name = self.main_input_name
         if self.rbln_config.model_cfg["use_inputs_embeds"]:
             main_input_name = "inputs_embeds"
@@ -133,11 +262,25 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         else:
             self.embed_tokens = None
 
+        dec_attn_mask = torch.zeros(self.batch_size, 1, 1, self.max_seq_len, dtype=torch.float32)
         self.prefill_decoder = RBLNRuntimeModel(
-            runtime=self.model[0], main_input_name=main_input_name, embed_tokens=self.embed_tokens
+            runtime=self.model[0],
+            main_input_name=main_input_name,
+            embed_tokens=self.embed_tokens,
+            phase="prefill",
+            batch_size=self.batch_size,
+            dec_attn_mask=dec_attn_mask,
+            vocab_size=self.config.vocab_size,
+            max_seq_len=self.max_seq_len,
+            prefill_chunk_size=self.prefill_chunk_size,
         )
         self.decoder = RBLNRuntimeModel(
-            runtime=self.model[1], main_input_name=main_input_name, embed_tokens=self.embed_tokens
+            runtime=self.model[1],
+            main_input_name=main_input_name,
+            embed_tokens=self.embed_tokens,
+            phase="decode",
+            batch_size=self.batch_size,
+            dec_attn_mask=dec_attn_mask,
         )
 
     @classmethod
@@ -164,7 +307,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
     def get_quantized_model(
         cls,
         model_id: str,
-        config: Optional[PretrainedConfig] = None,
+        config: Optional["PretrainedConfig"] = None,
         use_auth_token: Optional[Union[bool, str]] = None,
         revision: Optional[str] = None,
         force_download: bool = False,
@@ -496,24 +639,23 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         generate_idx: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
+        """
+        Forward method for the huggingface genearate api for the RBLN optimized model.
+        Continous batching을 위해 batch_idx를 사용하여 batch 단위로 prefill을 수행합니다.
+
+        """
         # prefll
         if cache_position is None:
             logits = []
-            input_tensors = inputs_embeds if inputs_embeds is not None else input_ids
-            batch_size = input_tensors.shape[0]
+            inputs = inputs_embeds if inputs_embeds is not None else input_ids
+            batch_size = inputs.shape[0]
 
             for b_idx in range(batch_size):
-                # Transform inputs as vllm format
-                if attention_mask is not None:
-                    input_tensor = input_tensors[b_idx : b_idx + 1, attention_mask[b_idx].bool()]
-                else:
-                    input_tensor = input_tensors[b_idx : b_idx + 1]
-
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
-
-                logit = self._forward_prefill(
-                    input_ids=input_tensor if inputs_embeds is None else None,
-                    inputs_embeds=input_tensor if inputs_embeds is not None else None,
+                logit = self.prefill_decoder(
+                    input_ids=inputs if inputs_embeds is None else None,
+                    inputs_embeds=inputs if inputs_embeds is not None else None,
+                    attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                     cache_position=cache_position,
                     batch_idx=b_idx,
                 )
@@ -521,7 +663,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             logits = torch.cat(logits, dim=0)
         # decoder
         else:
-            logits = self._forward_decoder(
+            logits = self.decoder(
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
@@ -531,119 +673,3 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             logits=logits,
             generate_idx=generate_idx,
         )
-
-    def _forward_prefill(
-        self,
-        input_ids: torch.LongTensor = None,
-        inputs_embeds: torch.Tensor = None,
-        cache_position: torch.Tensor = None,
-        batch_idx: int = None,
-    ) -> torch.FloatTensor:
-        if batch_idx is None or batch_idx >= self.batch_size:
-            raise RuntimeError(
-                f"Invalid batch_idx ({batch_idx}). It must be a non-null value less than the batch size ({self.batch_size})."
-            )
-
-        out_buffers = [
-            torch.empty(
-                size=[
-                    1,
-                    1,
-                    self.config.vocab_size,
-                ],
-                dtype=torch.float32,
-                device="cpu",
-            )
-        ]
-
-        input_tensors = inputs_embeds if inputs_embeds is not None else input_ids
-        query_length = input_tensors.shape[1]
-        if query_length > self.max_seq_len:
-            raise ValueError(
-                f"Input length ({query_length}) exceeds the maximum allowed sequence length ({self.max_seq_len})."
-            )
-
-        _attention_mask = self.prefill_attention_mask.clone()
-
-        for step in range(0, query_length, self.prefill_chunk_size):
-            # pad input_tensors & cache_position for prefill_chunk
-            if (step + self.prefill_chunk_size) > query_length:
-                pad_to_chunk = step + self.prefill_chunk_size - query_length
-                if inputs_embeds is not None:
-                    input_tensors = torch.nn.functional.pad(input_tensors, (0, 0, 0, pad_to_chunk))
-                else:
-                    input_tensors = torch.nn.functional.pad(input_tensors, (0, pad_to_chunk))
-
-                cache_position = torch.cat(
-                    [
-                        cache_position,
-                        torch.arange(
-                            query_length,
-                            step + self.prefill_chunk_size,
-                            dtype=torch.int32,
-                        ).unsqueeze(0),
-                    ],
-                    dim=-1,
-                )
-
-            # slice input_tensor & cache_position with prefill_chunk_size
-            _input_tensors = input_tensors[:, step : step + self.prefill_chunk_size]
-            _cache_position = cache_position[:, step : step + self.prefill_chunk_size]
-
-            # update attention_mask
-            if step >= self.prefill_chunk_size:
-                _attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
-            _attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
-
-            query_position = (query_length - 1) % self.prefill_chunk_size
-
-            logits = self.prefill_decoder(
-                input_ids=_input_tensors.contiguous() if inputs_embeds is None else None,
-                inputs_embeds=_input_tensors.contiguous() if inputs_embeds is not None else None,
-                attention_mask=_attention_mask.contiguous(),
-                cache_position=_cache_position.contiguous(),
-                batch_position=torch.tensor(batch_idx, dtype=torch.int16),
-                query_position=torch.tensor(query_position, dtype=torch.int16),
-                out=out_buffers,
-            )
-
-        # update decoder_attn_mask with preprocessed kv-cache length in prefill phase
-        self.dec_attn_mask[batch_idx] = self.dec_attn_mask_init.clone()
-        self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
-
-        return logits
-
-    def _forward_decoder(
-        self,
-        input_ids: torch.LongTensor = None,
-        inputs_embeds: torch.Tensor = None,
-        cache_position: torch.Tensor = None,
-    ) -> torch.FloatTensor:
-        input_tensors = inputs_embeds if inputs_embeds is not None else input_ids
-        if input_tensors is None:
-            raise ValueError("Either `input_ids` or `inputs_embeds` must be provided.")
-
-        batch_size = input_tensors.shape[0]
-        if batch_size != self.batch_size:
-            raise RuntimeError(
-                f"Batch size mismatch: got {batch_size}, expected {self.batch_size} (compiled batch size)."
-            )
-
-        if batch_size != cache_position.shape[0]:
-            raise RuntimeError(f"Cache position size mismatch: got {cache_position.shape[0]}, expected {batch_size}.")
-
-        for b_idx in range(batch_size):
-            decoding_step = cache_position[b_idx].item()
-            if not (0 <= decoding_step < self.dec_attn_mask.shape[-1]):
-                raise ValueError(
-                    f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
-                )
-            self.dec_attn_mask[b_idx, :, :, decoding_step] = 1
-        logits = self.decoder(
-            input_ids=input_tensors.contiguous() if inputs_embeds is None else None,
-            inputs_embeds=input_tensors.contiguous() if inputs_embeds is not None else None,
-            attention_mask=self.dec_attn_mask.contiguous(),
-            cache_position=cache_position.contiguous(),
-        )
-
-        return logits
