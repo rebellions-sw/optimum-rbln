@@ -30,9 +30,13 @@ from transformers import (
     CLIPTextModel,
     CLIPVisionConfig,
     CLIPVisionModel,
+    CLIPVisionModelWithProjection,
 )
-from transformers.modeling_outputs import BaseModelOutputWithPooling
-from transformers.models.clip.modeling_clip import CLIPTextModelOutput
+from transformers.models.clip.modeling_clip import (
+    BaseModelOutputWithPooling,
+    CLIPTextModelOutput,
+    CLIPVisionModelOutput,
+)
 
 from ....diffusers.modeling_diffusers import RBLNDiffusionMixin
 from ....modeling import RBLNModel
@@ -42,7 +46,14 @@ from ....modeling_config import RBLNCompileConfig, RBLNConfig
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, CLIPTextModel
+    from transformers import (
+        AutoFeatureExtractor,
+        AutoProcessor,
+        AutoTokenizer,
+        CLIPTextModel,
+        CLIPVisionModel,
+        CLIPVisionModelWithProjection,
+    )
 
 
 class _TextEncoder(torch.nn.Module):
@@ -120,7 +131,21 @@ class _VisionEncoder(torch.nn.Module):
         return enc_out
 
 
+class _VisionEncoderWithProjection(torch.nn.Module):
+    def __init__(self, enc: CLIPVisionModelWithProjection):
+        super().__init__()
+        self.enc = enc
+
+    def forward(self, inp):
+        enc_out = self.enc(inp, return_dict=False)
+        return enc_out
+
+
 class RBLNCLIPVisionModel(RBLNModel):
+    @classmethod
+    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
+        return rbln_config
+
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
         return _VisionEncoder(model).eval()
@@ -128,12 +153,13 @@ class RBLNCLIPVisionModel(RBLNModel):
     @classmethod
     def _get_rbln_config(
         cls,
-        preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
+        preprocessors: Union["AutoFeatureExtractor", "AutoProcessor"],
         model_config: "CLIPVisionConfig",
         rbln_kwargs: Dict[str, Any] = {},
     ) -> RBLNConfig:
         rbln_batch_size = rbln_kwargs.get("batch_size", 1)
         rbln_image_size = rbln_kwargs.get("image_size", None)
+        rbln_image_channels = model_config.num_channels if hasattr(model_config, "num_channels") else 3
 
         if rbln_image_size is None:
             rbln_image_size = getattr(model_config, "image_size", None)
@@ -144,32 +170,23 @@ class RBLNCLIPVisionModel(RBLNModel):
         if rbln_image_size is None:
             raise ValueError("`rbln_image_size` should be specified!")
 
-        rbln_compile_config = RBLNCompileConfig(
-            input_info=[
-                (
-                    "pixel_values",
-                    [
-                        rbln_batch_size,
-                        3,
-                        rbln_image_size[0],
-                        rbln_image_size[1],
-                    ],
-                    "float32",
-                )
-            ]
-        )
-
+        input_info = [
+            (
+                "pixel_values",
+                [
+                    rbln_batch_size,
+                    rbln_image_channels,
+                    rbln_image_size[0],
+                    rbln_image_size[1],
+                ],
+                "float32",
+            )
+        ]
+        rbln_compile_config = RBLNCompileConfig(input_info=input_info)
         rbln_config = RBLNConfig(
             rbln_cls=cls.__name__,
             compile_cfgs=[rbln_compile_config],
             rbln_kwargs=rbln_kwargs,
-        )
-
-        rbln_config.model_cfg.update(
-            {
-                "batch_size": rbln_batch_size,
-                "image_size": rbln_image_size,
-            }
         )
 
         return rbln_config
@@ -181,10 +198,30 @@ class RBLNCLIPVisionModel(RBLNModel):
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
         if len(kwargs) > 0 and any(kwargs.values()):
             logger.warning(f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__}.")
-
         output = super().forward(pixel_values)
         return BaseModelOutputWithPooling(
             last_hidden_state=output[0],
             pooler_output=output[1],
             hidden_states=output[2:],
+        )
+
+
+class RBLNCLIPVisionModelWithProjection(RBLNCLIPVisionModel):
+    @classmethod
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
+        return _VisionEncoderWithProjection(model).eval()
+
+    def forward(
+        self,
+        pixel_values: Optional[torch.FloatTensor] = None,
+        **kwargs,
+    ) -> Union[Tuple, CLIPVisionModelOutput]:
+        if len(kwargs) > 0 and any(kwargs.values()):
+            logger.warning(f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__}.")
+        output = super().forward(pixel_values)
+        return CLIPVisionModelOutput(
+            image_embeds=output[0],
+            last_hidden_state=output[1],
+            hidden_states=output[2] if len(output) > 2 else None,
+            attentions=output[3] if len(output) > 3 else None,
         )

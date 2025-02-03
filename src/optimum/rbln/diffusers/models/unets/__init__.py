@@ -22,3 +22,4 @@
 # from Rebellions Inc.
 
 from .unet_2d_condition import RBLNUNet2DConditionModel
+from .unet_spatio_temporal_condition import RBLNUNetSpatioTemporalConditionModel

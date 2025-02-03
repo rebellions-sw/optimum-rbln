@@ -22,3 +22,4 @@
 # from Rebellions Inc.
 
 from .autoencoder_kl import RBLNAutoencoderKL
+from .autoencoder_kl_temporal_decoder import RBLNAutoencoderKLTemporalDecoder

@@ -57,6 +57,7 @@ _import_structure = {
         "RBLNCLIPTextModel",
         "RBLNCLIPTextModelWithProjection",
         "RBLNCLIPVisionModel",
+        "RBLNCLIPVisionModelWithProjection",
         "RBLNDPTForDepthEstimation",
         "RBLNExaoneForCausalLM",
         "RBLNGemmaForCausalLM",
@@ -85,7 +86,9 @@ _import_structure = {
         "RBLNStableDiffusionPipeline",
         "RBLNStableDiffusionXLPipeline",
         "RBLNAutoencoderKL",
+        "RBLNAutoencoderKLTemporalDecoder",
         "RBLNUNet2DConditionModel",
+        "RBLNUNetSpatioTemporalConditionModel",
         "RBLNControlNetModel",
         "RBLNStableDiffusionImg2ImgPipeline",
         "RBLNStableDiffusionInpaintPipeline",
@@ -100,6 +103,7 @@ _import_structure = {
         "RBLNStableDiffusion3Img2ImgPipeline",
         "RBLNStableDiffusion3InpaintPipeline",
         "RBLNStableDiffusion3Pipeline",
+        "RBLNStableVideoDiffusionPipeline",
         "RBLNDiffusionMixin",
     ],
 }
@@ -107,6 +111,7 @@ _import_structure = {
 if TYPE_CHECKING:
     from .diffusers import (
         RBLNAutoencoderKL,
+        RBLNAutoencoderKLTemporalDecoder,
         RBLNControlNetModel,
         RBLNDiffusionMixin,
         RBLNMultiControlNetModel,
@@ -124,7 +129,9 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLImg2ImgPipeline,
         RBLNStableDiffusionXLInpaintPipeline,
         RBLNStableDiffusionXLPipeline,
+        RBLNStableVideoDiffusionPipeline,
         RBLNUNet2DConditionModel,
+        RBLNUNetSpatioTemporalConditionModel,
     )
     from .modeling import (
         RBLNBaseModel,
@@ -155,6 +162,7 @@ if TYPE_CHECKING:
         RBLNCLIPTextModel,
         RBLNCLIPTextModelWithProjection,
         RBLNCLIPVisionModel,
+        RBLNCLIPVisionModelWithProjection,
         RBLNDistilBertForQuestionAnswering,
         RBLNDPTForDepthEstimation,
         RBLNExaoneForCausalLM,

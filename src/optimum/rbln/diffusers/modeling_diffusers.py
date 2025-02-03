@@ -88,6 +88,11 @@ class RBLNDiffusionMixin:
         return "Inpaint" in cls.__name__
 
     @classmethod
+    @property
+    def img2vid_pipeline(cls):
+        return "Video" in cls.__name__
+
+    @classmethod
     def get_submodule_rbln_config(
         cls, model: torch.nn.Module, submodule_name: str, rbln_config: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -109,6 +114,7 @@ class RBLNDiffusionMixin:
             {
                 "img2img_pipeline": cls.img2img_pipeline,
                 "inpaint_pipeline": cls.inpaint_pipeline,
+                "img2vid_pipeline": cls.img2vid_pipeline,
             }
         )
         submodule_config = submodule_cls.update_rbln_config_using_pipe(model, submodule_config)
