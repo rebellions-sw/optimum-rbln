@@ -9,7 +9,8 @@ authors = [
 ]
 requires-python = ">=3.9,<3.13"
 readme = "README.md"
-license = {text = "Apache"}
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 dynamic = ["version"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
@@ -76,7 +77,6 @@ version-file = "src/optimum/rbln/__version__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/optimum"]
-core-metadata-version = "2.3"
 
 [tool.uv]
 environments = [
