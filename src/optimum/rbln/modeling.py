@@ -97,6 +97,7 @@ class RBLNModel(RBLNBaseModel):
                     f"Current PyTorch version is {torch.__version__}."
                 )
             model = model.half()
+            rbln_config = rbln_config.half()
 
         # Wrap the model if needed.
         return model

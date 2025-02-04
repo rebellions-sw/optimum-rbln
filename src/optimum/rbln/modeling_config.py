@@ -82,6 +82,12 @@ class RBLNCompileConfig:
     def __post_init__(self):
         self.input_info = [(i[0], i[1], RBLNCompileConfig.normalize_dtype(i[2]) or "float32") for i in self.input_info]
 
+    def half(self) -> "RBLNCompileConfig":
+        for i, info in enumerate(self.input_info):
+            if info[2] == "float32":
+                self.input_info[i] = self.input_info[i][:2] + ("float16",)
+        return self
+
     def update(self, kwargs: Dict[str, Any]):
         self.compiled_model_name = kwargs.get("compiled_model_name", self.compiled_model_name)
         self.mod_name = kwargs.get("mod_name", self.mod_name)
@@ -168,6 +174,11 @@ class RBLNConfig:
 
         # model_cfg : All user-provided values such as "max_seq_len".
         self.model_cfg: Dict[str, Any] = rbln_kwargs
+
+    def half(self) -> "RBLNConfig":
+        for i, compile_cfg in enumerate(self.compile_cfgs):
+            self.compile_cfgs[i] = compile_cfg.half()
+        return self
 
     def save(self, dir_path: str):
         dir_path = Path(dir_path)
