@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 import rebel
 import torch
 from huggingface_hub.constants import HUGGINGFACE_HUB_CACHE
+from packaging import version
 from transformers import AutoConfig, PretrainedConfig
 
 from .modeling_base import RBLNBaseModel
@@ -88,6 +89,15 @@ class RBLNModel(RBLNBaseModel):
 
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
+        # Convert model to FP16 if requested
+        if rbln_config.model_cfg.get("use_fp16", False):
+            if version.parse(torch.__version__) < version.parse("2.6.0"):
+                raise ValueError(
+                    "FP16 on CPU is only supported with PyTorch >= 2.6.0. "
+                    f"Current PyTorch version is {torch.__version__}."
+                )
+            model = model.half()
+
         # Wrap the model if needed.
         return model
 

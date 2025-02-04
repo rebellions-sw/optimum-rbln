@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Un
 
 import rebel
 import torch
+from packaging import version
 from rebel.compile_context import CompileContext
 from transformers import AutoConfig, AutoModelForCausalLM, PretrainedConfig, PreTrainedModel
 from transformers.modeling_utils import no_init_weights
@@ -297,6 +298,17 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_attn_impl = rbln_kwargs.get("attn_impl", None)
         rbln_kvcache_partition_len = rbln_kwargs.get("kvcache_partition_len", None)
         rbln_quantization = QuantizationManager.validate_quantization_config(rbln_kwargs.get("quantization", None))
+        rbln_use_fp16 = rbln_kwargs.get("use_fp16", False)
+
+        # Check PyTorch version for FP16 CPU support
+        if rbln_use_fp16 and version.parse(torch.__version__) < version.parse("2.6.0"):
+            raise ValueError(
+                "FP16 on CPU is only supported with PyTorch >= 2.6.0. "
+                f"Current PyTorch version is {torch.__version__}. "
+                "Please set use_fp16=False or upgrade PyTorch."
+            )
+
+        compute_dtype = "float16" if rbln_use_fp16 else "float32"
 
         prefill_chunk_size = 128
         if rbln_max_seq_len is None:
@@ -328,13 +340,13 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             hidden_size,
         ):
             if use_inputs_embeds:
-                main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
+                main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], compute_dtype)
             else:
                 main_input = ("input_ids", [batch_size, query_length], "int64")
 
             input_info = [
                 main_input,
-                ("attention_mask", [batch_size, 1, query_length, rbln_max_seq_len], "float32"),
+                ("attention_mask", [batch_size, 1, query_length, rbln_max_seq_len], compute_dtype),
                 (
                     "cache_position",
                     [batch_size, query_length],
@@ -359,7 +371,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                             rbln_max_seq_len,
                             head_dim,
                         ],
-                        "float32",
+                        compute_dtype,
                     )
                     for i in range(num_hidden_layers * 2)
                 ]
@@ -397,6 +409,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 "use_inputs_embeds": rbln_use_inputs_embeds,
                 "kvcache_partition_len": rbln_kvcache_partition_len,
                 "attn_impl": rbln_attn_impl,
+                "use_fp16": rbln_use_fp16,
             }
         )
 
@@ -544,6 +557,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 f"Invalid batch_idx ({batch_idx}). It must be a non-null value less than the batch size ({self.batch_size})."
             )
 
+        dtype = torch.float16 if self.rbln_config.model_cfg.get("use_fp16", False) else torch.float32
         out_buffers = [
             torch.empty(
                 size=[
@@ -551,7 +565,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     1,
                     self.config.vocab_size,
                 ],
-                dtype=torch.float32,
+                dtype=dtype,
                 device="cpu",
             )
         ]
