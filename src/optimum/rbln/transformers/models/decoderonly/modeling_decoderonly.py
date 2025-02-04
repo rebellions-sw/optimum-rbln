@@ -72,17 +72,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             vocab_size = kwargs.pop("vocab_size")
             self.max_seq_len = kwargs.pop("max_seq_len")
             self.prefill_chunk_size = kwargs.pop("prefill_chunk_size")
-            self.out_buffers = [
-                torch.empty(
-                    size=[
-                        1,
-                        1,
-                        vocab_size,
-                    ],
-                    dtype=torch.float32,
-                    device="cpu",
-                )
-            ]
+            self.output_size = [1, 1, vocab_size]
 
     def forward(
         self,
@@ -163,6 +153,14 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         attention_mask = torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
         causal_mask = 1 - torch.triu(torch.ones(1, 1, self.prefill_chunk_size, self.prefill_chunk_size), diagonal=1)
 
+        out_buffers = [
+            torch.empty(
+                size=self.output_size,
+                dtype=torch.float32,
+                device="cpu",
+            )
+        ]
+
         for step in range(0, query_length, self.prefill_chunk_size):
             # pad inputs & cache_position for prefill_chunk
             if (step + self.prefill_chunk_size) > query_length:
@@ -202,7 +200,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 cache_pos_chunk,
                 batch_position,
                 query_position,
-                out=self.out_buffers,
+                out=out_buffers,
             )
 
         # update decoder_attn_mask with preprocessed kv-cache length in prefill phase
@@ -653,13 +651,14 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
                 logit = self.prefill_decoder(
-                    input_ids=inputs if inputs_embeds is None else None,
-                    inputs_embeds=inputs if inputs_embeds is not None else None,
+                    input_ids=inputs[b_idx : b_idx + 1] if inputs_embeds is None else None,
+                    inputs_embeds=inputs[b_idx : b_idx + 1] if inputs_embeds is not None else None,
                     attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                     cache_position=cache_position,
                     batch_idx=b_idx,
                 )
                 logits.append(logit)
+
             logits = torch.cat(logits, dim=0)
         # decoder
         else:

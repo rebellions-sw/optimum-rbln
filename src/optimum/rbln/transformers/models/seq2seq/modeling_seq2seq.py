@@ -21,6 +21,7 @@
 # copied, modified, or distributed without prior written permission
 # from Rebellions Inc.
 
+import inspect
 import logging
 from abc import ABC
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
@@ -39,59 +40,14 @@ from ....utils.runtime_utils import RBLNPytorchRuntime
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import (
-        AutoFeatureExtractor,
-        AutoProcessor,
-        AutoTokenizer,
-        PretrainedConfig,
-    )
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, GenerationConfig, PretrainedConfig
 
 
 class RBLNRuntimeEncoder(RBLNPytorchRuntime):
     mandatory_members = ["main_input_name"]
 
-    def __init__(
-        self,
-        runtime: rebel.Runtime,
-        batch_size: int,
-        enc_max_seq_len: int,
-        pad_token_id: int,
-        **kwargs,
-    ) -> None:
-        super().__init__(runtime, **kwargs)
-        self.batch_size = batch_size
-        self.enc_max_seq_len = enc_max_seq_len
-        self.pad_token_id = pad_token_id
-
-    def forward(
-        self, input_ids: torch.Tensor = None, attention_mask: torch.Tensor = None, **kwargs: Dict[str, torch.Tensor]
-    ):
-        batch_size, input_len = input_ids.shape
-        if batch_size != self.batch_size:
-            raise ValueError(
-                f"Invalid batch size ({batch_size}). It must match the compiled batch size ({self.batch_size})."
-            )
-
-        if input_len > self.enc_max_seq_len:
-            raise ValueError(
-                f"Input length ({input_len}) exceeds the maximum allowed sequence length ({self.enc_max_seq_len})."
-            )
-
-        input_ids = torch.nn.functional.pad(
-            input_ids,
-            (0, self.enc_max_seq_len - input_len),
-            value=self.pad_token_id,
-        )
-        attention_mask = torch.nn.functional.pad(attention_mask, (0, self.enc_max_seq_len - input_len))
-
-        import pdb;
-        pdb.set_trace()
-        for b in range(batch_size):
-            batch_position = torch.tensor(b, dtype=torch.int16)
-            input_id = input_ids[b].unsqueeze(0)
-            attention_mask = attention_mask[b].unsqueeze(0).to(torch.float32)
-            _ = super().forward(input_id, attention_mask, batch_position)
-
+    def forward(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
+        _ = super().forward(*args, **kwargs)
         return BaseModelOutput(last_hidden_state=torch.tensor([1.0]))
 
 
@@ -134,13 +90,12 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
                 )
             decoder_attention_mask[b_idx, : decoding_step + 1] = 1
 
-        decoder_output = super().forward(
+        lm_logits = super().forward(
             decoder_input_ids,
-            attention_mask=decoder_attention_mask,
-            encoder_attention_mask=attention_mask,
-            cache_position=cache_position,
+            decoder_attention_mask,
+            attention_mask,
+            cache_position,
         )
-        lm_logits = decoder_output.logits
 
         return Seq2SeqLMOutput(logits=lm_logits)
 
@@ -406,67 +361,42 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
 
     def forward(
         self,
-        input_ids: torch.LongTensor = None,
+        decoder_input_ids: torch.LongTensor = None,
         cache_position: Union[List[torch.Tensor], torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
         # common decoder
         cache_position = torch.full((self.rbln_config.model_cfg["batch_size"], 1), cache_position, dtype=torch.int32)
-        logits = self.decoder(input_ids=input_ids, cache_position=cache_position, **kwargs).logits
+        logits = self.decoder(decoder_input_ids=decoder_input_ids, cache_position=cache_position, **kwargs).logits
 
         return Seq2SeqLMOutput(
             logits=logits,
         )
 
-    # def _prepare_encoder_decoder_kwargs_for_generation(
-    #     self,
-    #     inputs_tensor: torch.Tensor,
-    #     model_kwargs,
-    #     model_input_name: Optional[str] = None,
-    #     generation_config: Optional[GenerationConfig] = None,
-    # ) -> Dict[str, Any]:
-    #     # 1. get encoder
-    #     encoder = self.get_encoder()
+    def _prepare_encoder_decoder_kwargs_for_generation(
+        self,
+        inputs_tensor: torch.Tensor,
+        model_kwargs,
+        model_input_name: Optional[str] = None,
+        generation_config: Optional["GenerationConfig"] = None,
+    ) -> Dict[str, Any]:
+        # 1. get encoder
+        encoder = self.get_encoder()
 
-    #     # 2. Prepare encoder args and encoder kwargs from model kwargs.
-    #     irrelevant_prefix = ["decoder_", "cross_attn", "use_cache"]
-    #     encoder_kwargs = {
-    #         argument: value
-    #         for argument, value in model_kwargs.items()
-    #         if not any(argument.startswith(p) for p in irrelevant_prefix)
-    #     }
-    #     encoder_signature = set(inspect.signature(encoder.forward).parameters)
-    #     encoder_accepts_wildcard = "kwargs" in encoder_signature or "model_kwargs" in encoder_signature
-    #     if not encoder_accepts_wildcard:
-    #         encoder_kwargs = {
-    #             argument: value for argument, value in encoder_kwargs.items() if argument in encoder_signature
-    #         }
+        # 2. Prepare encoder args and encoder kwargs from model kwargs.
+        irrelevant_prefix = ["decoder_", "cross_attn", "use_cache"]
+        encoder_kwargs = {
+            argument: value
+            for argument, value in model_kwargs.items()
+            if not any(argument.startswith(p) for p in irrelevant_prefix)
+        }
+        encoder_signature = set(inspect.signature(encoder.forward).parameters)
+        encoder_accepts_wildcard = "kwargs" in encoder_signature or "model_kwargs" in encoder_signature
+        if not encoder_accepts_wildcard:
+            encoder_kwargs = {
+                argument: value for argument, value in encoder_kwargs.items() if argument in encoder_signature
+            }
 
-    #     batch_size, input_len = inputs_tensor.shape
-    #     inputs_tensor = torch.nn.functional.pad(
-    #         inputs_tensor,
-    #         (0, self.rbln_config.model_cfg["enc_max_seq_len"] - input_len),
-    #         value=self.rbln_config.model_cfg["pad_token_id"],
-    #     )
-    #     model_kwargs["attention_mask"] = torch.nn.functional.pad(
-    #         model_kwargs["attention_mask"], (0, self.rbln_config.model_cfg["enc_max_seq_len"] - input_len)
-    #     )
-
-    #     # 3. make sure that encoder returns `ModelOutput`
-    #     model_input_name = model_input_name if model_input_name is not None else self.main_input_name
-    #     encoder_kwargs["return_dict"] = True
-    #     encoder_kwargs["output_hidden_states"] = False
-    #     encoder_kwargs["output_attentions"] = False
-
-    #     for b in range(batch_size):
-    #         batch_position = torch.tensor(b, dtype=torch.int16)
-    #         encoder_kwargs["input_ids"] = inputs_tensor[b].unsqueeze(0)
-    #         encoder_kwargs["attention_mask"] = model_kwargs["attention_mask"][b].unsqueeze(0).to(torch.float32)
-    #         model_kwargs["encoder_outputs"] = encoder(**encoder_kwargs, batch_position=batch_position)
-
-<<<<<<< HEAD
-    #     return model_kwargs
-=======
         batch_size, input_len = inputs_tensor.shape
         inputs_tensor = torch.nn.functional.pad(
             inputs_tensor,
@@ -478,6 +408,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
         )
 
         # 3. make sure that encoder returns `ModelOutput`
+        model_input_name = model_input_name if model_input_name is not None else self.main_input_name
         encoder_kwargs["return_dict"] = True
         encoder_kwargs["output_hidden_states"] = False
         encoder_kwargs["output_attentions"] = False
@@ -489,4 +420,3 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
             model_kwargs["encoder_outputs"] = encoder(**encoder_kwargs, batch_position=batch_position)
 
         return model_kwargs
->>>>>>> v0.2.0
