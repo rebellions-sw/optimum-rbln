@@ -13,6 +13,7 @@ def main(
     from_transformers: bool = False,
     max_seq_len: typing.Optional[int] = None,
     tensor_parallel_size: typing.Optional[int] = 4,
+    use_fp16: bool = False,
 ):
     # Example input sentences for the model
     sentences = [
@@ -29,6 +30,8 @@ def main(
             rbln_batch_size=batch_size,
             rbln_max_seq_len=max_seq_len,
             rbln_tensor_parallel_size=tensor_parallel_size,
+            rbln_use_fp16=use_fp16,
+            num_hidden_layers=1,
         )
         model.save_pretrained(os.path.basename(model_id))
     else:

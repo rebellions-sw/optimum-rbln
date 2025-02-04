@@ -71,16 +71,16 @@ def register_rbln_custom_attention():
         """
         return (
             q,
-            torch.empty(1, *kcache.shape[1:], device=kcache.device),
-            torch.empty(1, *vcache.shape[1:], device=vcache.device),
+            torch.empty(1, *kcache.shape[1:], device=kcache.device, dtype=kcache.dtype),
+            torch.empty(1, *vcache.shape[1:], device=vcache.device, dtype=vcache.dtype),
         )
 
     @register_fake("rbln_custom_ops::attn_decode")
     def attn_decode_abstract(q, k, v, m, kcache, vcache, seq, partition):
         return (
             q,
-            torch.empty(1, *kcache.shape[1:], device=kcache.device),
-            torch.empty(1, *vcache.shape[1:], device=vcache.device),
+            torch.empty(1, *kcache.shape[1:], device=kcache.device, dtype=kcache.dtype),
+            torch.empty(1, *vcache.shape[1:], device=vcache.device, dtype=vcache.dtype),
         )
 
     torch.library.define(
@@ -161,16 +161,16 @@ def register_rbln_custom_attention_add_softmax():
         """
         return (
             q,
-            torch.empty(1, *kcache.shape[1:], device=kcache.device),
-            torch.empty(1, *vcache.shape[1:], device=vcache.device),
+            torch.empty(1, *kcache.shape[1:], device=kcache.device, dtype=kcache.dtype),
+            torch.empty(1, *vcache.shape[1:], device=vcache.device, dtype=vcache.dtype),
         )
 
     @register_fake("rbln_custom_ops::attn_decode_add_softmax")
     def attn_decode_add_softmax_abstract(q, k, v, m, kcache, vcache, seq, partition):
         return (
             q,
-            torch.empty(1, *kcache.shape[1:], device=kcache.device),
-            torch.empty(1, *vcache.shape[1:], device=vcache.device),
+            torch.empty(1, *kcache.shape[1:], device=kcache.device, dtype=kcache.dtype),
+            torch.empty(1, *vcache.shape[1:], device=vcache.device, dtype=vcache.dtype),
         )
 
     torch.library.define(
@@ -208,14 +208,14 @@ def register_rbln_custom_attention_add_softmax():
         """
         return (
             q,
-            torch.empty(1, *kcache.shape[1:], device=kcache.device),
-            torch.empty(1, *vcache.shape[1:], device=vcache.device),
+            torch.empty(1, *kcache.shape[1:], device=kcache.device, dtype=kcache.dtype),
+            torch.empty(1, *vcache.shape[1:], device=vcache.device, dtype=vcache.dtype),
         )
 
     @register_fake("rbln_custom_ops::attn_prefill_add_softmax")
     def attn_prefill_add_softmax_abstract(q, k, v, m, kcache, vcache, batch, seq, partition):
         return (
             q,
-            torch.empty(1, *kcache.shape[1:], device=kcache.device),
-            torch.empty(1, *vcache.shape[1:], device=vcache.device),
+            torch.empty(1, *kcache.shape[1:], device=kcache.device, dtype=kcache.dtype),
+            torch.empty(1, *vcache.shape[1:], device=vcache.device, dtype=vcache.dtype),
         )

@@ -236,6 +236,15 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         wrapper_cfg["kvcache_partition_len"] = rbln_config.model_cfg.get("kvcache_partition_len")
         wrapper_cfg["use_rotary_emb"] = cls._use_rotary_emb
 
+        # Convert model to FP16 if requested
+        if rbln_config.model_cfg.get("use_fp16"):
+            if version.parse(torch.__version__) < version.parse("2.6.0"):
+                raise ValueError(
+                    "FP16 on CPU is only supported with PyTorch >= 2.6.0. "
+                    f"Current PyTorch version is {torch.__version__}."
+                )
+            model = model.half()
+
         return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
 
     @classmethod
@@ -298,7 +307,10 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_attn_impl = rbln_kwargs.get("attn_impl", None)
         rbln_kvcache_partition_len = rbln_kwargs.get("kvcache_partition_len", None)
         rbln_quantization = QuantizationManager.validate_quantization_config(rbln_kwargs.get("quantization", None))
-        rbln_use_fp16 = rbln_kwargs.get("use_fp16", False)
+        rbln_use_fp16 = rbln_kwargs.get("use_fp16", None)
+
+        if rbln_use_fp16 is None:
+            rbln_use_fp16 = False
 
         # Check PyTorch version for FP16 CPU support
         if rbln_use_fp16 and version.parse(torch.__version__) < version.parse("2.6.0"):
