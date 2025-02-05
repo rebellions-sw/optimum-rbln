@@ -549,14 +549,15 @@ class DecoderOnlyAttention(nn.Module):
         self_attn: Original attention module from the base model
     """
 
-    def __init__(self, self_attn):
+    def __init__(self, self_attn: nn.Module):
         super().__init__()
         self._original_mod = self_attn
         self.layer_idx = self_attn.layer_idx
         self.num_heads = self._original_mod.num_heads
         self.head_dim = self._original_mod.head_dim
         self._phase = "prefill"
-        self.scale = torch.tensor(self.get_attn_scale())
+        dtype = next(iter(self._original_mod.parameters())).dtype
+        self.scale = torch.tensor(self.get_attn_scale(), dtype=dtype)
 
         if hasattr(self._original_mod, "num_key_value_heads"):
             self.num_key_value_heads = self._original_mod.num_key_value_heads

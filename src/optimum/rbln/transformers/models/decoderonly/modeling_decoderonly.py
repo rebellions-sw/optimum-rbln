@@ -113,12 +113,16 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         self.max_seq_len = self.rbln_config.model_cfg["max_seq_len"]
         self.prefill_chunk_size = self.rbln_config.model_cfg["prefill_chunk_size"]
 
-        self.prefill_attention_mask = torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
-        self.causal_mask = 1 - torch.triu(
-            torch.ones(1, 1, self.prefill_chunk_size, self.prefill_chunk_size), diagonal=1
-        )
-        self.dec_attn_mask_init = torch.zeros(1, 1, 1, self.max_seq_len, dtype=torch.float32)
-        self.dec_attn_mask = torch.zeros(self.batch_size, 1, 1, self.max_seq_len, dtype=torch.float32)
+        # Get model dtype based on fp16 config
+        self.dtype = torch.float16 if self.rbln_config.model_cfg.get("use_fp16", False) else torch.float32
+
+        # Update dtypes for attention masks
+        self.prefill_attention_mask = torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=self.dtype)
+        self.causal_mask = (
+            1 - torch.triu(torch.ones(1, 1, self.prefill_chunk_size, self.prefill_chunk_size), diagonal=1)
+        ).to(self.dtype)
+        self.dec_attn_mask_init = torch.zeros(1, 1, 1, self.max_seq_len, dtype=self.dtype)
+        self.dec_attn_mask = torch.zeros(self.batch_size, 1, 1, self.max_seq_len, dtype=self.dtype)
 
         main_input_name = self.main_input_name
         if self.rbln_config.model_cfg["use_inputs_embeds"]:
@@ -555,7 +559,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 f"Invalid batch_idx ({batch_idx}). It must be a non-null value less than the batch size ({self.batch_size})."
             )
 
-        dtype = torch.float16 if self.rbln_config.model_cfg.get("use_fp16", False) else torch.float32
         out_buffers = [
             torch.empty(
                 size=[
@@ -563,7 +566,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     1,
                     self.config.vocab_size,
                 ],
-                dtype=dtype,
+                dtype=self.dtype,
                 device="cpu",
             )
         ]
@@ -651,6 +654,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
                 )
             self.dec_attn_mask[b_idx, :, :, decoding_step] = 1
+
         logits = self.decoder(
             input_ids=input_tensors.contiguous() if inputs_embeds is None else None,
             inputs_embeds=input_tensors.contiguous() if inputs_embeds is not None else None,
