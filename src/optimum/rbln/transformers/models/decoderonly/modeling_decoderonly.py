@@ -145,7 +145,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         and each chunk is processed sequentially. This allows for better memory utilization and compatibility with continuous batching.
         """
 
-        # Validate batch index
         if batch_idx is None or batch_idx >= self.batch_size:
             raise RuntimeError(
                 f"Invalid batch_idx ({batch_idx}). It must be a non-null value less than the batch size ({self.batch_size})."
@@ -153,7 +152,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
         inputs = inputs[:, attention_mask.bool()] if attention_mask is not None else inputs
 
-        # Validate input sequence length
         query_length = inputs.shape[1]
         if query_length > self.max_seq_len:
             raise ValueError(
@@ -658,7 +656,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         A for-loop ensures synchronization with the Hugging Face generate API.
         The decoder stage operates as usual, processing inputs in batch mode.
         """
-        # prefll
+        # Prefll
         if cache_position is None:
             logits = []
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
@@ -676,7 +674,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 logits.append(logit)
 
             logits = torch.cat(logits, dim=0)
-        # decode
+        # Decoder
         else:
             logits = self.decoder(
                 input_ids=input_ids,
