@@ -67,10 +67,14 @@ class RBLNBartModel(RBLNModel):
         if max_position_embeddings is not None and rbln_max_seq_len > max_position_embeddings:
             raise ValueError("`rbln_max_seq_len` should be less or equal than max_position_embeddings!")
 
+        input_names_order = inspect.signature(cls.hf_class.forward).parameters.keys()
+
         if rbln_model_input_names is None:
             for tokenizer in preprocessors:
                 if hasattr(tokenizer, "model_input_names"):
-                    rbln_model_input_names = tokenizer.model_input_names
+                    rbln_model_input_names = [
+                        name for name in input_names_order if name in tokenizer.model_input_names
+                    ]
                     # BartModel's forward() does not take token_type_ids as input.
                     # (Added because some of the tokenizers includes 'token_type_ids')
                     if "token_type_ids" in rbln_model_input_names:
@@ -79,11 +83,12 @@ class RBLNBartModel(RBLNModel):
             if rbln_model_input_names is None and hasattr(cls, "rbln_model_input_names"):
                 rbln_model_input_names = cls.rbln_model_input_names
             elif rbln_model_input_names is None and hasattr(cls, "rbln_model_input_names") is False:
-                input_names_order = inspect.signature(cls.hf_class.forward).parameters.keys()
                 raise ValueError(
                     "Specify the model input names obtained by the tokenizer via `rbln_model_input_names`, "
                     f"and be sure to make the order of the inputs same as BartModel forward() arguments like ({list(input_names_order)})"
                 )
+        else:
+            rbln_model_input_names = [name for name in input_names_order if name in rbln_model_input_names]
 
         if rbln_batch_size is None:
             rbln_batch_size = 1
