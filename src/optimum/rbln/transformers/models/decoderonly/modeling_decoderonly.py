@@ -93,17 +93,19 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             inputs = inputs_embeds
 
         if self.phase == "decode":
-            return self.deocode_forward(
+            return self.decode_forward(
                 inputs,
                 cache_position,
+                attention_mask=attention_mask,
             )
         else:
             return self.prefill_forward(inputs, cache_position, attention_mask, batch_idx)
 
-    def deocode_forward(
+    def decode_forward(
         self,
         inputs: torch.Tensor,
         cache_position: torch.Tensor = None,
+        attention_mask: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         batch_size = inputs.shape[0]
         if batch_size != self.batch_size:
@@ -124,7 +126,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
         logits = super().forward(
             inputs,
-            self.dec_attn_mask,
+            self.dec_attn_mask if attention_mask is None else attention_mask,
             cache_position,
         )
 
@@ -137,6 +139,13 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         attention_mask: Optional[torch.Tensor] = None,
         batch_idx: int = None,
     ) -> torch.FloatTensor:
+        """
+        Performs chunked prefill for efficient KV-cache updates and memory optimization.
+        Instead of processing the entire sequence at once, the input is divided into chunks of size `prefill_chunk_size`,
+        and each chunk is processed sequentially. This allows for better memory utilization and compatibility with continuous batching.
+        """
+
+        # Validate batch index
         if batch_idx is None or batch_idx >= self.batch_size:
             raise RuntimeError(
                 f"Invalid batch_idx ({batch_idx}). It must be a non-null value less than the batch size ({self.batch_size})."
@@ -144,15 +153,18 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
         inputs = inputs[:, attention_mask.bool()] if attention_mask is not None else inputs
 
+        # Validate input sequence length
         query_length = inputs.shape[1]
         if query_length > self.max_seq_len:
             raise ValueError(
                 f"Input length ({query_length}) exceeds the maximum allowed sequence length ({self.max_seq_len})."
             )
 
+        # Initialize attention mask and causal mask for chunked processing
         attention_mask = torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
         causal_mask = 1 - torch.triu(torch.ones(1, 1, self.prefill_chunk_size, self.prefill_chunk_size), diagonal=1)
 
+        # Buffer for storing output logits
         out_buffers = [
             torch.empty(
                 size=self.output_size,
@@ -161,8 +173,9 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             )
         ]
 
+        # Process input in chunks of size `prefill_chunk_size`
         for step in range(0, query_length, self.prefill_chunk_size):
-            # pad inputs & cache_position for prefill_chunk
+            # Pad input and cache_position if the last chunk is smaller than `prefill_chunk_size`
             if (step + self.prefill_chunk_size) > query_length:
                 padding_size = step + self.prefill_chunk_size - query_length
                 if inputs.dim() == 3:
@@ -182,18 +195,20 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     dim=-1,
                 )
 
-            # slice input & cache_position with prefill_chunk_size
+            # Extract the current chunk of inputs and cache positions
             input_chunk = inputs[:, step : step + self.prefill_chunk_size]
             cache_pos_chunk = cache_position[:, step : step + self.prefill_chunk_size]
 
-            # update attention_mask
+            # Update attention mask to ensure proper causal behavior
             if step >= self.prefill_chunk_size:
                 attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
             attention_mask[:, :, :, step : step + self.prefill_chunk_size] = causal_mask
 
+            # Define batch position and query position
             batch_position = torch.tensor(batch_idx, dtype=torch.int16)
             query_position = torch.tensor((query_length - 1) % self.prefill_chunk_size, dtype=torch.int16)
 
+            # Forward pass for the current chunk
             logits = super().forward(
                 input_chunk,
                 attention_mask,
@@ -203,7 +218,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 out=out_buffers,
             )
 
-        # update decoder_attn_mask with preprocessed kv-cache length in prefill phase
+        # Update decoder attention mask with processed KV-cache length from prefill phase
         self.dec_attn_mask[batch_idx].fill_(0)
         self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
 
@@ -638,9 +653,10 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
         """
-        Forward method for the huggingface genearate api for the RBLN optimized model.
-        Continous batching을 위해 batch_idx를 사용하여 batch 단위로 prefill을 수행합니다.
-
+        Forward method for the RBLN-optimized model, designed for integration with the Hugging Face generate API.
+        For continuous batching, the prefill stage compiles one batch at a time and updates the KV cache using batch_idx.
+        A for-loop ensures synchronization with the Hugging Face generate API.
+        The decoder stage operates as usual, processing inputs in batch mode.
         """
         # prefll
         if cache_position is None:
@@ -660,7 +676,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 logits.append(logit)
 
             logits = torch.cat(logits, dim=0)
-        # decoder
+        # decode
         else:
             logits = self.decoder(
                 input_ids=input_ids,
