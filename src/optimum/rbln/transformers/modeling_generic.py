@@ -32,7 +32,6 @@ different model architectures.
 import inspect
 from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
-import transformers
 from transformers import (
     AutoModelForAudioClassification,
     AutoModelForImageClassification,
@@ -83,19 +82,24 @@ class RBLNModelForQuestionAnswering(RBLNModel):
         if rbln_batch_size is None:
             rbln_batch_size = 1
 
+        input_names_order = inspect.signature(cls.hf_class.forward).parameters.keys()
+
         if rbln_model_input_names is None:
             for tokenizer in preprocessors:
                 if hasattr(tokenizer, "model_input_names"):
-                    rbln_model_input_names = tokenizer.model_input_names
+                    rbln_model_input_names = [
+                        name for name in input_names_order if name in tokenizer.model_input_names
+                    ]
                     break
             if rbln_model_input_names is None and hasattr(cls, "rbln_model_input_names"):
                 rbln_model_input_names = cls.rbln_model_input_names
             elif rbln_model_input_names is None and hasattr(cls, "rbln_model_input_names") is False:
-                input_names_order = inspect.signature(cls.hf_class.forward).parameters.keys()
                 raise ValueError(
                     "Specify the model input names obtained by the tokenizer via `rbln_model_input_names`, "
                     f"and be sure to make the order of the inputs same as QuestionAnswering forward() arguments like ({list(input_names_order)})"
                 )
+        else:
+            rbln_model_input_names = [name for name in input_names_order if name in rbln_model_input_names]
 
         input_info = [
             (model_input_name, [rbln_batch_size, rbln_max_seq_len], "int64")
@@ -289,20 +293,24 @@ class RBLNModelForSequenceClassification(RBLNModel):
         if max_position_embeddings is not None and rbln_max_seq_len > max_position_embeddings:
             raise ValueError("`rbln_enc_max_seq_len` should be less or equal than max_position_embeddings!")
 
+        input_names_order = inspect.signature(cls.hf_class.forward).parameters.keys()
+
         if rbln_model_input_names is None:
             for tokenizer in preprocessors:
                 if hasattr(tokenizer, "model_input_names"):
-                    rbln_model_input_names = tokenizer.model_input_names
+                    rbln_model_input_names = [
+                        name for name in input_names_order if name in tokenizer.model_input_names
+                    ]
                     break
             if rbln_model_input_names is None and hasattr(cls, "rbln_model_input_names"):
                 rbln_model_input_names = cls.rbln_model_input_names
             elif rbln_model_input_names is None and hasattr(cls, "rbln_model_input_names") is False:
-                original_model_class = getattr(transformers, model_config.architectures[0])
-                input_names_order = inspect.signature(original_model_class.forward).parameters.keys()
                 raise ValueError(
                     "Specify the model input names obtained by the tokenizer via `rbln_model_input_names`, "
                     f"and be sure to make the order of the inputs same as SequenceClassification forward() arguments like ({list(input_names_order)})"
                 )
+        else:
+            rbln_model_input_names = [name for name in input_names_order if name in rbln_model_input_names]
 
         if rbln_batch_size is None:
             rbln_batch_size = 1
@@ -353,19 +361,24 @@ class RBLNModelForMaskedLM(RBLNModel):
         if max_position_embeddings is not None and rbln_max_seq_len > max_position_embeddings:
             raise ValueError("`rbln_enc_max_seq_len` should be less or equal than max_position_embeddings!")
 
+        input_names_order = inspect.signature(cls.hf_class.forward).parameters.keys()
+
         if rbln_model_input_names is None:
             for tokenizer in preprocessors:
                 if hasattr(tokenizer, "model_input_names"):
-                    rbln_model_input_names = tokenizer.model_input_names
+                    rbln_model_input_names = [
+                        name for name in input_names_order if name in tokenizer.model_input_names
+                    ]
                     break
             if rbln_model_input_names is None and hasattr(cls, "rbln_model_input_names"):
                 rbln_model_input_names = cls.rbln_model_input_names
             elif rbln_model_input_names is None and hasattr(cls, "rbln_model_input_names") is False:
-                input_names_order = inspect.signature(cls.hf_class.forward).parameters.keys()
                 raise ValueError(
                     "Specify the model input names obtained by the tokenizer via `rbln_model_input_names`, "
                     f"and be sure to make the order of the inputs same as MaskedLM forward() arguments like ({list(input_names_order)})"
                 )
+        else:
+            rbln_model_input_names = [name for name in input_names_order if name in rbln_model_input_names]
 
         if rbln_batch_size is None:
             rbln_batch_size = 1
