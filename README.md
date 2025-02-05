@@ -6,7 +6,9 @@
 <img src="assets/rbln_logo.png" width="60%"/>
 
 [![PyPI version](https://badge.fury.io/py/optimum-rbln.svg)](https://badge.fury.io/py/optimum-rbln)
-[![License](https://img.shields.io/github/license/rebellions-sw/optimum-rbln)](https://github.com/rebellions-sw/optimum-rbln/blob/main/LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-available-brightgreen)](https://docs.rbln.ai/software/optimum/optimum_rbln.html)
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
+
 
 </div>
 

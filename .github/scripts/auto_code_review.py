@@ -56,7 +56,7 @@ Review the following code changes(GIT DIFF) along with the pull request (PR) det
 <PR_DESCRIPTION>
   title : {pr.title}
   body :
-{pr.body[:pr.body.find("## Related Issues")] if pr.body is not None else ''}
+{pr.body[: pr.body.find("## Related Issues")] if pr.body is not None else ""}
 </PR_DESCRIPTION>
 
 

@@ -70,7 +70,7 @@ def _get_default_logging_level():
         else:
             logging.getLogger().warning(
                 f"Unknown option OPTIMUM_RBLN_VERBOSE={env_level_str}, "
-                f"has to be one of: { ', '.join(log_levels.keys()) }"
+                f"has to be one of: {', '.join(log_levels.keys())}"
             )
     return _default_log_level
 

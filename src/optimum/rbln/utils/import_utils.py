@@ -132,7 +132,7 @@ def is_rbln_available() -> bool:
 def check_version_compats() -> None:
     warnings.filterwarnings(action="always", category=ImportWarning, module="optimum.rbln")
     my_version = importlib.metadata.version("optimum-rbln")
-    target_version = list(filter(lambda v: Version(my_version) > Version(v), RBLN_VERSION_COMPATS.keys()))[0]
+    target_version = list(filter(lambda v: Version(my_version) >= Version(v), RBLN_VERSION_COMPATS.keys()))[0]
     for compat in RBLN_VERSION_COMPATS[target_version]:
         try:
             dep_version = importlib.metadata.version(compat.package_name)

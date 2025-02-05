@@ -33,9 +33,7 @@ dependencies = [
     "accelerate>=1.0.1",
     "transformers==4.45.2",
     "diffusers<=0.31.0",
-    "einops>=0.8.0",
     "packaging>=24.1",
-    "halo>=0.0.31",
 ]
 
 [project.urls]

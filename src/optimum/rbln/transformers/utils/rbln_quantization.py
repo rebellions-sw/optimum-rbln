@@ -52,7 +52,7 @@ class QuantizationManager:
     ) -> None:
         context_info = f" for {context}" if context else ""
         valid_values_str = ", ".join(valid_values)
-        raise ValueError(f"Invalid {key}: {value}{context_info}. " f"Supported values are: {valid_values_str}")
+        raise ValueError(f"Invalid {key}: {value}{context_info}. Supported values are: {valid_values_str}")
 
     @staticmethod
     def validate_quantization_config(quantize_config: Optional[dict]) -> Optional[dict]:

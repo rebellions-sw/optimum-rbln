@@ -55,7 +55,7 @@ def main(
                     "content": [
                         {
                             "type": "text",
-                            "text": f"Name the {i+1} largest countries in the world. Explain detail.",
+                            "text": f"Name the {i + 1} largest countries in the world. Explain detail.",
                         },
                     ],
                 },
