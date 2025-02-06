@@ -298,10 +298,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_attn_impl = rbln_kwargs.get("attn_impl", None)
         rbln_kvcache_partition_len = rbln_kwargs.get("kvcache_partition_len", None)
         rbln_quantization = QuantizationManager.validate_quantization_config(rbln_kwargs.get("quantization", None))
-        rbln_prefill_chunk_size = rbln_kwargs.get("prefill_chunk_size", 128)
+        rbln_prefill_chunk_size = rbln_kwargs.get("prefill_chunk_size", None)
 
         if rbln_prefill_chunk_size is None:
-            warnings.warn("prefill_chunk_size is None. Falling back to default value: 128.", UserWarning)
             rbln_prefill_chunk_size = 128
         elif rbln_prefill_chunk_size % 64 != 0 or rbln_prefill_chunk_size == 0:
             raise ValueError(
