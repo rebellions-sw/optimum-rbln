@@ -463,8 +463,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
         if save_directory_path.absolute() == real_save_dir.absolute():
             raise FileExistsError(
-                f"Cannot save model to '{save_directory}'. "
-                f"This directory already exists and contains the model files."
+                f"Cannot save model to '{save_directory}'. This directory already exists and contains the model files."
             )
 
         # Create a temporary directory next to the target directory
