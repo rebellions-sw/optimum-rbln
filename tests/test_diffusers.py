@@ -217,7 +217,7 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
     GENERATION_KWARGS = {
         "num_inference_steps": 1,
         "generator": torch.manual_seed(42),
-        "image": to_pil_image(torch.randn(1, 3, 64, 64, generator=torch.manual_seed(42)).clamp(0, 1)),
+        "image": to_pil_image(torch.randn(3, 64, 64, generator=torch.manual_seed(42)).clamp(0, 1)),
         "num_frames": 14,
         "decode_chunk_size": 7,
     }
@@ -236,7 +236,7 @@ class TestSVDXTImg2VidModel(BaseTest.TestModel):
     GENERATION_KWARGS = {
         "num_inference_steps": 1,
         "generator": torch.manual_seed(42),
-        "image": to_pil_image(torch.randn(1, 3, 64, 64, generator=torch.manual_seed(42)).clamp(0, 1)),
+        "image": to_pil_image(torch.randn(3, 64, 64, generator=torch.manual_seed(42)).clamp(0, 1)),
         "num_frames": 25,
         "decode_chunk_size": 5,
     }
