@@ -11,6 +11,7 @@ from optimum.rbln import (
     RBLNStableDiffusionPipeline,
     RBLNStableDiffusionXLControlNetPipeline,
     RBLNStableDiffusionXLPipeline,
+    RBLNStableVideoDiffusionPipeline,
 )
 
 from .test_base import BaseTest
@@ -208,6 +209,41 @@ class TestSDMultiControlNetModel(BaseTest.TestModel):
         cls.RBLN_CLASS_KWARGS["controlnet"] = controlnets
         return super().setUpClass()
 
+
+class TestSVDImg2VidModel(BaseTest.TestModel):
+    RBLN_CLASS = RBLNStableVideoDiffusionPipeline
+    HF_MODEL_ID = "stabilityai/stable-video-diffusion-img2vid"
+    GENERATION_KWARGS = {
+        "num_inference_steps": 1,
+        "generator": torch.manual_seed(42),
+        "image": torch.randn(1, 3, 64, 64, generator=torch.manual_seed(42)).clamp(0, 1),
+        "num_frames": 14,
+        "decode_chunk_size": 7,
+    }
+    RBLN_CLASS_KWARGS = {
+        "rbln_img_width": 64,
+        "rbln_img_height": 64,
+        "num_frames": 14,
+        "decode_chunk_size": 7,
+    }
+    
+
+class TestSVDXTImg2VidModel(BaseTest.TestModel):
+    RBLN_CLASS = RBLNStableVideoDiffusionPipeline
+    HF_MODEL_ID = "stabilityai/stable-video-diffusion-img2vid-xt"
+    GENERATION_KWARGS = {
+        "num_inference_steps": 1,
+        "generator": torch.manual_seed(42),
+        "image": torch.randn(1, 3, 64, 64, generator=torch.manual_seed(42)).clamp(0, 1),
+        "num_frames": 25,
+        "decode_chunk_size": 5,
+    }
+    RBLN_CLASS_KWARGS = {
+        "rbln_img_width": 64,
+        "rbln_img_height": 64,
+        "num_frames": 25,
+        "decode_chunk_size": 5,
+    }
 
 if __name__ == "__main__":
     unittest.main()
