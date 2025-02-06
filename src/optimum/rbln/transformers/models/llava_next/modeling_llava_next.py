@@ -35,7 +35,6 @@ from transformers import (
     PreTrainedModel,
 )
 from transformers.modeling_outputs import BaseModelOutputWithPooling
-from transformers.models.llava_next.modeling_llava_next import LlavaNextCausalLMOutputWithPast
 
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
@@ -331,7 +330,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         cache_position: torch.Tensor = None,
         generate_idx: Optional[torch.Tensor] = None,
         **kwargs,
-    ) -> Union[Tuple, LlavaNextCausalLMOutputWithPast]:
+    ) -> Union[Tuple, RBLNDecoderOnlyOutput]:
         if inputs_embeds is not None:
             raise NotImplementedError("Specifying inputs_embeds is not supported.")
 
@@ -388,7 +387,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
                 # Update generate_idx according to inputs_embed
                 generate_idx[b_idx] = inputs_embed.shape[1]
 
-                logit = self.language_model._forward_prefill(
+                logit = self.language_model.prefill_decoder(
                     inputs_embeds=inputs_embed,
                     batch_idx=b_idx,
                     cache_position=torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0),
@@ -397,18 +396,16 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
                 logits.append(logit)
 
             logits = torch.cat(logits, dim=0)
-            outputs = RBLNDecoderOnlyOutput(logits=logits, generate_idx=generate_idx)
 
         else:
             inputs_embeds = self.text_embedding(input_ids)
 
-            outputs: RBLNDecoderOnlyOutput = self.language_model(
+            logits = self.language_model.decoder(
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
-                generate_idx=generate_idx,
             )
 
-        return outputs
+        return RBLNDecoderOnlyOutput(logits=logits, generate_idx=generate_idx)
 
     # Almost copied from : https://github.com/huggingface/transformers/blob/5af7d41e49bbfc8319f462eb45253dcb3863dfb7/src/transformers/models/llava_next/modeling_llava_next.py
     def pack_image_features(self, image_features, image_sizes, image_newline=None):
