@@ -563,7 +563,20 @@ class DecoderOnlyLayer(nn.Module):
         # Fully Connected
         residual = hidden_states
         hidden_states = self.get_post_attention_layernorm()(hidden_states)
-        hidden_states = self._original_mod.mlp(hidden_states)
+
+        kPipe = 2
+        if hidden_states.shape[1] > kPipe:
+            hiddens = []
+            for i in range(kPipe):
+                assert hidden_states.shape[1] % kPipe == 0, "currently only support even split"
+
+                chunk = hidden_states.shape[1] // kPipe
+                hiddens.append(self._original_mod.mlp(hidden_states[:, i*chunk:(i+1)*chunk, :]))
+            hidden_states = torch.cat(hiddens, dim=1)
+
+        else:
+            hidden_states = self._original_mod.mlp(hidden_states)
+
         hidden_states = residual + hidden_states
 
         return hidden_states
