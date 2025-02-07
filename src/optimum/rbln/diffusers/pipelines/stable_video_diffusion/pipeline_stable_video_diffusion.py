@@ -49,16 +49,18 @@ class RBLNStableVideoDiffusionPipeline(RBLNDiffusionMixin, StableVideoDiffusionP
     """
 
     original_class = StableVideoDiffusionPipeline
-    _submodules = ["image_encoder", "unet", "vae"]
+    # _submodules = ["image_encoder", "unet", "vae"]
+    _submodules = ["unet"]
 
     def handle_additional_kwargs(self, **kwargs):
         compiled_num_frames = self.unet.rbln_config.model_cfg.get("num_frames")
         if compiled_num_frames is not None:
             kwargs["num_frames"] = compiled_num_frames
 
-        compiled_decode_chunk_size = self.vae.rbln_config.model_cfg.get("decode_chunk_size")
-        if compiled_decode_chunk_size is not None:
-            kwargs["decode_chunk_size"] = compiled_decode_chunk_size
+        # compiled_decode_chunk_size = self.vae.rbln_config.model_cfg.get("decode_chunk_size")
+        compiled_decode_chunk_size = 7
+        # if compiled_decode_chunk_size is not None:
+        #     kwargs["decode_chunk_size"] = compiled_decode_chunk_size
         return kwargs
 
     def _encode_image(

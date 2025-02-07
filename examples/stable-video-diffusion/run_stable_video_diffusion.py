@@ -21,7 +21,6 @@ def main(
     image = image.resize((img_width, img_height))
 
     if from_diffusers:
-        model_id = "stabilityai/stable-video-diffusion-img2vid"
         pipe = RBLNStableVideoDiffusionPipeline.from_pretrained(
             model_id,
             export=True,
@@ -49,7 +48,7 @@ def main(
     if num_frames is None:
         num_frames = pipe.unet.config.num_frames
 
-    export_to_video(frames, f"generated_{os.path.basename(model_id)}.mp4", fps=num_frames)
+    export_to_video(frames, f"generated_{os.path.basename(model_id)}_wpqfk.mp4", fps=num_frames)
 
 
 if __name__ == "__main__":
