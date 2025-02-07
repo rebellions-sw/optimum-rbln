@@ -118,15 +118,10 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
 
     def __post_init__(self, **kwargs):
         batch_size = self.rbln_config.model_cfg["batch_size"]
-        enc_max_seq_len = self.rbln_config.model_cfg["enc_max_seq_len"]
-        pad_token_id = self.rbln_config.model_cfg["pad_token_id"]
         dec_max_seq_len = self.rbln_config.model_cfg["dec_max_seq_len"]
         self.encoder = RBLNRuntimeEncoder(
             runtime=self.model[0],
             main_input_name="input_ids",
-            batch_size=batch_size,
-            enc_max_seq_len=enc_max_seq_len,
-            pad_token_id=pad_token_id,
         )
         self.decoder = RBLNRuntimeDecoder(
             runtime=self.model[1], main_input_name="input_ids", batch_size=batch_size, dec_max_seq_len=dec_max_seq_len
