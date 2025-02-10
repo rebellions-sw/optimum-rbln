@@ -21,7 +21,7 @@
 # copied, modified, or distributed without prior written permission
 # from Rebellions Inc.
 
-import logging
+from ....utils.logging import get_logger
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import rebel
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     import torch
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RBLNVQModel(RBLNModel):
@@ -72,9 +72,15 @@ class RBLNVQModel(RBLNModel):
 
     @classmethod
     def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
-        batch_size = rbln_config.get("batch_size") or 1
-        img_height = rbln_config.get("img_height") or 512
-        img_width = rbln_config.get("img_width") or 512
+        batch_size = rbln_config.get("batch_size")
+        if batch_size is None:
+            batch_size = 1
+        img_height = rbln_config.get("img_height")
+        if img_height is None:
+            img_height = 512
+        img_width = rbln_config.get("img_width")
+        if img_width is None:
+            img_width = 512
 
         rbln_config.update(
             {
