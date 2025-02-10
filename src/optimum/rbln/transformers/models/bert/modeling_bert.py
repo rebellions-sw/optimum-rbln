@@ -64,24 +64,29 @@ class RBLNBertModel(RBLNModel):
         if max_position_embeddings is not None and rbln_max_seq_len > max_position_embeddings:
             raise ValueError("`rbln_max_seq_len` should be less or equal than max_position_embeddings!")
 
-        input_names_order = inspect.signature(cls.hf_class.forward).parameters.keys()
+        signature_params = inspect.signature(cls.hf_class.forward).parameters.keys()
 
         if rbln_model_input_names is None:
             for tokenizer in preprocessors:
                 if hasattr(tokenizer, "model_input_names"):
-                    rbln_model_input_names = [
-                        name for name in input_names_order if name in tokenizer.model_input_names
-                    ]
+                    rbln_model_input_names = [name for name in signature_params if name in tokenizer.model_input_names]
+
+                    invalid_params = set(rbln_model_input_names) - set(signature_params)
+                    if invalid_params:
+                        raise ValueError(f"Invalid model input names: {invalid_params}")
                     break
             if rbln_model_input_names is None and hasattr(cls, "rbln_model_input_names"):
                 rbln_model_input_names = cls.rbln_model_input_names
             elif rbln_model_input_names is None and hasattr(cls, "rbln_model_input_names") is False:
                 raise ValueError(
                     "Specify the model input names obtained by the tokenizer via `rbln_model_input_names`, "
-                    f"and be sure to make the order of the inputs same as BertModel forward() arguments like ({list(input_names_order)})"
+                    f"and be sure to make the order of the inputs same as BertModel forward() arguments like ({list(signature_params)})"
                 )
         else:
-            rbln_model_input_names = [name for name in input_names_order if name in rbln_model_input_names]
+            invalid_params = set(rbln_model_input_names) - set(signature_params)
+            if invalid_params:
+                raise ValueError(f"Invalid model input names: {invalid_params}")
+            rbln_model_input_names = [name for name in signature_params if name in rbln_model_input_names]
 
         if rbln_batch_size is None:
             rbln_batch_size = 1
