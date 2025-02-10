@@ -23,4 +23,5 @@
 
 from .attn import register_rbln_custom_attention, register_rbln_custom_attention_add_softmax
 from .flash_attn import register_rbln_custom_flash_attention
+from .paged_attn import register_rbln_custom_paged_attention
 from .kv_cache_update import register_rbln_custom_cache_update

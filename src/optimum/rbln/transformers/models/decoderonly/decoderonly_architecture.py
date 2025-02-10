@@ -28,7 +28,7 @@ import torch
 from torch import nn
 from transformers import PretrainedConfig, PreTrainedModel
 
-from ....ops import register_rbln_custom_attention, register_rbln_custom_flash_attention
+from ....ops import register_rbln_custom_attention, register_rbln_custom_flash_attention, register_rbln_custom_paged_attention
 from ....utils import logging
 from ...modeling_rope_utils import ROPE_INIT_FUNCTIONS
 
@@ -43,7 +43,7 @@ MAX_FLASH_ATTN_PARTITION_LENGTH = 32_768
 
 
 def validate_attention_method(
-    rbln_attn_impl: str, rbln_kvcache_partition_len: int, rbln_max_seq_len: int
+    rbln_attn_impl: str, rbln_kvcache_partition_len: int, rbln_kvcache_block_size: int, rbln_max_seq_len: int
 ) -> Tuple[str, int]:
     if rbln_kvcache_partition_len is not None:
         if rbln_attn_impl == "eager":
@@ -53,16 +53,24 @@ def validate_attention_method(
                 "or switch `rbln_attn_impl` to 'flash_attn' to use KV cache partitioning."
             )
         elif rbln_attn_impl is None:
-            rbln_attn_impl = "flash_attn"
-            logger.warning(
-                "A non-null `rbln_kvcache_partition_len` was provided, but `rbln_attn_impl` was not explicitly set. "
-                "Since KV cache partitioning is only supported with flash attention, "
-                "`rbln_attn_impl` has been automatically switched to 'flash_attn'."
-            )
+            if rbln_kvcache_block_size is not None:
+                rbln_attn_impl = "paged_attn"
+                logger.warning(
+                    "A Non-null 'rbln_kvcache_block_size' was provided, but `rbln_attn_impl` was not explicitly set. "
+                    "Since KV cache block size is only supported with paged attention, "
+                    "`rbln_attn_impl` has been automatically switched to 'paged_attn'."
+                )
+            else:
+                rbln_attn_impl = "flash_attn"
+                logger.warning(
+                    "A non-null `rbln_kvcache_partition_len` was provided, but `rbln_attn_impl` was not explicitly set. "
+                    "Since KV cache partitioning is only supported with flash attention, "
+                    "`rbln_attn_impl` has been automatically switched to 'flash_attn'."
+                )
 
     rbln_attn_impl = "eager" if rbln_attn_impl is None else rbln_attn_impl
-    if rbln_attn_impl not in ["eager", "flash_attn"]:
-        raise ValueError(f"Unknown `rbln_attn_impl` : {rbln_attn_impl}. (Available : 'eager', 'flash_attn`)")
+    if rbln_attn_impl not in ["eager", "flash_attn", "paged_attn"]:
+        raise ValueError(f"Unknown `rbln_attn_impl` : {rbln_attn_impl}. (Available : 'eager', 'flash_attn`, 'paged_attn')")
 
     if rbln_kvcache_partition_len is None and rbln_attn_impl == "flash_attn":
         rbln_kvcache_partition_len = DEFAULT_FLASH_ATTN_PARTITION_LENGTH
@@ -71,7 +79,7 @@ def validate_attention_method(
     # Constraint of eager attention:
     # - `max_seq_len` <= 32k
 
-    # Constraints of flash attention:
+    # Constraints of flash/paged attention:
     # 1. `max_seq_len` should be multiple of `partition_len`.
     # 2. 4k <= `partition_len` <= 32k.
     # 3. `max_seq_len` should be larger then 8k.
@@ -83,7 +91,7 @@ def validate_attention_method(
             " or consider switching `rbln_attn_impl` to 'flash_attn' for larger sequence lengths."
         )
 
-    if rbln_attn_impl == "flash_attn":
+    if rbln_attn_impl in ["flash_attn", "paged_attn"]:
         if rbln_max_seq_len // rbln_kvcache_partition_len < 2 or rbln_max_seq_len % rbln_kvcache_partition_len != 0:
             raise ValueError(
                 f"`rbln_max_seq_len` ({rbln_max_seq_len}) must be a multiple of `rbln_kvcache_partition_len` ({rbln_kvcache_partition_len}) "
@@ -102,7 +110,7 @@ def validate_attention_method(
                 "this requirement, or consider switching `rbln_attn_impl` to 'eager' for shorter lengths."
             )
 
-    return rbln_attn_impl, rbln_kvcache_partition_len
+    return rbln_attn_impl, rbln_kvcache_partition_len, rbln_kvcache_block_size
 
 
 class DecoderOnlyWrapper(nn.Module):
@@ -111,7 +119,7 @@ class DecoderOnlyWrapper(nn.Module):
     This wrapper is designed to:
     1. Convert Huggingface decoder models for RBLN compilation with static shapes
     2. Handle input/model mapping and additional information supply (e.g., positional embeddings)
-    3. Manage different attention implementations (standard and flash attention)
+    3. Manage different attention implementations (standard/flash/paged attention)
     4. Support both prefill and decode phases
 
     Notes:
@@ -138,6 +146,7 @@ class DecoderOnlyWrapper(nn.Module):
         use_rotary_emb: bool,
         attn_impl: str,
         kvcache_partition_len: Optional[int] = None,
+        kvcache_block_size: Optional[int] = None,
     ):
         super().__init__()
         self.config = causal_lm.config
@@ -148,9 +157,14 @@ class DecoderOnlyWrapper(nn.Module):
             self.rotary_emb = None
 
         self.attn_impl = attn_impl
-        if self.attn_impl == "flash_attn":
+        self.kvcache_block_size = None
+        if self.attn_impl in ["flash_attn", "paged_attn"]:
             self.kvcache_partition_len = kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
-            register_rbln_custom_flash_attention()
+            if self.attn_impl == "flash_attn":
+                register_rbln_custom_flash_attention()
+            elif self.attn_impl == "paged_attn":
+                self.kvcache_block_size = kvcache_block_size
+                register_rbln_custom_paged_attention()
         elif self.attn_impl == "eager":
             self.kvcache_partition_len = None
             register_rbln_custom_attention()
@@ -180,12 +194,16 @@ class DecoderOnlyWrapper(nn.Module):
                 new_self_attn = DecoderOnlyFlashAttention(
                     layer.self_attn, kvcache_partition_len=self.kvcache_partition_len
                 )
+            elif self.attn_impl == "paged_attn":
+                new_self_attn = DecoderOnlyPagedAttention(
+                    layer.self_attn, kvcache_partition_len=self.kvcache_partition_len, kvcache_block_size=self.kvcache_block_size
+                )
             else:
                 raise NotImplementedError(f"Unknwon attn : {self.attn_impl}")
 
             new_layer = DecoderOnlyLayer(layer, new_self_attn)
             new_layers.append(new_layer)
-        new_model = DecoderOnlyModel(causal_lm.model, new_layers, partition_len=self.kvcache_partition_len)
+        new_model = DecoderOnlyModel(causal_lm.model, new_layers, partition_len=self.kvcache_partition_len, kvcache_block_size=self.kvcache_block_size)
         new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm
 
@@ -200,23 +218,45 @@ class DecoderOnlyWrapper(nn.Module):
 
     def forward(self, *args):
         if self.phase == "decode":
-            (
-                input_ids_or_inputs_embeds,
-                attention_mask,
-                cache_position,
-                *past_key_values,
-            ) = args
+            if self.attn_impl == "paged_attn":
+                (
+                    input_ids_or_inputs_embeds,
+                    attention_mask,
+                    cache_position,
+                    block_tables,
+                    *past_key_values,
+                ) = args
+            else:
+                (
+                    input_ids_or_inputs_embeds,
+                    attention_mask,
+                    cache_position,
+                    *past_key_values,
+                ) = args
+                block_tables = None
             batch_position = torch.tensor(0, dtype=torch.int16)
             query_position = None
         elif self.phase == "prefill":
-            (
-                input_ids_or_inputs_embeds,
-                attention_mask,
-                cache_position,
-                batch_position,
-                query_position,
-                *past_key_values,
-            ) = args
+            if self.attn_impl == "paged_attn":
+                (
+                    input_ids_or_inputs_embeds,
+                    attention_mask,
+                    cache_position,
+                    query_position,
+                    block_tables,
+                    *past_key_values,
+                ) = args
+                batch_position = None
+            else:
+                (
+                    input_ids_or_inputs_embeds,
+                    attention_mask,
+                    cache_position,
+                    batch_position,
+                    query_position,
+                    *past_key_values,
+                ) = args
+                block_tables = None
         else:
             raise ValueError(f"Unknown phase: {self.phase}")
 
@@ -253,6 +293,7 @@ class DecoderOnlyWrapper(nn.Module):
             query_position=query_position,
             past_key_values=past_key_values,
             rotary_emb=self.rotary_emb,
+            block_tables=block_tables,
         )
 
         # ((key, value)) * n_layer -> [key, value] * n_layer
@@ -314,6 +355,7 @@ class DecoderOnlyForCausalLM(nn.Module):
         query_position: torch.Tensor = None,
         past_key_values: Tuple[Tuple[torch.Tensor]] = None,
         rotary_emb: nn.Module = None,
+        block_tables: Optional[torch.Tensor] = None,
     ):
         # outputs
         hidden_states, present_key_values = self.model(
@@ -324,6 +366,7 @@ class DecoderOnlyForCausalLM(nn.Module):
             batch_position=batch_position,
             past_key_values=past_key_values,
             rotary_emb=rotary_emb,
+            block_tables=block_tables,
         )
 
         if self.phase == "prefill":
@@ -347,12 +390,13 @@ class DecoderOnlyModel(nn.Module):
         _phase: Current processing phase ("prefill" or "decode")
     """
 
-    def __init__(self, model, layers: List["DecoderOnlyLayer"], partition_len=None):
+    def __init__(self, model, layers: List["DecoderOnlyLayer"], partition_len=None, kvcache_block_size=None):
         super().__init__()
         self._original_mod = model
         self.layers = nn.ModuleList(layers)
         self._phase = "prefill"
         self.partition_len = partition_len
+        self.kvcache_block_size = kvcache_block_size
 
     @property
     def phase(self):
@@ -366,14 +410,21 @@ class DecoderOnlyModel(nn.Module):
 
     @property
     def attn_impl(self) -> str:
-        return "eager" if self.partition_len is None else "flash_attn"
+        # return "eager" if self.partition_len is None else "flash_attn"
+        if self.partition_len is None:
+            return "eager"
+        else:
+            if self.kvcache_block_size is None:
+                return "flash_attn"
+            else:
+                return "paged_attn"
 
     @property
     def hidden_multiplier(self):
         return 1
 
     def convert_sequence_positions_for_flash_attn(self, seq_positions, max_seq_len):
-        if self.attn_impl != "flash_attn":
+        if self.attn_impl not in ["flash_attn", "paged_attn"]:
             raise NotImplementedError(f"Unknown attn_impl ({self.attn_impl}).")
 
         partition_len = self.partition_len
@@ -404,6 +455,7 @@ class DecoderOnlyModel(nn.Module):
         batch_position: torch.Tensor = None,
         past_key_values: Tuple[Tuple[torch.Tensor]] = None,
         rotary_emb: nn.Module = None,
+        block_tables: Optional[torch.Tensor] = None,
     ):
         # retrieve input_ids and inputs_embeds
         if (input_ids is None) ^ (inputs_embeds is not None):
@@ -437,7 +489,7 @@ class DecoderOnlyModel(nn.Module):
 
         # (batch, seq_len) -> (batch,)
         seq_positions = cache_position[:, 0]
-        if self.attn_impl == "flash_attn":
+        if self.attn_impl in ["flash_attn", "paged_attn"]:
             max_seq_len = past_key_values[0][0].shape[-2]
             seq_positions = self.convert_sequence_positions_for_flash_attn(
                 seq_positions=seq_positions, max_seq_len=max_seq_len
@@ -453,6 +505,7 @@ class DecoderOnlyModel(nn.Module):
                 past_key_values=present_key_values,
                 cos=cos,
                 sin=sin,
+                block_tables=block_tables,
             )
 
         hidden_states = self.get_last_layernorm()(hidden_states)
@@ -514,6 +567,7 @@ class DecoderOnlyLayer(nn.Module):
         past_key_values: Tuple[Tuple[torch.Tensor]],
         cos: Optional[torch.Tensor] = None,
         sin: Optional[torch.Tensor] = None,
+        block_tables: Optional[torch.Tensor] = None,
     ):
         residual = hidden_states
         hidden_states = self.get_pre_attention_layernorm()(hidden_states)
@@ -526,6 +580,8 @@ class DecoderOnlyLayer(nn.Module):
             past_key_values=past_key_values,
             cos=cos,
             sin=sin,
+            block_tables=block_tables,
+
         )
         hidden_states = residual + hidden_states
 
@@ -613,6 +669,7 @@ class DecoderOnlyAttention(nn.Module):
         past_key_values: Tuple[Tuple[torch.Tensor]],
         cos: Optional[torch.Tensor] = None,
         sin: Optional[torch.Tensor] = None,
+        block_tables: Optional[torch.Tensor] = None,
     ):
         batch_size, query_length, _ = hidden_states.size()
 
@@ -852,6 +909,7 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
         past_key_values: Tuple[Tuple[torch.Tensor]],
         cos: Optional[torch.Tensor] = None,
         sin: Optional[torch.Tensor] = None,
+        block_tables: Optional[torch.Tensor] = None,
     ):
         batch_size, query_length, _ = hidden_states.size()
 
@@ -950,6 +1008,123 @@ class FlashAttentionOp(AttentionOp):
                 scale,
                 self.kvcache_partition_size,
             )
+
+        # reshape for removing repeat_kv
+        attn_output = attn_output.view(1, self.num_heads, -1, self.head_dim)
+        attn_output = attn_output.transpose(1, 2).contiguous()
+        attn_output = attn_output.reshape(1, -1, self.num_heads * self.head_dim)
+
+        return attn_output, key_state, value_state
+
+
+class DecoderOnlyPagedAttention(DecoderOnlyAttention):
+    def __init__(self, self_attn, kvcache_partition_len, kvcache_block_size):
+        self.kvcache_partition_size = kvcache_partition_len
+        self.kvcache_block_size = kvcache_block_size
+        super().__init__(self_attn=self_attn)
+
+    def get_attention(self):
+        return PagedAttentionOp(self.num_heads, self.head_dim, self.num_key_value_heads, self.kvcache_partition_size, self.kvcache_block_size)
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: torch.Tensor,
+        seq_positions: torch.LongTensor,
+        batch_position: torch.Tensor,
+        past_key_values: Tuple[Tuple[torch.Tensor]],
+        cos: Optional[torch.Tensor] = None,
+        sin: Optional[torch.Tensor] = None,
+        block_tables: Optional[torch.Tensor] = None,
+    ):
+        batch_size, query_length, _ = hidden_states.size()
+
+        query_states, key_states, value_states = self.projection(hidden_states=hidden_states)
+
+        query_states = query_states.view(batch_size, query_length, self.num_heads, self.head_dim).transpose(1, 2)
+        key_states = key_states.view(batch_size, query_length, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+        value_states = value_states.view(batch_size, query_length, self.num_key_value_heads, self.head_dim).transpose(
+            1, 2
+        )
+        # b, num_head, query, head_dim
+
+        if cos is not None and sin is not None:
+            query_states, key_states = self.apply_rotary_pos_embed(query_states, key_states, cos, sin)
+
+        _key_states = []
+        _value_states = []
+        _attn_outputs = []
+        for b in range(batch_size):
+            seq_position = seq_positions[b][0]
+            attn_output, key_state, value_state = self.attention(
+                query_states[b].unsqueeze(0),
+                key_states[b].unsqueeze(0),
+                value_states[b].unsqueeze(0),
+                attention_mask[b].unsqueeze(0) if self.phase == "decode" else attention_mask,
+                past_key_state=past_key_values[self.layer_idx][0],
+                past_value_state=past_key_values[self.layer_idx][1],
+                seq_position=seq_position,
+                scale=self.scale,
+                block_table=block_tables[b],
+                block_size=self.kvcache_block_size,
+            )
+            _key_states.append(key_state)
+            _value_states.append(value_state)
+            _attn_outputs.append(attn_output)
+        key_states = torch.cat(_key_states, dim=0)
+        value_states = torch.cat(_value_states, dim=0)
+        attn_outputs = torch.cat(_attn_outputs, dim=0)
+
+        attn_outputs = self.o_proj(attn_outputs)
+        past_key_values[self.layer_idx] = key_states, value_states
+        return attn_outputs, past_key_values
+
+
+class PagedAttentionOp(AttentionOp):
+    def __init__(self, num_heads: int, head_dim: int, num_key_value_heads: int, kvcache_partition_len: int, kvcache_block_size: int):
+        super().__init__(num_heads=num_heads, head_dim=head_dim, num_key_value_heads=num_key_value_heads)
+        self.kvcache_partition_size = kvcache_partition_len
+        self.kvcache_block_size = kvcache_block_size
+
+    def forward(
+        self,
+        query_state,
+        key_state,
+        value_state,
+        attn_mask,
+        past_key_state,
+        past_value_state,
+        seq_position,
+        scale,
+        block_table,
+        block_size,
+    ):
+        # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
+        key_state = key_state.unsqueeze(2)
+        value_state = value_state.unsqueeze(2)
+        attn_mask = attn_mask.unsqueeze(2)
+
+        query_state = query_state.view(
+            1,
+            self.num_key_value_heads,
+            self.num_heads // self.num_key_value_heads,
+            -1,  # seq len
+            self.head_dim,
+        )
+
+        attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_attn(
+            query_state,
+            key_state,
+            value_state,
+            attn_mask,
+            past_key_state.unsqueeze(2),
+            past_value_state.unsqueeze(2),
+            seq_position,
+            scale,
+            self.kvcache_partition_size,
+            block_table,
+            block_size,
+        )
 
         # reshape for removing repeat_kv
         attn_output = attn_output.view(1, self.num_heads, -1, self.head_dim)

@@ -233,6 +233,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         wrapper_cfg = {"max_seq_len": rbln_config.model_cfg["max_seq_len"]}
         wrapper_cfg["attn_impl"] = rbln_config.model_cfg.get("attn_impl")
         wrapper_cfg["kvcache_partition_len"] = rbln_config.model_cfg.get("kvcache_partition_len")
+        wrapper_cfg["kvcache_block_size"] = rbln_config.model_cfg.get("kvcache_block_size")
         wrapper_cfg["use_rotary_emb"] = cls._use_rotary_emb
 
         return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
@@ -296,6 +297,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_use_inputs_embeds = rbln_kwargs.get("use_inputs_embeds", None)
         rbln_attn_impl = rbln_kwargs.get("attn_impl", None)
         rbln_kvcache_partition_len = rbln_kwargs.get("kvcache_partition_len", None)
+        rbln_kvcache_block_size = rbln_kwargs.get("kvcache_block_size", None)
         rbln_quantization = QuantizationManager.validate_quantization_config(rbln_kwargs.get("quantization", None))
 
         prefill_chunk_size = 128
@@ -309,9 +311,10 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_batch_size = 1 if rbln_batch_size is None else rbln_batch_size
         rbln_use_inputs_embeds = False if rbln_use_inputs_embeds is None else rbln_use_inputs_embeds
 
-        rbln_attn_impl, rbln_kvcache_partition_len = validate_attention_method(
+        rbln_attn_impl, rbln_kvcache_partition_len, rbln_kvcache_block_size = validate_attention_method(
             rbln_attn_impl=rbln_attn_impl,
             rbln_kvcache_partition_len=rbln_kvcache_partition_len,
+            rbln_kvcache_block_size=rbln_kvcache_block_size,
             rbln_max_seq_len=rbln_max_seq_len,
         )
 
@@ -326,6 +329,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             query_length,
             use_inputs_embeds,
             hidden_size,
+            attn_impl,
         ):
             if use_inputs_embeds:
                 main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
@@ -342,21 +346,35 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 ),
             ]
             if query_length > 1:
-                input_info.extend(
-                    [
-                        ("batch_position", [], "int16"),
-                        ("query_position", [], "int16"),
-                    ]
-                )
+                if attn_impl == "paged_attn":
+                    input_info.extend(
+                        [
+                            ("query_position", [], "int16"),
+                        ]
+                    )
+                else:
+                    input_info.extend(
+                        [
+                            ("batch_position", [], "int16"),
+                            ("query_position", [], "int16"),
+                        ]
+                    )
+            if attn_impl == "paged_attn":
+                max_block_cnt = rbln_max_seq_len // rbln_kvcache_block_size
+                input_info.extend([("block_tables", [batch_size, max_block_cnt], "int16")])
 
+            kvcache_batch_size = 1 if attn_impl == "paged_attn" else rbln_batch_size
+            # TODO: add logic to compute num_blocks
+            num_blocks = 2
+            kvcache_seq_len =  num_blocks * rbln_kvcache_block_size if attn_impl == "paged_attn" else rbln_max_seq_len
             input_info.extend(
                 [
                     (
                         f"past_key_values_{i}",
                         [
-                            rbln_batch_size,
+                            kvcache_batch_size,
                             num_key_value_heads,
-                            rbln_max_seq_len,
+                            kvcache_seq_len,
                             head_dim,
                         ],
                         "float32",
@@ -372,12 +390,14 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             query_length=prefill_chunk_size,
             use_inputs_embeds=rbln_use_inputs_embeds,
             hidden_size=hidden_size,
+            attn_impl=rbln_attn_impl,
         )
         dec_input_info = get_input_info(
             batch_size=rbln_batch_size,
             query_length=1,
             use_inputs_embeds=rbln_use_inputs_embeds,
             hidden_size=hidden_size,
+            attn_impl=rbln_attn_impl,
         )
 
         prefill_compile_config = RBLNCompileConfig(compiled_model_name="prefill", input_info=prefill_input_info)
@@ -396,6 +416,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 "prefill_chunk_size": prefill_chunk_size,
                 "use_inputs_embeds": rbln_use_inputs_embeds,
                 "kvcache_partition_len": rbln_kvcache_partition_len,
+                "kvcache_block_size": rbln_kvcache_block_size,
                 "attn_impl": rbln_attn_impl,
             }
         )
@@ -496,6 +517,11 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         generate_idx: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
+        paged_attn = True
+        block_tables = None
+        if paged_attn:
+            block_tables = torch.tensor([[0,1]], dtype=torch.int16)
+            # block_tables = torch.tensor([[0,1], [2,3]], dtype=torch.int16)
         # prefll
         if cache_position is None:
             logits = []
@@ -516,6 +542,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     inputs_embeds=input_tensor if inputs_embeds is not None else None,
                     cache_position=cache_position,
                     batch_idx=b_idx,
+                    block_tables= block_tables[b_idx].unsqueeze(0) if block_tables is not None else block_tables
                 )
                 logits.append(logit)
             logits = torch.cat(logits, dim=0)
@@ -525,6 +552,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
+                block_tables=block_tables,
             )
 
         return RBLNDecoderOnlyOutput(
@@ -538,6 +566,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         inputs_embeds: torch.Tensor = None,
         cache_position: torch.Tensor = None,
         batch_idx: int = None,
+        block_tables: torch.Tensor = None,
     ) -> torch.FloatTensor:
         if batch_idx is None or batch_idx >= self.batch_size:
             raise RuntimeError(
@@ -602,8 +631,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 inputs_embeds=_input_tensors.contiguous() if inputs_embeds is not None else None,
                 attention_mask=_attention_mask.contiguous(),
                 cache_position=_cache_position.contiguous(),
-                batch_position=torch.tensor(batch_idx, dtype=torch.int16),
+                batch_position=torch.tensor(batch_idx, dtype=torch.int16) if block_tables is None else None,
                 query_position=torch.tensor(query_position, dtype=torch.int16),
+                block_tables=block_tables,
                 out=out_buffers,
             )
 
@@ -618,6 +648,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         input_ids: torch.LongTensor = None,
         inputs_embeds: torch.Tensor = None,
         cache_position: torch.Tensor = None,
+        block_tables: torch.Tensor = None,
     ) -> torch.FloatTensor:
         input_tensors = inputs_embeds if inputs_embeds is not None else input_ids
         if input_tensors is None:
@@ -644,6 +675,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             inputs_embeds=input_tensors.contiguous() if inputs_embeds is not None else None,
             attention_mask=self.dec_attn_mask.contiguous(),
             cache_position=cache_position.contiguous(),
+            block_tables=block_tables,
         )
 
         return logits
