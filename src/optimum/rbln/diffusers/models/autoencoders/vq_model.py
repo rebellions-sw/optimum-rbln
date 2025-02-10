@@ -21,7 +21,6 @@
 # copied, modified, or distributed without prior written permission
 # from Rebellions Inc.
 
-from ....utils.logging import get_logger
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import rebel
@@ -33,6 +32,7 @@ from transformers import PretrainedConfig
 
 from ....modeling import RBLNModel
 from ....modeling_config import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNConfig
+from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
 from .vae import RBLNRuntimeVQDecoder, RBLNRuntimeVQEncoder, _VQDecoder, _VQEncoder
 
@@ -54,6 +54,7 @@ class RBLNVQModel(RBLNModel):
 
         self.encoder = RBLNRuntimeVQEncoder(runtime=self.model[0], main_input_name="x")
         self.decoder = RBLNRuntimeVQDecoder(runtime=self.model[1], main_input_name="z")
+        self.decoder.lookup_from_codebook = self.config.lookup_from_codebook
         height = self.rbln_config.model_cfg.get("img_height", 512)
         width = self.rbln_config.model_cfg.get("img_width", 512)
         self.image_size = [height, width]
@@ -164,5 +165,5 @@ class RBLNVQModel(RBLNModel):
         return VQEncoderOutput(latents=posterior)
 
     def decode(self, h: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
-        dec, commit_loss = self.decoder.decode(h)
+        dec, commit_loss = self.decoder.decode(h, **kwargs)
         return DecoderOutput(sample=dec, commit_loss=commit_loss)
