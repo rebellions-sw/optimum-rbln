@@ -234,13 +234,12 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         if is_prefill_phase:
             model_inputs["generate_idx"] = torch.zeros((batch_size, 1), dtype=torch.int32)
 
-        model_inputs.update(
-            {
-                "pixel_values": pixel_values,
-                "image_sizes": image_sizes,
-                "attention_mask": attention_mask,
-            }
-        )
+            model_inputs.update(
+                {
+                    "pixel_values": pixel_values,
+                    "image_sizes": image_sizes,
+                }
+            )
         return model_inputs
 
     def _update_model_kwargs_for_generation(
@@ -264,22 +263,30 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
 
         return inputs_embeds
 
-    def image_embedding(
+    def get_image_features(
         self,
-        image_sizes: torch.LongTensor,
         pixel_values: torch.FloatTensor,
+        image_sizes: torch.Tensor,
         vision_feature_layer: int,
         vision_feature_select_strategy: str,
-    ) -> torch.Tensor:
-        vision_feature_layer = (
-            vision_feature_layer if vision_feature_layer is not None else self.config.vision_feature_layer
-        )
-        vision_feature_select_strategy = (
-            vision_feature_select_strategy
-            if vision_feature_select_strategy is not None
-            else self.config.vision_feature_select_strategy
-        )
+    ):
+        """
+        Obtains image last hidden states from the vision tower and apply multimodal projection.
 
+        Args:
+            pixel_values (`torch.FloatTensor]` of shape `(batch_size, num_patches, channels, height, width)`)
+               The tensors corresponding to the input images.
+            image_sizes (`torch.Tensor` of shape `(num_images, 2)`)
+                Actual image size of each images (H, W).
+            vision_feature_layer (`int`):
+                The index of the layer to select the vision feature.
+            vision_feature_select_strategy (`str`):
+                The feature selection strategy used to select the vision feature from the vision backbone.
+                Can be one of `"default"` or `"full"`
+        Returns:
+            image_features (List[`torch.Tensor`]): List of image feature tensor, each contains all the visual feature of all patches
+            and are of shape `(num_patches, image_length, embed_dim)`).
+        """
         # ! infer image_num_patches from image_sizes
         image_num_patches = [
             image_size_to_num_patches(
@@ -289,10 +296,8 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
             )
             for imsize in image_sizes
         ]
-
-        # figure out if pixel_values is concatenated or stacked
         if pixel_values.dim() == 5:
-            # stacking when input is (batch_size, num_patches, num_channels, height, width)
+            # stacked if input is (batch_size, num_patches, num_channels, height, width)
             _pixel_values_list = [pix_val[:num_patch] for pix_val, num_patch in zip(pixel_values, image_num_patches)]
             pixel_values = torch.cat(_pixel_values_list, dim=0)
         elif pixel_values.dim() != 4:
@@ -301,23 +306,13 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
 
         image_features = self.vision_tower(pixel_values, output_hidden_states=True)
         selected_image_feature = image_features.hidden_states[vision_feature_layer]
-
         if vision_feature_select_strategy == "default":
             selected_image_feature = selected_image_feature[:, 1:]
         elif vision_feature_select_strategy == "full":
             selected_image_feature = selected_image_feature
-
         image_features = self.multi_modal_projector(selected_image_feature)
         image_features = torch.split(image_features, image_num_patches, dim=0)
-
-        # NOTE we only support multimodal_patch_merge_type == "spatial_unpad"
-        image_features, feature_lens = self.pack_image_features(
-            image_features,
-            image_sizes,
-            image_newline=self.image_newline,
-        )
-
-        return image_features, feature_lens
+        return image_features
 
     def forward(
         self,
@@ -330,78 +325,71 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         vision_feature_select_strategy: Optional[str] = None,
         cache_position: torch.Tensor = None,
         generate_idx: Optional[torch.Tensor] = None,
+        batch_idx: Optional[int] = None,
         **kwargs,
     ) -> Union[Tuple, LlavaNextCausalLMOutputWithPast]:
+        vision_feature_layer = (
+            vision_feature_layer if vision_feature_layer is not None else self.config.vision_feature_layer
+        )
+        vision_feature_select_strategy = (
+            vision_feature_select_strategy
+            if vision_feature_select_strategy is not None
+            else self.config.vision_feature_select_strategy
+        )
+
         if inputs_embeds is not None:
             raise NotImplementedError("Specifying inputs_embeds is not supported.")
+        inputs_embeds = self.get_input_embeddings()(input_ids)
+
+        if pixel_values is not None and pixel_values.size(0) > 0:
+            image_features = self.get_image_features(
+                pixel_values,
+                image_sizes,
+                vision_feature_layer=vision_feature_layer,
+                vision_feature_select_strategy=vision_feature_select_strategy,
+            )
+
+            # NOTE we only support multimodal_patch_merge_type == "spatial_unpad"
+            image_features, feature_lens = self.pack_image_features(
+                image_features,
+                image_sizes,
+                vision_feature_select_strategy=vision_feature_select_strategy,
+                image_newline=self.image_newline,
+            )
+
+            n_image_tokens = (input_ids == self.config.image_token_index).sum().item()
+            n_image_features = image_features.shape[0]
+            if n_image_tokens != n_image_features:
+                raise ValueError(
+                    f"Image features and image tokens do not match: tokens: {n_image_tokens}, features {n_image_features}"
+                )
+            special_image_mask = (input_ids == self.config.image_token_index).unsqueeze(-1)
+            special_image_mask = special_image_mask.expand_as(inputs_embeds).to(inputs_embeds.device)
+            image_features = image_features.to(inputs_embeds.device, inputs_embeds.dtype)
+            inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, image_features)
 
         is_prefill_phase = not generate_idx.bool().all()
 
         if is_prefill_phase:
-            # if the number of image tokens is more than image embeddings seq length, then prob we expanded it in processing
-            # not very reliable, but we don't expect one to actually pass 500+ images for one prompt
-            # In case we're in decoding stage, legacy behavior is checked by presence of pixel values even if use_cache=True
-            legacy_processing = (
-                (input_ids == self.config.image_token_index).sum(1).max() < self.config.image_seq_length
-            ) or (input_ids.shape[-1] == 1 and pixel_values is not None)
-
-            # Get the number of images in the prompt
-            special_image_token_masks = [input_id == self.config.image_token_index for input_id in input_ids]
-            if legacy_processing:
-                num_special_image_tokens = [torch.sum(mask, dim=-1) for mask in special_image_token_masks]
-            else:
-                image_tokens_masks_diff = [
-                    torch.diff(mask, prepend=torch.tensor([0])) for mask in special_image_token_masks
-                ]
-                num_special_image_tokens = [int(torch.sum((diff == 1).int())) for diff in image_tokens_masks_diff]
-
-            # Split images for each prompt
-            if pixel_values is not None and pixel_values.size(0) > 0:
-                pixel_values = pixel_values.split(num_special_image_tokens, dim=0)
-                image_sizes = image_sizes.split(num_special_image_tokens, dim=0)
-
             logits = []
-            for b_idx in range(input_ids.shape[0]):
-                # Get text_embeds from input_id
-                input_id = input_ids[b_idx : b_idx + 1, attention_mask[b_idx].bool()]
-                inputs_embed = self.text_embedding(input_id)
-
-                # If any images in the prompt, get image_embeds and merge with text
-                if num_special_image_tokens[b_idx] > 0:
-                    image_features, feature_lens = self.image_embedding(
-                        image_sizes[b_idx], pixel_values[b_idx], vision_feature_layer, vision_feature_select_strategy
-                    )
-                    if legacy_processing:
-                        inputs_embed, _, _, _, _ = self._merge_input_ids_with_image_features(
-                            image_features,
-                            feature_lens,
-                            inputs_embed.to(image_features.dtype),
-                            input_id,
-                            torch.ones_like(input_id, dtype=torch.long),
-                        )
-                    else:
-                        special_image_mask = (
-                            (input_id == self.config.image_token_index).unsqueeze(-1).expand_as(inputs_embed)
-                        )
-                        inputs_embed = inputs_embed.masked_scatter(special_image_mask, image_features)
-
-                # Update generate_idx according to inputs_embed
-                generate_idx[b_idx] = inputs_embed.shape[1]
-
+            batch_size = input_ids.shape[0]
+            inputs_embeds = [inputs_embeds[i : i + 1, attention_mask[i].bool()] for i in range(batch_size)]
+            for batch_idx in range(batch_size):
+                generate_idx[batch_idx] = inputs_embeds[batch_idx].shape[-2]
                 logit = self.language_model._forward_prefill(
-                    inputs_embeds=inputs_embed,
-                    batch_idx=b_idx,
-                    cache_position=torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0),
+                    inputs_embeds=inputs_embeds[batch_idx],
+                    batch_idx=batch_idx,
+                    cache_position=torch.arange(
+                        0,
+                        generate_idx[batch_idx].item(),
+                        dtype=torch.int32,
+                    ).unsqueeze(0),
                 )
 
                 logits.append(logit)
-
             logits = torch.cat(logits, dim=0)
             outputs = RBLNDecoderOnlyOutput(logits=logits, generate_idx=generate_idx)
-
         else:
-            inputs_embeds = self.text_embedding(input_ids)
-
             outputs: RBLNDecoderOnlyOutput = self.language_model(
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
@@ -410,8 +398,8 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
 
         return outputs
 
-    # Almost copied from : https://github.com/huggingface/transformers/blob/5af7d41e49bbfc8319f462eb45253dcb3863dfb7/src/transformers/models/llava_next/modeling_llava_next.py
-    def pack_image_features(self, image_features, image_sizes, image_newline=None):
+    # Almost copied from : https://github.com/huggingface/transformers/blob/6b550462139655d488d4c663086a63e98713c6b9/src/transformers/models/llava_next/modeling_llava_next.py
+    def pack_image_features(self, image_features, image_sizes, vision_feature_select_strategy, image_newline=None):
         """
         Reshape, unpad and then pack each image_feature into a single image_features tensor containing all visual vectors.
 
@@ -420,6 +408,8 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
                 List of image feature tensor, each contains all the visual feature of all patches.
             image_sizes (`torch.Tensor` of shape `(num_images, 2)`)
                 Actual image size of each images (H, W).
+            vision_feature_select_strategy (`str`)
+                The feature selection strategy used to select the vision feature from the vision backbone.
             image_newline (`torch.Tensor` of shape `(embed_dim)`)
                 New line embedding vector.
         Returns:
@@ -434,9 +424,15 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
                 base_image_feature = image_feature[0]
                 image_feature = image_feature[1:]
                 height = width = self.config.vision_config.image_size // self.config.vision_config.patch_size
-                if height * width != base_image_feature.shape[0]:
+
+                if vision_feature_select_strategy == "default":
+                    expected_num_patches = height * width
+                elif vision_feature_select_strategy == "full":
+                    expected_num_patches = height * width + 1
+                if expected_num_patches != base_image_feature.shape[0]:
                     raise ValueError("The number of patches is not consistent with the image size.")
-                num_patch_width, num_patch_height = get_anyres_image_grid_shape(
+
+                num_patch_height, num_patch_width = get_anyres_image_grid_shape(
                     image_sizes[image_idx],
                     self.config.image_grid_pinpoints,
                     self.config.vision_config.image_size,
@@ -449,7 +445,9 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
                     image_feature = torch.cat(
                         (
                             image_feature,
-                            image_newline[:, None, None].expand(*image_feature.shape[:-1], 1).to(image_feature.dtype),
+                            image_newline[:, None, None]
+                            .expand(*image_feature.shape[:-1], 1)
+                            .to(image_feature.device, image_feature.dtype),
                         ),
                         dim=-1,
                     )
