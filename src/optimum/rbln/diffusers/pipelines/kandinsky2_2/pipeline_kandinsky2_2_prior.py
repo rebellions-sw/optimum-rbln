@@ -1,4 +1,4 @@
-# Copyright 2025 Rebellions Inc. All rights reserved.
+# Copyright 2024 Rebellions Inc.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,10 +20,13 @@
 # are the intellectual property of Rebellions Inc. and may not be
 # copied, modified, or distributed without prior written permission
 # from Rebellions Inc.
+"""RBLNKandinskyV22PriorPipeline class for inference of diffusion models on rbln devices."""
 
-from .modeling_clip import (
-    RBLNCLIPTextModel,
-    RBLNCLIPTextModelWithProjection,
-    RBLNCLIPVisionModel,
-    RBLNCLIPVisionModelWithProjection,
-)
+from diffusers import KandinskyV22PriorPipeline
+
+from ...modeling_diffusers import RBLNDiffusionMixin
+
+
+class RBLNKandinskyV22PriorPipeline(RBLNDiffusionMixin, KandinskyV22PriorPipeline):
+    original_class = KandinskyV22PriorPipeline
+    _submodules = ["text_encoder", "image_encoder", "prior"]
