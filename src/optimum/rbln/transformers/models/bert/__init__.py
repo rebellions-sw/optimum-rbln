@@ -21,4 +21,4 @@
 # copied, modified, or distributed without prior written permission
 # from Rebellions Inc.
 
-from .modeling_bert import RBLNBertModel
+from .modeling_bert import RBLNBertModel, RBLNBertForQuestionAnswering
