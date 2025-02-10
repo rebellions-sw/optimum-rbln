@@ -20,6 +20,13 @@
 # are the intellectual property of Rebellions Inc. and may not be
 # copied, modified, or distributed without prior written permission
 # from Rebellions Inc.
+"""RBLNKandinskyV22PriorPipeline class for inference of diffusion models on rbln devices."""
 
-from .autoencoder_kl import RBLNAutoencoderKL
-from .vq_model import RBLNVQModel
+from diffusers import KandinskyV22PriorPipeline
+
+from ...modeling_diffusers import RBLNDiffusionMixin
+
+
+class RBLNKandinskyV22PriorPipeline(RBLNDiffusionMixin, KandinskyV22PriorPipeline):
+    original_class = KandinskyV22PriorPipeline
+    _submodules = ["text_encoder", "image_encoder", "prior"]
