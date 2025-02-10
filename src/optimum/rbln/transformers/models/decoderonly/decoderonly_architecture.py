@@ -538,6 +538,9 @@ class DecoderOnlyLayer(nn.Module):
         return hidden_states, present_key_values
 
 
+from transformers import GPT2Config
+
+
 class DecoderOnlyAttention(nn.Module):
     """Attention implementation for decoder-only models optimized for RBLN compilation.
 
@@ -553,8 +556,8 @@ class DecoderOnlyAttention(nn.Module):
         super().__init__()
         self._original_mod = self_attn
         self.layer_idx = self_attn.layer_idx
-        self.num_heads = (
-            getattr(self._original_mod, "num_heads", None) or self._original_mod.config.num_attention_heads
+        self.num_heads = getattr(self._original_mod, "num_heads", None) or getattr(
+            self._original_mod.config, "num_attention_heads"
         )
         self.head_dim = self._original_mod.head_dim
         self._phase = "prefill"
@@ -562,7 +565,7 @@ class DecoderOnlyAttention(nn.Module):
 
         if hasattr(self._original_mod, "num_key_value_heads"):
             self.num_key_value_heads = self._original_mod.num_key_value_heads
-        elif hasattr(self._original_mod, "config") and "num_key_value_heads" in self._original_mod.config:
+        elif hasattr(self._original_mod, "config") and hasattr(self._original_mod.config, "num_key_value_heads"):
             self.num_key_value_heads = self._original_mod.config.num_key_value_heads
         else:
             self.num_key_value_heads = self.num_heads
