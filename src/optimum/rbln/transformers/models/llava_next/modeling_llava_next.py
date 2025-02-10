@@ -233,13 +233,14 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
 
         if is_prefill_phase:
             model_inputs["generate_idx"] = torch.zeros((batch_size, 1), dtype=torch.int32)
-
             model_inputs.update(
                 {
                     "pixel_values": pixel_values,
                     "image_sizes": image_sizes,
                 }
             )
+
+        model_inputs["attention_mask"] = attention_mask
         return model_inputs
 
     def _update_model_kwargs_for_generation(
@@ -263,7 +264,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
 
         return inputs_embeds
 
-    def get_image_features(
+    def image_embedding(
         self,
         pixel_values: torch.FloatTensor,
         image_sizes: torch.Tensor,
@@ -342,7 +343,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         inputs_embeds = self.get_input_embeddings()(input_ids)
 
         if pixel_values is not None and pixel_values.size(0) > 0:
-            image_features = self.get_image_features(
+            image_features = self.image_embedding(
                 pixel_values,
                 image_sizes,
                 vision_feature_layer=vision_feature_layer,
