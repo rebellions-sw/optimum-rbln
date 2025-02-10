@@ -13,3 +13,4 @@
 # limitations under the License.
 
 from .autoencoder_kl import RBLNAutoencoderKL
+from .vq_model import RBLNVQModel

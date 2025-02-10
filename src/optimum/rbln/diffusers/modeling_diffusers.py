@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import torch
 
+from optimum.rbln.diffusers import pipelines
+
 from ..modeling import RBLNModel
 from ..modeling_config import RUNTIME_KEYWORDS, ContextRblnConfig, use_rbln_config
 from ..utils.decorator_utils import remove_compile_time_kwargs
@@ -84,25 +86,29 @@ class RBLNDiffusionMixin:
     ) -> Dict[str, Any]:
         submodule = getattr(model, submodule_name)
         submodule_class_name = submodule.__class__.__name__
+        if isinstance(submodule, torch.nn.Module):
+            if submodule_class_name == "MultiControlNetModel":
+                submodule_class_name = "ControlNetModel"
 
-        if submodule_class_name == "MultiControlNetModel":
-            submodule_class_name = "ControlNetModel"
+            submodule_cls: RBLNModel = getattr(importlib.import_module("optimum.rbln"), f"RBLN{submodule_class_name}")
 
-        submodule_cls: RBLNModel = getattr(importlib.import_module("optimum.rbln"), f"RBLN{submodule_class_name}")
+            submodule_config = rbln_config.get(submodule_name, {})
+            submodule_config = copy.deepcopy(submodule_config)
 
-        submodule_config = rbln_config.get(submodule_name, {})
-        submodule_config = copy.deepcopy(submodule_config)
+            pipe_global_config = {k: v for k, v in rbln_config.items() if k not in cls._submodules}
 
-        pipe_global_config = {k: v for k, v in rbln_config.items() if k not in cls._submodules}
-
-        submodule_config.update({k: v for k, v in pipe_global_config.items() if k not in submodule_config})
-        submodule_config.update(
-            {
-                "img2img_pipeline": cls.img2img_pipeline,
-                "inpaint_pipeline": cls.inpaint_pipeline,
-            }
-        )
-        submodule_config = submodule_cls.update_rbln_config_using_pipe(model, submodule_config)
+            submodule_config.update({k: v for k, v in pipe_global_config.items() if k not in submodule_config})
+            submodule_config.update(
+                {
+                    "img2img_pipeline": cls.img2img_pipeline,
+                    "inpaint_pipeline": cls.inpaint_pipeline,
+                }
+            )
+            submodule_config = submodule_cls.update_rbln_config_using_pipe(model, submodule_config)
+        elif hasattr(pipelines, submodule_class_name):
+            submodule_config = rbln_config
+        else:
+            raise ValueError("fsubmodule {submodule_name} isn't supported")
         return submodule_config
 
     @staticmethod
@@ -231,7 +237,7 @@ class RBLNDiffusionMixin:
     ) -> Dict[str, RBLNModel]:
         compiled_submodules = {}
 
-        for submodule_name in cls._submodules:
+        for i, submodule_name in enumerate(cls._submodules):
             submodule = passed_submodules.get(submodule_name) or getattr(model, submodule_name, None)
             submodule_rbln_config = cls.get_submodule_rbln_config(model, submodule_name, rbln_config)
 
@@ -256,6 +262,39 @@ class RBLNDiffusionMixin:
                     model_save_dir=model_save_dir,
                     rbln_config=submodule_rbln_config,
                 )
+            elif hasattr(pipelines, submodule.__class__.__name__):
+                connected_pipe = submodule
+                connected_pipe_model_save_dir = model_save_dir
+                connected_pipe_rbln_config = submodule_rbln_config
+                connected_pipe_cls: RBLNDiffusionMixin = getattr(
+                    importlib.import_module("optimum.rbln"), connected_pipe.__class__.__name__
+                )
+                submodule_dict = {}
+                for name in connected_pipe.config.keys():
+                    submodule_dict[name] = getattr(connected_pipe, name)
+                connected_pipe = connected_pipe_cls(**submodule_dict)
+                connected_pipe_submodules = {}
+                prefix = cls._prefix[i]
+                for name in connected_pipe_cls._submodules:
+                    if prefix + name in passed_submodules:
+                        connected_pipe_submodules[name] = passed_submodules.get(prefix + name)
+
+                connected_pipe_compiled_submodules = connected_pipe_cls._compile_submodules(
+                    model=connected_pipe,
+                    passed_submodules=connected_pipe_submodules,
+                    model_save_dir=model_save_dir,
+                    rbln_config=connected_pipe_rbln_config,
+                )
+                connected_pipe = connected_pipe_cls._construct_pipe(
+                    connected_pipe,
+                    connected_pipe_compiled_submodules,
+                    connected_pipe_model_save_dir,
+                    connected_pipe_rbln_config,
+                )
+
+                for name in connected_pipe_cls._submodules:
+                    compiled_submodules[prefix + name] = getattr(connected_pipe, name)
+                submodule = connected_pipe
             else:
                 raise ValueError(f"Unknown class of submodule({submodule_name}) : {submodule.__class__.__name__} ")
 
@@ -287,10 +326,22 @@ class RBLNDiffusionMixin:
     @classmethod
     def _construct_pipe(cls, model, submodules, model_save_dir, rbln_config):
         # Construct finalize pipe setup with compiled submodules and configurations
+        submodule_names = []
+        for i, submodule_name in enumerate(cls._submodules):
+            submodule = getattr(model, submodule_name)
+            if hasattr(pipelines, submodule.__class__.__name__):
+                prefix = cls._prefix[i]
+                connected_pipe_submodules = submodules[submodule_name].__class__._submodules
+                connected_pipe_submodules = [prefix + name for name in connected_pipe_submodules]
+                submodule_names += connected_pipe_submodules
+                delattr(model, submodule_name)
+                setattr(model, submodule_name, submodules[submodule_name])
+            else:
+                submodule_names.append(submodule_name)
 
         if model_save_dir is not None:
             # To skip saving original pytorch modules
-            for submodule_name in cls._submodules:
+            for submodule_name in submodule_names:
                 delattr(model, submodule_name)
 
             # Direct calling of `save_pretrained` causes config.unet = (None, None).
@@ -300,7 +351,7 @@ class RBLNDiffusionMixin:
             # Causing warning messeages.
 
         update_dict = {}
-        for submodule_name in cls._submodules:
+        for submodule_name in submodule_names:
             # replace submodule
             setattr(model, submodule_name, submodules[submodule_name])
             update_dict[submodule_name] = ("optimum.rbln", submodules[submodule_name].__class__.__name__)
