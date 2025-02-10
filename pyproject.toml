@@ -32,8 +32,10 @@ dependencies = [
     "torchvision<=0.20.1",
     "accelerate>=1.0.1",
     "transformers==4.48.2",
-    "diffusers<=0.31.0",
+    "diffusers==0.32.2",
     "packaging>=24.1",
+    "pyproject-toml",
+    "uv-lock",
 ]
 
 [project.urls]
