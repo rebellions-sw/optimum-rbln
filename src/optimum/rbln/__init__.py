@@ -106,6 +106,9 @@ if TYPE_CHECKING:
     from .diffusers import (
         RBLNAutoencoderKL,
         RBLNControlNetModel,
+        RBLNKandinskyV22InpaintCombinedPipeline,
+        RBLNKandinskyV22InpaintPipeline,
+        RBLNKandinskyV22PriorPipeline,
         RBLNDiffusionMixin,
         RBLNKandinskyV22InpaintCombinedPipeline,
         RBLNKandinskyV22InpaintPipeline,
