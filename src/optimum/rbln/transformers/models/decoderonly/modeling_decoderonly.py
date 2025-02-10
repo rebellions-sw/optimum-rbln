@@ -73,7 +73,9 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             self.max_seq_len = kwargs.pop("max_seq_len")
             self.prefill_chunk_size = kwargs.pop("prefill_chunk_size")
             self.output_size = [1, 1, vocab_size]
-            self.causal_mask = 1 - torch.triu(torch.ones(1, 1, self.prefill_chunk_size, self.prefill_chunk_size), diagonal=1)
+            self.causal_mask = 1 - torch.triu(
+                torch.ones(1, 1, self.prefill_chunk_size, self.prefill_chunk_size), diagonal=1
+            )
 
     def forward(
         self,
@@ -162,7 +164,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
         # Initialize attention mask for chunked processing
         attention_mask = torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
-        
+
         # Buffer for storing output logits
         out_buffers = [
             torch.empty(
