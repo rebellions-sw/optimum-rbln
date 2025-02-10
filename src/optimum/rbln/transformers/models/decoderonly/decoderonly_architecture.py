@@ -538,8 +538,6 @@ class DecoderOnlyLayer(nn.Module):
         return hidden_states, present_key_values
 
 
-
-
 class DecoderOnlyAttention(nn.Module):
     """Attention implementation for decoder-only models optimized for RBLN compilation.
 
