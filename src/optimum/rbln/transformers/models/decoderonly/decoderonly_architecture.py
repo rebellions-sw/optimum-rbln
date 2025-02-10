@@ -538,7 +538,6 @@ class DecoderOnlyLayer(nn.Module):
         return hidden_states, present_key_values
 
 
-from transformers import GPT2Config
 
 
 class DecoderOnlyAttention(nn.Module):

@@ -170,7 +170,7 @@ class T5CrossAttention(nn.Module):
         key_value_states: torch.Tensor = None,
     ):
         batch_size = hidden_states.shape[0]
-        
+
         query_states = self.q(hidden_states)
         query_states = query_states.view(batch_size, -1, self.n_heads, self.key_value_proj_dim).transpose(1, 2)
 
