@@ -57,8 +57,8 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
     def __init__(
         self,
         runtime: rebel.Runtime,
-        batch_size: int = None,
-        dec_max_seq_len: int = None,
+        batch_size: int,
+        dec_max_seq_len: int,
         **kwargs,
     ) -> None:
         super().__init__(runtime, **kwargs)
