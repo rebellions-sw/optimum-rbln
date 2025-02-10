@@ -22,7 +22,7 @@
 # from Rebellions Inc.
 
 
-import logging
+from ....utils.logging import get_logger
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
@@ -36,7 +36,7 @@ from ...modeling_diffusers import RBLNDiffusionMixin
 from ....utils.runtime_utils import RBLNPytorchRuntime
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RBLNRuntimePriorTransformer(RBLNPytorchRuntime):

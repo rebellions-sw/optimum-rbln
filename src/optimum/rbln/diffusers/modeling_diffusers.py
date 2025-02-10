@@ -108,7 +108,7 @@ class RBLNDiffusionMixin:
         elif hasattr(pipelines, submodule_class_name):
             submodule_config = rbln_config
         else:
-            raise ValueError("fsubmodule {submodule_name} isn't supported")
+            raise ValueError(f"submodule {submodule_name} isn't supported")
         return submodule_config
 
     @staticmethod

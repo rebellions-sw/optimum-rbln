@@ -86,7 +86,6 @@ class RBLNRuntimeVQDecoder(RBLNPytorchRuntime):
         # assume that force_not_quantize is True & vq_model.config.lookup_from_codebook is True
         commit_loss = torch.zeros((h.shape[0])).to(h.device, dtype=h.dtype)
         dec = self.forward(h.contiguous())
-        # return DecoderOutput(sample=dec, commit_loss=commit_loss)
         return dec, commit_loss
 
 
