@@ -64,3 +64,6 @@ class RBLNRobertaForMaskedLM(RBLNModelForMaskedLM):
 
 class RBLNViTForImageClassification(RBLNModelForImageClassification):
     pass
+
+# class RBLNBertForMaskedLM(RBLNModelForMaskedLM):
+#     pass

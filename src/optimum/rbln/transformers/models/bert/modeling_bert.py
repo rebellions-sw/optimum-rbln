@@ -29,6 +29,7 @@ from transformers import PretrainedConfig
 
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
+from ...modeling_alias import RBLNModelForMaskedLM
 
 
 logger = logging.getLogger(__name__)
@@ -96,3 +97,6 @@ class RBLNBertModel(RBLNModel):
 
         rbln_config.model_cfg.update({"max_seq_len": rbln_max_seq_len})
         return rbln_config
+
+class RBLNBertForMaskedLM(RBLNModelForMaskedLM):
+    pass
