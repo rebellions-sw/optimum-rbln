@@ -73,6 +73,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             self.max_seq_len = kwargs.pop("max_seq_len")
             self.prefill_chunk_size = kwargs.pop("prefill_chunk_size")
             self.output_size = [1, 1, vocab_size]
+            self.causal_mask = 1 - torch.triu(torch.ones(1, 1, self.prefill_chunk_size, self.prefill_chunk_size), diagonal=1)
 
     def forward(
         self,
@@ -116,13 +117,14 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         if batch_size != cache_position.shape[0]:
             raise RuntimeError(f"Cache position size mismatch: got {cache_position.shape[0]}, expected {batch_size}.")
 
-        for b_idx in range(batch_size):
-            decoding_step = cache_position[b_idx].item()
-            if not (0 <= decoding_step < self.dec_attn_mask.shape[-1]):
-                raise ValueError(
-                    f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
-                )
-            self.dec_attn_mask[b_idx, :, :, decoding_step] = 1
+        if attention_mask is not None:
+            for b_idx in range(batch_size):
+                decoding_step = cache_position[b_idx].item()
+                if not (0 <= decoding_step < self.dec_attn_mask.shape[-1]):
+                    raise ValueError(
+                        f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
+                    )
+                self.dec_attn_mask[b_idx, :, :, decoding_step] = 1
 
         logits = super().forward(
             inputs,
@@ -158,10 +160,9 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 f"Input length ({query_length}) exceeds the maximum allowed sequence length ({self.max_seq_len})."
             )
 
-        # Initialize attention mask and causal mask for chunked processing
+        # Initialize attention mask for chunked processing
         attention_mask = torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
-        causal_mask = 1 - torch.triu(torch.ones(1, 1, self.prefill_chunk_size, self.prefill_chunk_size), diagonal=1)
-
+        
         # Buffer for storing output logits
         out_buffers = [
             torch.empty(
@@ -200,7 +201,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             # Update attention mask to ensure proper causal behavior
             if step >= self.prefill_chunk_size:
                 attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
-            attention_mask[:, :, :, step : step + self.prefill_chunk_size] = causal_mask
+            attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
 
             # Define batch position and query position
             batch_position = torch.tensor(batch_idx, dtype=torch.int16)
