@@ -76,7 +76,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForVision2Seq,
     )
     from .bart import RBLNBartForConditionalGeneration, RBLNBartModel
-    from .bert import RBLNBertModel, RBLNBertForQuestionAnswering
+    from .bert import RBLNBertForQuestionAnswering, RBLNBertModel
     from .clip import RBLNCLIPTextModel, RBLNCLIPTextModelWithProjection, RBLNCLIPVisionModel
     from .dpt import RBLNDPTForDepthEstimation
     from .exaone import RBLNExaoneForCausalLM
