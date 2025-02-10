@@ -83,7 +83,10 @@ class RBLNRuntimeVQEncoder(RBLNPytorchRuntime):
 
 class RBLNRuntimeVQDecoder(RBLNPytorchRuntime):
     def decode(self, h: torch.Tensor, force_not_quantize: bool = False, shape=None, **kwargs) -> List[torch.Tensor]:
-        # assume that force_not_quantize is True & vq_model.config.lookup_from_codebook is True
+        if not (force_not_quantize and not self.lookup_from_codebook):
+            raise ValueError(
+                "Currently, the `decode` method of the class `RBLNVQModel` is executed successfully only if `force_not_quantize` is True and `config.lookup_from_codebook` is False"
+            )
         commit_loss = torch.zeros((h.shape[0])).to(h.device, dtype=h.dtype)
         dec = self.forward(h.contiguous())
         return dec, commit_loss
@@ -112,7 +115,7 @@ class _VQDecoder(torch.nn.Module):
     def decode(self, h: torch.Tensor, force_not_quantize: bool = False, return_dict: bool = True, shape=None):
         quant = h
         quant2 = self.vq_model.post_quant_conv(quant)
-        # quant = None if self.vq_model.config.norm_type == "spatial" else quant
+        quant = quant if self.vq_model.config.norm_type == "spatial" else None
         dec = self.vq_model.decoder(quant2, quant)
         return dec
 
