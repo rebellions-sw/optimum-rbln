@@ -34,7 +34,6 @@ dependencies = [
     "transformers==4.48.2",
     "diffusers==0.32.2",
     "packaging>=24.1",
-    "pyproject-toml",
 ]
 
 [project.urls]
