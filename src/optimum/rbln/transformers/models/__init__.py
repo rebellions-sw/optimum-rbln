@@ -42,7 +42,7 @@ _import_structure = {
         "RBLNAutoModelForVision2Seq",
     ],
     "bart": ["RBLNBartForConditionalGeneration", "RBLNBartModel"],
-    "bert": ["RBLNBertModel"],
+    "bert": ["RBLNBertModel", "RBLNBertForQuestionAnswering"],
     "clip": [
         "RBLNCLIPTextModel",
         "RBLNCLIPTextModelWithProjection",
@@ -81,7 +81,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForVision2Seq,
     )
     from .bart import RBLNBartForConditionalGeneration, RBLNBartModel
-    from .bert import RBLNBertModel
+    from .bert import RBLNBertForQuestionAnswering, RBLNBertModel
     from .clip import (
         RBLNCLIPTextModel,
         RBLNCLIPTextModelWithProjection,
