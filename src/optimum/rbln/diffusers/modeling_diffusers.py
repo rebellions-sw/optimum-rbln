@@ -69,6 +69,7 @@ class RBLNDiffusionMixin:
     """
 
     _submodules = []
+    _prefix = {}
 
     @classmethod
     @property
@@ -237,7 +238,7 @@ class RBLNDiffusionMixin:
     ) -> Dict[str, RBLNModel]:
         compiled_submodules = {}
 
-        for i, submodule_name in enumerate(cls._submodules):
+        for submodule_name in cls._submodules:
             submodule = passed_submodules.get(submodule_name) or getattr(model, submodule_name, None)
             submodule_rbln_config = cls.get_submodule_rbln_config(model, submodule_name, rbln_config)
 
@@ -274,7 +275,7 @@ class RBLNDiffusionMixin:
                     submodule_dict[name] = getattr(connected_pipe, name)
                 connected_pipe = connected_pipe_cls(**submodule_dict)
                 connected_pipe_submodules = {}
-                prefix = cls._prefix[i]
+                prefix = cls._prefix.get(submodule_name, "")
                 for name in connected_pipe_cls._submodules:
                     if prefix + name in passed_submodules:
                         connected_pipe_submodules[name] = passed_submodules.get(prefix + name)
