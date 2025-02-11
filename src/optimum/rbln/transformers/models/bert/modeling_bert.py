@@ -98,5 +98,6 @@ class RBLNBertModel(RBLNModel):
         rbln_config.model_cfg.update({"max_seq_len": rbln_max_seq_len})
         return rbln_config
 
+
 class RBLNBertForMaskedLM(RBLNModelForMaskedLM):
     pass

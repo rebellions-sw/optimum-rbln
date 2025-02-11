@@ -151,6 +151,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForVision2Seq,
         RBLNBartForConditionalGeneration,
         RBLNBartModel,
+        RBLNBertForMaskedLM,
         RBLNBertForQuestionAnswering,
         RBLNBertModel,
         RBLNCLIPTextModel,
@@ -177,7 +178,6 @@ if TYPE_CHECKING:
         RBLNWhisperForConditionalGeneration,
         RBLNXLMRobertaForSequenceClassification,
         RBLNXLMRobertaModel,
-        RBLNBertForMaskedLM,
     )
 
 else:
