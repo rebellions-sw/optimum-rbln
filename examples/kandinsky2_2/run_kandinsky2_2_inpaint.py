@@ -23,7 +23,6 @@ def main(
         pipe = RBLNKandinskyV22InpaintCombinedPipeline.from_pretrained(
             model_id=model_id,
             export=True,
-            rbln_guidance_scale=7.5,
         )
         pipe.save_pretrained(os.path.basename(model_id))
     else:
