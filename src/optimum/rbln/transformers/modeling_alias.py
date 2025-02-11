@@ -29,10 +29,6 @@ class RBLNASTForAudioClassification(RBLNModelForAudioClassification):
     pass
 
 
-class RBLNBertForQuestionAnswering(RBLNModelForQuestionAnswering):
-    rbln_model_input_names = ["input_ids", "attention_mask", "token_type_ids"]
-
-
 class RBLNDistilBertForQuestionAnswering(RBLNModelForQuestionAnswering):
     rbln_model_input_names = ["input_ids", "attention_mask"]
 
