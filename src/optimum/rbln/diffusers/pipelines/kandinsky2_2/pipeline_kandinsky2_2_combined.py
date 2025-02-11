@@ -45,7 +45,7 @@ from .pipeline_kandinsky2_2_prior import RBLNKandinskyV22PriorPipeline
 class RBLNKandinskyV22InpaintCombinedPipeline(RBLNDiffusionMixin, KandinskyV22InpaintCombinedPipeline):
     original_class = KandinskyV22InpaintCombinedPipeline
     _submodules = ["prior_pipe", "decoder_pipe"]
-    _prefix = ["prior_", ""]
+    _prefix = {"prior_pipe": "prior_"}
 
     def __init__(
         self,
