@@ -21,4 +21,5 @@
 # copied, modified, or distributed without prior written permission
 # from Rebellions Inc.
 
+from .prior_transformer import RBLNPriorTransformer
 from .transformer_sd3 import RBLNSD3Transformer2DModel

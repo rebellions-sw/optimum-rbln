@@ -21,4 +21,9 @@
 # copied, modified, or distributed without prior written permission
 # from Rebellions Inc.
 
-from .modeling_clip import RBLNCLIPTextModel, RBLNCLIPTextModelWithProjection, RBLNCLIPVisionModel
+from .modeling_clip import (
+    RBLNCLIPTextModel,
+    RBLNCLIPTextModelWithProjection,
+    RBLNCLIPVisionModel,
+    RBLNCLIPVisionModelWithProjection,
+)

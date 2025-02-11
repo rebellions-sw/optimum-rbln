@@ -21,5 +21,6 @@
 # copied, modified, or distributed without prior written permission
 # from Rebellions Inc.
 
-from .autoencoder_kl import RBLNAutoencoderKL
-from .vq_model import RBLNVQModel
+from .pipeline_kandinsky2_2_combined import RBLNKandinskyV22InpaintCombinedPipeline
+from .pipeline_kandinsky2_2_inpaint import RBLNKandinskyV22InpaintPipeline
+from .pipeline_kandinsky2_2_prior import RBLNKandinskyV22PriorPipeline
