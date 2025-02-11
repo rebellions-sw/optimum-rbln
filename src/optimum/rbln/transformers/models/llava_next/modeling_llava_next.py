@@ -266,11 +266,20 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
 
     def image_embedding(
         self,
-        pixel_values: torch.FloatTensor,
         image_sizes: torch.Tensor,
+        pixel_values: torch.FloatTensor,
         vision_feature_layer: int,
         vision_feature_select_strategy: str,
     ):
+        vision_feature_layer = (
+            vision_feature_layer if vision_feature_layer is not None else self.config.vision_feature_layer
+        )
+        vision_feature_select_strategy = (
+            vision_feature_select_strategy
+            if vision_feature_select_strategy is not None
+            else self.config.vision_feature_select_strategy
+        )
+
         """
         Obtains image last hidden states from the vision tower and apply multimodal projection.
 
@@ -313,7 +322,16 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
             selected_image_feature = selected_image_feature
         image_features = self.multi_modal_projector(selected_image_feature)
         image_features = torch.split(image_features, image_num_patches, dim=0)
-        return image_features
+
+        # NOTE we only support multimodal_patch_merge_type == "spatial_unpad"
+        image_features, feature_lens = self.pack_image_features(
+            image_features,
+            image_sizes,
+            vision_feature_select_strategy=vision_feature_select_strategy,
+            image_newline=self.image_newline,
+        )
+
+        return image_features, feature_lens
 
     def forward(
         self,
@@ -343,19 +361,11 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         inputs_embeds = self.get_input_embeddings()(input_ids)
 
         if pixel_values is not None and pixel_values.size(0) > 0:
-            image_features = self.image_embedding(
-                pixel_values,
-                image_sizes,
+            image_features, _ = self.image_embedding(
+                pixel_values=pixel_values,
+                image_sizes=image_sizes,
                 vision_feature_layer=vision_feature_layer,
                 vision_feature_select_strategy=vision_feature_select_strategy,
-            )
-
-            # NOTE we only support multimodal_patch_merge_type == "spatial_unpad"
-            image_features, feature_lens = self.pack_image_features(
-                image_features,
-                image_sizes,
-                vision_feature_select_strategy=vision_feature_select_strategy,
-                image_newline=self.image_newline,
             )
 
             n_image_tokens = (input_ids == self.config.image_token_index).sum().item()
@@ -497,7 +507,7 @@ def get_anyres_image_grid_shape(image_size, grid_pinpoints, patch_size):
     return height // patch_size, width // patch_size
 
 
-# Almost copied from : https://github.com/huggingface/transformers/blob/5af7d41e49bbfc8319f462eb45253dcb3863dfb7/src/transformers/models/llava_next/modeling_llava_next.py
+# Almost copied from : https://github.com/huggingface/transformers/blob/1feebb5b4150882deabddd190a541f336f3be817/src/transformers/models/llava_next/modeling_llava_next.py#L115C1-L152C1
 def unpad_image(tensor, original_size):
     """
     Unpads a PyTorch tensor of a padded and resized image.
@@ -511,6 +521,12 @@ def unpad_image(tensor, original_size):
     Returns:
         `torch.Tensor`: The unpadded image tensor.
     """
+    if not isinstance(original_size, (list, tuple)):
+        if not isinstance(original_size, (torch.Tensor, np.ndarray)):
+            raise TypeError(
+                f"image_size invalid type: {type(original_size)} not valid, should be either list, tuple, np.ndarray or tensor"
+            )
+        original_size = original_size.tolist()
     original_height, original_width = original_size
     current_height, current_width = tensor.shape[1:]
 
@@ -519,12 +535,12 @@ def unpad_image(tensor, original_size):
 
     if original_aspect_ratio > current_aspect_ratio:
         scale_factor = current_width / original_width
-        new_height = int(original_height * scale_factor)
+        new_height = int(round(original_height * scale_factor, 7))
         padding = (current_height - new_height) // 2
         unpadded_tensor = tensor[:, padding : current_height - padding, :]
     else:
         scale_factor = current_height / original_height
-        new_width = int(original_width * scale_factor)
+        new_width = int(round(original_width * scale_factor, 7))
         padding = (current_width - new_width) // 2
         unpadded_tensor = tensor[:, :, padding : current_width - padding]
 
@@ -576,7 +592,7 @@ def image_size_to_num_patches(image_size, grid_pinpoints, patch_size: int):
     Calculate the number of patches after the preprocessing for images of any resolution.
 
     Args:
-        image_size (`Union[torch.LongTensor, np.ndarray, Tuple[int, int]):
+        image_size (`torch.LongTensor` or `np.ndarray` or `Tuple[int, int]`):
             The size of the input image in the format (height, width). ?
         grid_pinpoints (`List`):
             A list containing possible resolutions. Each item in the list should be a tuple or list
