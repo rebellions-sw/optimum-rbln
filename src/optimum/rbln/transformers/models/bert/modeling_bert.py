@@ -29,6 +29,7 @@ from transformers import PretrainedConfig
 
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
+from ...modeling_generic import RBLNModelForQuestionAnswering
 
 
 logger = logging.getLogger(__name__)
@@ -106,3 +107,7 @@ class RBLNBertModel(RBLNModel):
 
         rbln_config.model_cfg.update({"max_seq_len": rbln_max_seq_len})
         return rbln_config
+
+
+class RBLNBertForQuestionAnswering(RBLNModelForQuestionAnswering):
+    rbln_model_input_names = ["input_ids", "attention_mask", "token_type_ids"]
