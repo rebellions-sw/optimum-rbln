@@ -62,16 +62,16 @@ def register_rbln_custom_attention():
         """
         return (
             q,
-            torch.empty(1, *kcache.shape[1:], device=kcache.device),
-            torch.empty(1, *vcache.shape[1:], device=vcache.device),
+            torch.empty(*kcache.shape, device=kcache.device),
+            torch.empty(*vcache.shape, device=vcache.device),
         )
 
     @register_fake("rbln_custom_ops::attn_decode")
     def attn_decode_abstract(q, k, v, m, kcache, vcache, seq, partition):
         return (
             q,
-            torch.empty(1, *kcache.shape[1:], device=kcache.device),
-            torch.empty(1, *vcache.shape[1:], device=vcache.device),
+            torch.empty(*kcache.shape, device=kcache.device),
+            torch.empty(*vcache.shape, device=vcache.device),
         )
 
     torch.library.define(
