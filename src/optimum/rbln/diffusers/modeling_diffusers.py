@@ -191,6 +191,9 @@ class RBLNDiffusionMixin:
                 if model_index_config is None:
                     model_index_config = cls.load_config(pretrained_model_name_or_path=model_id)
 
+                if submodule_name not in model_index_config:
+                    continue
+
                 module_name, class_name = model_index_config[submodule_name]
                 if module_name != "optimum.rbln":
                     raise ValueError(
@@ -235,6 +238,7 @@ class RBLNDiffusionMixin:
         passed_submodules: Dict[str, RBLNModel],
         model_save_dir: Optional[PathLike],
         rbln_config: Dict[str, Any],
+        prefix: Optional[str] = "",
     ) -> Dict[str, RBLNModel]:
         compiled_submodules = {}
 
@@ -252,14 +256,16 @@ class RBLNDiffusionMixin:
                     controlnets=submodule,
                     model_save_dir=model_save_dir,
                     controlnet_rbln_config=submodule_rbln_config,
+                    prefix=prefix,
                 )
             elif isinstance(submodule, torch.nn.Module):
                 submodule_cls: RBLNModel = getattr(
                     importlib.import_module("optimum.rbln"), f"RBLN{submodule.__class__.__name__}"
                 )
+                subfolder = prefix + submodule_name
                 submodule = submodule_cls.from_model(
                     model=submodule,
-                    subfolder=submodule_name,
+                    subfolder=subfolder,
                     model_save_dir=model_save_dir,
                     rbln_config=submodule_rbln_config,
                 )
@@ -272,7 +278,8 @@ class RBLNDiffusionMixin:
                 )
                 submodule_dict = {}
                 for name in connected_pipe.config.keys():
-                    submodule_dict[name] = getattr(connected_pipe, name)
+                    if hasattr(connected_pipe, name):
+                        submodule_dict[name] = getattr(connected_pipe, name)
                 connected_pipe = connected_pipe_cls(**submodule_dict)
                 connected_pipe_submodules = {}
                 prefix = cls._prefix.get(submodule_name, "")
@@ -285,6 +292,7 @@ class RBLNDiffusionMixin:
                     passed_submodules=connected_pipe_submodules,
                     model_save_dir=model_save_dir,
                     rbln_config=connected_pipe_rbln_config,
+                    prefix=prefix,
                 )
                 connected_pipe = connected_pipe_cls._construct_pipe(
                     connected_pipe,
@@ -308,6 +316,7 @@ class RBLNDiffusionMixin:
         controlnets: "MultiControlNetModel",
         model_save_dir: Optional[PathLike],
         controlnet_rbln_config: Dict[str, Any],
+        prefix: Optional[str] = "",
     ):
         # Compile multiple ControlNet models for a MultiControlNet setup
         from .models.controlnet import RBLNControlNetModel
@@ -316,7 +325,7 @@ class RBLNDiffusionMixin:
         compiled_controlnets = [
             RBLNControlNetModel.from_model(
                 model=controlnet,
-                subfolder="controlnet" if i == 0 else f"controlnet_{i}",
+                subfolder=f"{prefix}controlnet" if i == 0 else f"{prefix}controlnet_{i}",
                 model_save_dir=model_save_dir,
                 rbln_config=controlnet_rbln_config,
             )
@@ -328,10 +337,10 @@ class RBLNDiffusionMixin:
     def _construct_pipe(cls, model, submodules, model_save_dir, rbln_config):
         # Construct finalize pipe setup with compiled submodules and configurations
         submodule_names = []
-        for i, submodule_name in enumerate(cls._submodules):
+        for submodule_name in cls._submodules:
             submodule = getattr(model, submodule_name)
             if hasattr(pipelines, submodule.__class__.__name__):
-                prefix = cls._prefix[i]
+                prefix = cls._prefix.get(submodule_name, "")
                 connected_pipe_submodules = submodules[submodule_name].__class__._submodules
                 connected_pipe_submodules = [prefix + name for name in connected_pipe_submodules]
                 submodule_names += connected_pipe_submodules
