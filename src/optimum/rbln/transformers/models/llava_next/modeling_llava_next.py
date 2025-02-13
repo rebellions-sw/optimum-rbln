@@ -398,9 +398,8 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
 
                 logits.append(logit)
             logits = torch.cat(logits, dim=0)
-            outputs = RBLNDecoderOnlyOutput(logits=logits, generate_idx=generate_idx)
         else:
-            logits: RBLNDecoderOnlyOutput = self.language_model.decoder(
+            logits = self.language_model.decoder(
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
             )

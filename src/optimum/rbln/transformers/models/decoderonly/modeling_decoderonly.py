@@ -154,8 +154,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 f"Invalid batch_idx ({batch_idx}). It must be a non-null value less than the batch size ({self.batch_size})."
             )
 
-        # Handle continuous batching in a compiled graph by extracting valid inputs  
-        # If an attention mask is provided, select only the valid (non-masked) inputs  
+        # Handle continuous batching in a compiled graph by extracting valid inputs
+        # If an attention mask is provided, select only the valid (non-masked) inputs
         inputs = inputs[:, attention_mask.bool()] if attention_mask is not None else inputs
 
         query_length = inputs.shape[1]
