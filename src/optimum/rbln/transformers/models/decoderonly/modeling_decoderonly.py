@@ -59,7 +59,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         phase: str,
         batch_size: int,
         dec_attn_mask: torch.Tensor,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         super().__init__(runtime, **kwargs)
         self.phase = phase
@@ -154,6 +154,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 f"Invalid batch_idx ({batch_idx}). It must be a non-null value less than the batch size ({self.batch_size})."
             )
 
+        # Handle continuous batching in a compiled graph by extracting valid inputs  
+        # If an attention mask is provided, select only the valid (non-masked) inputs  
         inputs = inputs[:, attention_mask.bool()] if attention_mask is not None else inputs
 
         query_length = inputs.shape[1]
@@ -163,7 +165,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             )
 
         # Initialize attention mask for chunked processing
-        attention_mask = torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
+        chunked_attention_mask = torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
 
         # Buffer for storing output logits
         out_buffers = [
@@ -179,8 +181,10 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             # Pad input and cache_position if the last chunk is smaller than `prefill_chunk_size`
             if (step + self.prefill_chunk_size) > query_length:
                 padding_size = step + self.prefill_chunk_size - query_length
+                # inputs_embeds
                 if inputs.dim() == 3:
                     inputs = torch.nn.functional.pad(inputs, (0, 0, 0, padding_size))
+                # inputs_ids
                 else:
                     inputs = torch.nn.functional.pad(inputs, (0, padding_size))
 
@@ -202,8 +206,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
             # Update attention mask to ensure proper causal behavior
             if step >= self.prefill_chunk_size:
-                attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
-            attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
+                chunked_attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
+            chunked_attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
 
             # Define batch position and query position
             batch_position = torch.tensor(batch_idx, dtype=torch.int16)
@@ -212,7 +216,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             # Forward pass for the current chunk
             logits = super().forward(
                 input_chunk,
-                attention_mask,
+                chunked_attention_mask,
                 cache_pos_chunk,
                 batch_position,
                 query_position,
