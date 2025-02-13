@@ -218,14 +218,16 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
     @classmethod
     def get_pytorch_model(cls, *args, **kwargs) -> "PreTrainedModel":
+        logger.debug("Loading the LLM model to the CPU.")  # TODO(jongho): Remove.
+
         rbln_kwargs = kwargs.get("rbln_kwargs", {})
         rbln_quantization = rbln_kwargs.get("quantization", None)
-
         if rbln_quantization is not None and rbln_quantization["format"] == "rbln":
             model = cls.get_quantized_model(*args, **kwargs)
         else:
             model = super().get_pytorch_model(*args, **kwargs)
 
+        logger.debug("Loaded the LLM model to the CPU.")
         return model
 
     @classmethod
