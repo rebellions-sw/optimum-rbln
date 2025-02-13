@@ -15,7 +15,7 @@ Before you ask a question, it is best to search for existing [Issues](/issues) t
 
 If you then still feel the need to ask a question and need clarification, we recommend the following:
 
-- Open an [Issue](/issues/new).
+- Open an [Issue](https://github.com/rebellions-sw/optimum-rbln/issues/new/choose).
 - Provide as much context as you can about what you're running into.
 
 We will then take care of the issue as soon as possible.
