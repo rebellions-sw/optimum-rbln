@@ -96,7 +96,9 @@ class TestLlamaForCausalLM_Flash(LLMTest.TestLLM):
 class TestGPT2LMHeadModel(LLMTest.TestLLM):
     RBLN_CLASS = RBLNGPT2LMHeadModel
     # TEST_LEVEL = TestLevel.FULL
-    EXPECTED_OUTPUT = " What kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind"
+    EXPECTED_OUTPUT = (
+        " What kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind"
+    )
     HF_MODEL_ID = "openai-community/gpt2"
     HF_CONFIG_KWARGS = {"n_layer": 1, "max_position_embeddings": 1024}
 
@@ -158,9 +160,7 @@ class TestBartModel(LLMTest.TestLLM):
     }
     RBLN_CLASS_KWARGS = {"rbln_config": {"enc_max_seq_len": 512, "dec_max_seq_len": 512}}
     PROMPT = "summarize: studies have shown that owning a dog is good for you"
-    EXPECTED_OUTPUT = (
-        "InsteadInsteadInsteadHoweverHoweverHoweverAlthoughAlthoughAlthoughWhileWhileWhileAlthoughAlthoughHoweverHoweverManyMany"
-    )
+    EXPECTED_OUTPUT = "InsteadInsteadInsteadHoweverHoweverHoweverAlthoughAlthoughAlthoughWhileWhileWhileAlthoughAlthoughHoweverHoweverManyMany"
     TEST_LEVEL = TestLevel.ESSENTIAL
 
     def get_inputs(self):
