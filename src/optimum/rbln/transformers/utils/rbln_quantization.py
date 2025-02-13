@@ -135,6 +135,8 @@ def update_layers_to_quantize(module: torch.nn.Module) -> None:
     """
     Updates specified linear layers to quantized (qlinear) layers in the given module.
     """
+
+    logger.debug("Updating layers to be quantized")  # TODO(jongho): remove.
     processed_layers = []
 
     for name, layer in module.named_modules():
@@ -151,6 +153,7 @@ def load_weights(model, model_id, n_layer=None):
     """
     Load safetensor file data directly into the model, filtering by layer if n_layer is provided.
     """
+    logger.debug("Loading the quantized weights into the CPU.")  # TODO(jongho): remove.
 
     model_params = dict(model.named_parameters(recurse=True))
     model_buffers = dict(model.named_buffers(recurse=True))
@@ -171,6 +174,8 @@ def load_weights(model, model_id, n_layer=None):
                 model_params[key].data.copy_(value)
             elif key in model_buffers:
                 model_buffers[key].data.copy_(value)
+
+    logger.debug("Loaded the quantized weights into the CPU.")
 
 
 def is_target_for_qlinear_replacement(layer_name: str, layer: torch.nn.Module) -> bool:

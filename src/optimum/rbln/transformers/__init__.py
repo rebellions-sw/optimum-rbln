@@ -44,6 +44,7 @@ _import_structure = {
         "RBLNBartForConditionalGeneration",
         "RBLNBartModel",
         "RBLNBertModel",
+        "RBLNBertForQuestionAnswering",
         "RBLNCLIPTextModel",
         "RBLNCLIPTextModelWithProjection",
         "RBLNCLIPVisionModel",
@@ -65,7 +66,6 @@ _import_structure = {
     ],
     "modeling_alias": [
         "RBLNASTForAudioClassification",
-        "RBLNBertForQuestionAnswering",
         "RBLNDistilBertForQuestionAnswering",
         "RBLNResNetForImageClassification",
         "RBLNXLMRobertaForSequenceClassification",
@@ -79,7 +79,6 @@ if TYPE_CHECKING:
     from .cache_utils import RebelDynamicCache
     from .modeling_alias import (
         RBLNASTForAudioClassification,
-        RBLNBertForQuestionAnswering,
         RBLNDistilBertForQuestionAnswering,
         RBLNResNetForImageClassification,
         RBLNRobertaForMaskedLM,
@@ -102,6 +101,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForVision2Seq,
         RBLNBartForConditionalGeneration,
         RBLNBartModel,
+        RBLNBertForQuestionAnswering,
         RBLNBertModel,
         RBLNCLIPTextModel,
         RBLNCLIPTextModelWithProjection,
