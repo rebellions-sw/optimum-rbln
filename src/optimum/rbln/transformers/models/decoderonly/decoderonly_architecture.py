@@ -544,15 +544,19 @@ class DecoderOnlyAttention(nn.Module):
         super().__init__()
         self._original_mod = self_attn
         self.layer_idx = self_attn.layer_idx
-        self.num_heads = self._original_mod.num_heads
+        self.num_heads = getattr(self._original_mod, "num_heads", None) or getattr(
+            self._original_mod.config, "num_attention_heads"
+        )
         self.head_dim = self._original_mod.head_dim
         self._phase = "prefill"
         self.scale = torch.tensor(self.get_attn_scale())
 
         if hasattr(self._original_mod, "num_key_value_heads"):
             self.num_key_value_heads = self._original_mod.num_key_value_heads
+        elif hasattr(self._original_mod, "config") and hasattr(self._original_mod.config, "num_key_value_heads"):
+            self.num_key_value_heads = self._original_mod.config.num_key_value_heads
         else:
-            self.num_key_value_heads = self._original_mod.num_heads
+            self.num_key_value_heads = self.num_heads
 
         self.attention = self.get_attention()
         self.__post_init__()
