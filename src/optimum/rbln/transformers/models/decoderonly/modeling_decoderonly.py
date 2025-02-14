@@ -658,9 +658,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
         """
-        Forward method for the RBLN-optimized model, designed for integration with the Hugging Face generate API.
-        For continuous batching, the prefill stage compiles one batch at a time and updates the KV cache using batch_idx.
-        A for-loop ensures synchronization with the Hugging Face generate API.
+        Forward method for the RBLN-optimized model, designed for integration with the HuggingFace generate API.
+        For continuous batching, the prefill stage processes one batch at a time and updates the KV cache using batch_idx.
+        A for-loop ensures synchronization with the HuggingFace generate API.
         The decoder stage operates as usual, processing inputs in batch mode.
         """
         # Prefll
