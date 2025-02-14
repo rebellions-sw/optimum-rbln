@@ -454,7 +454,7 @@ class Seq2SeqSelfAttention(nn.Module):
             query_states,
             key_states,
             value_states,
-            attention_mask.unsqueeze(2),
+            attention_mask.unsqueeze(2), # Unsqueeze group axis since CustomKernel expects it for group query attention
             past_key_value[0].view(bsz, self.num_heads, 1, -1, self.head_dim),
             past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
             cache_position.squeeze(1),
