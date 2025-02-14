@@ -700,8 +700,6 @@ class AttentionOp(nn.Module):
         )
 
         if self.phase == "decode":
-            import pdb;
-            pdb.set_trace()
             attn_output, key_state, value_state = torch.ops.rbln_custom_ops.attn_decode(
                 query_state,
                 key_state,
