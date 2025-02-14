@@ -420,7 +420,7 @@ class Seq2SeqSelfAttention(nn.Module):
         pass
 
     def _shape(self, tensor: torch.Tensor, seq_len: int, bsz: int) -> torch.Tensor:
-        return tensor.view(bsz, 1, seq_len, 1, self.num_heads, self.head_dim).transpose(2, 4)
+        return tensor.view(bsz, seq_len, 1, self.num_heads, self.head_dim).transpose(1, 3)
 
     def projection(self, hidden_states) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Projects input hidden states into query, key, and value representations.
@@ -450,38 +450,21 @@ class Seq2SeqSelfAttention(nn.Module):
         key_states = self._shape(key_states, -1, bsz)
         value_states = self._shape(value_states, -1, bsz)
 
-        all_key_states = []
-        all_value_states = []
-        all_attn_output = []
-        for b_idx in range(bsz):
-            query_state = query_states[b_idx]
-            key_state = key_states[b_idx]
-            value_state = value_states[b_idx]
-            attn_mask = attention_mask[b_idx].unsqueeze(0).unsqueeze(2)
-            past_key_state = past_key_value[0].view(bsz, self.num_heads, 1, -1, self.head_dim)
-            past_value_state = past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim)
+        attn_output, key_states, value_states = self.attn_decode(
+            query_states,
+            key_states,
+            value_states,
+            attention_mask.unsqueeze(
+                2
+            ),  # Unsqueeze group axis since CustomKernel expects it for group query attention
+            past_key_value[0].view(bsz, self.num_heads, 1, -1, self.head_dim),
+            past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
+            cache_position.squeeze(1),
+            torch.tensor(1.0, dtype=torch.float32),  # scale
+        )
 
-            attn_output, key_state, value_state = self.attn_decode(
-                query_state,
-                key_state,
-                value_state,
-                attn_mask,
-                past_key_state,
-                past_value_state,
-                cache_position[b_idx][0],
-                torch.tensor(1.0, dtype=torch.float32),  # scale
-            )
-
-            attn_output = attn_output.view(1, self.num_heads, -1, self.head_dim).transpose(1, 2)
-            attn_output = attn_output.reshape(1, -1, self.num_heads * self.head_dim)
-
-            all_key_states.append(key_state.squeeze(2))
-            all_value_states.append(value_state.squeeze(2))
-            all_attn_output.append(attn_output)
-
-        key_states = torch.cat(all_key_states, dim=0)
-        value_states = torch.cat(all_value_states, dim=0)
-        attn_output = torch.cat(all_attn_output, dim=0)
+        attn_output = attn_output.view(bsz, self.num_heads, -1, self.head_dim).transpose(1, 2)
+        attn_output = attn_output.reshape(bsz, -1, self.num_heads * self.head_dim)
 
         attn_output = self.out_proj(attn_output)
         present_key_value = (key_states, value_states)
