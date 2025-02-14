@@ -910,7 +910,7 @@ class FlashAttentionOp(AttentionOp):
             self.head_dim,
         )
 
-        if self.phase == "decode":            
+        if self.phase == "decode":
             attn_output, key_state, value_state = torch.ops.rbln_custom_ops.flash_attn_decode(
                 query_state,
                 key_state,
