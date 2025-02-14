@@ -1,4 +1,4 @@
-# Copyright 2024 Rebellions Inc.
+# Copyright 2025 Rebellions Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,15 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-# Portions of this software are licensed under the Apache License,
-# Version 2.0. See the NOTICE file distributed with this work for
-# additional information regarding copyright ownership.
-
-# All other portions of this software, including proprietary code,
-# are the intellectual property of Rebellions Inc. and may not be
-# copied, modified, or distributed without prior written permission
-# from Rebellions Inc.
 
 import inspect
 from dataclasses import dataclass
@@ -218,14 +209,16 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
     @classmethod
     def get_pytorch_model(cls, *args, **kwargs) -> "PreTrainedModel":
+        logger.debug("Loading the LLM model to the CPU.")  # TODO(jongho): Remove.
+
         rbln_kwargs = kwargs.get("rbln_kwargs", {})
         rbln_quantization = rbln_kwargs.get("quantization", None)
-
         if rbln_quantization is not None and rbln_quantization["format"] == "rbln":
             model = cls.get_quantized_model(*args, **kwargs)
         else:
             model = super().get_pytorch_model(*args, **kwargs)
 
+        logger.debug("Loaded the LLM model to the CPU.")
         return model
 
     @classmethod
@@ -297,8 +290,15 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_attn_impl = rbln_kwargs.get("attn_impl", None)
         rbln_kvcache_partition_len = rbln_kwargs.get("kvcache_partition_len", None)
         rbln_quantization = QuantizationManager.validate_quantization_config(rbln_kwargs.get("quantization", None))
+        rbln_prefill_chunk_size = rbln_kwargs.get("prefill_chunk_size", None)
 
-        prefill_chunk_size = 128
+        if rbln_prefill_chunk_size is None:
+            rbln_prefill_chunk_size = 128
+        elif rbln_prefill_chunk_size % 64 != 0 or rbln_prefill_chunk_size == 0:
+            raise ValueError(
+                f"Invalid rbln_prefill_chunk_size: {rbln_prefill_chunk_size}. It must be a nonzero multiple of 64."
+            )
+
         if rbln_max_seq_len is None:
             rbln_max_seq_len = getattr(model_config, "max_position_embeddings", None) or getattr(
                 model_config, "n_positions", None
@@ -369,7 +369,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
         prefill_input_info = get_input_info(
             batch_size=1,
-            query_length=prefill_chunk_size,
+            query_length=rbln_prefill_chunk_size,
             use_inputs_embeds=rbln_use_inputs_embeds,
             hidden_size=hidden_size,
         )
@@ -393,7 +393,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             {
                 "max_seq_len": rbln_max_seq_len,
                 "batch_size": rbln_batch_size,
-                "prefill_chunk_size": prefill_chunk_size,
+                "prefill_chunk_size": rbln_prefill_chunk_size,
                 "use_inputs_embeds": rbln_use_inputs_embeds,
                 "kvcache_partition_len": rbln_kvcache_partition_len,
                 "attn_impl": rbln_attn_impl,

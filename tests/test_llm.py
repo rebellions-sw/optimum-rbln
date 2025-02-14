@@ -47,7 +47,7 @@ class LLMTest:
 
         def get_inputs(self):
             inputs = self.tokenizer(self.PROMPT, return_tensors="pt")
-            inputs["max_new_tokens"] = 16
+            inputs["max_new_tokens"] = 20
             inputs["do_sample"] = False
             return inputs
 
@@ -62,7 +62,7 @@ class LLMTest:
 class TestQwen2Model(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen2ForCausalLM
     HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
-    EXPECTED_OUTPUT = " I am a 30-year-old woman who has been living with lupus"
+    EXPECTED_OUTPUT = " I am a 30-year-old woman who has been living with lupus for over 1"
     HF_CONFIG_KWARGS = {"max_position_embeddings": 1024}
 
 
@@ -70,7 +70,7 @@ class TestLlamaForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNLlamaForCausalLM
     HF_MODEL_ID = "afmck/testing-llama-tiny"
     TEST_LEVEL = TestLevel.ESSENTIAL
-    EXPECTED_OUTPUT = "reress makefable R���� noethetssh"
+    EXPECTED_OUTPUT = "reress makefable R���� noethetsshss rechoolso�"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
 
     def get_inputs(self):
@@ -83,7 +83,7 @@ class TestLlamaForCausalLM_Flash(LLMTest.TestLLM):
     RBLN_CLASS = RBLNLlamaForCausalLM
     HF_MODEL_ID = "afmck/testing-llama-tiny"
     TEST_LEVEL = TestLevel.ESSENTIAL
-    EXPECTED_OUTPUT = "reress makefable R���� noethetssh"
+    EXPECTED_OUTPUT = "reress makefable R���� noethetsshss rechoolso�"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 8192}
     RBLN_CLASS_KWARGS = {"rbln_config": {"attn_impl": "flash_attn", "kvcache_partition_len": 4096}}
 
@@ -96,7 +96,9 @@ class TestLlamaForCausalLM_Flash(LLMTest.TestLLM):
 class TestGPT2LMHeadModel(LLMTest.TestLLM):
     RBLN_CLASS = RBLNGPT2LMHeadModel
     # TEST_LEVEL = TestLevel.FULL
-    EXPECTED_OUTPUT = " What kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind"
+    EXPECTED_OUTPUT = (
+        " What kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind"
+    )
     HF_MODEL_ID = "openai-community/gpt2"
     HF_CONFIG_KWARGS = {"n_layer": 1, "max_position_embeddings": 1024}
 
@@ -106,7 +108,7 @@ class TestPhiForCausalLM(LLMTest.TestLLM):
 
     # HF_MODEL_ID = "hf-internal-testing/tiny-random-PhiForCausalLM"
     HF_MODEL_ID = "microsoft/phi-2"
-    EXPECTED_OUTPUT = "\nAnswer: Theorettebrates']['<<<urlskolegate"
+    EXPECTED_OUTPUT = "\nAnswer: Theorettebrates']['<<<urlskolegateezzingrill"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "trust_remote_code": True}
 
 
@@ -114,7 +116,7 @@ class TestExaoneForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNExaoneForCausalLM
     # HF_MODEL_ID = "katuni4ka/tiny-random-exaone"
     HF_MODEL_ID = "LGAI-EXAONE/EXAONE-3.5-2.4B-Instruct"
-    EXPECTED_OUTPUT = "????????????????"
+    EXPECTED_OUTPUT = "????????????????????"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "trust_remote_code": True}
 
 
@@ -134,7 +136,7 @@ class TestT5Model(LLMTest.TestLLM):
         inputs = self.tokenizer(
             self.PROMPT, padding="max_length", max_length=512, truncation=True, return_tensors="pt"
         )
-        inputs["max_new_tokens"] = 16
+        inputs["max_new_tokens"] = 20
         inputs["do_sample"] = False
         inputs["num_beams"] = 1
         return inputs
@@ -158,16 +160,14 @@ class TestBartModel(LLMTest.TestLLM):
     }
     RBLN_CLASS_KWARGS = {"rbln_config": {"enc_max_seq_len": 512, "dec_max_seq_len": 512}}
     PROMPT = "summarize: studies have shown that owning a dog is good for you"
-    EXPECTED_OUTPUT = (
-        "InsteadInsteadInsteadHoweverHoweverHoweverAlthoughAlthoughAlthoughWhileWhileWhileAlthoughAlthough"
-    )
+    EXPECTED_OUTPUT = "InsteadInsteadInsteadHoweverHoweverHoweverAlthoughAlthoughAlthoughWhileWhileWhileAlthoughAlthoughHoweverHoweverManyMany"
     TEST_LEVEL = TestLevel.ESSENTIAL
 
     def get_inputs(self):
         inputs = self.tokenizer(
             self.PROMPT, padding="max_length", max_length=512, truncation=True, return_tensors="pt"
         )
-        inputs["max_new_tokens"] = 16
+        inputs["max_new_tokens"] = 20
         inputs["do_sample"] = False
         inputs["num_beams"] = 1
         return inputs
