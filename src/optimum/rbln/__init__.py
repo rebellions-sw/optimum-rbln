@@ -71,6 +71,7 @@ _import_structure = {
         "RBLNRobertaForSequenceClassification",
         "RBLNRobertaForMaskedLM",
         "RBLNViTForImageClassification",
+        "RBLNBertForMaskedLM",
     ],
     "diffusers": [
         "RBLNStableDiffusionPipeline",
@@ -141,6 +142,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForVision2Seq,
         RBLNBartForConditionalGeneration,
         RBLNBartModel,
+        RBLNBertForMaskedLM,
         RBLNBertForQuestionAnswering,
         RBLNBertModel,
         RBLNCLIPTextModel,
