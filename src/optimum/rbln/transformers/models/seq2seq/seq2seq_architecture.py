@@ -435,7 +435,7 @@ class Seq2SeqSelfAttention(nn.Module):
         key_states = self.k_proj(hidden_states)
         value_states = self.v_proj(hidden_states)
         return query_states, key_states, value_states
-
+    
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -454,7 +454,7 @@ class Seq2SeqSelfAttention(nn.Module):
             query_states,
             key_states,
             value_states,
-            attention_mask,
+            attention_mask.unsqueeze(2),
             past_key_value[0].view(bsz, self.num_heads, 1, -1, self.head_dim),
             past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
             cache_position.squeeze(1),
