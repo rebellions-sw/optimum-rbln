@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import importlib
-import logging
 from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 import torch
@@ -22,6 +21,7 @@ from transformers import PretrainedConfig
 
 from ...modeling import RBLNModel
 from ...modeling_config import RBLNCompileConfig, RBLNConfig
+from ...utils.logging import get_logger
 from ..modeling_diffusers import RBLNDiffusionMixin
 
 
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class _ControlNetModel(torch.nn.Module):

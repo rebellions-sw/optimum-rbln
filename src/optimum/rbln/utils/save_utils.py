@@ -30,14 +30,15 @@
 Refer to huggingface/optimum/blob/4fdeea77d71e79451ba53e0c1f9d8f37e9704268/optimum/utils/save_utils.py
 """
 
-import logging
 from pathlib import Path
 from typing import List, Union
 
 from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
 
+from .logging import get_logger
 
-logger = logging.getLogger(__name__)
+
+logger = get_logger(__name__)
 
 
 def maybe_load_preprocessors(
