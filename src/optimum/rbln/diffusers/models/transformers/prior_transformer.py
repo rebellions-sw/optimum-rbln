@@ -12,16 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Portions of this software are licensed under the Apache License,
-# Version 2.0. See the NOTICE file distributed with this work for
-# additional information regarding copyright ownership.
-
-# All other portions of this software, including proprietary code,
-# are the intellectual property of Rebellions Inc. and may not be
-# copied, modified, or distributed without prior written permission
-# from Rebellions Inc.
-
-
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
