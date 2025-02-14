@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 from typing import TYPE_CHECKING
 
 import torch  # noqa: I001
@@ -20,13 +19,14 @@ from diffusers import AutoencoderKL
 from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
 
+from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
 
 
 if TYPE_CHECKING:
     import torch
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RBLNRuntimeVAEEncoder(RBLNPytorchRuntime):

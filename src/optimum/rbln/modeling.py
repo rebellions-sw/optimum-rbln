@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
@@ -24,13 +23,14 @@ from transformers import AutoConfig, PretrainedConfig
 
 from .modeling_base import RBLNBaseModel
 from .modeling_config import DEFAULT_COMPILED_MODEL_NAME, RBLNConfig, use_rbln_config
+from .utils.logging import get_logger
 
 
 if TYPE_CHECKING:
     from transformers import PreTrainedModel
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RBLNModel(RBLNBaseModel):

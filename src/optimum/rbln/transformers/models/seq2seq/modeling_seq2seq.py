@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import inspect
-import logging
 from abc import ABC
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
@@ -25,10 +24,11 @@ from transformers.modeling_outputs import BaseModelOutput, Seq2SeqLMOutput
 
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
+from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from transformers import (
