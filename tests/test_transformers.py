@@ -163,7 +163,7 @@ class TestWhisperModel(BaseTest.TestModel):
         "rbln_batch_size": 2,
     }
 
-    def test_generate_language(self):
+    def test_generate(self):
         inputs = self.get_inputs()
         output = self.model.generate(**inputs)
 
@@ -189,11 +189,11 @@ class TestWhisperModel(BaseTest.TestModel):
         )
         inputs["attention_mask"] = torch.ones(2, 3002, dtype=torch.int64)
 
-        output = self.model.generate(**inputs, temperature=0.0, return_timestamps=True)
+        _ = self.model.generate(**inputs, temperature=0.0, return_timestamps=True)
 
     def test_pipeline(self):
-        from transformers import AutoProcessor, pipeline
         import numpy as np
+        from transformers import AutoProcessor, pipeline
 
         processor = AutoProcessor.from_pretrained(self.HF_MODEL_ID)
 
@@ -210,7 +210,7 @@ class TestWhisperModel(BaseTest.TestModel):
         data = [np.random.rand(5000), np.random.rand(5000)]
 
         with torch.no_grad():
-            outputs = pipe(
+            _ = pipe(
                 data,
                 generate_kwargs={
                     "repetition_penalty": 1.3,
@@ -246,7 +246,7 @@ class TestWhisperModel_TokenTimestamps(BaseTest.TestModel):
 
     def test_generate(self):
         inputs = self.get_inputs()
-        output = self.model.generate(**inputs)
+        _ = self.model.generate(**inputs)
 
     def test_long_form_generate(self):
         inputs = self.get_inputs()
@@ -256,7 +256,7 @@ class TestWhisperModel_TokenTimestamps(BaseTest.TestModel):
         )
         inputs["attention_mask"] = torch.ones(2, 3002, dtype=torch.int64)
 
-        output = self.model.generate(**inputs, temperature=0.0)
+        _ = self.model.generate(**inputs, temperature=0.0)
 
 
 class TestRBLNXLMRobertaForSequenceClassification(BaseTest.TestModel):

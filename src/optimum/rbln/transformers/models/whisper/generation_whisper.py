@@ -31,11 +31,9 @@ Generation utilities for Whisper.
 Modified from `transformers.models.whisper.generation_whisper.py`
 """
 
-import inspect
-from packaging import version
-
 import torch
 import transformers
+from packaging import version
 from transformers import GenerationMixin
 from transformers.models.whisper.generation_whisper import WhisperGenerationMixin
 
