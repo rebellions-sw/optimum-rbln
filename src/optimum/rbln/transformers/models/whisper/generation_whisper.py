@@ -48,13 +48,12 @@ class RBLNWhisperGenerationMixin(WhisperGenerationMixin, GenerationMixin):
     def _postprocess_outputs(
         self, seek_outputs, decoder_input_ids, return_token_timestamps, generation_config, *args, **kwargs
     ):
-        # transformers v4.40.2 has no keyword shortform, it has seperate codes from generation_fallback
-        is_shortform = kwargs.get("is_shortform", False)
-        start_idx = 0 if is_shortform and not return_token_timestamps else decoder_input_ids.shape[-1]
+        # remove all previously passed decoder input ids
+        # should happen only if it is the first generated segment
+        start_idx = decoder_input_ids.shape[-1]
 
         if isinstance(seek_outputs, torch.Tensor):
-            seek_outputs = seek_outputs[:, start_idx:]
-            return seek_outputs, seek_outputs
+            return seek_outputs[:, start_idx:], seek_outputs
 
         if return_token_timestamps and not self.rbln_token_timestamps:
             raise RuntimeError(
