@@ -7,6 +7,7 @@ from transformers import T5EncoderModel
 
 from optimum.rbln import (
     RBLNASTForAudioClassification,
+    RBLNBertForMaskedLM,
     RBLNBertForQuestionAnswering,
     RBLNCLIPTextModel,
     RBLNDPTForDepthEstimation,
@@ -23,6 +24,7 @@ from optimum.rbln.transformers.models.auto.modeling_auto import (
     RBLNAutoModelForCTC,
     RBLNAutoModelForDepthEstimation,
     RBLNAutoModelForImageClassification,
+    RBLNAutoModelForMaskedLM,
     RBLNAutoModelForQuestionAnswering,
     RBLNAutoModelForSequenceClassification,
     RBLNAutoModelForSpeechSeq2Seq,
@@ -88,6 +90,17 @@ class TestBertModel(BaseTest.TestModel):
     RBLN_AUTO_CLASS = RBLNAutoModelForQuestionAnswering
     RBLN_CLASS = RBLNBertForQuestionAnswering
     HF_MODEL_ID = "hf-internal-testing/tiny-random-BertForQuestionAnswering"
+    GENERATION_KWARGS = {
+        "input_ids": RANDOM_INPUT_IDS,
+        "attention_mask": RANDOM_ATTN_MASK,
+        "token_type_ids": RANDOM_TOKEN_TYPE_IDS,
+    }
+
+
+class TestBertForMaskedLM(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoModelForMaskedLM
+    RBLN_CLASS = RBLNBertForMaskedLM
+    HF_MODEL_ID = "hf-internal-testing/tiny-random-BertForMaskedLM"
     GENERATION_KWARGS = {
         "input_ids": RANDOM_INPUT_IDS,
         "attention_mask": RANDOM_ATTN_MASK,

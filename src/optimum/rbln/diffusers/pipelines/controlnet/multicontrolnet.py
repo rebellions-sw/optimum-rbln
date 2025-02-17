@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
@@ -21,13 +20,14 @@ import torch
 from diffusers.pipelines.controlnet.multicontrolnet import MultiControlNetModel
 
 from ....modeling import RBLNModel
+from ....utils.logging import get_logger
 from ...models.controlnet import RBLNControlNetModel
 
 
 if TYPE_CHECKING:
     pass
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RBLNMultiControlNetModel(RBLNModel):

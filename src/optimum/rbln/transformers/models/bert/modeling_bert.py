@@ -13,17 +13,17 @@
 # limitations under the License.
 
 import inspect
-import logging
 from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 from transformers import PretrainedConfig
 
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
-from ...modeling_generic import RBLNModelForQuestionAnswering
+from ....utils.logging import get_logger
+from ...modeling_generic import RBLNModelForMaskedLM, RBLNModelForQuestionAnswering
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
@@ -98,6 +98,10 @@ class RBLNBertModel(RBLNModel):
 
         rbln_config.model_cfg.update({"max_seq_len": rbln_max_seq_len})
         return rbln_config
+
+
+class RBLNBertForMaskedLM(RBLNModelForMaskedLM):
+    rbln_model_input_names = ["input_ids", "attention_mask", "token_type_ids"]
 
 
 class RBLNBertForQuestionAnswering(RBLNModelForQuestionAnswering):
