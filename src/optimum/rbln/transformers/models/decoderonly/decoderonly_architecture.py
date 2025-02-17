@@ -427,12 +427,14 @@ class DecoderOnlyModel(nn.Module):
             cos, sin = None, None
 
         # (batch, seq_len) -> (batch,)
-        seq_positions = cache_position[:, 0]
         if self.attn_impl == "flash_attn":
+            seq_positions = cache_position[:, 0]
             max_seq_len = past_key_values[0][0].shape[-2]
             seq_positions = self.convert_sequence_positions_for_flash_attn(
                 seq_positions=seq_positions, max_seq_len=max_seq_len
             )
+        else:
+            seq_positions = cache_position[:, 0].unsqueeze(-1)
 
         present_key_values = past_key_values
         for layer in self.layers:
