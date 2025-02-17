@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import importlib
-import logging
 import os
 import shutil
 from abc import ABC, abstractmethod
@@ -32,6 +31,7 @@ from transformers import (
 
 from .modeling_config import RBLNCompileConfig, RBLNConfig, use_rbln_config
 from .utils.hub import PushToHubMixin, pull_compiled_model_from_hub, validate_files
+from .utils.logging import get_logger
 from .utils.runtime_utils import UnavailableRuntime
 from .utils.save_utils import maybe_load_preprocessors
 from .utils.submodule import SubModulesMixin
@@ -40,7 +40,7 @@ from .utils.submodule import SubModulesMixin
 if TYPE_CHECKING:
     from transformers import PreTrainedModel
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PreTrainedModel(ABC):  # noqa: F811

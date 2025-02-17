@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import inspect
-import logging
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
 
 import rebel
@@ -30,12 +29,13 @@ from transformers.modeling_outputs import BaseModelOutput, Seq2SeqLMOutput
 
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
+from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
 from .generation_whisper import RBLNWhisperGenerationMixin
 from .whisper_architecture import WhisperWrapper
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, PretrainedConfig, PreTrainedModel
