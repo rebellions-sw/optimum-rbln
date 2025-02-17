@@ -68,10 +68,18 @@ class RBLNWhisperGenerationMixin(WhisperGenerationMixin, GenerationMixin):
             num_frames = getattr(generation_config, "num_frames", None)
             if version.parse(transformers.__version__) >= version.parse("4.46.0"):
                 seek_outputs["token_timestamps"] = self._extract_token_timestamps(
-                    seek_outputs, generation_config.alignment_heads, num_frames=num_frames, num_input_ids=decoder_input_ids.shape[-1]
+                    seek_outputs,
+                    generation_config.alignment_heads,
+                    num_frames=num_frames,
+                    num_input_ids=decoder_input_ids.shape[-1],
                 )
             else:
-                seek_outputs["token_timestamps"] = self._extract_token_timestamps(seek_outputs, generation_config.alignment_heads, num_frames=num_frames, num_input_ids=decoder_input_ids.shape[-1])
+                seek_outputs["token_timestamps"] = self._extract_token_timestamps(
+                    seek_outputs,
+                    generation_config.alignment_heads,
+                    num_frames=num_frames,
+                    num_input_ids=decoder_input_ids.shape[-1],
+                )
         seek_outputs["sequences"] = seek_outputs["sequences"][:, start_idx:]
 
         def split_by_batch_index(values, key, batch_idx):
