@@ -32,8 +32,10 @@ Modified from `transformers.models.whisper.generation_whisper.py`
 """
 
 import inspect
+from packaging import version
 
 import torch
+import transformers
 from transformers import GenerationMixin
 from transformers.models.whisper.generation_whisper import WhisperGenerationMixin
 
@@ -63,20 +65,13 @@ class RBLNWhisperGenerationMixin(WhisperGenerationMixin, GenerationMixin):
             )
 
         if return_token_timestamps and hasattr(generation_config, "alignment_heads"):
-            kwargs = {
-                "num_frames": getattr(generation_config, "num_frames", None),
-                "num_input_ids": decoder_input_ids.shape[-1],
-            }
-            keys_to_remove = []
-            for key in kwargs.keys():
-                if key not in inspect.signature(self._extract_token_timestamps).parameters.keys():
-                    keys_to_remove.append(key)
-            for key in keys_to_remove:
-                del kwargs[key]
-
-            seek_outputs["token_timestamps"] = self._extract_token_timestamps(
-                seek_outputs, generation_config.alignment_heads, **kwargs
-            )
+            num_frames = getattr(generation_config, "num_frames", None)
+            if version.parse(transformers.__version__) >= version.parse("4.46.0"):
+                seek_outputs["token_timestamps"] = self._extract_token_timestamps(
+                    seek_outputs, generation_config.alignment_heads, num_frames=num_frames, num_input_ids=decoder_input_ids.shape[-1]
+                )
+            else:
+                seek_outputs["token_timestamps"] = self._extract_token_timestamps(seek_outputs, generation_config.alignment_heads, num_frames=num_frames, num_input_ids=decoder_input_ids.shape[-1])
         seek_outputs["sequences"] = seek_outputs["sequences"][:, start_idx:]
 
         def split_by_batch_index(values, key, batch_idx):
