@@ -64,11 +64,16 @@ class RBLNWhisperGenerationMixin(WhisperGenerationMixin, GenerationMixin):
             )
 
         if return_token_timestamps and hasattr(generation_config, "alignment_heads"):
-            num_frames = getattr(generation_config, "num_frames", None)
-            kwargs = {"num_frames": num_frames, "num_input_ids": decoder_input_ids.shape[-1]}
+            kwargs = {
+                "num_frames": getattr(generation_config, "num_frames", None),
+                "num_input_ids": decoder_input_ids.shape[-1],
+            }
+            keys_to_remove = []
             for key in kwargs.keys():
                 if key not in inspect.signature(self._extract_token_timestamps).parameters.keys():
-                    kwargs.pop(key)
+                    keys_to_remove.append(key)
+            for key in keys_to_remove:
+                del kwargs[key]
 
             seek_outputs["token_timestamps"] = self._extract_token_timestamps(
                 seek_outputs, generation_config.alignment_heads, **kwargs
