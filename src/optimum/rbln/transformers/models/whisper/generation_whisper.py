@@ -76,7 +76,6 @@ class RBLNWhisperGenerationMixin(WhisperGenerationMixin, GenerationMixin):
                     seek_outputs,
                     generation_config.alignment_heads,
                     num_frames=num_frames,
-                    num_input_ids=decoder_input_ids.shape[-1],
                 )
         seek_outputs["sequences"] = seek_outputs["sequences"][:, start_idx:]
 
