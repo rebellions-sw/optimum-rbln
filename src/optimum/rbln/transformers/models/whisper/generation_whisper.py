@@ -31,6 +31,8 @@ Generation utilities for Whisper.
 Modified from `transformers.models.whisper.generation_whisper.py`
 """
 
+import inspect
+
 import torch
 from transformers import GenerationMixin
 from transformers.models.whisper.generation_whisper import WhisperGenerationMixin
@@ -46,18 +48,14 @@ class RBLNWhisperGenerationMixin(WhisperGenerationMixin, GenerationMixin):
     def _postprocess_outputs(
         self, seek_outputs, decoder_input_ids, return_token_timestamps, generation_config, *args, **kwargs
     ):
-        # remove all previously passed decoder input ids
-
-        ################################## rbln_change for 4.40.2###################################
-        # 4.40.2 has no keyword shortform, it has seperate codes from generation_fallback
+        # transformers v4.40.2 has no keyword shortform, it has seperate codes from generation_fallback
         is_shortform = kwargs.get("is_shortform", False)
-        start_idx = decoder_input_ids.shape[-1] if not is_shortform else torch.tensor(0)
+        start_idx = 0 if is_shortform and not return_token_timestamps else decoder_input_ids.shape[-1]
 
         if isinstance(seek_outputs, torch.Tensor):
             seek_outputs = seek_outputs[:, start_idx:]
             return seek_outputs, seek_outputs
 
-        ############## rbln validation#############
         if return_token_timestamps and not self.rbln_token_timestamps:
             raise RuntimeError(
                 "To use .generate() with return_token_timestamps=True, the model must be compiled with rbln_token_timestamps=True. "
@@ -67,11 +65,14 @@ class RBLNWhisperGenerationMixin(WhisperGenerationMixin, GenerationMixin):
 
         if return_token_timestamps and hasattr(generation_config, "alignment_heads"):
             num_frames = getattr(generation_config, "num_frames", None)
-            seek_outputs["token_timestamps"] = self._extract_token_timestamps(
-                seek_outputs, generation_config.alignment_heads, num_frames=num_frames
-            )
-            seek_outputs["token_timestamps"] = seek_outputs["token_timestamps"][:, start_idx:]
+            kwargs = {"num_frames": num_frames, "num_input_ids": decoder_input_ids.shape[-1]}
+            for key in kwargs.keys():
+                if key not in inspect.signature(self._extract_token_timestamps).parameters.keys():
+                    kwargs.pop(key)
 
+            seek_outputs["token_timestamps"] = self._extract_token_timestamps(
+                seek_outputs, generation_config.alignment_heads, **kwargs
+            )
         seek_outputs["sequences"] = seek_outputs["sequences"][:, start_idx:]
 
         def split_by_batch_index(values, key, batch_idx):
@@ -87,15 +88,12 @@ class RBLNWhisperGenerationMixin(WhisperGenerationMixin, GenerationMixin):
 
         sequence_tokens = seek_outputs["sequences"]
 
-        ##################################### thkim change #############################################
         valid_seekoutputs = []
         for k, v in seek_outputs.items():
             if v is not None and len(v) > 0 and v[0] is not None:
                 valid_seekoutputs.append((k, v))
         seek_outputs = [
-            {k: split_by_batch_index(v, k, i) for k, v in valid_seekoutputs}
-            # {k: split_by_batch_index(v, k, i, is_shortform) for k, v in seek_outputs.items()}
-            for i in range(sequence_tokens.shape[0])
+            {k: split_by_batch_index(v, k, i) for k, v in valid_seekoutputs} for i in range(sequence_tokens.shape[0])
         ]
 
         return sequence_tokens, seek_outputs

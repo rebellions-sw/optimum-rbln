@@ -104,7 +104,7 @@ def main(
             **gen_kwargs,
         )
 
-        generated_ids = outputs
+        generated_ids = outputs["sequences"] if return_token_timestamps else outputs
         transcriptions = processor.batch_decode(generated_ids, skip_special_tokens=True, decode_with_timestamps=True)
 
         print("---RBLN Longform Generate Result ---")
