@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 import rebel
 import torch
 from rebel.compile_context import CompileContext
-from transformers import AutoModelForSeq2SeqLM, GenerationConfig, PretrainedConfig, PreTrainedModel
+from transformers import AutoModelForSeq2SeqLM, PretrainedConfig, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutput, Seq2SeqLMOutput
 
 from ....modeling import RBLNModel
@@ -31,12 +31,7 @@ from ....utils.runtime_utils import RBLNPytorchRuntime
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import (
-        AutoFeatureExtractor,
-        AutoProcessor,
-        AutoTokenizer,
-        PretrainedConfig,
-    )
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, GenerationConfig, PretrainedConfig
 
 
 class RBLNRuntimeEncoder(RBLNPytorchRuntime):
@@ -50,9 +45,50 @@ class RBLNRuntimeEncoder(RBLNPytorchRuntime):
 class RBLNRuntimeDecoder(RBLNPytorchRuntime):
     mandatory_members = ["main_input_name"]
 
-    def forward(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
-        outputs = super().forward(*args, **kwargs)
-        return Seq2SeqLMOutput(logits=outputs)
+    def __init__(
+        self,
+        runtime: rebel.Runtime,
+        batch_size: int,
+        dec_max_seq_len: int,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(runtime, **kwargs)
+        self.batch_size = batch_size
+        self.dec_max_seq_len = dec_max_seq_len
+
+    def forward(
+        self,
+        decoder_input_ids: Optional[torch.LongTensor] = None,
+        attention_mask: Optional[torch.FloatTensor] = None,
+        decoder_attention_mask: Optional[torch.BoolTensor] = None,
+        cache_position: Optional[torch.Tensor] = None,
+        **kwargs,
+    ) -> Tuple[torch.FloatTensor]:
+        batch_size = decoder_input_ids.shape[0]
+        if batch_size != self.batch_size:
+            raise RuntimeError(
+                f"Batch size mismatch: got {batch_size}, expected {self.batch_size} (compiled batch size)."
+            )
+
+        if batch_size != cache_position.shape[0]:
+            raise RuntimeError(f"Cache position size mismatch: got {cache_position.shape[0]}, expected {batch_size}.")
+
+        for b_idx in range(self.batch_size):
+            decoding_step = cache_position[b_idx].item()
+            if not (0 <= decoding_step < self.dec_max_seq_len):
+                raise ValueError(
+                    f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
+                )
+            decoder_attention_mask[b_idx, : decoding_step + 1] = 1
+
+        lm_logits = super().forward(
+            decoder_input_ids,
+            decoder_attention_mask,
+            attention_mask,
+            cache_position,
+        )
+
+        return Seq2SeqLMOutput(logits=lm_logits)
 
 
 class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
@@ -72,8 +108,15 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
     auto_model_class = AutoModelForSeq2SeqLM
 
     def __post_init__(self, **kwargs):
-        self.encoder = RBLNRuntimeEncoder(runtime=self.model[0], main_input_name="input_ids")
-        self.decoder = RBLNRuntimeDecoder(runtime=self.model[1], main_input_name="input_ids")
+        batch_size = self.rbln_config.model_cfg["batch_size"]
+        dec_max_seq_len = self.rbln_config.model_cfg["dec_max_seq_len"]
+        self.encoder = RBLNRuntimeEncoder(
+            runtime=self.model[0],
+            main_input_name="input_ids",
+        )
+        self.decoder = RBLNRuntimeDecoder(
+            runtime=self.model[1], main_input_name="input_ids", batch_size=batch_size, dec_max_seq_len=dec_max_seq_len
+        )
 
     @classmethod
     @torch.inference_mode()
@@ -304,46 +347,24 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
 
     def forward(
         self,
-        input_ids: torch.LongTensor = None,
+        decoder_input_ids: torch.LongTensor = None,
         cache_position: Union[List[torch.Tensor], torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
         # common decoder
         cache_position = torch.full((self.rbln_config.model_cfg["batch_size"], 1), cache_position, dtype=torch.int32)
-        logits = self._forward_decoder(input_ids=input_ids, cache_position=cache_position, **kwargs).logits
+        logits = self.decoder(decoder_input_ids=decoder_input_ids, cache_position=cache_position, **kwargs).logits
 
         return Seq2SeqLMOutput(
             logits=logits,
         )
-
-    def _forward_decoder(
-        self,
-        attention_mask: Optional[torch.FloatTensor] = None,
-        decoder_input_ids: Optional[torch.LongTensor] = None,
-        decoder_attention_mask: Optional[torch.BoolTensor] = None,
-        cache_position: Optional[torch.Tensor] = None,
-        **kwargs,
-    ) -> Tuple[torch.FloatTensor]:
-        dec_attention_mask = decoder_attention_mask.clone()
-        for b_idx in range(self.rbln_config.model_cfg["batch_size"]):
-            dec_attention_mask[b_idx, : cache_position[b_idx] + 1] = 1
-
-        decoder_output = self.decoder(
-            input_ids=decoder_input_ids,
-            attention_mask=dec_attention_mask,
-            encoder_attention_mask=attention_mask,
-            cache_position=cache_position,
-        )
-        lm_logits = decoder_output.logits
-
-        return Seq2SeqLMOutput(logits=lm_logits)
 
     def _prepare_encoder_decoder_kwargs_for_generation(
         self,
         inputs_tensor: torch.Tensor,
         model_kwargs,
         model_input_name: Optional[str] = None,
-        generation_config: Optional[GenerationConfig] = None,
+        generation_config: Optional["GenerationConfig"] = None,
     ) -> Dict[str, Any]:
         # 1. get encoder
         encoder = self.get_encoder()
@@ -373,6 +394,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
         )
 
         # 3. make sure that encoder returns `ModelOutput`
+        model_input_name = model_input_name if model_input_name is not None else self.main_input_name
         encoder_kwargs["return_dict"] = True
         encoder_kwargs["output_hidden_states"] = False
         encoder_kwargs["output_attentions"] = False

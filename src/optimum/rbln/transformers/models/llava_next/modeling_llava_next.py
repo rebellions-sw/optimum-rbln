@@ -25,7 +25,6 @@ from transformers import (
     PreTrainedModel,
 )
 from transformers.modeling_outputs import BaseModelOutputWithPooling
-from transformers.models.llava_next.modeling_llava_next import LlavaNextCausalLMOutputWithPast
 
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
@@ -337,7 +336,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         generate_idx: Optional[torch.Tensor] = None,
         batch_idx: Optional[int] = None,
         **kwargs,
-    ) -> Union[Tuple, LlavaNextCausalLMOutputWithPast]:
+    ) -> Union[Tuple, RBLNDecoderOnlyOutput]:
         vision_feature_layer = (
             vision_feature_layer if vision_feature_layer is not None else self.config.vision_feature_layer
         )
@@ -378,7 +377,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
             inputs_embeds = [inputs_embeds[i : i + 1, attention_mask[i].bool()] for i in range(batch_size)]
             for batch_idx in range(batch_size):
                 generate_idx[batch_idx] = inputs_embeds[batch_idx].shape[-2]
-                logit = self.language_model._forward_prefill(
+                logit = self.language_model.prefill_decoder(
                     inputs_embeds=inputs_embeds[batch_idx],
                     batch_idx=batch_idx,
                     cache_position=torch.arange(
@@ -390,15 +389,13 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
 
                 logits.append(logit)
             logits = torch.cat(logits, dim=0)
-            outputs = RBLNDecoderOnlyOutput(logits=logits, generate_idx=generate_idx)
         else:
-            outputs: RBLNDecoderOnlyOutput = self.language_model(
+            logits = self.language_model.decoder(
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
-                generate_idx=generate_idx,
             )
 
-        return outputs
+        return RBLNDecoderOnlyOutput(logits=logits, generate_idx=generate_idx)
 
     # Almost copied from : https://github.com/huggingface/transformers/blob/6b550462139655d488d4c663086a63e98713c6b9/src/transformers/models/llava_next/modeling_llava_next.py
     def pack_image_features(self, image_features, image_sizes, vision_feature_select_strategy, image_newline=None):

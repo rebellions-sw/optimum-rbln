@@ -186,7 +186,6 @@ class BaseTest:
                     output = self.model(**inputs)
 
             output = self.postprocess(inputs, output)
-            print(output)
             if self.EXPECTED_OUTPUT:
                 self.assertEqual(output, self.EXPECTED_OUTPUT)
 
