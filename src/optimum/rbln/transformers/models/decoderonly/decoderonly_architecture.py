@@ -434,7 +434,7 @@ class DecoderOnlyModel(nn.Module):
                 seq_positions=seq_positions, max_seq_len=max_seq_len
             )
         else:
-            seq_positions = cache_position[:, 0].unsqueeze(-1)
+            seq_positions = cache_position[:, :1]
 
         present_key_values = past_key_values
         for layer in self.layers:
