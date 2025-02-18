@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 import rebel
@@ -23,6 +22,7 @@ from transformers import PretrainedConfig
 
 from ....modeling import RBLNModel
 from ....modeling_config import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNConfig
+from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
 from .vae import RBLNRuntimeVAEDecoder, RBLNRuntimeVAEEncoder, _VAEDecoder, _VAEEncoder
 
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     import torch
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RBLNAutoencoderKL(RBLNModel):

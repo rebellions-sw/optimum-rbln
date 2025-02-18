@@ -39,9 +39,6 @@ RANDOM_INPUT_IDS = torch.randint(low=0, high=50, size=(1, 512), generator=torch.
 RANDOM_ATTN_MASK = torch.randint(low=0, high=2, size=(1, 512), generator=torch.manual_seed(42), dtype=torch.int64)
 RANDOM_TOKEN_TYPE_IDS = torch.randint(low=0, high=3, size=(1, 512), generator=torch.manual_seed(84), dtype=torch.int64)
 RANDOM_AUDIO = torch.randn(size=(1, 160005), generator=torch.manual_seed(42), dtype=torch.float32)
-RANDOM_INPUT_FEATURES = torch.randint(
-    low=0, high=50, size=(1, 80, 3000), generator=torch.manual_seed(42), dtype=torch.float32
-)
 
 
 class TestASTModel(BaseTest.TestModel):
@@ -151,14 +148,115 @@ class TestWhisperModel(BaseTest.TestModel):
     HF_MODEL_ID = "openai/whisper-tiny"
 
     GENERATION_KWARGS = {
-        "input_features": RANDOM_INPUT_FEATURES,
+        "input_features": torch.randint(
+            low=0, high=50, size=(2, 80, 3000), generator=torch.manual_seed(42), dtype=torch.float32
+        ),
         "max_new_tokens": 10,
     }
     HF_CONFIG_KWARGS = {
         "num_hidden_layers": 1,
         "encoder_layers": 1,
-        "decoder_layers": 1,
+        "decoder_layers": 4,
     }
+    RBLN_CLASS_KWARGS = {
+        "rbln_token_timestamps": False,
+        "rbln_batch_size": 2,
+    }
+
+    def test_generate(self):
+        inputs = self.get_inputs()
+        output = self.model.generate(**inputs)
+
+        if self.EXPECTED_OUTPUT is not None:
+            self.assertEqual(output, self.EXPECTED_OUTPUT)
+        else:
+            self.EXPECTED_OUTPUT = output
+
+    def test_generate_language(self):
+        inputs = self.get_inputs()
+        output = self.model.generate(**inputs, language="en")
+
+        if self.EXPECTED_OUTPUT is not None:
+            self.assertEqual(output, self.EXPECTED_OUTPUT)
+        else:
+            self.EXPECTED_OUTPUT = output
+
+    def test_long_form_generate(self):
+        inputs = self.get_inputs()
+
+        inputs["input_features"] = torch.randint(
+            low=0, high=50, size=(2, 80, 3001), generator=torch.manual_seed(42), dtype=torch.float32
+        )
+        inputs["attention_mask"] = torch.ones(2, 3002, dtype=torch.int64)
+
+        _ = self.model.generate(**inputs, temperature=0.0, return_timestamps=True)
+
+    def test_pipeline(self):
+        import numpy as np
+        from transformers import AutoProcessor, pipeline
+
+        processor = AutoProcessor.from_pretrained(self.HF_MODEL_ID)
+
+        pipe = pipeline(
+            "automatic-speech-recognition",
+            model=self.model,
+            tokenizer=processor.tokenizer,
+            feature_extractor=processor.feature_extractor,
+            chunk_length_s=30,
+            return_timestamps=True,
+            batch_size=2,
+        )
+
+        data = [np.random.rand(5000), np.random.rand(5000)]
+
+        with torch.no_grad():
+            _ = pipe(
+                data,
+                generate_kwargs={
+                    "repetition_penalty": 1.3,
+                },
+                batch_size=2,
+            )
+
+
+class TestWhisperModel_TokenTimestamps(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoModelForSpeechSeq2Seq
+    RBLN_CLASS = RBLNWhisperForConditionalGeneration
+    HF_MODEL_ID = "openai/whisper-tiny"
+
+    GENERATION_KWARGS = {
+        "input_features": torch.randint(
+            low=0, high=50, size=(2, 80, 3000), generator=torch.manual_seed(42), dtype=torch.float32
+        ),
+        "max_new_tokens": 1,
+        "return_token_timestamps": True,
+        "return_timestamps": True,
+    }
+
+    HF_CONFIG_KWARGS = {
+        "num_hidden_layers": 1,
+        "encoder_layers": 1,
+        "decoder_layers": 4,
+    }
+
+    RBLN_CLASS_KWARGS = {
+        "rbln_token_timestamps": True,
+        "rbln_batch_size": 2,
+    }
+
+    def test_generate(self):
+        inputs = self.get_inputs()
+        _ = self.model.generate(**inputs)
+
+    def test_long_form_generate(self):
+        inputs = self.get_inputs()
+
+        inputs["input_features"] = torch.randint(
+            low=0, high=50, size=(2, 80, 3001), generator=torch.manual_seed(42), dtype=torch.float32
+        )
+        inputs["attention_mask"] = torch.ones(2, 3002, dtype=torch.int64)
+
+        _ = self.model.generate(**inputs, temperature=0.0)
 
 
 class TestRBLNXLMRobertaForSequenceClassification(BaseTest.TestModel):
