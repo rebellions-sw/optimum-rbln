@@ -442,8 +442,9 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             logger.error(f"Provided path ({save_directory}) should be a directory, not a file")
             return
 
-        real_save_dir = self.model_save_dir / self.subfolder
-        save_directory_path = Path(save_directory)
+        # Normalize paths to handle relative paths and symlinks
+        real_save_dir = Path(self.model_save_dir).resolve() / self.subfolder
+        save_directory_path = Path(save_directory).resolve()
 
         if not os.path.exists(real_save_dir) or not os.path.isdir(real_save_dir):
             raise FileNotFoundError(
@@ -452,13 +453,13 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
                 f"Please ensure the model directory exists and you have the necessary permissions to access it."
             )
 
-        if save_directory_path.absolute() == real_save_dir.absolute():
+        if save_directory_path == real_save_dir:
             raise FileExistsError(
                 f"Cannot save model to '{save_directory}'. This directory already exists and contains the model files."
             )
 
-        # Create a temporary directory next to the target directory
-        tmp_dir = save_directory + ".tmp"
+        # Create a temporary directory with normalized path
+        tmp_dir = str(save_directory_path) + ".tmp"
         try:
             # Remove temporary directory if it exists from a previous failed attempt
             if os.path.exists(tmp_dir):
@@ -473,9 +474,9 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
                 self.generation_config.save_pretrained(tmp_dir)
 
             # If everything succeeded, atomically replace the target directory
-            if os.path.exists(save_directory):
-                shutil.rmtree(save_directory)
-            os.rename(tmp_dir, save_directory)
+            if os.path.exists(save_directory_path):
+                shutil.rmtree(save_directory_path)
+            os.rename(tmp_dir, save_directory_path)
 
         except Exception as e:
             # Clean up the temporary directory if anything fails
@@ -484,7 +485,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             raise e  # Re-raise the exception after cleanup
 
         if push_to_hub:
-            return super().push_to_hub(save_directory, **kwargs)
+            return super().push_to_hub(str(save_directory_path), **kwargs)
 
     @staticmethod
     def _raise_missing_compiled_file_error(missing_files: List[str]):
