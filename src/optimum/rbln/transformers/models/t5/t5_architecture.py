@@ -1,4 +1,4 @@
-# Copyright 2024 Rebellions Inc.
+# Copyright 2025 Rebellions Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,15 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-# Portions of this software are licensed under the Apache License,
-# Version 2.0. See the NOTICE file distributed with this work for
-# additional information regarding copyright ownership.
-
-# All other portions of this software, including proprietary code,
-# are the intellectual property of Rebellions Inc. and may not be
-# copied, modified, or distributed without prior written permission
-# from Rebellions Inc.
 
 from typing import Tuple
 
@@ -156,6 +147,11 @@ class T5CrossAttention(nn.Module):
     def __init__(self, attn):
         super().__init__()
         self.attn = attn
+        self.q = attn.q
+        self.o = attn.o
+        self.n_heads = attn.n_heads
+        self.key_value_proj_dim = attn.key_value_proj_dim
+        self.inner_dim = attn.inner_dim
 
     def forward(
         self,
@@ -164,9 +160,27 @@ class T5CrossAttention(nn.Module):
         attention_mask: torch.Tensor = None,
         key_value_states: torch.Tensor = None,
     ):
-        return self.attn(
-            hidden_states=hidden_states,
-            past_key_value=past_key_value,
-            position_bias=attention_mask,
-            key_value_states=key_value_states,
-        )
+        batch_size = hidden_states.shape[0]
+
+        query_states = self.q(hidden_states)
+        query_states = query_states.view(batch_size, -1, self.n_heads, self.key_value_proj_dim).transpose(1, 2)
+
+        # reuse k,v, cross_attentions
+        key_states = past_key_value[0]
+        value_states = past_key_value[1]
+
+        # compute scores, equivalent of torch.einsum("bnqd,bnkd->bnqk", query_states, key_states), compatible with onnx op>9
+        scores = torch.matmul(query_states, key_states.transpose(3, 2))
+        scores += attention_mask
+
+        # (batch_size, n_heads, seq_length, key_length)
+        attn_weights = nn.functional.softmax(scores.float(), dim=-1).type_as(scores)
+        attn_output = torch.matmul(attn_weights, value_states)
+
+        attn_output = attn_output.transpose(1, 2).contiguous()
+        attn_output = attn_output.view(batch_size, -1, self.inner_dim)
+        attn_output = self.o(attn_output)
+
+        outputs = (attn_output, past_key_value)
+
+        return outputs

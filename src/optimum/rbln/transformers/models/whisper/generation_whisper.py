@@ -1,4 +1,4 @@
-# Copyright 2024 The HuggingFace Inc. team.
+# Copyright 2022 The HuggingFace Inc. team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Copyright 2024 Rebellions Inc.
+# Copyright 2025 Rebellions Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,21 +26,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Portions of this software are licensed under the Apache License,
-# Version 2.0. See the NOTICE file distributed with this work for
-# additional information regarding copyright ownership.
-
-# All other portions of this software, including proprietary code,
-# are the intellectual property of Rebellions Inc. and may not be
-# copied, modified, or distributed without prior written permission
-# from Rebellions Inc.
-
 """
 Generation utilities for Whisper.
 Modified from `transformers.models.whisper.generation_whisper.py`
 """
 
 import torch
+import transformers
+from packaging import version
 from transformers import GenerationMixin
 from transformers.models.whisper.generation_whisper import WhisperGenerationMixin
 
@@ -56,17 +49,12 @@ class RBLNWhisperGenerationMixin(WhisperGenerationMixin, GenerationMixin):
         self, seek_outputs, decoder_input_ids, return_token_timestamps, generation_config, *args, **kwargs
     ):
         # remove all previously passed decoder input ids
-
-        ################################## rbln_change for 4.40.2###################################
-        # 4.40.2 has no keyword shortform, it has seperate codes from generation_fallback
-        is_shortform = kwargs.get("is_shortform", False)
-        start_idx = decoder_input_ids.shape[-1] if not is_shortform else torch.tensor(0)
+        # should happen only if it is the first generated segment
+        start_idx = decoder_input_ids.shape[-1]
 
         if isinstance(seek_outputs, torch.Tensor):
-            seek_outputs = seek_outputs[:, start_idx:]
-            return seek_outputs, seek_outputs
+            return seek_outputs[:, start_idx:], seek_outputs
 
-        ############## rbln validation#############
         if return_token_timestamps and not self.rbln_token_timestamps:
             raise RuntimeError(
                 "To use .generate() with return_token_timestamps=True, the model must be compiled with rbln_token_timestamps=True. "
@@ -76,11 +64,19 @@ class RBLNWhisperGenerationMixin(WhisperGenerationMixin, GenerationMixin):
 
         if return_token_timestamps and hasattr(generation_config, "alignment_heads"):
             num_frames = getattr(generation_config, "num_frames", None)
-            seek_outputs["token_timestamps"] = self._extract_token_timestamps(
-                seek_outputs, generation_config.alignment_heads, num_frames=num_frames
-            )
-            seek_outputs["token_timestamps"] = seek_outputs["token_timestamps"][:, start_idx:]
-
+            if version.parse(transformers.__version__) >= version.parse("4.46.0"):
+                seek_outputs["token_timestamps"] = self._extract_token_timestamps(
+                    seek_outputs,
+                    generation_config.alignment_heads,
+                    num_frames=num_frames,
+                    num_input_ids=decoder_input_ids.shape[-1],
+                )
+            else:
+                seek_outputs["token_timestamps"] = self._extract_token_timestamps(
+                    seek_outputs,
+                    generation_config.alignment_heads,
+                    num_frames=num_frames,
+                )
         seek_outputs["sequences"] = seek_outputs["sequences"][:, start_idx:]
 
         def split_by_batch_index(values, key, batch_idx):
@@ -96,15 +92,12 @@ class RBLNWhisperGenerationMixin(WhisperGenerationMixin, GenerationMixin):
 
         sequence_tokens = seek_outputs["sequences"]
 
-        ##################################### thkim change #############################################
         valid_seekoutputs = []
         for k, v in seek_outputs.items():
             if v is not None and len(v) > 0 and v[0] is not None:
                 valid_seekoutputs.append((k, v))
         seek_outputs = [
-            {k: split_by_batch_index(v, k, i) for k, v in valid_seekoutputs}
-            # {k: split_by_batch_index(v, k, i, is_shortform) for k, v in seek_outputs.items()}
-            for i in range(sequence_tokens.shape[0])
+            {k: split_by_batch_index(v, k, i) for k, v in valid_seekoutputs} for i in range(sequence_tokens.shape[0])
         ]
 
         return sequence_tokens, seek_outputs

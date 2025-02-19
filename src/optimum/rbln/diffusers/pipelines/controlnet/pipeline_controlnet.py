@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Copyright 2024 Rebellions Inc.
+# Copyright 2025 Rebellions Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,15 +26,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Portions of this software are licensed under the Apache License,
-# Version 2.0. See the NOTICE file distributed with this work for
-# additional information regarding copyright ownership.
-
-# All other portions of this software, including proprietary code,
-# are the intellectual property of Rebellions Inc. and may not be
-# copied, modified, or distributed without prior written permission
-# from Rebellions Inc.
-
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import torch
@@ -43,16 +34,17 @@ from diffusers import StableDiffusionControlNetPipeline
 from diffusers.image_processor import PipelineImageInput
 from diffusers.pipelines.controlnet.pipeline_controlnet import retrieve_timesteps
 from diffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
-from diffusers.utils import deprecate, logging
+from diffusers.utils import deprecate
 from diffusers.utils.torch_utils import is_compiled_module, is_torch_version
 
 from ....utils.decorator_utils import remove_compile_time_kwargs
+from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
 from ...models import RBLNControlNetModel
 from ...pipelines.controlnet.multicontrolnet import RBLNMultiControlNetModel
 
 
-logger = logging.get_logger(__name__)
+logger = get_logger(__name__)
 
 
 class RBLNStableDiffusionControlNetPipeline(RBLNDiffusionMixin, StableDiffusionControlNetPipeline):
