@@ -1,4 +1,4 @@
-# Copyright 2025 Rebellions Inc. All rights reserved.
+# Copyright 2024 Rebellions Inc.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .modeling_clip import (
-    RBLNCLIPTextModel,
-    RBLNCLIPTextModelWithProjection,
-    RBLNCLIPVisionModel,
-    RBLNCLIPVisionModelWithProjection,
-)
+from diffusers import KandinskyV22InpaintPipeline
+
+from ...modeling_diffusers import RBLNDiffusionMixin
+
+
+class RBLNKandinskyV22InpaintPipeline(RBLNDiffusionMixin, KandinskyV22InpaintPipeline):
+    original_class = KandinskyV22InpaintPipeline
+    _submodules = ["unet", "movq"]

@@ -22,7 +22,7 @@ from transformers import (
     CLIPVisionModel,
 )
 from transformers.modeling_outputs import BaseModelOutputWithPooling
-from transformers.models.clip.modeling_clip import CLIPTextModelOutput
+from transformers.models.clip.modeling_clip import CLIPTextModelOutput, CLIPVisionModelOutput
 
 from ....diffusers.modeling_diffusers import RBLNDiffusionMixin
 from ....modeling import RBLNModel
@@ -117,6 +117,10 @@ class RBLNCLIPVisionModel(RBLNModel):
         return _VisionEncoder(model).eval()
 
     @classmethod
+    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
+        return rbln_config
+
+    @classmethod
     def _get_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
@@ -178,4 +182,25 @@ class RBLNCLIPVisionModel(RBLNModel):
             last_hidden_state=output[0],
             pooler_output=output[1],
             hidden_states=output[2:],
+        )
+
+
+class RBLNCLIPVisionModelWithProjection(RBLNCLIPVisionModel):
+    def forward(
+        self,
+        pixel_values: Optional[torch.FloatTensor] = None,
+        **kwargs,
+    ) -> Union[Tuple, CLIPVisionModelOutput]:
+        if len(kwargs) > 0 and any(kwargs.values()):
+            logger.warning(f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__}.")
+
+        output = super().forward(pixel_values)
+        image_embeds = output[0]
+        last_hidden_state = output[1]
+        hidden_states = output[2:]
+
+        return CLIPVisionModelOutput(
+            image_embeds=image_embeds,
+            last_hidden_state=last_hidden_state,
+            hidden_states=hidden_states,
         )
