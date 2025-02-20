@@ -9,7 +9,8 @@ authors = [
 ]
 requires-python = ">=3.9,<3.13"
 readme = "README.md"
-license = {text = "Apache"}
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 dynamic = ["version"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
@@ -31,11 +32,9 @@ dependencies = [
     "torchaudio<=2.5.1",
     "torchvision<=0.20.1",
     "accelerate>=1.0.1",
-    "transformers==4.45.2",
+    "transformers==4.48.3",
     "diffusers<=0.31.0",
-    "einops>=0.8.0",
     "packaging>=24.1",
-    "halo>=0.0.31",
 ]
 
 [project.urls]
@@ -76,7 +75,6 @@ version-file = "src/optimum/rbln/__version__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/optimum"]
-core-metadata-version = "2.3"
 
 [tool.uv]
 environments = [

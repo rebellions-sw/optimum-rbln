@@ -1,4 +1,4 @@
-# Copyright 2024 Rebellions Inc.
+# Copyright 2025 Rebellions Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,30 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Portions of this software are licensed under the Apache License,
-# Version 2.0. See the NOTICE file distributed with this work for
-# additional information regarding copyright ownership.
-
-# All other portions of this software, including proprietary code,
-# are the intellectual property of Rebellions Inc. and may not be
-# copied, modified, or distributed without prior written permission
-# from Rebellions Inc.
-
-import logging
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 import torch  # noqa: I001
 from diffusers import AutoencoderKL, AutoencoderKLTemporalDecoder
 from diffusers.models.autoencoders.vae import DecoderOutput, DiagonalGaussianDistribution
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
 
+from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
 
 
 if TYPE_CHECKING:
     import torch
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RBLNRuntimeVAEEncoder(RBLNPytorchRuntime):

@@ -1,4 +1,4 @@
-# Copyright 2024 Rebellions Inc.
+# Copyright 2025 Rebellions Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,16 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Portions of this software are licensed under the Apache License,
-# Version 2.0. See the NOTICE file distributed with this work for
-# additional information regarding copyright ownership.
-
-# All other portions of this software, including proprietary code,
-# are the intellectual property of Rebellions Inc. and may not be
-# copied, modified, or distributed without prior written permission
-# from Rebellions Inc.
-
-import logging
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
@@ -33,13 +23,14 @@ from transformers import AutoConfig, PretrainedConfig
 
 from .modeling_base import RBLNBaseModel
 from .modeling_config import DEFAULT_COMPILED_MODEL_NAME, RBLNConfig, use_rbln_config
+from .utils.logging import get_logger
 
 
 if TYPE_CHECKING:
     from transformers import PreTrainedModel
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RBLNModel(RBLNBaseModel):

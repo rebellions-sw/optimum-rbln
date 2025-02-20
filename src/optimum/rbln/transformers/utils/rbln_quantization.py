@@ -1,4 +1,4 @@
-# Copyright 2024 Rebellions Inc.
+# Copyright 2025 Rebellions Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,15 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-# Portions of this software are licensed under the Apache License,
-# Version 2.0. See the NOTICE file distributed with this work for
-# additional information regarding copyright ownership.
-
-# All other portions of this software, including proprietary code,
-# are the intellectual property of Rebellions Inc. and may not be
-# copied, modified, or distributed without prior written permission
-# from Rebellions Inc.
 
 import functools
 import glob
@@ -52,7 +43,7 @@ class QuantizationManager:
     ) -> None:
         context_info = f" for {context}" if context else ""
         valid_values_str = ", ".join(valid_values)
-        raise ValueError(f"Invalid {key}: {value}{context_info}. " f"Supported values are: {valid_values_str}")
+        raise ValueError(f"Invalid {key}: {value}{context_info}. Supported values are: {valid_values_str}")
 
     @staticmethod
     def validate_quantization_config(quantize_config: Optional[dict]) -> Optional[dict]:
@@ -135,6 +126,8 @@ def update_layers_to_quantize(module: torch.nn.Module) -> None:
     """
     Updates specified linear layers to quantized (qlinear) layers in the given module.
     """
+
+    logger.debug("Updating layers to be quantized")  # TODO(jongho): remove.
     processed_layers = []
 
     for name, layer in module.named_modules():
@@ -151,6 +144,7 @@ def load_weights(model, model_id, n_layer=None):
     """
     Load safetensor file data directly into the model, filtering by layer if n_layer is provided.
     """
+    logger.debug("Loading the quantized weights into the CPU.")  # TODO(jongho): remove.
 
     model_params = dict(model.named_parameters(recurse=True))
     model_buffers = dict(model.named_buffers(recurse=True))
@@ -171,6 +165,8 @@ def load_weights(model, model_id, n_layer=None):
                 model_params[key].data.copy_(value)
             elif key in model_buffers:
                 model_buffers[key].data.copy_(value)
+
+    logger.debug("Loaded the quantized weights into the CPU.")
 
 
 def is_target_for_qlinear_replacement(layer_name: str, layer: torch.nn.Module) -> bool:

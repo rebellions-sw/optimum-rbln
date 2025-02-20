@@ -1,4 +1,4 @@
-# Copyright 2024 Rebellions Inc.
+# Copyright 2025 Rebellions Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,15 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-# Portions of this software are licensed under the Apache License,
-# Version 2.0. See the NOTICE file distributed with this work for
-# additional information regarding copyright ownership.
-
-# All other portions of this software, including proprietary code,
-# are the intellectual property of Rebellions Inc. and may not be
-# copied, modified, or distributed without prior written permission
-# from Rebellions Inc.
 
 import math
 from typing import List, Optional, Tuple
@@ -436,12 +427,14 @@ class DecoderOnlyModel(nn.Module):
             cos, sin = None, None
 
         # (batch, seq_len) -> (batch,)
-        seq_positions = cache_position[:, 0]
         if self.attn_impl == "flash_attn":
+            seq_positions = cache_position[:, 0]
             max_seq_len = past_key_values[0][0].shape[-2]
             seq_positions = self.convert_sequence_positions_for_flash_attn(
                 seq_positions=seq_positions, max_seq_len=max_seq_len
             )
+        else:
+            seq_positions = cache_position[:, :1]
 
         present_key_values = past_key_values
         for layer in self.layers:
@@ -553,15 +546,19 @@ class DecoderOnlyAttention(nn.Module):
         super().__init__()
         self._original_mod = self_attn
         self.layer_idx = self_attn.layer_idx
-        self.num_heads = self._original_mod.num_heads
+        self.num_heads = getattr(self._original_mod, "num_heads", None) or getattr(
+            self._original_mod.config, "num_attention_heads"
+        )
         self.head_dim = self._original_mod.head_dim
         self._phase = "prefill"
         self.scale = torch.tensor(self.get_attn_scale())
 
         if hasattr(self._original_mod, "num_key_value_heads"):
             self.num_key_value_heads = self._original_mod.num_key_value_heads
+        elif hasattr(self._original_mod, "config") and hasattr(self._original_mod.config, "num_key_value_heads"):
+            self.num_key_value_heads = self._original_mod.config.num_key_value_heads
         else:
-            self.num_key_value_heads = self._original_mod.num_heads
+            self.num_key_value_heads = self.num_heads
 
         self.attention = self.get_attention()
         self.__post_init__()
@@ -631,33 +628,21 @@ class DecoderOnlyAttention(nn.Module):
         if batch_size > 1 and self.phase == "prefill":
             raise NotImplementedError(f"batch size should be 1 if prefill phase, but got {batch_size}.")
 
-        # TODO(jongho): flash attn legacy. (clone)
-        _seq_positions = seq_positions.clone().unsqueeze(1)
+        attn_output, key_state, value_state = self.attention(
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            past_key_state=past_key_values[self.layer_idx][0],
+            past_value_state=past_key_values[self.layer_idx][1],
+            batch_position=None if self.phase == "decode" else batch_position,
+            seq_position=seq_positions,
+            scale=self.scale,
+        )
+        key_states = key_state
+        value_states = value_state
 
-        _key_states = []
-        _value_states = []
-        _attn_outputs = []
-        for b in range(batch_size):
-            seq_position = _seq_positions[b][0]
-            attn_output, key_state, value_state = self.attention(
-                query_states[b].unsqueeze(0),
-                key_states[b].unsqueeze(0),
-                value_states[b].unsqueeze(0),
-                attention_mask[b].unsqueeze(0) if self.phase == "decode" else attention_mask,
-                past_key_state=past_key_values[self.layer_idx][0],
-                past_value_state=past_key_values[self.layer_idx][1],
-                batch_position=b if self.phase == "decode" else batch_position,
-                seq_position=seq_position,
-                scale=self.scale,
-            )
-            _key_states.append(key_state)
-            _value_states.append(value_state)
-            _attn_outputs.append(attn_output)
-        key_states = torch.cat(_key_states, dim=0)
-        value_states = torch.cat(_value_states, dim=0)
-        attn_outputs = torch.cat(_attn_outputs, dim=0)
-
-        attn_outputs = self.o_proj(attn_outputs)
+        attn_outputs = self.o_proj(attn_output)
         past_key_values[self.layer_idx] = key_states, value_states
         return attn_outputs, past_key_values
 
@@ -703,8 +688,13 @@ class AttentionOp(nn.Module):
         value_state = value_state.unsqueeze(2)
         attn_mask = attn_mask.unsqueeze(2)
 
+        if self.phase == "decode":
+            batch_size = key_state.shape[0]
+        else:
+            batch_size = 1
+
         query_state = query_state.view(
-            1,
+            batch_size,
             self.num_key_value_heads,
             self.num_heads // self.num_key_value_heads,
             -1,  # seq len
@@ -736,9 +726,9 @@ class AttentionOp(nn.Module):
                 scale,
             )
 
-        attn_output = attn_output.view(1, self.num_heads, -1, self.head_dim)
+        attn_output = attn_output.view(batch_size, self.num_heads, -1, self.head_dim)
         attn_output = attn_output.transpose(1, 2).contiguous()
-        attn_output = attn_output.reshape(1, -1, self.num_heads * self.head_dim)
+        attn_output = attn_output.reshape(batch_size, -1, self.num_heads * self.head_dim)
 
         return attn_output, key_state.squeeze(2), value_state.squeeze(2)
 
@@ -867,31 +857,23 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
         if cos is not None and sin is not None:
             query_states, key_states = self.apply_rotary_pos_embed(query_states, key_states, cos, sin)
 
-        _key_states = []
-        _value_states = []
-        _attn_outputs = []
-        for b in range(batch_size):
-            seq_position = seq_positions[b][0]  # FIXME: Remove take-take pattern matching
-            attn_output, key_state, value_state = self.attention(
-                query_states[b].unsqueeze(0),
-                key_states[b].unsqueeze(0),
-                value_states[b].unsqueeze(0),
-                attention_mask[b].unsqueeze(0) if self.phase == "decode" else attention_mask,
-                past_key_state=past_key_values[self.layer_idx][0],
-                past_value_state=past_key_values[self.layer_idx][1],
-                batch_position=b if self.phase == "decode" else batch_position,
-                seq_position=seq_position,
-                scale=self.scale,
-            )
-            _key_states.append(key_state)
-            _value_states.append(value_state)
-            _attn_outputs.append(attn_output)
-        key_states = torch.cat(_key_states, dim=0)
-        value_states = torch.cat(_value_states, dim=0)
-        attn_outputs = torch.cat(_attn_outputs, dim=0)
+        attn_output, key_state, value_state = self.attention(
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            past_key_state=past_key_values[self.layer_idx][0],
+            past_value_state=past_key_values[self.layer_idx][1],
+            batch_position=None if self.phase == "decode" else batch_position,
+            seq_position=seq_positions,
+            scale=self.scale,
+        )
+        key_states = key_state
+        value_states = value_state
 
-        attn_outputs = self.o_proj(attn_outputs)
+        attn_outputs = self.o_proj(attn_output)
         past_key_values[self.layer_idx] = key_states, value_states
+
         return attn_outputs, past_key_values
 
 
@@ -917,8 +899,13 @@ class FlashAttentionOp(AttentionOp):
         value_state = value_state.unsqueeze(2)
         attn_mask = attn_mask.unsqueeze(2)
 
+        if self.phase == "decode":
+            batch_size = key_state.shape[0]
+        else:
+            batch_size = 1
+
         query_state = query_state.view(
-            1,
+            batch_size,
             self.num_key_value_heads,
             self.num_heads // self.num_key_value_heads,
             -1,  # seq len
@@ -952,8 +939,8 @@ class FlashAttentionOp(AttentionOp):
             )
 
         # reshape for removing repeat_kv
-        attn_output = attn_output.view(1, self.num_heads, -1, self.head_dim)
+        attn_output = attn_output.view(batch_size, self.num_heads, -1, self.head_dim)
         attn_output = attn_output.transpose(1, 2).contiguous()
-        attn_output = attn_output.reshape(1, -1, self.num_heads * self.head_dim)
+        attn_output = attn_output.reshape(batch_size, -1, self.num_heads * self.head_dim)
 
         return attn_output, key_state, value_state
