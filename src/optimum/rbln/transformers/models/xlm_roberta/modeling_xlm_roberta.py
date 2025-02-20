@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import inspect
-import logging
 from typing import TYPE_CHECKING, Optional, Union
 
 import torch
@@ -21,9 +20,10 @@ from transformers import PretrainedConfig
 
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
+from ....utils.logging import get_logger
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer

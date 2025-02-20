@@ -34,16 +34,17 @@ from diffusers import StableDiffusionControlNetPipeline
 from diffusers.image_processor import PipelineImageInput
 from diffusers.pipelines.controlnet.pipeline_controlnet import retrieve_timesteps
 from diffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
-from diffusers.utils import deprecate, logging
+from diffusers.utils import deprecate
 from diffusers.utils.torch_utils import is_compiled_module, is_torch_version
 
 from ....utils.decorator_utils import remove_compile_time_kwargs
+from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
 from ...models import RBLNControlNetModel
 from ...pipelines.controlnet.multicontrolnet import RBLNMultiControlNetModel
 
 
-logger = logging.get_logger(__name__)
+logger = get_logger(__name__)
 
 
 class RBLNStableDiffusionControlNetPipeline(RBLNDiffusionMixin, StableDiffusionControlNetPipeline):
