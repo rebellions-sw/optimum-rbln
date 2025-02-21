@@ -204,6 +204,10 @@ class RBLNDiffusionMixin:
                         if connected_submodule_config:
                             rbln_config[prefix + connected_submodule_name] = connected_submodule_config
                         submodules.append(prefix + connected_submodule_name)
+                pipe_global_config = {k: v for k, v in rbln_config.items() if k not in submodules}
+                for submodule in submodules:
+                    if submodule in rbln_config:
+                        rbln_config[submodule].update(pipe_global_config)
             else:
                 submodules = cls._submodules
 
