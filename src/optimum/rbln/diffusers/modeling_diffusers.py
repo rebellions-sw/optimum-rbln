@@ -172,8 +172,22 @@ class RBLNDiffusionMixin:
 
         else:
             # raise error if any of submodules are torch module.
-            model_index_config = None
-            for submodule_name in cls._submodules:
+            model_index_config = cls.load_config(pretrained_model_name_or_path=model_id)
+            if cls._load_connected_pipes:
+                submodules = []
+                for submodule in cls._submodules:
+                    submodule_config = rbln_config.pop(submodule, {})
+                    prefix = cls._prefix.get(submodule, "")
+                    connected_submodules = cls._connected_classes.get(submodule)._submodules
+                    for connected_submodule_name in connected_submodules:
+                        connected_submodule_config = submodule_config.pop(connected_submodule_name, {})
+                        if connected_submodule_config:
+                            rbln_config[prefix + connected_submodule_name] = connected_submodule_config
+                        submodules.append(prefix + connected_submodule_name)
+            else:
+                submodules = cls._submodules
+
+            for submodule_name in submodules:
                 if isinstance(kwargs.get(submodule_name), torch.nn.Module):
                     raise AssertionError(
                         f"{submodule_name} is not compiled torch module. If you want to compile, set `export=True`."
@@ -186,12 +200,6 @@ class RBLNDiffusionMixin:
                         submodule_config[key] = value
 
                 if not any(kwd in submodule_config for kwd in RUNTIME_KEYWORDS):
-                    continue
-
-                if model_index_config is None:
-                    model_index_config = cls.load_config(pretrained_model_name_or_path=model_id)
-
-                if submodule_name not in model_index_config:
                     continue
 
                 module_name, class_name = model_index_config[submodule_name]
