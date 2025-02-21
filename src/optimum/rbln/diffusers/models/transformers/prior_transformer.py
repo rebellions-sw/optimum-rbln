@@ -77,7 +77,7 @@ class RBLNPriorTransformer(RBLNModel):
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
         self.runtime = RBLNRuntimePriorTransformer(runtime=self.model[0])
-        artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth")
+        artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
         self.clip_mean = artifacts["clip_mean"]
         self.clip_std = artifacts["clip_std"]
 
@@ -137,7 +137,7 @@ class RBLNPriorTransformer(RBLNModel):
 
         input_info = [
             ("hidden_states", [batch_size, embedding_dim], "float32"),
-            ("timestep", [], "int64"),
+            ("timestep", [], "float32"),
             ("proj_embedding", [batch_size, embedding_dim], "float32"),
             ("encoder_hidden_states", [batch_size, num_embeddings, embedding_dim], "float32"),
             ("attention_mask", [batch_size, num_embeddings], "float32"),

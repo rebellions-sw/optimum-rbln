@@ -15,7 +15,7 @@
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import rebel
-import torch  # noqa: I001
+import torch
 from diffusers import VQModel
 from diffusers.models.autoencoders.vae import DecoderOutput
 from diffusers.models.autoencoders.vq_model import VQEncoderOutput
