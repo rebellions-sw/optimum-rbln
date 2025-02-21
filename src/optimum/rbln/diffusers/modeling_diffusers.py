@@ -19,12 +19,11 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import torch
 
-from . import pipelines
-
 from ..modeling import RBLNModel
 from ..modeling_config import RUNTIME_KEYWORDS, ContextRblnConfig, use_rbln_config
 from ..utils.decorator_utils import remove_compile_time_kwargs
 from ..utils.logging import get_logger
+from . import pipelines
 
 
 logger = get_logger(__name__)
