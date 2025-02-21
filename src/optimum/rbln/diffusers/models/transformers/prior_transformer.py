@@ -162,7 +162,7 @@ class RBLNPriorTransformer(RBLNModel):
     ):
         return self.runtime.forward(
             hidden_states.contiguous(),
-            timestep.long(),
+            timestep.float(),
             proj_embedding,
             encoder_hidden_states,
             attention_mask.float(),
