@@ -414,9 +414,16 @@ class RBLNDiffusionMixin:
         if rbln_config.get("optimize_host_memory") is False:
             # Keep compiled_model objs to further analysis. -> TODO: remove soon...
             model.compiled_models = []
-            for name in cls._submodules:
-                submodule = getattr(model, name)
-                model.compiled_models.extend(submodule.compiled_models)
+            if model._load_connected_pipes:
+                for name in cls._submodules:
+                    connected_pipe = getattr(model, name)
+                    for submodule_name in connected_pipe.__class__._submodules:
+                        submodule = getattr(connected_pipe, submodule_name)
+                        model.compiled_models.extend(submodule.compiled_models)
+            else:
+                for name in cls._submodules:
+                    submodule = getattr(model, name)
+                    model.compiled_models.extend(submodule.compiled_models)
 
         return model
 
