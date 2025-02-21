@@ -124,7 +124,9 @@ class RBLNDiffusionMixin:
 
             pipe_global_config = {k: v for k, v in rbln_config.items() if k not in submodules}
             for connected_submodule_name in connected_submodules:
-                submodule_config[connected_submodule_name].update({k: v for k, v in pipe_global_config.items() if k not in submodule_config})
+                submodule_config[connected_submodule_name].update(
+                    {k: v for k, v in pipe_global_config.items() if k not in submodule_config}
+                )
             rbln_config[submodule_name] = submodule_config
         else:
             raise ValueError(f"submodule {submodule_name} isn't supported")
