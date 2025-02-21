@@ -29,7 +29,6 @@ from .vae import RBLNRuntimeVQDecoder, RBLNRuntimeVQEncoder, _VQDecoder, _VQEnco
 
 
 if TYPE_CHECKING:
-    import torch
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
 
 logger = get_logger(__name__)
