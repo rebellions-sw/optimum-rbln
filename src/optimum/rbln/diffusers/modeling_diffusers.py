@@ -110,10 +110,10 @@ class RBLNDiffusionMixin:
             submodule_config = copy.deepcopy(submodule_config)
 
             submodule_cls: RBLNModel = getattr(importlib.import_module("optimum.rbln"), f"{submodule_class_name}")
-            prefix = submodule_cls._prefix.get(submodule, "")
+            prefix = cls._prefix.get(submodule_name, "")
             connected_submodules = cls._connected_classes.get(submodule_name)._submodules
             for connected_submodule_name in connected_submodules:
-                connected_submodule_config = rbln_config.get(prefix + connected_submodule_name, {})
+                connected_submodule_config = rbln_config.pop(prefix + connected_submodule_name, {})
                 if connected_submodule_name in submodule_config:
                     submodule_config[connected_submodule_name].update(connected_submodule_config)
                 else:
@@ -123,7 +123,9 @@ class RBLNDiffusionMixin:
             submodules += [prefix + connected_submodule_name for connected_submodule_name in connected_submodules]
 
             pipe_global_config = {k: v for k, v in rbln_config.items() if k not in submodules}
-            submodule_config.update({k: v for k, v in pipe_global_config.items() if k not in submodule_config})
+            for connected_submodule_name in connected_submodules:
+                submodule_config[connected_submodule_name].update({k: v for k, v in pipe_global_config.items() if k not in submodule_config})
+            rbln_config[submodule_name] = submodule_config
         else:
             raise ValueError(f"submodule {submodule_name} isn't supported")
         return submodule_config
