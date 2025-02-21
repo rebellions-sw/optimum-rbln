@@ -58,7 +58,7 @@ class RBLNStableVideoDiffusionPipeline(RBLNDiffusionMixin, StableVideoDiffusionP
             kwargs["num_frames"] = compiled_num_frames
 
         # compiled_decode_chunk_size = self.vae.rbln_config.model_cfg.get("decode_chunk_size")
-        compiled_decode_chunk_size = 7
+        compiled_decode_chunk_size = 5
         # if compiled_decode_chunk_size is not None:
         #     kwargs["decode_chunk_size"] = compiled_decode_chunk_size
         return kwargs

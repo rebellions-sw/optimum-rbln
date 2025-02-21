@@ -9,7 +9,7 @@ from optimum.rbln import RBLNStableVideoDiffusionPipeline
 
 
 def main(
-    model_id: str = "stabilityai/stable-video-diffusion-img2vid",
+    model_id: str = "stabilityai/stable-video-diffusion-img2vid-xt-1-1",
     from_diffusers: bool = False,
     img_width: int = 1024,
     img_height: int = 576,
@@ -29,7 +29,8 @@ def main(
             rbln_num_frames=num_frames,
             rbln_decode_chunk_size=decode_chunk_size,
         )
-        pipe.save_pretrained(os.path.basename(model_id))
+        options = "unet"
+        pipe.save_pretrained(os.path.basename(model_id+f"_{options}"))
     else:
         pipe = RBLNStableVideoDiffusionPipeline.from_pretrained(
             model_id=os.path.basename(model_id),
@@ -48,7 +49,7 @@ def main(
     if num_frames is None:
         num_frames = pipe.unet.config.num_frames
 
-    export_to_video(frames, f"generated_{os.path.basename(model_id)}_wpqfk.mp4", fps=num_frames)
+    export_to_video(frames, f"generated_{os.path.basename(model_id)}_{options}.mp4", fps=num_frames)
 
 
 if __name__ == "__main__":
