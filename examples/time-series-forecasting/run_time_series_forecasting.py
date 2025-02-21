@@ -2,12 +2,9 @@ import torch
 from huggingface_hub import hf_hub_download
 from transformers import TimeSeriesTransformerForPrediction
 
+from optimum.rbln import RBLNTimeSeriesTransformerForPrediction
 
-# from diffusers import StableDiffusionControlNetPipeline, ControlNetModel
-# model = StableDiffusionControlNetPipeline.from_pretrained(pretrained_model_name_or_path="hf-internal-testing/tiny-stable-diffusion-torch", controlnet=ControlNetModel.from_pretrained("hf-internal-testing/tiny-controlnet", use_safetensors=False), use_safetensors=False)
-
-# import pdb;
-# pdb.set_trace()
+rbln_model = RBLNTimeSeriesTransformerForPrediction.from_pretrained("huggingface/time-series-transformer-tourism-monthly",export=True)
 
 # 데이터 다운로드 및 로드
 file = hf_hub_download(
@@ -17,6 +14,7 @@ batch = torch.load(file)
 
 # 사전 학습된 Time Series Transformer 모델 로드
 model = TimeSeriesTransformerForPrediction.from_pretrained("huggingface/time-series-transformer-tourism-monthly")
+
 
 
 # 예측 수행

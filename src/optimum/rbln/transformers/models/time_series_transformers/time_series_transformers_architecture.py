@@ -64,11 +64,12 @@ class TimeSeriesTransformersEncoderWrapper(torch.nn.Module):
 
     def forward(
         self,
-        inputs_embeds: Optional[torch.LongTensor],
-        cross_key_values: torch.Tensor,  # n_layers, batch_size, num_heads, context_length, d_kv
+        inputs_embeds: torch.Tensor,
+        attention_mask: torch.Tensor,
+        # cross_key_values: torch.Tensor,  # n_layers, batch_size, num_heads, context_length, d_kv
     ) -> Union[Tuple[torch.FloatTensor], BaseModelOutput]:
         # 1. get encoder last_hidden_states
-        encoder_outputs = self.encoder(inputs_embeds=inputs_embeds, return_dict=False)
+        encoder_outputs = self.encoder(inputs_embeds=inputs_embeds, attention_mask=attention_mask, return_dict=False)
         last_hidden_states = encoder_outputs[0]
 
         # 2. pre-compute cross_attention's past_key_value which used in decoder phase.
@@ -112,7 +113,7 @@ class TimeSeriesTransformersDecoderWrapper(torch.nn.Module):
 
     def forward(
         self,
-        decoder_input_ids: torch.Tensor,
+        inputs_embeds: torch.Tensor,
         decoder_attention_mask: torch.Tensor,
         encoder_attention_mask: torch.Tensor,
         cache_position: torch.Tensor,
@@ -128,7 +129,7 @@ class TimeSeriesTransformersDecoderWrapper(torch.nn.Module):
 
         # Decode
         last_hidden_states, self_present_key_values = self.decoder(
-            input_ids=decoder_input_ids,
+            inputs_embeds=inputs_embeds,
             attention_mask=decoder_attention_mask,
             encoder_attention_mask=encoder_attention_mask,
             cache_position=cache_position,
@@ -186,8 +187,6 @@ class TimeSeriesTransformersDecoder(nn.Module):
             hidden_states = layer_outputs[0]
             self_present_key_values += layer_outputs[1]
 
-        hidden_states = self.layer_norm(hidden_states)
-
         return hidden_states, self_present_key_values
 
 
@@ -227,7 +226,7 @@ class TimeSeriesTransformersDecoderLayer(nn.Module):
 
         # Cross-Attention Block
         residual = hidden_states
-        hidden_states = self.encoder_attn(
+        hidden_states, _ = self.encoder_attn(
             hidden_states=hidden_states,
             past_key_value=cross_past_key_value,
             attention_mask=encoder_attention_mask,
@@ -309,6 +308,7 @@ class TimeSeriesTransformersCrossAttention(TimeSeriesTransformersSelfAttention):
     def forward(
         self,
         hidden_states: torch.Tensor,
+        attention_mask: torch.Tensor,
         past_key_value: Optional[Tuple[torch.Tensor]] = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         batch_size, query_len, _ = hidden_states.size()
@@ -319,6 +319,7 @@ class TimeSeriesTransformersCrossAttention(TimeSeriesTransformersSelfAttention):
         value_states = past_key_value[1]
 
         attn_weights = torch.matmul(query_states, key_states.transpose(2, 3))
+        attn_weights = attn_weights + attention_mask
         attn_weights = nn.functional.softmax(attn_weights, dim=-1)
 
         attn_output = torch.matmul(attn_weights, value_states)

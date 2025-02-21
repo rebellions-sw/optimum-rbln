@@ -20,3 +20,5 @@
 # are the intellectual property of Rebellions Inc. and may not be
 # copied, modified, or distributed without prior written permission
 # from Rebellions Inc.
+
+from .modeling_time_series_transformers import RBLNTimeSeriesTransformerForPrediction

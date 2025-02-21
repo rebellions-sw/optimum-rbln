@@ -150,7 +150,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
             compile_context=context,
         )
 
-        return {"encoder": compiled_encoder, "decoder": compiled_decoder}
+        # return {"encoder": compiled_encoder, "decoder": compiled_decoder}
 
     @classmethod
     def _get_rbln_config(
@@ -174,7 +174,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
             raise TypeError(f"Expected rbln_num_parallel_samples to be an int, but got {type(rbln_batch_size)}")
 
         context_length = model_config.context_length  # enc_max_seq_len
-        predict_length = model_config.predict_length  # dec_max_seq_len
+        predict_length = model_config.prediction_length  # dec_max_seq_len
 
         # d_model = model_config.d_model
         feature_size = model_config.feature_size
@@ -201,8 +201,8 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         )
 
         dec_input_info = [
-            ("inputs_embeds", [rbln_batch_size, 1], "int64"),
-            ("attention_mask", [rbln_batch_size, predict_length], "float32"),
+            ("inputs_embeds", [rbln_batch_size * rbln_num_parallel_samples, 1, feature_size], "float32"),
+            ("attention_mask", [rbln_batch_size * rbln_num_parallel_samples, predict_length], "float32"),
             ("encoder_attention_mask", [rbln_batch_size, context_length], "float32"),
             ("cache_position", [], "int32"),
         ]
@@ -226,7 +226,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
                 (
                     f"self_key_value_states_{i}",
                     [
-                        rbln_batch_size,
+                        rbln_batch_size * rbln_num_parallel_samples,
                         model_config.decoder_attention_heads,
                         predict_length,
                         model_config.d_model // model_config.encoder_attention_heads,
