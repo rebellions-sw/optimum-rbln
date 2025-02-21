@@ -12,4 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .prior_transformer import RBLNPriorTransformer
 from .transformer_sd3 import RBLNSD3Transformer2DModel

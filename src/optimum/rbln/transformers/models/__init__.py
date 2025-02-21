@@ -34,7 +34,12 @@ _import_structure = {
     ],
     "bart": ["RBLNBartForConditionalGeneration", "RBLNBartModel"],
     "bert": ["RBLNBertModel", "RBLNBertForQuestionAnswering", "RBLNBertForMaskedLM"],
-    "clip": ["RBLNCLIPTextModel", "RBLNCLIPTextModelWithProjection", "RBLNCLIPVisionModel"],
+    "clip": [
+        "RBLNCLIPTextModel",
+        "RBLNCLIPTextModelWithProjection",
+        "RBLNCLIPVisionModel",
+        "RBLNCLIPVisionModelWithProjection",
+    ],
     "dpt": ["RBLNDPTForDepthEstimation"],
     "exaone": ["RBLNExaoneForCausalLM"],
     "gemma": ["RBLNGemmaForCausalLM"],
@@ -68,7 +73,12 @@ if TYPE_CHECKING:
     )
     from .bart import RBLNBartForConditionalGeneration, RBLNBartModel
     from .bert import RBLNBertForMaskedLM, RBLNBertForQuestionAnswering, RBLNBertModel
-    from .clip import RBLNCLIPTextModel, RBLNCLIPTextModelWithProjection, RBLNCLIPVisionModel
+    from .clip import (
+        RBLNCLIPTextModel,
+        RBLNCLIPTextModelWithProjection,
+        RBLNCLIPVisionModel,
+        RBLNCLIPVisionModelWithProjection,
+    )
     from .dpt import RBLNDPTForDepthEstimation
     from .exaone import RBLNExaoneForCausalLM
     from .gemma import RBLNGemmaForCausalLM
