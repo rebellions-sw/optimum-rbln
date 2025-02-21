@@ -1,4 +1,4 @@
-# Copyright 2024 Rebellions Inc.
+# Copyright 2025 Rebellions Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,17 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Portions of this software are licensed under the Apache License,
-# Version 2.0. See the NOTICE file distributed with this work for
-# additional information regarding copyright ownership.
-
-# All other portions of this software, including proprietary code,
-# are the intellectual property of Rebellions Inc. and may not be
-# copied, modified, or distributed without prior written permission
-# from Rebellions Inc.
-
 import inspect
-import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple, Union
 
@@ -39,10 +29,11 @@ from transformers.models.llava_next.modeling_llava_next import LlavaNextCausalLM
 
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
+from ....utils.logging import get_logger
 from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyOutput
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from transformers import (

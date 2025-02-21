@@ -1,4 +1,4 @@
-# Copyright 2024 Rebellions Inc.
+# Copyright 2025 Rebellions Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,17 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Portions of this software are licensed under the Apache License,
-# Version 2.0. See the NOTICE file distributed with this work for
-# additional information regarding copyright ownership.
-
-# All other portions of this software, including proprietary code,
-# are the intellectual property of Rebellions Inc. and may not be
-# copied, modified, or distributed without prior written permission
-# from Rebellions Inc.
-
 import importlib
-import logging
 import os
 import shutil
 from abc import ABC, abstractmethod
@@ -41,6 +31,7 @@ from transformers import (
 
 from .modeling_config import RBLNCompileConfig, RBLNConfig, use_rbln_config
 from .utils.hub import PushToHubMixin, pull_compiled_model_from_hub, validate_files
+from .utils.logging import get_logger
 from .utils.runtime_utils import UnavailableRuntime
 from .utils.save_utils import maybe_load_preprocessors
 from .utils.submodule import SubModulesMixin
@@ -49,7 +40,7 @@ from .utils.submodule import SubModulesMixin
 if TYPE_CHECKING:
     from transformers import PreTrainedModel
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PreTrainedModel(ABC):  # noqa: F811
@@ -451,26 +442,46 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             logger.error(f"Provided path ({save_directory}) should be a directory, not a file")
             return
 
-        os.makedirs(save_directory, exist_ok=True)
-
         real_save_dir = self.model_save_dir / self.subfolder
         save_directory_path = Path(save_directory)
-        if os.path.exists(real_save_dir) and os.path.isdir(real_save_dir):
-            if save_directory_path.absolute() == real_save_dir.absolute():
-                raise FileExistsError(
-                    f"Cannot save model to '{save_directory}'. "
-                    f"This directory already exists and contains the model files."
-                )
-            shutil.copytree(real_save_dir, save_directory, dirs_exist_ok=True)
-            self.config.save_pretrained(save_directory)
-            if self.generation_config is not None:
-                self.generation_config.save_pretrained(save_directory)
-        else:
+
+        if not os.path.exists(real_save_dir) or not os.path.isdir(real_save_dir):
             raise FileNotFoundError(
                 f"Unable to save the model. The model directory '{real_save_dir}' does not exist or is not accessible. "
                 f"Cannot save to the specified destination '{save_directory}'. "
                 f"Please ensure the model directory exists and you have the necessary permissions to access it."
             )
+
+        if save_directory_path.absolute() == real_save_dir.absolute():
+            raise FileExistsError(
+                f"Cannot save model to '{save_directory}'. This directory already exists and contains the model files."
+            )
+
+        # Create a temporary directory next to the target directory
+        tmp_dir = save_directory + ".tmp"
+        try:
+            # Remove temporary directory if it exists from a previous failed attempt
+            if os.path.exists(tmp_dir):
+                shutil.rmtree(tmp_dir)
+
+            # First copy everything to a temporary directory
+            shutil.copytree(real_save_dir, tmp_dir)
+
+            # Save configs to the temporary directory
+            self.config.save_pretrained(tmp_dir)
+            if self.generation_config is not None:
+                self.generation_config.save_pretrained(tmp_dir)
+
+            # If everything succeeded, atomically replace the target directory
+            if os.path.exists(save_directory):
+                shutil.rmtree(save_directory)
+            os.rename(tmp_dir, save_directory)
+
+        except Exception as e:
+            # Clean up the temporary directory if anything fails
+            if os.path.exists(tmp_dir):
+                shutil.rmtree(tmp_dir)
+            raise e  # Re-raise the exception after cleanup
 
         if push_to_hub:
             return super().push_to_hub(save_directory, **kwargs)

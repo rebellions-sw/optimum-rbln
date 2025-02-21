@@ -1,4 +1,4 @@
-# Copyright 2024 Rebellions Inc.
+# Copyright 2025 Rebellions Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,26 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Portions of this software are licensed under the Apache License,
-# Version 2.0. See the NOTICE file distributed with this work for
-# additional information regarding copyright ownership.
-
-# All other portions of this software, including proprietary code,
-# are the intellectual property of Rebellions Inc. and may not be
-# copied, modified, or distributed without prior written permission
-# from Rebellions Inc.
-
 import inspect
-import logging
 from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 from transformers import PretrainedConfig
 
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
+from ....utils.logging import get_logger
+from ...modeling_generic import RBLNModelForMaskedLM, RBLNModelForQuestionAnswering
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
@@ -64,19 +56,29 @@ class RBLNBertModel(RBLNModel):
         if max_position_embeddings is not None and rbln_max_seq_len > max_position_embeddings:
             raise ValueError("`rbln_max_seq_len` should be less or equal than max_position_embeddings!")
 
+        signature_params = inspect.signature(cls.hf_class.forward).parameters.keys()
+
         if rbln_model_input_names is None:
             for tokenizer in preprocessors:
                 if hasattr(tokenizer, "model_input_names"):
-                    rbln_model_input_names = tokenizer.model_input_names
+                    rbln_model_input_names = [name for name in signature_params if name in tokenizer.model_input_names]
+
+                    invalid_params = set(rbln_model_input_names) - set(signature_params)
+                    if invalid_params:
+                        raise ValueError(f"Invalid model input names: {invalid_params}")
                     break
             if rbln_model_input_names is None and hasattr(cls, "rbln_model_input_names"):
                 rbln_model_input_names = cls.rbln_model_input_names
             elif rbln_model_input_names is None and hasattr(cls, "rbln_model_input_names") is False:
-                input_names_order = inspect.signature(cls.hf_class.forward).parameters.keys()
                 raise ValueError(
                     "Specify the model input names obtained by the tokenizer via `rbln_model_input_names`, "
-                    f"and be sure to make the order of the inputs same as BertModel forward() arguments like ({list(input_names_order)})"
+                    f"and be sure to make the order of the inputs same as BertModel forward() arguments like ({list(signature_params)})"
                 )
+        else:
+            invalid_params = set(rbln_model_input_names) - set(signature_params)
+            if invalid_params:
+                raise ValueError(f"Invalid model input names: {invalid_params}")
+            rbln_model_input_names = [name for name in signature_params if name in rbln_model_input_names]
 
         if rbln_batch_size is None:
             rbln_batch_size = 1
@@ -96,3 +98,11 @@ class RBLNBertModel(RBLNModel):
 
         rbln_config.model_cfg.update({"max_seq_len": rbln_max_seq_len})
         return rbln_config
+
+
+class RBLNBertForMaskedLM(RBLNModelForMaskedLM):
+    rbln_model_input_names = ["input_ids", "attention_mask", "token_type_ids"]
+
+
+class RBLNBertForQuestionAnswering(RBLNModelForQuestionAnswering):
+    rbln_model_input_names = ["input_ids", "attention_mask", "token_type_ids"]
