@@ -29,6 +29,11 @@ def main(
             rbln_img_height=img_height,
             rbln_num_frames=num_frames,
             rbln_decode_chunk_size=decode_chunk_size,
+            rbln_config={
+                "image_encoder": {"device": 0},
+                "unet": {"device": 1},
+                "vae": {"device": 2},
+            }
         )
         pipe.save_pretrained(os.path.basename(model_id))
     else:
