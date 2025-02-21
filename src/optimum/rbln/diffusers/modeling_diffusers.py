@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import torch
 
-from optimum.rbln.diffusers import pipelines
+from . import pipelines
 
 from ..modeling import RBLNModel
 from ..modeling_config import RUNTIME_KEYWORDS, ContextRblnConfig, use_rbln_config
@@ -107,7 +107,24 @@ class RBLNDiffusionMixin:
             )
             submodule_config = submodule_cls.update_rbln_config_using_pipe(model, submodule_config)
         elif hasattr(pipelines, submodule_class_name):
-            submodule_config = rbln_config
+            submodule_config = rbln_config.get(submodule_name, {})
+            submodule_config = copy.deepcopy(submodule_config)
+
+            submodule_cls: RBLNModel = getattr(importlib.import_module("optimum.rbln"), f"{submodule_class_name}")
+            prefix = submodule_cls._prefix.get(submodule, "")
+            connected_submodules = cls._connected_classes.get(submodule_name)._submodules
+            for connected_submodule_name in connected_submodules:
+                connected_submodule_config = rbln_config.get(prefix + connected_submodule_name, {})
+                if connected_submodule_name in submodule_config:
+                    submodule_config[connected_submodule_name].update(connected_submodule_config)
+                else:
+                    submodule_config[connected_submodule_name] = connected_submodule_config
+
+            submodules = copy.deepcopy(cls._submodules)
+            submodules += [prefix + connected_submodule_name for connected_submodule_name in connected_submodules]
+
+            pipe_global_config = {k: v for k, v in rbln_config.items() if k not in submodules}
+            submodule_config.update({k: v for k, v in pipe_global_config.items() if k not in submodule_config})
         else:
             raise ValueError(f"submodule {submodule_name} isn't supported")
         return submodule_config
@@ -352,7 +369,6 @@ class RBLNDiffusionMixin:
                 connected_pipe_submodules = submodules[submodule_name].__class__._submodules
                 connected_pipe_submodules = [prefix + name for name in connected_pipe_submodules]
                 submodule_names += connected_pipe_submodules
-                delattr(model, submodule_name)
                 setattr(model, submodule_name, submodules[submodule_name])
             else:
                 submodule_names.append(submodule_name)
