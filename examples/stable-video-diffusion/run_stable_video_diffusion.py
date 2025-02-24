@@ -21,7 +21,6 @@ def main(
     image = image.resize((img_width, img_height))
 
     if from_diffusers:
-        model_id = "stabilityai/stable-video-diffusion-img2vid"
         pipe = RBLNStableVideoDiffusionPipeline.from_pretrained(
             model_id,
             export=True,
