@@ -112,6 +112,11 @@ class RBLNDiffusionMixin:
             submodule_cls: RBLNModel = getattr(importlib.import_module("optimum.rbln"), f"{submodule_class_name}")
             prefix = cls._prefix.get(submodule_name, "")
             connected_submodules = cls._connected_classes.get(submodule_name)._submodules
+            pipe_global_config = {k: v for k, v in submodule_config.items() if k not in connected_submodules}
+            submodule_config = {k: v for k, v in submodule_config.items() if k in connected_submodules}
+            for key in submodule_config.keys():
+                submodule_config[key].update(pipe_global_config)
+
             for connected_submodule_name in connected_submodules:
                 connected_submodule_config = rbln_config.pop(prefix + connected_submodule_name, {})
                 if connected_submodule_name in submodule_config:
@@ -119,11 +124,8 @@ class RBLNDiffusionMixin:
                 else:
                     submodule_config[connected_submodule_name] = connected_submodule_config
 
-            submodules = copy.deepcopy(cls._submodules)
-            submodules += [prefix + connected_submodule_name for connected_submodule_name in connected_submodules]
-
             pipe_global_config = {
-                k: v for k, v in rbln_config.items() if k not in submodules and not isinstance(v, dict)
+                k: v for k, v in rbln_config.items() if k != submodule_class_name and not isinstance(v, dict)
             }
 
             for connected_submodule_name in connected_submodules:

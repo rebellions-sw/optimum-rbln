@@ -39,10 +39,10 @@ def main(
             export=False,
         )
 
-    generator = torch.manual_seed(111)
+    generator = torch.manual_seed(42)
     image_emb, zero_image_emb = prior_pipe(prompt, generator=generator, return_dict=False)
 
-    mask = np.zeros((768, 768), dtype=np.float32)
+    mask = np.zeros((512, 512), dtype=np.float32)
     mask[:170, 170:-170] = 1
 
     out = pipe(
