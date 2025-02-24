@@ -1,36 +1,58 @@
 import os
 
 import fire
+import numpy as np
 import torch
 from diffusers.utils import load_image
 
-from optimum.rbln import RBLNKandinskyV22InpaintCombinedPipeline
+from optimum.rbln import RBLNKandinskyV22InpaintPipeline, RBLNKandinskyV22PriorPipeline
 
 
 def main(
-    model_id: str = "kandinsky-community/kandinsky-2-2-decoder-inpaint",
+    prior_model_id: str = "kandinsky-community/kandinsky-2-2-prior",
+    inpaint_model_id: str = "kandinsky-community/kandinsky-2-2-decoder-inpaint",
     from_diffusers: bool = False,
-    prompt: str = "concept art digital painting of an elven castle, inspired by lord of the rings, highly detailed, 8k",
+    prompt: str = "a hat",
 ):
-    img_url = "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/inpaint.png"
-    mask_url = (
-        "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/inpaint_mask.png"
-    )
-    source = load_image(img_url)
-    mask = load_image(mask_url)
+    img_url = "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/kandinsky/cat.png"
+    init_image = load_image(img_url)
 
     if from_diffusers:
-        pipe = RBLNKandinskyV22InpaintCombinedPipeline.from_pretrained(
-            model_id=model_id,
+        prior_pipe = RBLNKandinskyV22PriorPipeline.from_pretrained(
+            model_id=prior_model_id,
             export=True,
         )
-        pipe.save_pretrained(os.path.basename(model_id))
+        prior_pipe.save_pretrained(os.path.basename(prior_model_id))
+
+        pipe = RBLNKandinskyV22InpaintPipeline.from_pretrained(
+            model_id=inpaint_model_id,
+            export=True,
+        )
+        pipe.save_pretrained(os.path.basename(inpaint_model_id))
     else:
-        pipe = RBLNKandinskyV22InpaintCombinedPipeline.from_pretrained(
-            model_id=os.path.basename(model_id), export=False
+        prior_pipe = RBLNKandinskyV22PriorPipeline.from_pretrained(
+            model_id=os.path.basename(prior_model_id),
+            export=False,
+        )
+        pipe = RBLNKandinskyV22InpaintPipeline.from_pretrained(
+            model_id=os.path.basename(inpaint_model_id),
+            export=False,
         )
 
-    image = pipe(prompt, image=source, mask_image=mask, generator=torch.manual_seed(42)).images[0]
+    generator = torch.manual_seed(42)
+    image_emb, zero_image_emb = prior_pipe(prompt, generator=generator, return_dict=False)
+
+    mask = np.zeros((512, 512), dtype=np.float32)
+    mask[:170, 170:-170] = 1
+
+    out = pipe(
+        image=init_image,
+        mask_image=mask,
+        image_embeds=image_emb,
+        negative_image_embeds=zero_image_emb,
+        generator=generator,
+    )
+    image = out.images[0]
     image.save(f"{prompt}.png")
 
 

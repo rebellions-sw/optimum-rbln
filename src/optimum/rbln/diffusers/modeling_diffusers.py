@@ -112,6 +112,11 @@ class RBLNDiffusionMixin:
             submodule_cls: RBLNModel = getattr(importlib.import_module("optimum.rbln"), f"{submodule_class_name}")
             prefix = cls._prefix.get(submodule_name, "")
             connected_submodules = cls._connected_classes.get(submodule_name)._submodules
+            pipe_global_config = {k: v for k, v in submodule_config.items() if k not in connected_submodules}
+            submodule_config = {k: v for k, v in submodule_config.items() if k in connected_submodules}
+            for key in submodule_config.keys():
+                submodule_config[key].update(pipe_global_config)
+
             for connected_submodule_name in connected_submodules:
                 connected_submodule_config = rbln_config.pop(prefix + connected_submodule_name, {})
                 if connected_submodule_name in submodule_config:
@@ -119,14 +124,17 @@ class RBLNDiffusionMixin:
                 else:
                     submodule_config[connected_submodule_name] = connected_submodule_config
 
-            submodules = copy.deepcopy(cls._submodules)
-            submodules += [prefix + connected_submodule_name for connected_submodule_name in connected_submodules]
+            pipe_global_config = {
+                k: v for k, v in rbln_config.items() if k != submodule_class_name and not isinstance(v, dict)
+            }
 
-            pipe_global_config = {k: v for k, v in rbln_config.items() if k not in submodules}
             for connected_submodule_name in connected_submodules:
-                submodule_config[connected_submodule_name].update(
-                    {k: v for k, v in pipe_global_config.items() if k not in submodule_config}
-                )
+                for k, v in pipe_global_config.items():
+                    if "guidance_scale" in k:
+                        if prefix + "guidance_scale" == k:
+                            submodule_config[connected_submodule_name]["guidance_scale"] = v
+                    else:
+                        submodule_config[connected_submodule_name][k] = v
             rbln_config[submodule_name] = submodule_config
         else:
             raise ValueError(f"submodule {submodule_name} isn't supported")
