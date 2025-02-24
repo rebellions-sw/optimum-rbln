@@ -20,6 +20,7 @@ def main(
     image = load_image(url)
     image = image.resize((img_width, img_height))
 
+    options = "unet"
     if from_diffusers:
         pipe = RBLNStableVideoDiffusionPipeline.from_pretrained(
             model_id,
@@ -29,7 +30,6 @@ def main(
             rbln_num_frames=num_frames,
             rbln_decode_chunk_size=decode_chunk_size,
         )
-        options = "unet"
         pipe.save_pretrained(os.path.basename(model_id+f"_{options}"))
     else:
         pipe = RBLNStableVideoDiffusionPipeline.from_pretrained(
@@ -48,7 +48,7 @@ def main(
 
     if num_frames is None:
         num_frames = pipe.unet.config.num_frames
-
+    
     export_to_video(frames, f"generated_{os.path.basename(model_id)}_{options}.mp4", fps=num_frames)
 
 
