@@ -50,7 +50,7 @@ def main(
         mask_image=mask,
         image_embeds=image_emb,
         negative_image_embeds=zero_image_emb,
-        generator=generator
+        generator=generator,
     )
     image = out.images[0]
     image.save(f"{prompt}.png")

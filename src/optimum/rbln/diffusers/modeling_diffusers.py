@@ -122,7 +122,9 @@ class RBLNDiffusionMixin:
             submodules = copy.deepcopy(cls._submodules)
             submodules += [prefix + connected_submodule_name for connected_submodule_name in connected_submodules]
 
-            pipe_global_config = {k: v for k, v in rbln_config.items() if k not in submodules and not isinstance(v, dict)}
+            pipe_global_config = {
+                k: v for k, v in rbln_config.items() if k not in submodules and not isinstance(v, dict)
+            }
 
             for connected_submodule_name in connected_submodules:
                 for k, v in pipe_global_config.items():
