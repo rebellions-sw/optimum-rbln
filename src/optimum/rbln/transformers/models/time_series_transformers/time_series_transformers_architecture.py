@@ -65,11 +65,11 @@ class TimeSeriesTransformersEncoderWrapper(torch.nn.Module):
     def forward(
         self,
         inputs_embeds: torch.Tensor,
-        attention_mask: torch.Tensor,
-        # cross_key_values: torch.Tensor,  # n_layers, batch_size, num_heads, context_length, d_kv
+        # attention_mask: Optional[torch.Tensor] = None,
+        cross_key_values: torch.Tensor,  # n_layers, batch_size, num_heads, context_length, d_kv
     ) -> Union[Tuple[torch.FloatTensor], BaseModelOutput]:
         # 1. get encoder last_hidden_states
-        encoder_outputs = self.encoder(inputs_embeds=inputs_embeds, attention_mask=attention_mask, return_dict=False)
+        encoder_outputs = self.encoder(inputs_embeds=inputs_embeds, attention_mask=None, return_dict=False)
         last_hidden_states = encoder_outputs[0]
 
         # 2. pre-compute cross_attention's past_key_value which used in decoder phase.
@@ -114,8 +114,8 @@ class TimeSeriesTransformersDecoderWrapper(torch.nn.Module):
     def forward(
         self,
         inputs_embeds: torch.Tensor,
-        decoder_attention_mask: torch.Tensor,
-        encoder_attention_mask: torch.Tensor,
+        # decoder_attention_mask: torch.Tensor,
+        # encoder_attention_mask: Optional[torch.Tensor],
         cache_position: torch.Tensor,
         cross_kv_cache: torch.Tensor,  # batch_size, num_heads, context_length, d_kv
         *self_kv_cache: torch.Tensor,  # batch_size * num_parallel_samples, num_heads, prediction_length, d_kv
@@ -130,8 +130,8 @@ class TimeSeriesTransformersDecoderWrapper(torch.nn.Module):
         # Decode
         last_hidden_states, self_present_key_values = self.decoder(
             inputs_embeds=inputs_embeds,
-            attention_mask=decoder_attention_mask,
-            encoder_attention_mask=encoder_attention_mask,
+            attention_mask=None,
+            # encoder_attention_mask=encoder_attention_mask,
             cache_position=cache_position,
             self_past_key_values=self_past_key_values,
             cross_past_key_values=cross_past_key_values,
@@ -218,7 +218,7 @@ class TimeSeriesTransformersDecoderLayer(nn.Module):
         hidden_states, self_present_key_value = self.self_attn(
             hidden_states=hidden_states,
             past_key_value=self_past_key_value,
-            attention_mask=attention_mask,
+            # attention_mask=attention_mask,
             cache_position=cache_position,
         )
         hidden_states = residual + hidden_states
@@ -272,15 +272,18 @@ class TimeSeriesTransformersSelfAttention(TimeSeriesTransformersAttention):
         s_idx = torch.tensor(cache_position, dtype=torch.int16)
         axis = torch.tensor(2, dtype=torch.int16)
 
-        key_states = torch.ops.rbln_custom_ops.rbln_cache_update(past_key_value[0], key_states, s_idx, axis)
-        value_states = torch.ops.rbln_custom_ops.rbln_cache_update(past_key_value[1], value_states, s_idx, axis)
+        key_states = torch.ops.rbln_custom_ops.rbln_cache_update(
+            past_key_value[0].unsqueeze(1), key_states, s_idx, axis
+        )
+        value_states = torch.ops.rbln_custom_ops.rbln_cache_update(
+            past_key_value[1].unsqueeze(1), value_states, s_idx, axis
+        )
         return key_states, value_states
 
     def forward(
         self,
         hidden_states: torch.Tensor,
         past_key_value: Optional[Tuple[torch.Tensor]] = None,
-        attention_mask: Optional[torch.Tensor] = None,
         cache_position: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         bsz, tgt_len, _ = hidden_states.size()
@@ -292,7 +295,7 @@ class TimeSeriesTransformersSelfAttention(TimeSeriesTransformersAttention):
         key_states, value_states = self.rbln_cache_update(past_key_value, key_states, value_states, cache_position)
 
         attn_weights = torch.matmul(query_states, key_states.transpose(2, 3))
-        attn_weights = attn_weights + attention_mask
+        attn_weights = attn_weights
         attn_weights = nn.functional.softmax(attn_weights, dim=-1)
 
         attn_output = torch.matmul(attn_weights, value_states)
@@ -305,21 +308,25 @@ class TimeSeriesTransformersSelfAttention(TimeSeriesTransformersAttention):
 
 
 class TimeSeriesTransformersCrossAttention(TimeSeriesTransformersSelfAttention):
+
     def forward(
         self,
         hidden_states: torch.Tensor,
         attention_mask: torch.Tensor,
         past_key_value: Optional[Tuple[torch.Tensor]] = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
+        bsz = past_key_value[0].shape[0]
         batch_size, query_len, _ = hidden_states.size()
-        query_states = self._shape(self.q_proj(hidden_states), query_len, batch_size)
+
+        num_repeat = batch_size // bsz
+        query_states = self.q_proj(hidden_states).view(bsz, num_repeat, 1, self.num_heads, self.head_dim).transpose(2,3)
         query_states = query_states * self.scaling
 
-        key_states = past_key_value[0]
-        value_states = past_key_value[1]
-
-        attn_weights = torch.matmul(query_states, key_states.transpose(2, 3))
-        attn_weights = attn_weights + attention_mask
+        key_states = past_key_value[0].unsqueeze(1)
+        value_states = past_key_value[1].unsqueeze(1)
+        
+        attn_weights = torch.matmul(query_states, key_states.transpose(3, 4))
+        attn_weights = attn_weights
         attn_weights = nn.functional.softmax(attn_weights, dim=-1)
 
         attn_output = torch.matmul(attn_weights, value_states)

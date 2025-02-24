@@ -32,7 +32,7 @@ from transformers import (
     PretrainedConfig,
     TimeSeriesTransformerForPrediction,
 )
-from transformers.modeling_outputs import BaseModelOutput, Seq2SeqLMOutput
+from transformers.modeling_outputs import SampleTSPredictionOutput
 
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
@@ -53,7 +53,7 @@ class RBLNRuntimeEncoder(RBLNPytorchRuntime):
     mandatory_members = ["main_input_name"]
 
     def forward(self, inputs_embeds: torch.Tensor = None, attention_mask: torch.Tensor = None):
-        _ = super().forward(inputs_embeds, attention_mask)
+        _ = super().forward(inputs_embeds)
 
 
 class RBLNRuntimeDecoder(RBLNPytorchRuntime):
@@ -62,8 +62,8 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
     def forward(
         self,
         inputs_embeds: torch.Tensor = None,
-        decoder_attention_mask: torch.Tensor = None,
-        encoder_attention_mask: torch.Tensor = None,
+        # decoder_attention_mask: torch.Tensor = None,
+        # encoder_attention_mask: torch.Tensor = None,
         cache_position: torch.Tensor = None,
     ):
         pass
@@ -150,7 +150,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
             compile_context=context,
         )
 
-        # return {"encoder": compiled_encoder, "decoder": compiled_decoder}
+        return {"encoder": compiled_encoder, "decoder": compiled_decoder}
 
     @classmethod
     def _get_rbln_config(
@@ -182,7 +182,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         # model input info
         enc_input_info = [
             ("inputs_embeds", [rbln_batch_size, context_length, feature_size], "float32"),
-            ("attention_mask", [rbln_batch_size, context_length], "float32"),
+            # ("attention_mask", [rbln_batch_size, context_length], "float32"),
         ]
         enc_input_info.extend(
             [
@@ -201,9 +201,9 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         )
 
         dec_input_info = [
-            ("inputs_embeds", [rbln_batch_size * rbln_num_parallel_samples, 1, feature_size], "float32"),
-            ("attention_mask", [rbln_batch_size * rbln_num_parallel_samples, predict_length], "float32"),
-            ("encoder_attention_mask", [rbln_batch_size, context_length], "float32"),
+            ("inputs_embeds", [rbln_batch_size * rbln_num_parallel_samples, predict_length, feature_size], "float32"),
+            # ("attention_mask", [rbln_batch_size * rbln_num_parallel_samples, predict_length], "float32"),
+            # ("encoder_attention_mask", [rbln_batch_size, context_length], "float32"),
             ("cache_position", [], "int32"),
         ]
         dec_input_info.extend(
@@ -211,11 +211,11 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
                 (
                     "cross_key_value_states",
                     [
-                        model_config.decoder_layers * 2,
-                        rbln_batch_size,
-                        model_config.decoder_attention_heads,
-                        context_length,
-                        model_config.d_model // model_config.decoder_attention_heads,
+                        model_config.decoder_layers * 2,  # 4
+                        rbln_batch_size,  # 64
+                        model_config.decoder_attention_heads,  # 2
+                        context_length,  # 24
+                        model_config.d_model // model_config.decoder_attention_heads,  # 13
                     ],
                     "float32",
                 )
@@ -274,13 +274,96 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
             ),
         ]
 
-    def forward(
+    # def forward(
+    #     self,
+    #     input_ids: Optional[torch.LongTensor] = None,
+    #     cache_position: Optional[torch.Tensor] = None,
+    #     input_features: Optional[torch.Tensor] = None,
+    #     decoder_input_ids: Optional[torch.Tensor] = None,
+    #     encoder_outputs: Optional[Seq2SeqLMOutput] = None,
+    #     **kwargs,
+    # ) -> Seq2SeqLMOutput:
+    #     pass
+
+    @torch.no_grad()
+    def generate(
         self,
-        input_ids: Optional[torch.LongTensor] = None,
-        cache_position: Optional[torch.Tensor] = None,
-        input_features: Optional[torch.Tensor] = None,
-        decoder_input_ids: Optional[torch.Tensor] = None,
-        encoder_outputs: Optional[Seq2SeqLMOutput] = None,
-        **kwargs,
-    ) -> Seq2SeqLMOutput:
-        pass
+        past_values: torch.Tensor,
+        past_time_features: torch.Tensor,
+        future_time_features: torch.Tensor,
+        past_observed_mask: Optional[torch.Tensor] = None,
+        static_categorical_features: Optional[torch.Tensor] = None,
+        static_real_features: Optional[torch.Tensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+    ) -> SampleTSPredictionOutput:
+        outputs = self(
+            static_categorical_features=static_categorical_features,
+            static_real_features=static_real_features,
+            past_time_features=past_time_features,
+            past_values=past_values,
+            past_observed_mask=past_observed_mask,
+            future_time_features=future_time_features,
+            future_values=None,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=True,
+            use_cache=True,
+        )
+
+        decoder = self.model.get_decoder()
+        enc_last_hidden = outputs.encoder_last_hidden_state
+        loc = outputs.loc
+        scale = outputs.scale
+        static_feat = outputs.static_features
+
+        num_parallel_samples = self.config.num_parallel_samples
+        repeated_loc = loc.repeat_interleave(repeats=num_parallel_samples, dim=0)
+        repeated_scale = scale.repeat_interleave(repeats=num_parallel_samples, dim=0)
+
+        repeated_past_values = (
+            past_values.repeat_interleave(repeats=num_parallel_samples, dim=0) - repeated_loc
+        ) / repeated_scale
+
+        expanded_static_feat = static_feat.unsqueeze(1).expand(-1, future_time_features.shape[1], -1)
+        features = torch.cat((expanded_static_feat, future_time_features), dim=-1)
+        repeated_features = features.repeat_interleave(repeats=num_parallel_samples, dim=0)
+
+        repeated_enc_last_hidden = enc_last_hidden.repeat_interleave(repeats=num_parallel_samples, dim=0)
+
+        future_samples = []
+
+        # greedy decoding
+        for k in range(self.config.prediction_length):
+            lagged_sequence = self.model.get_lagged_subsequences(
+                sequence=repeated_past_values,
+                subsequences_length=1 + k,
+                shift=1,
+            )
+
+            lags_shape = lagged_sequence.shape
+            reshaped_lagged_sequence = lagged_sequence.reshape(lags_shape[0], lags_shape[1], -1)
+
+            decoder_input = torch.cat((reshaped_lagged_sequence, repeated_features[:, : k + 1]), dim=-1)
+
+            print(f"decoder_input_shape = {decoder_input.shape}")
+
+            dec_output = decoder(inputs_embeds=decoder_input, encoder_hidden_states=repeated_enc_last_hidden)
+            dec_last_hidden = dec_output.last_hidden_state
+
+            params = self.parameter_projection(dec_last_hidden[:, -1:])
+            distr = self.output_distribution(params, loc=repeated_loc, scale=repeated_scale)
+            next_sample = distr.sample()
+
+            repeated_past_values = torch.cat(
+                (repeated_past_values, (next_sample - repeated_loc) / repeated_scale), dim=1
+            )
+            future_samples.append(next_sample)
+
+        concat_future_samples = torch.cat(future_samples, dim=1)
+
+        return SampleTSPredictionOutput(
+            sequences=concat_future_samples.reshape(
+                (-1, num_parallel_samples, self.config.prediction_length) + self.target_shape,
+            )
+        )
