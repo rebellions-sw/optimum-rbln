@@ -122,11 +122,15 @@ class RBLNDiffusionMixin:
             submodules = copy.deepcopy(cls._submodules)
             submodules += [prefix + connected_submodule_name for connected_submodule_name in connected_submodules]
 
-            pipe_global_config = {k: v for k, v in rbln_config.items() if k not in submodules}
+            pipe_global_config = {k: v for k, v in rbln_config.items() if k not in submodules and not isinstance(v, dict)}
+
             for connected_submodule_name in connected_submodules:
-                submodule_config[connected_submodule_name].update(
-                    {k: v for k, v in pipe_global_config.items() if k not in submodule_config}
-                )
+                for k, v in pipe_global_config.items():
+                    if "guidance_scale" in k:
+                        if prefix + "guidance_scale" == k:
+                            submodule_config[connected_submodule_name]["guidance_scale"] = v
+                    else:
+                        submodule_config[connected_submodule_name][k] = v
             rbln_config[submodule_name] = submodule_config
         else:
             raise ValueError(f"submodule {submodule_name} isn't supported")
