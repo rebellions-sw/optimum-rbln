@@ -55,16 +55,16 @@ jobs:
         env:
           OPTIMUM_RBLN_TEST_LEVEL: default
         run: |
-          uv run --no-sync pytest tests/test_transformers.py
+          uv run --no-sync pytest -n auto tests/test_transformers.py
 
       - name: Run pytest (diffusers)
         env:
           OPTIMUM_RBLN_TEST_LEVEL: default
         run: |
-          uv run --no-sync pytest tests/test_diffusers.py
+          uv run --no-sync pytest -n auto tests/test_diffusers.py
 
       - name: Run pytest (llm)
         env:
           OPTIMUM_RBLN_TEST_LEVEL: default
         run: |
-          uv run --no-sync pytest tests/test_llm.py      
+          uv run --no-sync pytest -n auto tests/test_llm.py      

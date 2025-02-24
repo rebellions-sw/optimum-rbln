@@ -60,29 +60,37 @@ class BaseTest:
         TEST_LEVEL = TestLevel.DEFAULT
         DEVICE = -1  # -1 indicates dummy device
 
-        @classmethod
-        def setUpClass(cls):
+        def setUp(self):
+            """Instance-level setup that runs before each test method"""
             env_coverage = os.environ.get("OPTIMUM_RBLN_TEST_LEVEL", "default")
             env_coverage = TestLevel[env_coverage.upper()]
-            if env_coverage.value < cls.TEST_LEVEL.value:
-                raise unittest.SkipTest(f"Skipped test : Test Coverage {env_coverage.name} < {cls.TEST_LEVEL.name}")
+            if env_coverage.value < self.TEST_LEVEL.value:
+                raise unittest.SkipTest(f"Skipped test : Test Coverage {env_coverage.name} < {self.TEST_LEVEL.name}")
 
-            if os.path.exists(cls.RBLN_LOCAL_DIR):
-                shutil.rmtree(cls.RBLN_LOCAL_DIR)
+            # Use a unique directory for each test instance
+            self.test_dir = f"{self.RBLN_LOCAL_DIR}-{os.getpid()}-{id(self)}"
 
-            cls.model = cls.RBLN_CLASS.from_pretrained(
-                cls.HF_MODEL_ID,
+            if os.path.exists(self.test_dir):
+                shutil.rmtree(self.test_dir)
+
+            self.model = self.RBLN_CLASS.from_pretrained(
+                self.HF_MODEL_ID,
                 export=True,
-                model_save_dir=cls.RBLN_LOCAL_DIR,
-                rbln_device=cls.DEVICE,
-                **cls.RBLN_CLASS_KWARGS,
-                **cls.HF_CONFIG_KWARGS,
+                model_save_dir=self.test_dir,
+                rbln_device=self.DEVICE,
+                **self.RBLN_CLASS_KWARGS,
+                **self.HF_CONFIG_KWARGS,
             )
 
-        @classmethod
+        def tearDown(self):
+            """Instance-level cleanup that runs after each test method"""
+            if os.path.exists(self.test_dir):
+                shutil.rmtree(self.test_dir)
+
         @property
-        def RBLN_LOCAL_DIR(cls):
-            return os.path.basename(cls.HF_MODEL_ID) + "-local"
+        def RBLN_LOCAL_DIR(self):
+            """Base directory name without unique identifiers"""
+            return os.path.basename(self.HF_MODEL_ID) + "-local"
 
         @classmethod
         @property
@@ -105,14 +113,6 @@ class BaseTest:
         def is_diffuser(self):
             # Note that This is only True when it is a pipeline, not model (i.e. AutoEncoderKL)
             return isinstance(self.model, DiffusionPipeline)
-
-        @classmethod
-        def tearDownClass(cls):
-            if os.path.exists(cls.RBLN_LOCAL_DIR):
-                shutil.rmtree(cls.RBLN_LOCAL_DIR)
-
-        def test_model_save_dir(self):
-            self.assertTrue(os.path.exists(self.RBLN_LOCAL_DIR), "model_save_dir does not work.")
 
         @require_hf_token
         @require_hf_user_id
@@ -215,10 +215,13 @@ class BaseTest:
                         **self.HF_CONFIG_KWARGS,
                     )
 
+        def test_model_save_dir(self):
+            self.assertTrue(os.path.exists(self.test_dir), "model_save_dir does not work.")
+
         def test_model_save_dir_load(self):
             # Test model_save_dir
             _ = self.RBLN_CLASS.from_pretrained(
-                self.RBLN_LOCAL_DIR,
+                self.test_dir,
                 export=False,
                 rbln_create_runtimes=False,
                 **self.HF_CONFIG_KWARGS,
@@ -271,19 +274,28 @@ class DisallowedTestBase:
         HF_CONFIG_KWARGS = {}
         TEST_LEVEL = TestLevel.DEFAULT
 
-        @classmethod
-        def setUpClass(cls):
+        def setUp(self):
             env_coverage = os.environ.get("OPTIMUM_RBLN_TEST_LEVEL", "default")
             env_coverage = TestLevel[env_coverage.upper()]
-            if env_coverage.value < cls.TEST_LEVEL.value:
-                raise unittest.SkipTest(f"Skipped test : Test Coverage {env_coverage.name} < {cls.TEST_LEVEL.name}")
+            if env_coverage.value < self.TEST_LEVEL.value:
+                raise unittest.SkipTest(f"Skipped test : Test Coverage {env_coverage.name} < {self.TEST_LEVEL.name}")
+
+            self.test_dir = f"{self.RBLN_LOCAL_DIR}-{os.getpid()}-{id(self)}"
+
+        def tearDown(self):
+            if os.path.exists(self.test_dir):
+                shutil.rmtree(self.test_dir)
+
+        @property
+        def RBLN_LOCAL_DIR(self):
+            return os.path.basename(self.HF_MODEL_ID) + "-local"
 
         def test_load(self):
             try:
                 _ = self.RBLN_CLASS.from_pretrained(
                     self.HF_MODEL_ID,
                     export=True,
-                    model_save_dir=self.RBLN_LOCAL_DIR,
+                    model_save_dir=self.test_dir,
                     **self.RBLN_CLASS_KWARGS,
                     **self.HF_CONFIG_KWARGS,
                 )
@@ -292,11 +304,3 @@ class DisallowedTestBase:
 
             except ValueError:
                 pass
-
-            finally:
-                if os.path.exists(self.RBLN_LOCAL_DIR):
-                    shutil.rmtree(self.RBLN_LOCAL_DIR)
-
-        @property
-        def RBLN_LOCAL_DIR(self):
-            return os.path.basename(self.HF_MODEL_ID) + "-local"

@@ -128,17 +128,14 @@ class TestT5EncoderModel(BaseTest.TestModel):
         "num_layers": 1,
     }
 
-    @classmethod
-    def setUpClass(cls):
-        if os.path.exists(cls.RBLN_LOCAL_DIR):
-            shutil.rmtree(cls.RBLN_LOCAL_DIR)
-
-        t5_encoder_model = T5EncoderModel.from_pretrained(cls.HF_MODEL_ID, return_dict=False, **cls.HF_CONFIG_KWARGS)
-        cls.model = cls.RBLN_CLASS.from_model(
+    def setUp(self):
+        super().setUp()
+        t5_encoder_model = T5EncoderModel.from_pretrained(self.HF_MODEL_ID, return_dict=False, **self.HF_CONFIG_KWARGS)
+        self.model = self.RBLN_CLASS.from_model(
             model=t5_encoder_model,
-            model_save_dir=cls.RBLN_LOCAL_DIR,
+            model_save_dir=self.test_dir,
             rbln_device=-1,
-            **cls.RBLN_CLASS_KWARGS,
+            **self.RBLN_CLASS_KWARGS,
         )
 
 
