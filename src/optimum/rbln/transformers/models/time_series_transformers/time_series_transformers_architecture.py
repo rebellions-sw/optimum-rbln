@@ -320,7 +320,7 @@ class TimeSeriesTransformersCrossAttention(TimeSeriesTransformersSelfAttention):
         batch_size, query_len, _ = hidden_states.size()
 
         num_repeat = batch_size // bsz
-        query_states = self.q_proj(hidden_states).view(bsz, num_repeat, 1, self.num_heads, self.head_dim).transpose(2,3)
+        query_states = self.q_proj(hidden_states).view(bsz, num_repeat, query_len, self.num_heads, self.head_dim).transpose(2,3)
         query_states = query_states * self.scaling
 
         key_states = past_key_value[0].unsqueeze(1)
