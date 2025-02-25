@@ -481,7 +481,7 @@ class DecoderOnlyModel(nn.Module):
         # (batch, seq_len) -> (batch,)
         seq_positions = cache_position[:, 0]
         if self.attn_impl in ["flash_attn", "paged_attn"]:
-            max_seq_len = past_key_values[0][0].shape[-2]
+            max_seq_len = attention_mask.shape[-1]
             seq_positions = self.convert_sequence_positions_for_flash_attn(
                 seq_positions=seq_positions, max_seq_len=max_seq_len
             )

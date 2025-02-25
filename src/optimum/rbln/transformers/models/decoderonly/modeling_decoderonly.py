@@ -122,7 +122,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                         f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
                     )
                 self.dec_attn_mask[b_idx, :, :, decoding_step] = 1
-
+        
         logits = super().forward(
             inputs,
             self.dec_attn_mask if attention_mask is None else attention_mask,
@@ -145,8 +145,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         Instead of processing the entire sequence at once, the input is divided into chunks of size `prefill_chunk_size`,
         and each chunk is processed sequentially. This allows for better memory utilization and compatibility with continuous batching.
         """
-
-        if batch_idx is None or batch_idx >= self.batch_size:
+        if block_tables is None and (batch_idx is None or batch_idx >= self.batch_size):
             raise RuntimeError(
                 f"Invalid batch_idx ({batch_idx}). It must be a non-null value less than the batch size ({self.batch_size})."
             )
@@ -222,8 +221,9 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             )
 
         # Update decoder attention mask with processed KV-cache length from prefill phase
-        self.dec_attn_mask[batch_idx].fill_(0)
-        self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
+        if block_tables is not None:
+            self.dec_attn_mask[batch_idx].fill_(0)
+            self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
 
         return logits
 
@@ -527,14 +527,20 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                             ("query_position", [], "int16"),
                         ]
                     )
-            if attn_impl == "paged_attn":
-                max_block_cnt = rbln_max_seq_len // rbln_kvcache_block_size
-                input_info.extend([("block_tables", [batch_size, max_block_cnt], "int16")])
+            kvcache_batch_size = rbln_batch_size
+            kvcache_seq_len = rbln_max_seq_len
 
-            kvcache_batch_size = 1 if attn_impl == "paged_attn" else rbln_batch_size
-            # TODO: add logic to compute num_blocks
-            num_blocks = 2
-            kvcache_seq_len =  num_blocks * rbln_kvcache_block_size if attn_impl == "paged_attn" else rbln_max_seq_len
+            if attn_impl == "paged_attn":
+                kvcache_batch_size = 1
+                max_block_cnt = rbln_max_seq_len // rbln_kvcache_block_size
+                if query_length > 1:
+                    input_info.extend([("block_tables", [1, max_block_cnt], "int16")])
+                else:
+                    input_info.extend([("block_tables", [batch_size, max_block_cnt], "int16")])
+                
+                kvcache_seq_len = cls.estimate_paged_attn_num_blocks() * rbln_kvcache_block_size
+                # kvcache_seq_len = 2 * rbln_kvcache_block_size
+
             input_info.extend(
                 [
                     (
@@ -582,10 +588,12 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 "max_seq_len": rbln_max_seq_len,
                 "batch_size": rbln_batch_size,
                 "prefill_chunk_size": rbln_prefill_chunk_size,
-                "use_inputs_embeds": rbln_use_inputs_embeds,
+                "use_inputs_embeds": rbln_use_inputs_embeds,    
                 "kvcache_partition_len": rbln_kvcache_partition_len,
                 "kvcache_block_size": rbln_kvcache_block_size,
                 "attn_impl": rbln_attn_impl,
+                "kvcache_num_blocks": (cls.estimate_paged_attn_num_blocks() 
+                               if rbln_attn_impl == "paged_attn" else 0)
             }
         )
 
@@ -593,6 +601,10 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             rbln_config.model_cfg.update({"quantization": rbln_quantization})
 
         return rbln_config
+
+    def estimate_paged_attn_num_blocks() -> int:
+        # TODO: add logic to compute max num_blocks
+        return 64
 
     @classmethod
     def _create_runtimes(
@@ -692,7 +704,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         The decoder stage operates as usual, processing inputs in batch mode.
         """
         # Prefll
-        #FIXME
+        # FIXME
         paged_attn = True
         block_tables = None
         if paged_attn:
