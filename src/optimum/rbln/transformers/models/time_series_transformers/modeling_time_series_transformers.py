@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 class RBLNRuntimeEncoder(RBLNPytorchRuntime):
     mandatory_members = ["main_input_name"]
 
-    def forward(self, inputs_embeds: torch.Tensor = None, attention_mask: torch.Tensor = None):
+    def forward(self, inputs_embeds: torch.Tensor = None, decoder_attention_mask: torch.Tensor = None):
         _ = super().forward(inputs_embeds)
 
 
@@ -62,7 +62,7 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
     def forward(
         self,
         inputs_embeds: torch.Tensor = None,
-        # decoder_attention_mask: torch.Tensor = None,
+        attention_mask: torch.Tensor = None,
         # encoder_attention_mask: torch.Tensor = None,
         cache_position: torch.Tensor = None,
     ):
@@ -202,7 +202,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
 
         dec_input_info = [
             ("inputs_embeds", [rbln_batch_size * rbln_num_parallel_samples, predict_length, feature_size], "float32"),
-            # ("attention_mask", [rbln_batch_size * rbln_num_parallel_samples, predict_length], "float32"),
+            ("attention_mask", [rbln_batch_size * rbln_num_parallel_samples, predict_length], "float32"),
             # ("encoder_attention_mask", [rbln_batch_size, context_length], "float32"),
             ("cache_position", [], "int32"),
         ]

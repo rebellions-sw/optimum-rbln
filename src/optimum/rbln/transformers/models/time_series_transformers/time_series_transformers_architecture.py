@@ -114,7 +114,7 @@ class TimeSeriesTransformersDecoderWrapper(torch.nn.Module):
     def forward(
         self,
         inputs_embeds: torch.Tensor,
-        # decoder_attention_mask: torch.Tensor,
+        decoder_attention_mask: torch.Tensor,
         # encoder_attention_mask: Optional[torch.Tensor],
         cache_position: torch.Tensor,
         cross_kv_cache: torch.Tensor,  # batch_size, num_heads, context_length, d_kv
@@ -130,7 +130,7 @@ class TimeSeriesTransformersDecoderWrapper(torch.nn.Module):
         # Decode
         last_hidden_states, self_present_key_values = self.decoder(
             inputs_embeds=inputs_embeds,
-            attention_mask=None,
+            attention_mask=decoder_attention_mask,
             # encoder_attention_mask=encoder_attention_mask,
             cache_position=cache_position,
             self_past_key_values=self_past_key_values,
@@ -157,7 +157,7 @@ class TimeSeriesTransformersDecoder(nn.Module):
         self,
         inputs_embeds: torch.Tensor = None,
         attention_mask: Optional[torch.Tensor] = None,
-        encoder_attention_mask: Optional[torch.LongTensor] = None,
+        # encoder_attention_mask: Optional[torch.LongTensor] = None,
         self_past_key_values: Optional[torch.Tensor] = None,
         cross_past_key_values: Optional[torch.Tensor] = None,
         cache_position: Optional[torch.Tensor] = None,
@@ -179,7 +179,7 @@ class TimeSeriesTransformersDecoder(nn.Module):
             layer_outputs = decoder_layer(
                 hidden_states,
                 attention_mask=attention_mask,
-                encoder_attention_mask=encoder_attention_mask,
+                # encoder_attention_mask=encoder_attention_mask,
                 self_past_key_value=self_past_key_value,
                 cross_past_key_value=cross_past_key_value,
                 cache_position=cache_position,
@@ -208,7 +208,7 @@ class TimeSeriesTransformersDecoderLayer(nn.Module):
         self,
         hidden_states: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
-        encoder_attention_mask: Optional[torch.Tensor] = None,
+        # encoder_attention_mask: Optional[torch.Tensor] = None,
         self_past_key_value: Optional[Tuple[torch.Tensor]] = None,
         cross_past_key_value: Optional[Tuple[torch.Tensor]] = None,
         cache_position: Optional[torch.Tensor] = None,
@@ -218,7 +218,7 @@ class TimeSeriesTransformersDecoderLayer(nn.Module):
         hidden_states, self_present_key_value = self.self_attn(
             hidden_states=hidden_states,
             past_key_value=self_past_key_value,
-            # attention_mask=attention_mask,
+            attention_mask=attention_mask,
             cache_position=cache_position,
         )
         hidden_states = residual + hidden_states
@@ -229,7 +229,7 @@ class TimeSeriesTransformersDecoderLayer(nn.Module):
         hidden_states, _ = self.encoder_attn(
             hidden_states=hidden_states,
             past_key_value=cross_past_key_value,
-            attention_mask=encoder_attention_mask,
+            # attention_mask=encoder_attention_mask,
         )
         hidden_states = residual + hidden_states
         hidden_states = self.encoder_attn_layer_norm(hidden_states)
@@ -273,10 +273,10 @@ class TimeSeriesTransformersSelfAttention(TimeSeriesTransformersAttention):
         axis = torch.tensor(2, dtype=torch.int16)
 
         key_states = torch.ops.rbln_custom_ops.rbln_cache_update(
-            past_key_value[0].unsqueeze(1), key_states, s_idx, axis
+            past_key_value[0], key_states, s_idx, axis
         )
         value_states = torch.ops.rbln_custom_ops.rbln_cache_update(
-            past_key_value[1].unsqueeze(1), value_states, s_idx, axis
+            past_key_value[1], value_states, s_idx, axis
         )
         return key_states, value_states
 
@@ -284,6 +284,7 @@ class TimeSeriesTransformersSelfAttention(TimeSeriesTransformersAttention):
         self,
         hidden_states: torch.Tensor,
         past_key_value: Optional[Tuple[torch.Tensor]] = None,
+        attention_mask: Optional[torch.Tensor] = None,
         cache_position: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         bsz, tgt_len, _ = hidden_states.size()
@@ -295,7 +296,7 @@ class TimeSeriesTransformersSelfAttention(TimeSeriesTransformersAttention):
         key_states, value_states = self.rbln_cache_update(past_key_value, key_states, value_states, cache_position)
 
         attn_weights = torch.matmul(query_states, key_states.transpose(2, 3))
-        attn_weights = attn_weights
+        attn_weights = attn_weights + attention_mask
         attn_weights = nn.functional.softmax(attn_weights, dim=-1)
 
         attn_output = torch.matmul(attn_weights, value_states)
@@ -312,7 +313,7 @@ class TimeSeriesTransformersCrossAttention(TimeSeriesTransformersSelfAttention):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        attention_mask: torch.Tensor,
+        # attention_mask: torch.Tensor,
         past_key_value: Optional[Tuple[torch.Tensor]] = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         bsz = past_key_value[0].shape[0]
