@@ -121,7 +121,11 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     raise ValueError(
                         f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
                     )
-                self.dec_attn_mask[b_idx, :, :, decoding_step] = 1
+                if block_tables is not None:
+                    self.dec_attn_mask[b_idx].fill_(0)
+                    self.dec_attn_mask[b_idx, :, :, :decoding_step + 1] = 1
+                else:
+                    self.dec_attn_mask[b_idx, :, :, decoding_step] = 1
         
         logits = super().forward(
             inputs,
@@ -538,8 +542,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 else:
                     input_info.extend([("block_tables", [batch_size, max_block_cnt], "int16")])
                 
-                kvcache_seq_len = cls.estimate_paged_attn_num_blocks() * rbln_kvcache_block_size
-                # kvcache_seq_len = 2 * rbln_kvcache_block_size
+                # kvcache_seq_len = cls.estimate_paged_attn_num_blocks() * rbln_kvcache_block_size
+                kvcache_seq_len = 2 * rbln_kvcache_block_size
 
             input_info.extend(
                 [
