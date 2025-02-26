@@ -1040,7 +1040,6 @@ class DecoderOnlyPagedAttention(DecoderOnlyAttention):
         _value_states = []
         _attn_outputs = []
         for b in range(batch_size):
-            seq_position = seq_positions[b][0]
             attn_output, key_state, value_state = self.attention(
                 query_states[b].unsqueeze(0),
                 key_states[b].unsqueeze(0),
@@ -1048,9 +1047,9 @@ class DecoderOnlyPagedAttention(DecoderOnlyAttention):
                 attention_mask[b].unsqueeze(0) if self.phase == "decode" else attention_mask,
                 past_key_state=past_key_values[self.layer_idx][0],
                 past_value_state=past_key_values[self.layer_idx][1],
-                seq_position=seq_position,
+                seq_position=seq_positions,
                 scale=self.scale,
-                block_table=block_tables[b],
+                block_table=block_tables,
                 block_size=self.kvcache_block_size,
             )
             _key_states.append(key_state)
