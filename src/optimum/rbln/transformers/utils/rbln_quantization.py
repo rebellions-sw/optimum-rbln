@@ -263,7 +263,7 @@ def create_fp8linear(layer: Linear) -> Linear:
 
         return output
 
-    layer.weight = Parameter(layer.weight.to(torch.float16), requires_grad=False)
+    layer.weight = Parameter(layer.weight.to(torch.float32), requires_grad=False)
     layer.weight_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
     layer.input_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
     layer.forward = lambda inputs: fp8linear_forward(layer, inputs)
