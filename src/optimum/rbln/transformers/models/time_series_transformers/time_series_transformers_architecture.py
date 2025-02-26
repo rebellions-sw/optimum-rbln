@@ -272,12 +272,8 @@ class TimeSeriesTransformersSelfAttention(TimeSeriesTransformersAttention):
         s_idx = torch.tensor(cache_position, dtype=torch.int16)
         axis = torch.tensor(2, dtype=torch.int16)
 
-        key_states = torch.ops.rbln_custom_ops.rbln_cache_update(
-            past_key_value[0], key_states, s_idx, axis
-        )
-        value_states = torch.ops.rbln_custom_ops.rbln_cache_update(
-            past_key_value[1], value_states, s_idx, axis
-        )
+        key_states = torch.ops.rbln_custom_ops.rbln_cache_update(past_key_value[0], key_states, s_idx, axis)
+        value_states = torch.ops.rbln_custom_ops.rbln_cache_update(past_key_value[1], value_states, s_idx, axis)
         return key_states, value_states
 
     def forward(
@@ -309,7 +305,6 @@ class TimeSeriesTransformersSelfAttention(TimeSeriesTransformersAttention):
 
 
 class TimeSeriesTransformersCrossAttention(TimeSeriesTransformersSelfAttention):
-
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -320,12 +315,14 @@ class TimeSeriesTransformersCrossAttention(TimeSeriesTransformersSelfAttention):
         batch_size, query_len, _ = hidden_states.size()
 
         num_repeat = batch_size // bsz
-        query_states = self.q_proj(hidden_states).view(bsz, num_repeat, query_len, self.num_heads, self.head_dim).transpose(2,3)
+        query_states = (
+            self.q_proj(hidden_states).view(bsz, num_repeat, query_len, self.num_heads, self.head_dim).transpose(2, 3)
+        )
         query_states = query_states * self.scaling
 
         key_states = past_key_value[0].unsqueeze(1)
         value_states = past_key_value[1].unsqueeze(1)
-        
+
         attn_weights = torch.matmul(query_states, key_states.transpose(3, 4))
         attn_weights = attn_weights
         attn_weights = nn.functional.softmax(attn_weights, dim=-1)

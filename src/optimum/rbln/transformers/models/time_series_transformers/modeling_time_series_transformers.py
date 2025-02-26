@@ -31,8 +31,10 @@ from rebel.compile_context import CompileContext
 from transformers import (
     PretrainedConfig,
     TimeSeriesTransformerForPrediction,
+    TimeSeriesTransformerModel,
 )
-from transformers.modeling_outputs import SampleTSPredictionOutput
+from transformers.modeling_outputs import SampleTSPredictionOutput, Seq2SeqTSModelOutput
+from transformers.modeling_utils import no_init_weights
 
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
@@ -52,8 +54,45 @@ if TYPE_CHECKING:
 class RBLNRuntimeEncoder(RBLNPytorchRuntime):
     mandatory_members = ["main_input_name"]
 
-    def forward(self, inputs_embeds: torch.Tensor = None, decoder_attention_mask: torch.Tensor = None):
-        _ = super().forward(inputs_embeds)
+    def __init__(
+        self,
+        runtime: rebel.Runtime,
+        model: TimeSeriesTransformerModel,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(runtime, **kwargs)
+        self.model = model
+
+    def forward(
+        self,
+        past_values: torch.Tensor,
+        past_time_features: torch.Tensor,
+        static_categorical_features: Optional[torch.Tensor] = None,
+        static_real_features: Optional[torch.Tensor] = None,
+        past_observed_mask: Optional[torch.Tensor] = None,
+        future_values: Optional[torch.Tensor] = None,
+        future_time_features: Optional[torch.Tensor] = None,
+    ):
+        # preprocess
+        transformer_inputs, loc, scale, static_feat = self.model.create_network_inputs(
+            past_values=past_values,
+            past_time_features=past_time_features,
+            past_observed_mask=past_observed_mask,
+            static_categorical_features=static_categorical_features,
+            static_real_features=static_real_features,
+            future_values=future_values,
+            future_time_features=future_time_features,
+        )
+        enc_input = transformer_inputs[:, : self.model.config.context_length, ...]
+
+        # enc_attn_key_value_caches is updated to device dram in-place
+        _ = super().forward(inputs_embeds=enc_input)
+
+        return Seq2SeqTSModelOutput(
+            loc=loc,
+            scale=scale,
+            static_features=static_feat,
+        )
 
 
 class RBLNRuntimeDecoder(RBLNPytorchRuntime):
@@ -63,10 +102,10 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         self,
         inputs_embeds: torch.Tensor = None,
         attention_mask: torch.Tensor = None,
-        # encoder_attention_mask: torch.Tensor = None,
         cache_position: torch.Tensor = None,
+        # encoder_attention_mask: torch.Tensor = None,
     ):
-        pass
+        return super().forward(inputs_embeds, attention_mask, cache_position)
 
 
 class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
@@ -75,13 +114,16 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
-        pass
         self.batch_size = self.rbln_config.model_cfg["batch_size"]
         self.dec_max_seq_len = self.rbln_config.model_cfg["num_parallel_samples"]
 
+        # with no_init_weights():
+        self._origin_model = TimeSeriesTransformerForPrediction.from_pretrained("huggingface/time-series-transformer-tourism-monthly")
+
         self.encoder = RBLNRuntimeEncoder(
             runtime=self.model[0],
-            main_input_name="inputs_embeds",  # , batch_size=self.batch_size
+            main_input_name="inputs_embeds",
+            model=self._origin_model.model,
         )
         self.decoder = RBLNRuntimeDecoder(
             runtime=self.model[1],
@@ -274,17 +316,6 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
             ),
         ]
 
-    # def forward(
-    #     self,
-    #     input_ids: Optional[torch.LongTensor] = None,
-    #     cache_position: Optional[torch.Tensor] = None,
-    #     input_features: Optional[torch.Tensor] = None,
-    #     decoder_input_ids: Optional[torch.Tensor] = None,
-    #     encoder_outputs: Optional[Seq2SeqLMOutput] = None,
-    #     **kwargs,
-    # ) -> Seq2SeqLMOutput:
-    #     pass
-
     @torch.no_grad()
     def generate(
         self,
@@ -294,25 +325,17 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         past_observed_mask: Optional[torch.Tensor] = None,
         static_categorical_features: Optional[torch.Tensor] = None,
         static_real_features: Optional[torch.Tensor] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
+        **kwargs,
     ) -> SampleTSPredictionOutput:
-        outputs = self(
+        outputs = self.encoder(
             static_categorical_features=static_categorical_features,
             static_real_features=static_real_features,
             past_time_features=past_time_features,
             past_values=past_values,
             past_observed_mask=past_observed_mask,
             future_time_features=future_time_features,
-            future_values=None,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=True,
-            use_cache=True,
         )
 
-        decoder = self.model.get_decoder()
-        enc_last_hidden = outputs.encoder_last_hidden_state
         loc = outputs.loc
         scale = outputs.scale
         static_feat = outputs.static_features
@@ -329,13 +352,12 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         features = torch.cat((expanded_static_feat, future_time_features), dim=-1)
         repeated_features = features.repeat_interleave(repeats=num_parallel_samples, dim=0)
 
-        repeated_enc_last_hidden = enc_last_hidden.repeat_interleave(repeats=num_parallel_samples, dim=0)
-
         future_samples = []
 
         # greedy decoding
+        dec_attn_mask = torch.zeros(past_values.shape[0] * num_parallel_samples, self.config.prediction_length)
         for k in range(self.config.prediction_length):
-            lagged_sequence = self.model.get_lagged_subsequences(
+            lagged_sequence = self._origin_model.model.get_lagged_subsequences(
                 sequence=repeated_past_values,
                 subsequences_length=1 + k,
                 shift=1,
@@ -343,18 +365,32 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
 
             lags_shape = lagged_sequence.shape
             reshaped_lagged_sequence = lagged_sequence.reshape(lags_shape[0], lags_shape[1], -1)
-
             decoder_input = torch.cat((reshaped_lagged_sequence, repeated_features[:, : k + 1]), dim=-1)
 
-            print(f"decoder_input_shape = {decoder_input.shape}")
+            dec_attn_mask[:, k] = 1
+            dec_inputs_embeds = torch.nn.functional.pad(
+                decoder_input, (0, 0, 0, self.config.prediction_length - k - 1)
+            )
 
-            dec_output = decoder(inputs_embeds=decoder_input, encoder_hidden_states=repeated_enc_last_hidden)
-            dec_last_hidden = dec_output.last_hidden_state
+            # print(f"{k}'s 1: {torch.randn(1)}")
+            decoder_out = self.decoder(
+                inputs_embeds=dec_inputs_embeds,
+                attention_mask=dec_attn_mask,
+                cache_position=torch.tensor(k, dtype=torch.int32),
+            )
+            dec_last_hidden = decoder_out[:, : k + 1, :]
 
-            params = self.parameter_projection(dec_last_hidden[:, -1:])
-            distr = self.output_distribution(params, loc=repeated_loc, scale=repeated_scale)
+            params = self._origin_model.parameter_projection(dec_last_hidden[:, -1:])
+            
+            # print(f"{k}'s 2: {torch.randn(1)}")
+            distr = self._origin_model.output_distribution(params, loc=repeated_loc, scale=repeated_scale)
+            
+            # breakpoint()
+            torch.manual_seed(42)     
+            print(f"{k}'s 3: {torch.randn(1)}")
             next_sample = distr.sample()
-
+            # print(f"{k}'s 4: {torch.randn(1)}")
+            
             repeated_past_values = torch.cat(
                 (repeated_past_values, (next_sample - repeated_loc) / repeated_scale), dim=1
             )
@@ -363,7 +399,8 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         concat_future_samples = torch.cat(future_samples, dim=1)
 
         return SampleTSPredictionOutput(
+            # sequences=concat_future_samples
             sequences=concat_future_samples.reshape(
-                (-1, num_parallel_samples, self.config.prediction_length) + self.target_shape,
+                (-1, num_parallel_samples, self.config.prediction_length) + self._origin_model.target_shape,
             )
         )

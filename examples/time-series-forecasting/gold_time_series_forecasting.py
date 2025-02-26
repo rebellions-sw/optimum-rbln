@@ -16,40 +16,31 @@ file = hf_hub_download(
 batch = torch.load(file)
 
 # rbln_model = RBLNTimeSeriesTransformerForPrediction.from_pretrained(
-#     os.path.basename(model_id),
-#     export=False,  # rbln_batch_size=64
+#     "huggingface/time-series-transformer-tourism-monthly",
+#     export=True,# rbln_batch_size=64
 # )
-
-rbln_model = RBLNTimeSeriesTransformerForPrediction.from_pretrained(
-    model_id,
-    export=True,  
-    rbln_batch_size=64
-)
-
 
 # rbln_model.save_pretrained(os.path.basename(model_id))
 
-# torch.random.manual_seed(0)
-torch.manual_seed(42) 
-rbln_outputs = rbln_model.generate(
-    past_values=batch["past_values"][:1],
-    past_time_features=batch["past_time_features"][:1],
-    past_observed_mask=batch["past_observed_mask"][:1],
-    static_categorical_features=batch["static_categorical_features"][:1],
-    static_real_features=batch["static_real_features"][:1],
-    future_time_features=batch["future_time_features"][:1],
-)
-mean_prediction = rbln_outputs.sequences.mean(dim=1)
 
-print(mean_prediction)
+# rbln_outputs = rbln_model.generate(
+#     past_values=batch["past_values"][:1],
+#     past_time_features=batch["past_time_features"][:1],
+#     past_observed_mask=batch["past_observed_mask"][:1],
+#     static_categorical_features=batch["static_categorical_features"][:1],
+#     static_real_features=batch["static_real_features"][:1],
+#     future_time_features=batch["future_time_features"][:1],
+# )
+# mean_prediction = rbln_outputs.sequences.mean(dim=1)
+
+# print(mean_prediction)
 
 # 사전 학습된 Time Series Transformer 모델 로드
+torch.random.manual_seed(0)
 model = TimeSeriesTransformerForPrediction.from_pretrained("huggingface/time-series-transformer-tourism-monthly")
 
 # 예측 수행
 
-# torch.random.manual_seed(0)
-torch.manual_seed(42) 
 outputs = model.generate(
     past_values=batch["past_values"][:1],
     past_time_features=batch["past_time_features"][:1],
@@ -63,12 +54,6 @@ outputs = model.generate(
 mean_prediction = outputs.sequences.mean(dim=1)
 
 print(mean_prediction)
-
-from scipy import stats
-
-res = stats.pearsonr(rbln_outputs.sequences.reshape(-1), outputs.sequences.reshape(-1)).statistic
-print(f"pearsonr: {res.item()}")
-breakpoint()  
 
 # past_observed_mask = torch.nn.functional.pad(batch["past_observed_mask"], (0, 3))
 # past_values = torch.nn.functional.pad(batch["past_values"], (0, 3))
