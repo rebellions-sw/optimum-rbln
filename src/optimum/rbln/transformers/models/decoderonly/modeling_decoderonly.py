@@ -90,7 +90,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             return self.decode_forward(
                 inputs,
                 cache_position,
-                attention_mask=attention_mask,
             )
         else:
             return self.prefill_forward(inputs, cache_position, attention_mask, batch_idx)
@@ -121,7 +120,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
         logits = super().forward(
             inputs,
-            self.dec_attn_mask if attention_mask is None else attention_mask,
             cache_position,
         )
 
@@ -207,7 +205,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             # Forward pass for the current chunk
             logits = super().forward(
                 input_chunk,
-                chunked_attention_mask,
                 cache_pos_chunk,
                 batch_position,
                 query_position,

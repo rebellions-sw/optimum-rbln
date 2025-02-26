@@ -686,7 +686,6 @@ class AttentionOp(nn.Module):
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
         key_state = key_state.unsqueeze(2)  # 1, 32, 1, 128, 128
         value_state = value_state.unsqueeze(2)
-        attn_mask = attn_mask.unsqueeze(2)
 
         if self.phase == "decode":
             batch_size = key_state.shape[0]
@@ -706,7 +705,6 @@ class AttentionOp(nn.Module):
                 query_state,
                 key_state,
                 value_state,
-                attn_mask,
                 past_key_state.unsqueeze(2),
                 past_value_state.unsqueeze(2),
                 seq_position,
@@ -718,7 +716,6 @@ class AttentionOp(nn.Module):
                 query_state,
                 key_state,
                 value_state,
-                attn_mask,
                 past_key_state.unsqueeze(2),
                 past_value_state.unsqueeze(2),
                 batch_position,

@@ -28,11 +28,11 @@ else:
 def register_rbln_custom_attention():
     torch.library.define(
         "rbln_custom_ops::attn_decode",
-        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d) -> Tensor[]",
+        "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d) -> Tensor[]",
     )
 
     @torch.library.impl("rbln_custom_ops::attn_decode", "cpu")
-    def attn_decode_cpu(q, k, v, mask, kcache, vcache, seq, scale):
+    def attn_decode_cpu(q, k, v, kcache, vcache, seq, scale):
         """Defines the computation pattern for fused attention with KV cache updates.
 
         IMPORTANT: This op serves as a pattern definition for the RBLN compiler to generate
@@ -67,7 +67,7 @@ def register_rbln_custom_attention():
         )
 
     @register_fake("rbln_custom_ops::attn_decode")
-    def attn_decode_abstract(q, k, v, m, kcache, vcache, seq, partition):
+    def attn_decode_abstract(q, k, v, kcache, vcache, seq, partition):
         return (
             q,
             torch.empty(*kcache.shape, device=kcache.device),
@@ -76,11 +76,11 @@ def register_rbln_custom_attention():
 
     torch.library.define(
         "rbln_custom_ops::attn_prefill",
-        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e) -> Tensor[]",
+        "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e) -> Tensor[]",
     )
 
     @torch.library.impl("rbln_custom_ops::attn_prefill", "cpu")
-    def attn_prefill_cpu(q, k, v, mask, kcache, vcache, batch, seq, scale):
+    def attn_prefill_cpu(q, k, v, kcache, vcache, batch, seq, scale):
         """Defines the computation pattern for prefill phase attention with KV cache updates.
 
         IMPORTANT: This op serves as a pattern definition for the RBLN compiler to generate
@@ -110,7 +110,7 @@ def register_rbln_custom_attention():
         return q, kcache, vcache
 
     @register_fake("rbln_custom_ops::attn_prefill")
-    def attn_prefill_abstract(q, k, v, m, kcache, vcache, batch, seq, partition):
+    def attn_prefill_abstract(q, k, v, kcache, vcache, batch, seq, partition):
         return q, kcache, vcache
 
 
