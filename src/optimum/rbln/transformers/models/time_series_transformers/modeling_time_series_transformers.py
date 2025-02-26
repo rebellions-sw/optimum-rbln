@@ -115,10 +115,12 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
         self.batch_size = self.rbln_config.model_cfg["batch_size"]
-        self.dec_max_seq_len = self.rbln_config.model_cfg["num_parallel_samples"]
+        self.num_parallel_samples = self.rbln_config.model_cfg["num_parallel_samples"]
 
         # with no_init_weights():
-        self._origin_model = TimeSeriesTransformerForPrediction.from_pretrained("huggingface/time-series-transformer-tourism-monthly")
+        self._origin_model = TimeSeriesTransformerForPrediction.from_pretrained(
+            "huggingface/time-series-transformer-tourism-monthly"
+        )
 
         self.encoder = RBLNRuntimeEncoder(
             runtime=self.model[0],
@@ -129,12 +131,6 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
             runtime=self.model[1],
             main_input_name="inputs_embeds",  # , batch_size=self.batch_size
         )
-
-    # def get_encoder(self):
-    #     return self.encoder
-
-    # def get_decoder(self):
-    #     return self.decoder
 
     def __getattr__(self, __name: str) -> Any:
         """This is the key method to implement RBLN-TimeSeriesTransformersForPrediction.
@@ -151,7 +147,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
 
     @classmethod
     def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: "RBLNConfig"):
-        return TimeSeriesTransformersWrapper(model)
+        return TimeSeriesTransformersWrapper(model, rbln_config.model_cfg["num_parallel_samples"])
 
     @classmethod
     @torch.inference_mode()
@@ -179,16 +175,16 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
             if "key_value_states" in name:
                 context.mark_static_address(tensor)
 
-        compiled_encoder = super().compile(
-            wrapped_model.encoder,
-            enc_compile_config,
-            example_inputs=enc_example_inputs,
-            compile_context=context,
-        )
         compiled_decoder = super().compile(
             wrapped_model.decoder,
             dec_compile_config,
             example_inputs=dec_example_inputs,
+            compile_context=context,
+        )
+        compiled_encoder = super().compile(
+            wrapped_model.encoder,
+            enc_compile_config,
+            example_inputs=enc_example_inputs,
             compile_context=context,
         )
 
@@ -243,7 +239,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         )
 
         dec_input_info = [
-            ("inputs_embeds", [rbln_batch_size * rbln_num_parallel_samples, predict_length, feature_size], "float32"),
+            ("inputs_embeds", [rbln_batch_size * rbln_num_parallel_samples, 1, feature_size], "float32"),
             ("attention_mask", [rbln_batch_size * rbln_num_parallel_samples, predict_length], "float32"),
             # ("encoder_attention_mask", [rbln_batch_size, context_length], "float32"),
             ("cache_position", [], "int32"),
@@ -316,6 +312,16 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
             ),
         ]
 
+    def validate_batch_size(self, **kwargs):
+        for k, v in kwargs.items():
+            if v is not None and v.shape[0] != self.batch_size:
+                raise RuntimeError(
+                    f"Batch size mismatch in '{k}': Expected {self.batch_size}, but got {v.shape[0]}. \n"
+                    f"Tensor shape: {v.shape} \n\n"
+                    f"Note: `batch_size` is set at compile time. \n"
+                    f"To change it, pass `export=True` along with `rbln_batch_size` when calling `from_pretrained()` to trigger recompilation."
+                )
+
     @torch.no_grad()
     def generate(
         self,
@@ -327,6 +333,8 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         static_real_features: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> SampleTSPredictionOutput:
+        self.validate_batch_size(**{k: v for k, v in locals().items() if isinstance(v, torch.Tensor)})
+
         outputs = self.encoder(
             static_categorical_features=static_categorical_features,
             static_real_features=static_real_features,
@@ -340,7 +348,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         scale = outputs.scale
         static_feat = outputs.static_features
 
-        num_parallel_samples = self.config.num_parallel_samples
+        num_parallel_samples = self.num_parallel_samples
         repeated_loc = loc.repeat_interleave(repeats=num_parallel_samples, dim=0)
         repeated_scale = scale.repeat_interleave(repeats=num_parallel_samples, dim=0)
 
@@ -352,10 +360,10 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         features = torch.cat((expanded_static_feat, future_time_features), dim=-1)
         repeated_features = features.repeat_interleave(repeats=num_parallel_samples, dim=0)
 
-        future_samples = []
-
+        torch.manual_seed(42)  # erase me
         # greedy decoding
-        dec_attn_mask = torch.zeros(past_values.shape[0] * num_parallel_samples, self.config.prediction_length)
+        future_samples = []
+        dec_attn_mask = torch.zeros(self.batch_size * num_parallel_samples, self.config.prediction_length)
         for k in range(self.config.prediction_length):
             lagged_sequence = self._origin_model.model.get_lagged_subsequences(
                 sequence=repeated_past_values,
@@ -368,29 +376,21 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
             decoder_input = torch.cat((reshaped_lagged_sequence, repeated_features[:, : k + 1]), dim=-1)
 
             dec_attn_mask[:, k] = 1
-            dec_inputs_embeds = torch.nn.functional.pad(
-                decoder_input, (0, 0, 0, self.config.prediction_length - k - 1)
-            )
+            dec_inputs_embeds = decoder_input[:, -1:]
 
-            # print(f"{k}'s 1: {torch.randn(1)}")
             decoder_out = self.decoder(
                 inputs_embeds=dec_inputs_embeds,
                 attention_mask=dec_attn_mask,
                 cache_position=torch.tensor(k, dtype=torch.int32),
             )
-            dec_last_hidden = decoder_out[:, : k + 1, :]
+            dec_last_hidden = decoder_out
 
             params = self._origin_model.parameter_projection(dec_last_hidden[:, -1:])
-            
-            # print(f"{k}'s 2: {torch.randn(1)}")
+
             distr = self._origin_model.output_distribution(params, loc=repeated_loc, scale=repeated_scale)
-            
-            # breakpoint()
-            torch.manual_seed(42)     
-            print(f"{k}'s 3: {torch.randn(1)}")
+
             next_sample = distr.sample()
-            # print(f"{k}'s 4: {torch.randn(1)}")
-            
+
             repeated_past_values = torch.cat(
                 (repeated_past_values, (next_sample - repeated_loc) / repeated_scale), dim=1
             )

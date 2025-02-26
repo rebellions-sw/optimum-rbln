@@ -41,10 +41,10 @@ logger = logging.get_logger(__name__)
 
 
 class TimeSeriesTransformersWrapper:
-    def __init__(self, model):
+    def __init__(self, model, num_parallel_samples):
         register_rbln_custom_cache_update()
         self.encoder = TimeSeriesTransformersEncoderWrapper(model)
-        self.decoder = TimeSeriesTransformersDecoderWrapper(model)
+        self.decoder = TimeSeriesTransformersDecoderWrapper(model, num_parallel_samples)
 
 
 class TimeSeriesTransformersEncoderWrapper(torch.nn.Module):
@@ -93,18 +93,18 @@ class TimeSeriesTransformersEncoderWrapper(torch.nn.Module):
 
 
 class TimeSeriesTransformersDecoderWrapper(torch.nn.Module):
-    def __init__(self, model):
+    def __init__(self, model, num_parallel_samples):
         super().__init__()
         self.config = model.config
         self.num_layers = self.config.decoder_layers
 
-        self.decoder = self.convert_to_rbln_conditional_generation(model)
+        self.decoder = self.convert_to_rbln_conditional_generation(model, num_parallel_samples)
 
-    def convert_to_rbln_conditional_generation(self, model: nn.Module):
+    def convert_to_rbln_conditional_generation(self, model: nn.Module, num_parallel_samples: int):
         new_layers = []
         for layer in model.get_decoder().layers:
-            self_attn = TimeSeriesTransformersSelfAttention(layer.self_attn)
-            cross_attn = TimeSeriesTransformersCrossAttention(layer.encoder_attn)
+            self_attn = TimeSeriesTransformersSelfAttention(layer.self_attn, num_parallel_samples)
+            cross_attn = TimeSeriesTransformersCrossAttention(layer.encoder_attn, num_parallel_samples)
             new_layers.append(TimeSeriesTransformersDecoderLayer(layer, self_attn, cross_attn))
 
         decoder_model = TimeSeriesTransformersDecoder(model.get_decoder(), new_layers)
@@ -168,7 +168,7 @@ class TimeSeriesTransformersDecoder(nn.Module):
         attention_mask = _prepare_4d_causal_attention_mask(attention_mask, input_shape, inputs_embeds, cache_position)
 
         hidden_states = self.value_embedding(inputs_embeds)
-        embed_pos = self.embed_positions(inputs_embeds.size(), past_key_values_length=self.config.context_length)
+        embed_pos = self.embed_positions.weight[cache_position + self.config.context_length]
         hidden_states = self.layernorm_embedding(hidden_states + embed_pos)
 
         self_present_key_values = ()
@@ -245,7 +245,7 @@ class TimeSeriesTransformersDecoderLayer(nn.Module):
 
 
 class TimeSeriesTransformersAttention(nn.Module):
-    def __init__(self, attn):
+    def __init__(self, attn, num_parallel_samples):
         super().__init__()
         self._original_mod = attn
         self.q_proj = attn.q_proj
@@ -256,6 +256,7 @@ class TimeSeriesTransformersAttention(nn.Module):
         self.embed_dim = attn.embed_dim
         self.head_dim = attn.head_dim
         self.scaling = attn.scaling
+        self.num_parallel_samples = num_parallel_samples
 
     def _shape(self, tensor: torch.Tensor, seq_len: int, bsz: int) -> torch.Tensor:
         return tensor.view(bsz, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
@@ -311,12 +312,17 @@ class TimeSeriesTransformersCrossAttention(TimeSeriesTransformersSelfAttention):
         # attention_mask: torch.Tensor,
         past_key_value: Optional[Tuple[torch.Tensor]] = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
-        bsz = past_key_value[0].shape[0]
         batch_size, query_len, _ = hidden_states.size()
-
-        num_repeat = batch_size // bsz
         query_states = (
-            self.q_proj(hidden_states).view(bsz, num_repeat, query_len, self.num_heads, self.head_dim).transpose(2, 3)
+            self.q_proj(hidden_states)
+            .view(
+                batch_size // self.num_parallel_samples,
+                self.num_parallel_samples,
+                query_len,
+                self.num_heads,
+                self.head_dim,
+            )
+            .transpose(2, 3)
         )
         query_states = query_states * self.scaling
 
