@@ -324,6 +324,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         subfolder: str = "",
         local_files_only: bool = False,
         trust_remote_code: bool = False,
+        rbln_quantization: Optional[Dict[str, str]] = {},
         **kwargs,
     ):
         from ...utils.rbln_quantization import prepare_model_for_quantization
@@ -344,7 +345,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         with no_init_weights():
             model = AutoModelForCausalLM.from_config(config)
 
-        prepare_model_for_quantization(model, model_id, kwargs.get("num_hidden_layers"))
+        prepare_model_for_quantization(
+            model, model_id, kwargs.get("num_hidden_layers"), rbln_quantization=rbln_quantization
+        )
 
         return model
 
@@ -375,7 +378,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_kwargs = kwargs.get("rbln_kwargs", {})
         rbln_quantization = rbln_kwargs.get("quantization", None)
         if rbln_quantization is not None and rbln_quantization["format"] == "rbln":
-            model = cls.get_quantized_model(*args, **kwargs)
+            model = cls.get_quantized_model(*args, **kwargs, rbln_quantization=rbln_quantization)
         else:
             model = super().get_pytorch_model(*args, **kwargs)
 

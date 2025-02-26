@@ -28,7 +28,7 @@ from ...utils.logging import get_logger
 logger = get_logger()
 
 SUPPORTED_QUANTIZATIONS: Dict[str, list[str]] = {
-    "rbln": ["w4a16"],
+    "rbln": ["w4a16", "fp8_exp"],
 }
 
 
@@ -78,8 +78,9 @@ class QuantizationManager:
         quantize_config = cls.validate_quantization_config(quantize_config)
         if quantize_config:
             q_precision: str = quantize_config["precision"]
-            quant_bits = q_precision.split("w")[1].split("a")[0]
-            cls._set_env_var(cls.RBLN_QUANT_BITS_ENV, quant_bits)
+            if q_precision != "fp8_exp":
+                quant_bits = q_precision.split("w")[1].split("a")[0]
+                cls._set_env_var(cls.RBLN_QUANT_BITS_ENV, quant_bits)
             return cls.RBLN_QUANT_BITS_ENV
         return None
 
@@ -114,26 +115,40 @@ QUANTIZED_WEIGHTS = {
 }
 
 
-def prepare_model_for_quantization(model: torch.nn.Module, model_id: str, n_layer: Optional[int] = None) -> None:
+def prepare_model_for_quantization(
+    model: torch.nn.Module,
+    model_id: str,
+    n_layer: Optional[int] = None,
+    rbln_quantization: Optional[Dict[str, str]] = {},
+) -> None:
     """
     Prepare the model for quantization by updating specified linear layers to quantized (qlinear) layers.
     """
-    update_layers_to_quantize(model)
+    if rbln_quantization["precision"] == "w4a16":
+        replace_method = create_qlinear
+    elif rbln_quantization["precision"] == "fp8_exp":
+        replace_method = create_fp8linear
+    else:
+        replace_method = None
+    update_layers_to_quantize(model, replace_method=replace_method)
     load_weights(model, model_id, n_layer)
 
 
-def update_layers_to_quantize(module: torch.nn.Module) -> None:
+def update_layers_to_quantize(module: torch.nn.Module, replace_method: Callable) -> None:
     """
     Updates specified linear layers to quantized (qlinear) layers in the given module.
     """
 
     logger.debug("Updating layers to be quantized")  # TODO(jongho): remove.
+    if replace_method not in [create_fp8linear, create_qlinear]:
+        raise NotImplementedError
+
     processed_layers = []
 
     for name, layer in module.named_modules():
         if is_target_for_qlinear_replacement(name, layer):
             parent_module, layer_name = get_parent_and_child(module, name)
-            setattr(parent_module, layer_name, create_qlinear(layer))
+            setattr(parent_module, layer_name, replace_method(layer))
             processed_layers.append(name)
 
     if processed_layers:
@@ -211,5 +226,46 @@ def create_qlinear(layer: Linear) -> Linear:
     layer.weight = Parameter(layer.weight.to(torch.int8), requires_grad=False)
     layer.scales = Parameter(torch.ones(layer.out_features, dtype=torch.float32), requires_grad=False)
     layer.forward = lambda inputs: qlinear_forward(layer, inputs)
+
+    return layer
+
+
+def create_fp8linear(layer: Linear) -> Linear:
+    """
+    Converts a standard linear layer to a fp8 linear layer with a custom forward pass.
+    """
+
+    def static_per_tensor_quantize(tensor: torch.Tensor, inv_scale: float) -> torch.Tensor:
+        finfo = torch.finfo(torch.float8_e4m3fn)
+        qweight = (tensor / inv_scale).clamp(min=finfo.min, max=finfo.max)
+        return qweight  # .to(torch.float8_e4m3fn)
+
+    def fp8_gemm(A: torch.Tensor, A_scale, B: torch.Tensor, B_scale, bias, out_dtype: torch.dtype):
+        A = A.type(out_dtype)
+        B = B.type(out_dtype)
+
+        A *= A_scale
+        B *= B_scale.to(out_dtype)
+
+        output = torch.nn.functional.linear(A, B, bias=bias)
+        return output
+
+    def fp8linear_forward(self, x: torch.Tensor) -> torch.Tensor:
+        qinput = static_per_tensor_quantize(x, self.input_scale)
+        output = fp8_gemm(
+            A=qinput,
+            A_scale=self.input_scale,
+            B=self.weight,
+            B_scale=self.weight_scale,
+            bias=self.bias,
+            out_dtype=x.dtype,
+        )
+
+        return output
+
+    layer.weight = Parameter(layer.weight.to(torch.float16), requires_grad=False)
+    layer.weight_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
+    layer.input_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
+    layer.forward = lambda inputs: fp8linear_forward(layer, inputs)
 
     return layer
