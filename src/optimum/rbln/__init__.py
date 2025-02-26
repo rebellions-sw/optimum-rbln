@@ -98,6 +98,9 @@ _import_structure = {
         "RBLNStableDiffusion3Img2ImgPipeline",
         "RBLNStableDiffusion3InpaintPipeline",
         "RBLNStableDiffusion3Pipeline",
+        "RBLNCogVideoXPipeline",
+        "RBLNAutoencoderKLCogVideoX",
+        "RBLNCogVideoXTransformer3DModel",
         "RBLNDiffusionMixin",
     ],
 }
@@ -128,6 +131,9 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLPipeline,
         RBLNUNet2DConditionModel,
         RBLNVQModel,
+        RBLNAutoencoderKLCogVideoX,
+        RBLNCogVideoXPipeline,
+        RBLNCogVideoXTransformer3DModel,
     )
     from .modeling import (
         RBLNBaseModel,

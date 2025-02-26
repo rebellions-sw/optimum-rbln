@@ -14,3 +14,4 @@
 
 from .prior_transformer import RBLNPriorTransformer
 from .transformer_sd3 import RBLNSD3Transformer2DModel
+from .cogvideox_transformer_3d import RBLNCogVideoXTransformer3DModel

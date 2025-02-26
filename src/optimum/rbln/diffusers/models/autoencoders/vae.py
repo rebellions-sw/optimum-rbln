@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Union
 
 import torch  # noqa: I001
-from diffusers import AutoencoderKL, VQModel
-from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
+from diffusers import AutoencoderKL, VQModel, AutoencoderKLCogVideoX
+from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution, DecoderOutput
 from diffusers.models.autoencoders.vq_model import VQEncoderOutput
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
 
@@ -122,3 +122,110 @@ class _VQDecoder(torch.nn.Module):
     def forward(self, h: torch.Tensor):
         vq_out = self.decode(h)
         return vq_out
+
+
+class RBLNRuntimeVAECogVideoXEncoder(RBLNPytorchRuntime):
+    def encode(self, x: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
+        h = self.forward(x.contiguous())
+        posterior = DiagonalGaussianDistribution(h)
+        return AutoencoderKLOutput(latent_dist=posterior)
+
+
+class RBLNRuntimeVAECogVideoXDecoder(RBLNPytorchRuntime):
+    def decode(self, z: torch.FloatTensor, **kwargs) -> Union[DecoderOutput, torch.Tensor]:
+        return (self.forward(z),)
+
+
+class _VAECogVideoXEncoder(torch.nn.Module):
+    def __init__(self, cog_video_x: AutoencoderKLCogVideoX):
+        super().__init__()
+        self.cog_video_x = cog_video_x
+
+    def _encode(self, x: torch.Tensor) -> torch.Tensor:
+        batch_size, num_channels, num_frames, height, width = x.shape
+
+        if self.use_tiling and (width > self.tile_sample_min_width or height > self.tile_sample_min_height):
+            return self.tiled_encode(x)
+
+        frame_batch_size = self.num_sample_frames_batch_size
+        # Note: We expect the number of frames to be either `1` or `frame_batch_size * k` or `frame_batch_size * k + 1` for some k.
+        # As the extra single frame is handled inside the loop, it is not required to round up here.
+        num_batches = max(num_frames // frame_batch_size, 1)
+        conv_cache = None
+        enc = []
+
+        for i in range(num_batches):
+            remaining_frames = num_frames % frame_batch_size
+            start_frame = frame_batch_size * i + (0 if i == 0 else remaining_frames)
+            end_frame = frame_batch_size * (i + 1) + remaining_frames
+            x_intermediate = x[:, :, start_frame:end_frame]
+            x_intermediate, conv_cache = self.encoder(x_intermediate, conv_cache=conv_cache)
+            if self.quant_conv is not None:
+                x_intermediate = self.quant_conv(x_intermediate)
+            enc.append(x_intermediate)
+
+        enc = torch.cat(enc, dim=2)
+        
+        return enc
+    
+    def encode(self, x: torch.Tensor, return_dict: bool = True):
+        if self.use_slicing and x.shape[0] > 1:
+            encoded_slices = [self._encode(x_slice) for x_slice in x.split(1)]
+            h = torch.cat(encoded_slices)
+        else:
+            h = self._encode(x)
+        
+        return h
+
+    def forward(self, x: torch.Tensor):
+        cov_video_enc_out = self.encode(x, return_dict=False)
+        return cov_video_enc_out
+
+
+class _VAECogVideoXDecoder(torch.nn.Module):
+    def __init__(self, cog_video_x: AutoencoderKLCogVideoX):
+        super().__init__()
+        self.cog_video_x = cog_video_x
+        
+    def _decode(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
+        batch_size, num_channels, num_frames, height, width = z.shape
+
+        if self.use_tiling and (width > self.tile_latent_min_width or height > self.tile_latent_min_height):
+            return self.tiled_decode(z, return_dict=return_dict)
+
+        frame_batch_size = self.num_latent_frames_batch_size
+        num_batches = max(num_frames // frame_batch_size, 1)
+        conv_cache = None
+        dec = []
+
+        for i in range(num_batches):
+            remaining_frames = num_frames % frame_batch_size
+            start_frame = frame_batch_size * i + (0 if i == 0 else remaining_frames)
+            end_frame = frame_batch_size * (i + 1) + remaining_frames
+            z_intermediate = z[:, :, start_frame:end_frame]
+            if self.post_quant_conv is not None:
+                z_intermediate = self.post_quant_conv(z_intermediate)
+            z_intermediate, conv_cache = self.decoder(z_intermediate, conv_cache=conv_cache)
+            dec.append(z_intermediate)
+
+        dec = torch.cat(dec, dim=2)
+
+        if not return_dict:
+            return (dec,)
+
+        return DecoderOutput(sample=dec)
+
+    def decode(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
+        if self.use_slicing and z.shape[0] > 1:
+            decoded_slices = [self._decode(z_slice).sample for z_slice in z.split(1)]
+            decoded = torch.cat(decoded_slices)
+        else:
+            decoded = self._decode(z).sample
+
+        if not return_dict:
+            return (decoded,)
+        return DecoderOutput(sample=decoded)
+
+    def forward(self, z: torch.Tensor):
+        cov_video_dec_out = self.decode(z, return_dict=False)
+        return cov_video_dec_out
