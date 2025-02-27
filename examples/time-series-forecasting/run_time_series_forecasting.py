@@ -8,13 +8,15 @@ from optimum.rbln import RBLNTimeSeriesTransformerForPrediction
 def main(
     model_id: str = "huggingface/time-series-transformer-tourism-monthly",
     batch_size: int = 1,
+    num_parallel_samples: int = 100,
     from_transformers: bool = False,
 ):
     if from_transformers:
         model = RBLNTimeSeriesTransformerForPrediction.from_pretrained(
             model_id,
             export=True,
-            rbln_batch_size=batch_size
+            rbln_batch_size=batch_size,
+            num_parallel_samples= num_parallel_samples
         )
         model.save_pretrained(os.path.basename(model_id))    
     else:

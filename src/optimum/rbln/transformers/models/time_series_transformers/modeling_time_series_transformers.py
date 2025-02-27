@@ -115,7 +115,6 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
         self.batch_size = self.rbln_config.model_cfg["batch_size"]
-        self.num_parallel_samples = self.rbln_config.model_cfg["num_parallel_samples"]
         self._origin_model = TimeSeriesTransformerForPrediction.from_pretrained(self.config._name_or_path)
 
         self.encoder = RBLNRuntimeEncoder(
@@ -194,18 +193,13 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         rbln_kwargs: Dict[str, Any] = {},
     ) -> RBLNConfig:
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
-        rbln_num_parallel_samples = rbln_kwargs.get("num_parallel_samples", None)
+        # rbln_num_parallel_samples = rbln_kwargs.get("num_parallel_samples", None)
 
         rbln_batch_size = 1 if rbln_batch_size is None else rbln_batch_size
-        rbln_num_parallel_samples = (
-            model_config.num_parallel_samples if rbln_num_parallel_samples is None else rbln_num_parallel_samples
-        )
+        rbln_num_parallel_samples = model_config.num_parallel_samples
 
         if not isinstance(rbln_batch_size, int):
             raise TypeError(f"Expected rbln_batch_size to be an int, but got {type(rbln_batch_size)}")
-
-        if not isinstance(rbln_num_parallel_samples, int):
-            raise TypeError(f"Expected rbln_num_parallel_samples to be an int, but got {type(rbln_batch_size)}")
 
         context_length = model_config.context_length  # enc_max_seq_len
         predict_length = model_config.prediction_length  # dec_max_seq_len
@@ -344,7 +338,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         scale = outputs.scale
         static_feat = outputs.static_features
 
-        num_parallel_samples = self.num_parallel_samples
+        num_parallel_samples = self.config.num_parallel_samples
         repeated_loc = loc.repeat_interleave(repeats=num_parallel_samples, dim=0)
         repeated_scale = scale.repeat_interleave(repeats=num_parallel_samples, dim=0)
 
