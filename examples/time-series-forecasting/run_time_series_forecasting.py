@@ -1,90 +1,43 @@
 import os
 
+import fire
 import torch
 from huggingface_hub import hf_hub_download
-from transformers import TimeSeriesTransformerForPrediction
-
 from optimum.rbln import RBLNTimeSeriesTransformerForPrediction
 
+def main(
+    model_id: str = "huggingface/time-series-transformer-tourism-monthly",
+    batch_size: int = 1,
+    from_transformers: bool = False,
+):
+    if from_transformers:
+        model = RBLNTimeSeriesTransformerForPrediction.from_pretrained(
+            model_id,
+            export=True,
+            rbln_batch_size=batch_size
+        )
+        model.save_pretrained(os.path.basename(model_id))    
+    else:
+        model = RBLNTimeSeriesTransformerForPrediction.from_pretrained(
+            os.path.basename(model_id),
+            export=False,
+        )
 
-model_id = "huggingface/time-series-transformer-tourism-monthly"
+    dataset = hf_hub_download(
+        repo_id="hf-internal-testing/tourism-monthly-batch", filename="val-batch.pt", repo_type="dataset"
+    )
+    data = torch.load(dataset, weights_only=True)
 
-# 데이터 다운로드 및 로드
-file = hf_hub_download(
-    repo_id="hf-internal-testing/tourism-monthly-batch", filename="train-batch.pt", repo_type="dataset"
-)
-batch = torch.load(file)
+    batched_data = {}
+    for k, v in data.items():
+        batched_data[k] = v[:batch_size]
+        
+    rbln_outputs = model.generate(
+        **batched_data
+    )
+    mean_prediction = rbln_outputs.sequences.mean(dim=1)
 
-# rbln_model = RBLNTimeSeriesTransformerForPrediction.from_pretrained(
-#     os.path.basename(model_id),
-#     export=False,  # rbln_batch_size=64
-# )
+    print(mean_prediction)
 
-rbln_model = RBLNTimeSeriesTransformerForPrediction.from_pretrained(
-    model_id,
-    export=True,  
-    rbln_batch_size=64
-)
-
-
-# rbln_model.save_pretrained(os.path.basename(model_id))
-
-# torch.random.manual_seed(0)
-torch.manual_seed(42) 
-rbln_outputs = rbln_model.generate(
-    past_values=batch["past_values"][:1],
-    past_time_features=batch["past_time_features"][:1],
-    past_observed_mask=batch["past_observed_mask"][:1],
-    static_categorical_features=batch["static_categorical_features"][:1],
-    static_real_features=batch["static_real_features"][:1],
-    future_time_features=batch["future_time_features"][:1],
-)
-mean_prediction = rbln_outputs.sequences.mean(dim=1)
-
-print(mean_prediction)
-
-# 사전 학습된 Time Series Transformer 모델 로드
-model = TimeSeriesTransformerForPrediction.from_pretrained("huggingface/time-series-transformer-tourism-monthly")
-
-# 예측 수행
-
-# torch.random.manual_seed(0)
-torch.manual_seed(42) 
-outputs = model.generate(
-    past_values=batch["past_values"][:1],
-    past_time_features=batch["past_time_features"][:1],
-    past_observed_mask=batch["past_observed_mask"][:1],
-    static_categorical_features=batch["static_categorical_features"][:1],
-    static_real_features=batch["static_real_features"][:1],
-    future_time_features=batch["future_time_features"][:1],
-)
-
-# 평균 예측값 계산
-mean_prediction = outputs.sequences.mean(dim=1)
-
-print(mean_prediction)
-
-from scipy import stats
-
-res = stats.pearsonr(rbln_outputs.sequences.reshape(-1), outputs.sequences.reshape(-1)).statistic
-print(f"pearsonr: {res.item()}")
-breakpoint()  
-
-# past_observed_mask = torch.nn.functional.pad(batch["past_observed_mask"], (0, 3))
-# past_values = torch.nn.functional.pad(batch["past_values"], (0, 3))
-# past_time_features = torch.nn.functional.pad(batch["past_time_features"], (0, 0, 0, 3))
-
-# outputs = model.generate(
-#     past_values=past_values,
-#     past_time_features=past_time_features,
-#     past_observed_mask=past_observed_mask,
-#     static_categorical_features=batch["static_categorical_features"],
-#     static_real_features=batch["static_real_features"],
-#     future_time_features=batch["future_time_features"],
-# )
-
-# # 평균 예측값 계산
-# mean_prediction = outputs.sequences.mean(dim=1)
-
-# # 결과 출력
-# print(mean_prediction)
+if __name__ == "__main__":
+    fire.Fire(main)

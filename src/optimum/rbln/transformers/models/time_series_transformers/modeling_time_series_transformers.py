@@ -116,11 +116,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         super().__post_init__(**kwargs)
         self.batch_size = self.rbln_config.model_cfg["batch_size"]
         self.num_parallel_samples = self.rbln_config.model_cfg["num_parallel_samples"]
-
-        # with no_init_weights():
-        self._origin_model = TimeSeriesTransformerForPrediction.from_pretrained(
-            "huggingface/time-series-transformer-tourism-monthly"
-        )
+        self._origin_model = TimeSeriesTransformerForPrediction.from_pretrained(self.config._name_or_path)
 
         self.encoder = RBLNRuntimeEncoder(
             runtime=self.model[0],
@@ -360,7 +356,6 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         features = torch.cat((expanded_static_feat, future_time_features), dim=-1)
         repeated_features = features.repeat_interleave(repeats=num_parallel_samples, dim=0)
 
-        torch.manual_seed(42)  # erase me
         # greedy decoding
         future_samples = []
         dec_attn_mask = torch.zeros(self.batch_size * num_parallel_samples, self.config.prediction_length)
@@ -379,16 +374,14 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
             dec_inputs_embeds = decoder_input[:, -1:]
 
             decoder_out = self.decoder(
-                inputs_embeds=dec_inputs_embeds,
+                inputs_embeds=dec_inputs_embeds.contiguous(),
                 attention_mask=dec_attn_mask,
                 cache_position=torch.tensor(k, dtype=torch.int32),
             )
             dec_last_hidden = decoder_out
 
             params = self._origin_model.parameter_projection(dec_last_hidden[:, -1:])
-
             distr = self._origin_model.output_distribution(params, loc=repeated_loc, scale=repeated_scale)
-
             next_sample = distr.sample()
 
             repeated_past_values = torch.cat(
