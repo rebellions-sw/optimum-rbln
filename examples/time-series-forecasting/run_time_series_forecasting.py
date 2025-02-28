@@ -5,6 +5,7 @@ import torch
 from huggingface_hub import hf_hub_download
 from optimum.rbln import RBLNTimeSeriesTransformerForPrediction
 
+
 def main(
     model_id: str = "huggingface/time-series-transformer-tourism-monthly",
     batch_size: int = 1,
@@ -13,12 +14,9 @@ def main(
 ):
     if from_transformers:
         model = RBLNTimeSeriesTransformerForPrediction.from_pretrained(
-            model_id,
-            export=True,
-            rbln_batch_size=batch_size,
-            num_parallel_samples= num_parallel_samples
+            model_id, export=True, rbln_batch_size=batch_size, num_parallel_samples=num_parallel_samples
         )
-        model.save_pretrained(os.path.basename(model_id))    
+        model.save_pretrained(os.path.basename(model_id))
     else:
         model = RBLNTimeSeriesTransformerForPrediction.from_pretrained(
             os.path.basename(model_id),
@@ -33,13 +31,12 @@ def main(
     batched_data = {}
     for k, v in data.items():
         batched_data[k] = v[:batch_size]
-        
-    rbln_outputs = model.generate(
-        **batched_data
-    )
+
+    rbln_outputs = model.generate(**batched_data)
     mean_prediction = rbln_outputs.sequences.mean(dim=1)
 
     print(mean_prediction)
+
 
 if __name__ == "__main__":
     fire.Fire(main)

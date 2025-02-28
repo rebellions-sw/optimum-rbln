@@ -34,7 +34,6 @@ from transformers import (
     TimeSeriesTransformerModel,
 )
 from transformers.modeling_outputs import SampleTSPredictionOutput, Seq2SeqTSModelOutput
-from transformers.modeling_utils import no_init_weights
 
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
@@ -61,7 +60,7 @@ class RBLNRuntimeEncoder(RBLNPytorchRuntime):
         **kwargs: Any,
     ) -> None:
         super().__init__(runtime, **kwargs)
-        self.model = model
+        self._origin_model = model
 
     def forward(
         self,
@@ -74,7 +73,7 @@ class RBLNRuntimeEncoder(RBLNPytorchRuntime):
         future_time_features: Optional[torch.Tensor] = None,
     ):
         # preprocess
-        transformer_inputs, loc, scale, static_feat = self.model.create_network_inputs(
+        transformer_inputs, loc, scale, static_feat = self._origin_model.create_network_inputs(
             past_values=past_values,
             past_time_features=past_time_features,
             past_observed_mask=past_observed_mask,
@@ -83,7 +82,7 @@ class RBLNRuntimeEncoder(RBLNPytorchRuntime):
             future_values=future_values,
             future_time_features=future_time_features,
         )
-        enc_input = transformer_inputs[:, : self.model.config.context_length, ...]
+        enc_input = transformer_inputs[:, : self._origin_model.config.context_length, ...]
 
         # enc_attn_key_value_caches is updated to device dram in-place
         _ = super().forward(inputs_embeds=enc_input)
