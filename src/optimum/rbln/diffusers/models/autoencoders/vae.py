@@ -190,10 +190,10 @@ class _VAECogVideoXDecoder(torch.nn.Module):
     def _decode(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
         batch_size, num_channels, num_frames, height, width = z.shape
 
-        if self.use_tiling and (width > self.tile_latent_min_width or height > self.tile_latent_min_height):
-            return self.tiled_decode(z, return_dict=return_dict)
+        if self.cog_video_x.use_tiling and (width > self.cog_video_x.tile_latent_min_width or height > self.cog_video_x.tile_latent_min_height):
+            return self.cog_video_x.tiled_decode(z, return_dict=return_dict)
 
-        frame_batch_size = self.num_latent_frames_batch_size
+        frame_batch_size = self.cog_video_x.num_latent_frames_batch_size
         num_batches = max(num_frames // frame_batch_size, 1)
         conv_cache = None
         dec = []
@@ -203,9 +203,9 @@ class _VAECogVideoXDecoder(torch.nn.Module):
             start_frame = frame_batch_size * i + (0 if i == 0 else remaining_frames)
             end_frame = frame_batch_size * (i + 1) + remaining_frames
             z_intermediate = z[:, :, start_frame:end_frame]
-            if self.post_quant_conv is not None:
-                z_intermediate = self.post_quant_conv(z_intermediate)
-            z_intermediate, conv_cache = self.decoder(z_intermediate, conv_cache=conv_cache)
+            if self.cog_video_x.post_quant_conv is not None:
+                z_intermediate = self.cog_video_x.post_quant_conv(z_intermediate)
+            z_intermediate, conv_cache = self.cog_video_x.decoder(z_intermediate, conv_cache=conv_cache)
             dec.append(z_intermediate)
 
         dec = torch.cat(dec, dim=2)
@@ -216,7 +216,7 @@ class _VAECogVideoXDecoder(torch.nn.Module):
         return DecoderOutput(sample=dec)
 
     def decode(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
-        if self.use_slicing and z.shape[0] > 1:
+        if self.cog_video_x.use_slicing and z.shape[0] > 1:
             decoded_slices = [self._decode(z_slice).sample for z_slice in z.split(1)]
             decoded = torch.cat(decoded_slices)
         else:

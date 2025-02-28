@@ -21,12 +21,20 @@ model_id = "THUDM/CogVideoX-2b"
 # ).frames[0]
 
 # export_to_video(video, "output.mp4", fps=8)
-# import pdb; pdb.set_trace()
-# breakpoint()
-
 
 pipe = RBLNCogVideoXPipeline.from_pretrained(
     model_id=model_id,
     export=True,
 )
 pipe.save_pretrained(os.path.basename(model_id))
+
+video = pipe(
+    prompt=prompt,
+    num_videos_per_prompt=1,
+    num_inference_steps=1,
+    num_frames=49,
+    guidance_scale=6,
+    generator=torch.manual_seed(42),
+).frames[0]
+
+export_to_video(video, "output.mp4", fps=8)

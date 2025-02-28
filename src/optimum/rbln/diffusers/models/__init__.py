@@ -21,6 +21,7 @@ _import_structure = {
     "autoencoders": [
         "RBLNAutoencoderKL",
         "RBLNVQModel",
+        "RBLNAutoencoderKLCogVideoX",
     ],
     "unets": [
         "RBLNUNet2DConditionModel",
@@ -29,6 +30,7 @@ _import_structure = {
     "transformers": [
         "RBLNPriorTransformer",
         "RBLNSD3Transformer2DModel",
+        "RBLNCogVideoXTransformer3DModel",
     ],
 }
 
