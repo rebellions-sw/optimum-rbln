@@ -416,7 +416,20 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         return self.forward(*args, **kwargs)
 
     def __repr__(self):
-        return repr(self.model) + repr(self.rbln_submodules)
+        has_submodule = len(self.rbln_submodules) > 0
+        repr_str: str = f"<{self.__class__.__name__}>\n"
+        repr_str += f"- Total {len(self.model)} Runtimes"
+        repr_str += f" and {len(self.rbln_submodules)} Submodules\n" if has_submodule else "\n"
+        repr_str += "[Runtimes]\n"
+        repr_str += "\n".join([repr(model) for model in self.model])
+        repr_str += "\n"
+
+        if has_submodule > 0:
+            for i, submodule in enumerate(self.rbln_submodules):
+                repr_str += f"[Submodules {i} : {self._rbln_submodules[i]['name']}]\n"
+                repr_str += repr(submodule) + "\n"
+
+        return repr_str
 
     def __post_init__(self, **kwargs):
         pass
