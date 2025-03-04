@@ -513,7 +513,7 @@ class DecoderOnlyLayer(nn.Module):
 
         hidden_states, present_key_values = self.self_attn(
             hidden_states=hidden_states,
-            attention_mask=attention_mask,
+            # attention_mask=attention_mask,
             seq_positions=seq_positions,
             batch_position=batch_position,
             past_key_values=past_key_values,
@@ -833,7 +833,6 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        attention_mask: torch.Tensor,
         seq_positions: torch.LongTensor,
         batch_position: torch.Tensor,
         past_key_values: Tuple[Tuple[torch.Tensor]],
@@ -858,7 +857,6 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
             query_states,
             key_states,
             value_states,
-            attention_mask,
             past_key_state=past_key_values[self.layer_idx][0],
             past_value_state=past_key_values[self.layer_idx][1],
             batch_position=None if self.phase == "decode" else batch_position,
@@ -884,7 +882,6 @@ class FlashAttentionOp(AttentionOp):
         query_state,
         key_state,
         value_state,
-        attn_mask,
         batch_position,
         past_key_state,
         past_value_state,
@@ -894,7 +891,6 @@ class FlashAttentionOp(AttentionOp):
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
         key_state = key_state.unsqueeze(2)
         value_state = value_state.unsqueeze(2)
-        attn_mask = attn_mask.unsqueeze(2)
 
         if self.phase == "decode":
             batch_size = key_state.shape[0]
@@ -914,7 +910,6 @@ class FlashAttentionOp(AttentionOp):
                 query_state,
                 key_state,
                 value_state,
-                attn_mask,
                 past_key_state.unsqueeze(2),
                 past_value_state.unsqueeze(2),
                 seq_position,
@@ -926,7 +921,6 @@ class FlashAttentionOp(AttentionOp):
                 query_state,
                 key_state,
                 value_state,
-                attn_mask,
                 past_key_state.unsqueeze(2),
                 past_value_state.unsqueeze(2),
                 batch_position,
