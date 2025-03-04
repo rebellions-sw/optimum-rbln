@@ -330,7 +330,7 @@ class RBLNTimeSeriesTransformerForPrediction(BaseTest.TestModel):
         "future_time_features": torch.randn(1, 24, 2),
     }
     RBLN_CLASS_KWARGS = {"rbln_batch_size": 1}
-    
+
     def test_generate(self):
         inputs = self.get_inputs()
         _ = self.model.generate(**inputs)
