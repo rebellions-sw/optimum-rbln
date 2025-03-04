@@ -27,6 +27,7 @@ _import_structure = {
         "RBLNKandinskyV22InpaintCombinedPipeline",
         "RBLNKandinskyV22InpaintPipeline",
         "RBLNKandinskyV22PriorPipeline",
+        "RBLNKandinskyV22Pipeline",
         "RBLNStableDiffusionPipeline",
         "RBLNStableDiffusionXLPipeline",
         "RBLNStableDiffusionImg2ImgPipeline",
@@ -68,6 +69,7 @@ if TYPE_CHECKING:
     from .pipelines import (
         RBLNKandinskyV22InpaintCombinedPipeline,
         RBLNKandinskyV22InpaintPipeline,
+        RBLNKandinskyV22Pipeline,
         RBLNKandinskyV22PriorPipeline,
         RBLNMultiControlNetModel,
         RBLNStableDiffusion3Img2ImgPipeline,
