@@ -20,9 +20,10 @@ from transformers import (
     CLIPTextModel,
     CLIPVisionConfig,
     CLIPVisionModel,
+    CLIPVisionModelWithProjection,
 )
 from transformers.modeling_outputs import BaseModelOutputWithPooling
-from transformers.models.clip.modeling_clip import CLIPTextModelOutput
+from transformers.models.clip.modeling_clip import CLIPTextModelOutput, CLIPVisionModelOutput
 
 from ....diffusers.modeling_diffusers import RBLNDiffusionMixin
 from ....modeling import RBLNModel
@@ -193,5 +194,28 @@ class RBLNCLIPVisionModel(RBLNModel):
         return BaseModelOutputWithPooling(
             last_hidden_state=output[0],
             pooler_output=output[1],
-            hidden_states=output[2:],
+            hidden_states=output[2] if len(output) > 2 else None,
+            attentions=output[3] if len(output) > 3 else None,
+        )
+
+
+class RBLNCLIPVisionModelWithProjection(RBLNCLIPVisionModel):
+    @classmethod
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
+        return _VisionEncoderWithProjection(model).eval()
+
+    def forward(
+        self,
+        pixel_values: Optional[torch.FloatTensor] = None,
+        **kwargs,
+    ) -> Union[Tuple, CLIPVisionModelOutput]:
+        if len(kwargs) > 0 and any(kwargs.values()):
+            logger.warning(f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__}.")
+        
+        output = super().forward(pixel_values)
+        return CLIPVisionModelOutput(
+            image_embeds=output[0],
+            last_hidden_state=output[1],
+            hidden_states=output[2] if len(output) > 2 else None,
+            attentions=output[3] if len(output) > 3 else None,
         )
