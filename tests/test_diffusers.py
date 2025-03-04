@@ -4,6 +4,7 @@ import torch
 from diffusers import ControlNetModel
 
 from optimum.rbln import (
+    RBLNKandinskyV22InpaintCombinedPipeline,
     RBLNStableDiffusion3Img2ImgPipeline,
     RBLNStableDiffusion3Pipeline,
     RBLNStableDiffusionControlNetPipeline,
@@ -207,6 +208,22 @@ class TestSDMultiControlNetModel(BaseTest.TestModel):
         controlnets = [controlnet, controlnet_1]
         cls.RBLN_CLASS_KWARGS["controlnet"] = controlnets
         return super().setUpClass()
+
+
+class TestKandinskyV22InpaintingModel(BaseTest.TestModel):
+    RBLN_CLASS = RBLNKandinskyV22InpaintCombinedPipeline
+    # HF_MODEL_ID = "hf-internal-testing/tiny-random-kandinsky-v22-decoder"
+    HF_MODEL_ID = "kandinsky-community/kandinsky-2-2-decoder-inpaint"
+    GENERATION_KWARGS = {
+        "prompt": "concept art digital painting of an elven castle, inspired by lord of the rings, highly detailed, 8k",
+        "generator": torch.manual_seed(42),
+        "image": torch.FloatTensor(1, 3, 512, 512).uniform_(-1, 1),
+        "mask_image": torch.randn(1, 1, 512, 512).uniform_(0, 1),
+    }
+    RBLN_CLASS_KWARGS = {
+        "rbln_img_width": 512,
+        "rbln_img_height": 512,
+    }
 
 
 if __name__ == "__main__":

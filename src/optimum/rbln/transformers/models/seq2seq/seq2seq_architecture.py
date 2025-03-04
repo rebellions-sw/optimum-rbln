@@ -459,7 +459,7 @@ class Seq2SeqSelfAttention(nn.Module):
             ),  # Unsqueeze group axis since CustomKernel expects it for group query attention
             past_key_value[0].view(bsz, self.num_heads, 1, -1, self.head_dim),
             past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
-            cache_position.squeeze(1),
+            cache_position,
             torch.tensor(1.0, dtype=torch.float32),  # scale
         )
 
