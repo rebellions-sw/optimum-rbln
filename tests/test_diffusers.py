@@ -248,7 +248,7 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
             "vae": {"rbln_device": -1},
         },
     }
-    
+
 
 class TestSVDXTImg2VidModel(BaseTest.TestModel):
     RBLN_CLASS = RBLNStableVideoDiffusionPipeline

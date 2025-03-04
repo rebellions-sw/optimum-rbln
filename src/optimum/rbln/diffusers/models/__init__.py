@@ -37,8 +37,8 @@ _import_structure = {
 if TYPE_CHECKING:
     from .autoencoders import (
         RBLNAutoencoderKL,
-        RBLNVQModel,
         RBLNAutoencoderKLTemporalDecoder,
+        RBLNVQModel,
     )
     from .controlnet import RBLNControlNetModel
     from .transformers import (

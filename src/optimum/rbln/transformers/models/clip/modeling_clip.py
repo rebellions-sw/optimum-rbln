@@ -211,7 +211,7 @@ class RBLNCLIPVisionModelWithProjection(RBLNCLIPVisionModel):
     ) -> Union[Tuple, CLIPVisionModelOutput]:
         if len(kwargs) > 0 and any(kwargs.values()):
             logger.warning(f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__}.")
-        
+
         output = super().forward(pixel_values)
         return CLIPVisionModelOutput(
             image_embeds=output[0],
