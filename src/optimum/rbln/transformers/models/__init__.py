@@ -80,8 +80,8 @@ if TYPE_CHECKING:
     from .mistral import RBLNMistralForCausalLM
     from .phi import RBLNPhiForCausalLM
     from .qwen2 import RBLNQwen2ForCausalLM
-    from .time_series_transformers import RBLNTimeSeriesTransformerForPrediction
     from .t5 import RBLNT5EncoderModel, RBLNT5ForConditionalGeneration
+    from .time_series_transformers import RBLNTimeSeriesTransformerForPrediction
     from .wav2vec2 import RBLNWav2Vec2ForCTC
     from .whisper import RBLNWhisperForConditionalGeneration
     from .xlm_roberta import RBLNXLMRobertaModel

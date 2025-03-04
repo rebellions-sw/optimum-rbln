@@ -138,9 +138,10 @@ class TimeSeriesTransformersDecoderWrapper(torch.nn.Module):
             cross_past_key_values=cross_past_key_values,
         )
 
-        outputs = ()
         params = self.parameter_projection(last_hidden_states[:, -1:])
-        outputs = ((params),)
+
+        outputs = ()
+        outputs += (params,)
         outputs += (last_hidden_states,)
         outputs += self_present_key_values
 

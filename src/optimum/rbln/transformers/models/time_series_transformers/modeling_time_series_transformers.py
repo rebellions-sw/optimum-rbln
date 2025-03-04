@@ -23,7 +23,9 @@
 
 import inspect
 import logging
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
+from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
 import rebel
 import torch
@@ -33,12 +35,14 @@ from transformers import (
     TimeSeriesTransformerForPrediction,
     TimeSeriesTransformerModel,
 )
-from transformers.modeling_outputs import SampleTSPredictionOutput, Seq2SeqTSModelOutput
+from transformers.modeling_outputs import ModelOutput, SampleTSPredictionOutput, Seq2SeqTSModelOutput
+from transformers.modeling_utils import no_init_weights
 
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.runtime_utils import RBLNPytorchRuntime
 from .time_series_transformers_architecture import TimeSeriesTransformersWrapper
+
 
 # from .generation_whisper import RBLNWhisperGenerationMixin
 # from .whisper_architecture import WhisperWrapper
@@ -47,7 +51,7 @@ from .time_series_transformers_architecture import TimeSeriesTransformersWrapper
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import PretrainedConfig, PreTrainedModel, AutoFeatureExtractor, AutoProcessor, AutoTokenizer
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig, PreTrainedModel
 
 
 class RBLNRuntimeEncoder(RBLNPytorchRuntime):
@@ -104,7 +108,19 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         cache_position: torch.Tensor = None,
         # encoder_attention_mask: torch.Tensor = None,
     ):
-        return super().forward(inputs_embeds, attention_mask, cache_position)
+        outputs = super().forward(inputs_embeds, attention_mask, cache_position)
+
+        return RBLNSeq2SeqTSDecoderOutput(
+            params = outputs[:-1],
+            last_hidden_states = outputs[-1],
+        )
+
+
+@dataclass
+class RBLNSeq2SeqTSDecoderOutput(ModelOutput):
+    last_hidden_states: torch.FloatTensor = None
+    params: Tuple[torch.FloatTensor] = None
+
 
 
 class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
@@ -114,8 +130,11 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
         self.batch_size = self.rbln_config.model_cfg["batch_size"]
-        self._origin_model = TimeSeriesTransformerForPrediction.from_pretrained("huggingface/time-series-transformer-tourism-monthly")
 
+        with no_init_weights():
+            self._origin_model = TimeSeriesTransformerForPrediction._from_config(self.config)
+        artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
+        self._origin_model.model.embedder.load_state_dict(artifacts["embedder"])
         self.encoder = RBLNRuntimeEncoder(
             runtime=self.model[0],
             main_input_name="inputs_embeds",
@@ -184,6 +203,22 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         )
 
         return {"encoder": compiled_encoder, "decoder": compiled_decoder}
+
+    @classmethod
+    def save_torch_artifacts(
+        cls,
+        model: "PreTrainedModel",
+        save_dir_path: Path,
+        subfolder: str,
+        rbln_config: RBLNConfig,
+    ):
+        """
+        If you are unavoidably running on a CPU rather than an RBLN device,
+        store the torch tensor, weight, etc. in this function.
+        """
+        save_dict = {}
+        save_dict["embedder"] = model.model.embedder.state_dict()
+        torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
     @classmethod
     def _get_rbln_config(
@@ -368,11 +403,8 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
                 attention_mask=dec_attn_mask,
                 cache_position=torch.tensor(k, dtype=torch.int32),
             )
-            # dec_last_hidden = decoder_out
-            params = decoder_out[0]
+            params = decoder_out.params
 
-            # params = self._origin_model.parameter_projection(dec_last_hidden[:, -1:])
-            breakpoint()
             distr = self._origin_model.output_distribution(params, loc=repeated_loc, scale=repeated_scale)
             next_sample = distr.sample()
 
