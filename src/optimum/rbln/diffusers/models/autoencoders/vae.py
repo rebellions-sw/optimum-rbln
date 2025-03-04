@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Union
 
 import torch  # noqa: I001
-from diffusers import AutoencoderKL, VQModel
-from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
+from diffusers import AutoencoderKL, AutoencoderKLTemporalDecoder, VQModel
+from diffusers.models.autoencoders.vae import DecoderOutput, DiagonalGaussianDistribution
 from diffusers.models.autoencoders.vq_model import VQEncoderOutput
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
 
@@ -42,6 +42,12 @@ class RBLNRuntimeVAEDecoder(RBLNPytorchRuntime):
         return (self.forward(z),)
 
 
+class RBLNRuntimeVAETemporalDecoder(RBLNPytorchRuntime):
+    def decode(self, z: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
+        decoded = self.forward(z)
+        return DecoderOutput(sample=decoded)
+
+
 class _VAEDecoder(torch.nn.Module):
     def __init__(self, vae: "AutoencoderKL"):
         super().__init__()
@@ -52,18 +58,37 @@ class _VAEDecoder(torch.nn.Module):
         return vae_out
 
 
+class _VAETemporalDecoder(torch.nn.Module):
+    def __init__(self, vae: "AutoencoderKLTemporalDecoder"):
+        super().__init__()
+        self.vae = vae
+        self.num_frames = None
+
+    def forward(self, z):
+        vae_out = self.vae.decode(z, num_frames=self.num_frames, return_dict=False)
+        return vae_out
+
+
 class _VAEEncoder(torch.nn.Module):
-    def __init__(self, vae: "AutoencoderKL"):
+    def __init__(self, vae: Union["AutoencoderKL", "AutoencoderKLTemporalDecoder"]):
         super().__init__()
         self.vae = vae
 
     def encode(self, x: torch.FloatTensor, return_dict: bool = True):
-        if self.use_tiling and (x.shape[-1] > self.tile_sample_min_size or x.shape[-2] > self.tile_sample_min_size):
-            return self.tiled_encode(x, return_dict=return_dict)
+        if hasattr(self, "use_tiling") and hasattr(self, "use_slicing"):
+            if self.use_tiling and (
+                x.shape[-1] > self.tile_sample_min_size or x.shape[-2] > self.tile_sample_min_size
+            ):
+                return self.tiled_encode(x, return_dict=return_dict)
 
-        if self.use_slicing and x.shape[0] > 1:
-            encoded_slices = [self.encoder(x_slice) for x_slice in x.split(1)]
-            h = torch.cat(encoded_slices)
+            if self.use_slicing and x.shape[0] > 1:
+                encoded_slices = [self.encoder(x_slice) for x_slice in x.split(1)]
+                h = torch.cat(encoded_slices)
+            else:
+                h = self.encoder(x)
+                if self.quant_conv is not None:
+                    h = self.quant_conv(h)
+
         else:
             h = self.encoder(x)
             if self.quant_conv is not None:
