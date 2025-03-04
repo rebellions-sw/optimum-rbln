@@ -99,6 +99,7 @@ class TimeSeriesTransformersDecoderWrapper(torch.nn.Module):
         self.num_layers = self.config.decoder_layers
 
         self.decoder = self.convert_to_rbln_conditional_generation(model, num_parallel_samples)
+        self.parameter_projection = model.parameter_projection
 
     def convert_to_rbln_conditional_generation(self, model: nn.Module, num_parallel_samples: int):
         new_layers = []
@@ -137,7 +138,10 @@ class TimeSeriesTransformersDecoderWrapper(torch.nn.Module):
             cross_past_key_values=cross_past_key_values,
         )
 
-        outputs = (last_hidden_states,)
+        outputs = ()
+        params = self.parameter_projection(last_hidden_states[:, -1:])
+        outputs = ((params),)
+        outputs += (last_hidden_states,)
         outputs += self_present_key_values
 
         return outputs

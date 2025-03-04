@@ -114,7 +114,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
         self.batch_size = self.rbln_config.model_cfg["batch_size"]
-        self._origin_model = TimeSeriesTransformerForPrediction.from_pretrained(self.config._name_or_path)
+        self._origin_model = TimeSeriesTransformerForPrediction.from_pretrained("huggingface/time-series-transformer-tourism-monthly")
 
         self.encoder = RBLNRuntimeEncoder(
             runtime=self.model[0],
@@ -129,15 +129,16 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
     def __getattr__(self, __name: str) -> Any:
         """This is the key method to implement RBLN-TimeSeriesTransformersForPrediction.
         Returns:
-            Any: Whisper's corresponding method
+            Any: TimeSeriesTransformersForPrediction's corresponding method
         """
 
         def redirect(func):
             return lambda *pargs, **kwargs: func(self, *pargs, **kwargs)
 
         val = getattr(TimeSeriesTransformerForPrediction, __name)
-        if isinstance(val, Callable) and "self" in set(inspect.signature(val).parameters):
+        if val is not None and isinstance(val, Callable) and "self" in set(inspect.signature(val).parameters):
             return redirect(val)
+
 
     @classmethod
     def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: "RBLNConfig"):
@@ -192,7 +193,6 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         rbln_kwargs: Dict[str, Any] = {},
     ) -> RBLNConfig:
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
-        # rbln_num_parallel_samples = rbln_kwargs.get("num_parallel_samples", None)
 
         rbln_batch_size = 1 if rbln_batch_size is None else rbln_batch_size
         rbln_num_parallel_samples = model_config.num_parallel_samples
@@ -202,8 +202,6 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
 
         context_length = model_config.context_length  # enc_max_seq_len
         predict_length = model_config.prediction_length  # dec_max_seq_len
-
-        # d_model = model_config.d_model
         feature_size = model_config.feature_size
 
         # model input info
@@ -263,7 +261,6 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
                 for i in range(model_config.decoder_layers * 2)
             ]
         )
-
         enc_compile_config = RBLNCompileConfig(compiled_model_name="encoder", input_info=enc_input_info)
         dec_compile_config = RBLNCompileConfig(compiled_model_name="decoder", input_info=dec_input_info)
 
@@ -371,9 +368,11 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
                 attention_mask=dec_attn_mask,
                 cache_position=torch.tensor(k, dtype=torch.int32),
             )
-            dec_last_hidden = decoder_out
+            # dec_last_hidden = decoder_out
+            params = decoder_out[0]
 
-            params = self._origin_model.parameter_projection(dec_last_hidden[:, -1:])
+            # params = self._origin_model.parameter_projection(dec_last_hidden[:, -1:])
+            breakpoint()
             distr = self._origin_model.output_distribution(params, loc=repeated_loc, scale=repeated_scale)
             next_sample = distr.sample()
 
