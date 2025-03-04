@@ -68,7 +68,6 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
-        # self.in_features = self.config.projection_class_embeddings_input_dim
         self.in_features = self.rbln_config.model_cfg.get("in_features", None)
         if self.in_features is not None:
 
