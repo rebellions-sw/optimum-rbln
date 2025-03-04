@@ -29,6 +29,7 @@ _import_structure = {
         "RBLNKandinskyV22InpaintCombinedPipeline",
         "RBLNKandinskyV22InpaintPipeline",
         "RBLNKandinskyV22PriorPipeline",
+        "RBLNKandinskyV22Pipeline",
     ],
     "stable_diffusion": [
         "RBLNStableDiffusionImg2ImgPipeline",
@@ -57,6 +58,7 @@ if TYPE_CHECKING:
     from .kandinsky2_2 import (
         RBLNKandinskyV22InpaintCombinedPipeline,
         RBLNKandinskyV22InpaintPipeline,
+        RBLNKandinskyV22Pipeline,
         RBLNKandinskyV22PriorPipeline,
     )
     from .stable_diffusion import (
