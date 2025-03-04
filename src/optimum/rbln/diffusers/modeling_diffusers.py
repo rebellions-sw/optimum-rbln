@@ -261,7 +261,7 @@ class RBLNDiffusionMixin:
             prefix = cls._prefix.get(connected_pipe_name, "")
             for submodule_name in connected_pipe_cls._submodules:
                 flattened_config[prefix + submodule_name] = connected_pipe_config[submodule_name]
-        flattened_config.update(prepared_config)
+        flattened_config.update(pipe_global_config)
         return flattened_config
 
     @classmethod
@@ -402,7 +402,6 @@ class RBLNDiffusionMixin:
             model.save_config(model_save_dir)
 
         if rbln_config.get("optimize_host_memory") is False:
-            breakpoint()
             # Keep compiled_model objs to further analysis. -> TODO: remove soon...
             model.compiled_models = []
             for name in cls._submodules:
