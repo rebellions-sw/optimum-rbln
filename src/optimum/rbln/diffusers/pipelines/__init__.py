@@ -25,6 +25,11 @@ _import_structure = {
         "RBLNStableDiffusionXLControlNetImg2ImgPipeline",
         "RBLNStableDiffusionXLControlNetPipeline",
     ],
+    "kandinsky2_2": [
+        "RBLNKandinskyV22InpaintCombinedPipeline",
+        "RBLNKandinskyV22InpaintPipeline",
+        "RBLNKandinskyV22PriorPipeline",
+    ],
     "stable_diffusion": [
         "RBLNStableDiffusionImg2ImgPipeline",
         "RBLNStableDiffusionPipeline",
@@ -52,6 +57,11 @@ if TYPE_CHECKING:
         RBLNStableDiffusionControlNetPipeline,
         RBLNStableDiffusionXLControlNetImg2ImgPipeline,
         RBLNStableDiffusionXLControlNetPipeline,
+    )
+    from .kandinsky2_2 import (
+        RBLNKandinskyV22InpaintCombinedPipeline,
+        RBLNKandinskyV22InpaintPipeline,
+        RBLNKandinskyV22PriorPipeline,
     )
     from .stable_diffusion import (
         RBLNStableDiffusionImg2ImgPipeline,

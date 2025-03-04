@@ -14,3 +14,4 @@
 
 from .autoencoder_kl import RBLNAutoencoderKL
 from .autoencoder_kl_temporal_decoder import RBLNAutoencoderKLTemporalDecoder
+from .vq_model import RBLNVQModel

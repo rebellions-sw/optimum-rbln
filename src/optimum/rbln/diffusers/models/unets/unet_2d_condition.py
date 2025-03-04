@@ -115,6 +115,29 @@ class _UNet_SDXL(torch.nn.Module):
         return unet_out
 
 
+class _UNet_Kandinsky(torch.nn.Module):
+    def __init__(self, unet: "UNet2DConditionModel"):
+        super().__init__()
+        self.unet = unet
+
+    def forward(
+        self,
+        sample: torch.Tensor,
+        timestep: Union[torch.Tensor, float, int],
+        image_embeds: torch.Tensor,
+    ) -> torch.Tensor:
+        added_cond_kwargs = {"image_embeds": image_embeds}
+
+        unet_out = self.unet(
+            sample=sample,
+            timestep=timestep,
+            encoder_hidden_states=None,
+            added_cond_kwargs=added_cond_kwargs,
+            return_dict=False,
+        )
+        return unet_out
+
+
 class RBLNUNet2DConditionModel(RBLNModel):
     hf_library_name = "diffusers"
     auto_model_class = UNet2DConditionModel
@@ -138,6 +161,8 @@ class RBLNUNet2DConditionModel(RBLNModel):
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
         if model.config.addition_embed_type == "text_time":
             return _UNet_SDXL(model).eval()
+        elif model.config.addition_embed_type == "image":
+            return _UNet_Kandinsky(model).eval()
         else:
             return _UNet_SD(model).eval()
 
@@ -146,6 +171,7 @@ class RBLNUNet2DConditionModel(RBLNModel):
         cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]
     ) -> Union[int, Tuple[int, int]]:
         image_size = (rbln_config.get("img_height"), rbln_config.get("img_width"))
+        scale_factor = pipe.movq_scale_factor if hasattr(pipe, "movq_scale_factor") else pipe.vae_scale_factor
         if (image_size[0] is None) != (image_size[1] is None):
             raise ValueError("Both image height and image width must be given or not given")
         elif image_size[0] is None and image_size[1] is None:
@@ -153,22 +179,23 @@ class RBLNUNet2DConditionModel(RBLNModel):
                 # In case of img2img, sample size of unet is determined by vae encoder.
                 vae_sample_size = pipe.vae.config.sample_size
                 if isinstance(vae_sample_size, int):
-                    sample_size = vae_sample_size // pipe.vae_scale_factor
+                    sample_size = vae_sample_size // scale_factor
                 else:
                     sample_size = (
-                        vae_sample_size[0] // pipe.vae_scale_factor,
-                        vae_sample_size[1] // pipe.vae_scale_factor,
+                        vae_sample_size[0] // scale_factor,
+                        vae_sample_size[1] // scale_factor,
                     )
             else:
                 sample_size = pipe.unet.config.sample_size
         else:
-            sample_size = (image_size[0] // pipe.vae_scale_factor, image_size[1] // pipe.vae_scale_factor)
+            sample_size = (image_size[0] // scale_factor, image_size[1] // scale_factor)
 
         return sample_size
 
     @classmethod
     def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
         text_model_hidden_size = pipe.text_encoder_2.config.hidden_size if hasattr(pipe, "text_encoder_2") else None
+        image_model_hidden_size = pipe.unet.config.encoder_hid_dim if hasattr(pipe, "unet") else None
 
         batch_size = rbln_config.get("batch_size")
         if not batch_size:
@@ -184,10 +211,12 @@ class RBLNUNet2DConditionModel(RBLNModel):
                     "adjusting the batch size configuration as needed."
                 )
 
+        max_seq_len = pipe.text_encoder.config.max_position_embeddings if hasattr(pipe, "text_encoder") else None
         rbln_config.update(
             {
-                "max_seq_len": pipe.text_encoder.config.max_position_embeddings,
+                "max_seq_len": max_seq_len,
                 "text_model_hidden_size": text_model_hidden_size,
+                "image_model_hidden_size": image_model_hidden_size,
                 "sample_size": cls.get_unet_sample_size(pipe, rbln_config),
                 "batch_size": batch_size,
                 "is_controlnet": "controlnet" in pipe.config.keys(),
@@ -218,14 +247,15 @@ class RBLNUNet2DConditionModel(RBLNModel):
         if isinstance(sample_size, int):
             sample_size = (sample_size, sample_size)
 
-        if max_seq_len is None:
-            raise ValueError("`rbln_max_seq_len` (ex. text_encoder's max_position_embeddings) must be specified.")
-
         input_info = [
             ("sample", [batch_size, model_config.in_channels, sample_size[0], sample_size[1]], "float32"),
             ("timestep", [], "float32"),
-            ("encoder_hidden_states", [batch_size, max_seq_len, model_config.cross_attention_dim], "float32"),
         ]
+
+        if max_seq_len is not None:
+            input_info.append(
+                ("encoder_hidden_states", [batch_size, max_seq_len, model_config.cross_attention_dim], "float32"),
+            )
 
         if is_controlnet:
             # down block addtional residuals
@@ -256,11 +286,15 @@ class RBLNUNet2DConditionModel(RBLNModel):
             ]
             input_info.append(("mid_block_additional_residual", shape, "float32"))
 
-        if hasattr(model_config, "addition_embed_type") and model_config.addition_embed_type == "text_time":
-            rbln_text_model_hidden_size = rbln_kwargs["text_model_hidden_size"]
-            rbln_in_features = model_config.projection_class_embeddings_input_dim
-            input_info.append(("text_embeds", [batch_size, rbln_text_model_hidden_size], "float32"))
-            input_info.append(("time_ids", [batch_size, 6], "float32"))
+        if hasattr(model_config, "addition_embed_type"):
+            if model_config.addition_embed_type == "text_time":
+                rbln_text_model_hidden_size = rbln_kwargs["text_model_hidden_size"]
+                rbln_in_features = model_config.projection_class_embeddings_input_dim
+                input_info.append(("text_embeds", [batch_size, rbln_text_model_hidden_size], "float32"))
+                input_info.append(("time_ids", [batch_size, 6], "float32"))
+            elif model_config.addition_embed_type == "image":
+                rbln_image_model_hidden_size = rbln_kwargs["image_model_hidden_size"]
+                input_info.append(("image_embeds", [batch_size, rbln_image_model_hidden_size], "float32"))
 
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
 
@@ -319,6 +353,15 @@ class RBLNUNet2DConditionModel(RBLNModel):
                     encoder_hidden_states,
                     *down_block_additional_residuals,
                     mid_block_additional_residual,
+                    **added_cond_kwargs,
+                ),
+            )
+
+        if "image_embeds" in added_cond_kwargs:
+            return (
+                super().forward(
+                    sample.contiguous(),
+                    timestep.float(),
                     **added_cond_kwargs,
                 ),
             )
