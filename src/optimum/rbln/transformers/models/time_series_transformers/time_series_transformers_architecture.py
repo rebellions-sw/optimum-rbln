@@ -97,11 +97,10 @@ class TimeSeriesTransformersDecoderWrapper(torch.nn.Module):
         super().__init__()
         self.config = model.config
         self.num_layers = self.config.decoder_layers
-
-        self.decoder = self.convert_to_rbln_conditional_generation(model, num_parallel_samples)
+        self.decoder = self.convert_to_rbln_tst_decoder(model, num_parallel_samples)
         self.parameter_projection = model.parameter_projection
 
-    def convert_to_rbln_conditional_generation(self, model: nn.Module, num_parallel_samples: int):
+    def convert_to_rbln_tst_decoder(self, model: nn.Module, num_parallel_samples: int):
         new_layers = []
         for layer in model.get_decoder().layers:
             self_attn = TimeSeriesTransformersSelfAttention(layer.self_attn, num_parallel_samples)

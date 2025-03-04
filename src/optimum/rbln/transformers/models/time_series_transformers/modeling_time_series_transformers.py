@@ -43,11 +43,6 @@ from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.runtime_utils import RBLNPytorchRuntime
 from .time_series_transformers_architecture import TimeSeriesTransformersWrapper
 
-
-# from .generation_whisper import RBLNWhisperGenerationMixin
-# from .whisper_architecture import WhisperWrapper
-
-
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -416,7 +411,6 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         concat_future_samples = torch.cat(future_samples, dim=1)
 
         return SampleTSPredictionOutput(
-            # sequences=concat_future_samples
             sequences=concat_future_samples.reshape(
                 (-1, num_parallel_samples, self.config.prediction_length) + self._origin_model.target_shape,
             )
