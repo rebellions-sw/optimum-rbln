@@ -244,8 +244,8 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
         "decode_chunk_size": 7,
         "rbln_config": {
             "image_encoder": {"rbln_device": 0},
-            "unet": {"rbln_device": -1},
-            "vae": {"rbln_device": 0},
+            "unet": {"rbln_device": 0},
+            "vae": {"rbln_device": -1},
         },
     }
     
@@ -268,8 +268,8 @@ class TestSVDXTImg2VidModel(BaseTest.TestModel):
         "decode_chunk_size": 5,
         "rbln_config": {
             "image_encoder": {"rbln_device": 0},
-            "unet": {"rbln_device": -1},
-            "vae": {"rbln_device": 0},
+            "unet": {"rbln_device": 0},
+            "vae": {"rbln_device": -1},
         },
     }
 
