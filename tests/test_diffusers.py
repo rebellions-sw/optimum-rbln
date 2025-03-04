@@ -12,6 +12,7 @@ from optimum.rbln import (
     RBLNStableDiffusionPipeline,
     RBLNStableDiffusionXLControlNetPipeline,
     RBLNStableDiffusionXLPipeline,
+    RBLNStableVideoDiffusionPipeline,
 )
 
 from .test_base import BaseTest
@@ -225,6 +226,52 @@ class TestKandinskyV22InpaintingModel(BaseTest.TestModel):
         "rbln_img_height": 512,
     }
 
+class TestSVDImg2VidModel(BaseTest.TestModel):
+    RBLN_CLASS = RBLNStableVideoDiffusionPipeline
+    HF_MODEL_ID = "stabilityai/stable-video-diffusion-img2vid"
+    from torchvision.transforms.functional import to_pil_image
+    GENERATION_KWARGS = {
+        "num_inference_steps": 1,
+        "generator": torch.manual_seed(42),
+        "image": to_pil_image(torch.randn(3, 64, 64, generator=torch.manual_seed(42)).clamp(0, 1)),
+        "num_frames": 14,
+        "decode_chunk_size": 7,
+    }
+    RBLN_CLASS_KWARGS = {
+        "rbln_img_width": 64,
+        "rbln_img_height": 64,
+        "num_frames": 14,
+        "decode_chunk_size": 7,
+        "rbln_config": {
+            "image_encoder": {"rbln_device": 0},
+            "unet": {"rbln_device": -1},
+            "vae": {"rbln_device": 0},
+        },
+    }
+    
+
+class TestSVDXTImg2VidModel(BaseTest.TestModel):
+    RBLN_CLASS = RBLNStableVideoDiffusionPipeline
+    HF_MODEL_ID = "stabilityai/stable-video-diffusion-img2vid-xt"
+    from torchvision.transforms.functional import to_pil_image
+    GENERATION_KWARGS = {
+        "num_inference_steps": 1,
+        "generator": torch.manual_seed(42),
+        "image": to_pil_image(torch.randn(3, 64, 64, generator=torch.manual_seed(42)).clamp(0, 1)),
+        "num_frames": 25,
+        "decode_chunk_size": 5,
+    }
+    RBLN_CLASS_KWARGS = {
+        "rbln_img_width": 64,
+        "rbln_img_height": 64,
+        "num_frames": 25,
+        "decode_chunk_size": 5,
+        "rbln_config": {
+            "image_encoder": {"rbln_device": 0},
+            "unet": {"rbln_device": -1},
+            "vae": {"rbln_device": 0},
+        },
+    }
 
 if __name__ == "__main__":
     unittest.main()
