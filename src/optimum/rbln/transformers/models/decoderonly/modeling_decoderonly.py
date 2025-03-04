@@ -388,6 +388,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         wrapper_cfg["attn_impl"] = rbln_config.model_cfg.get("attn_impl")
         wrapper_cfg["kvcache_partition_len"] = rbln_config.model_cfg.get("kvcache_partition_len")
         wrapper_cfg["use_rotary_emb"] = cls._use_rotary_emb
+        wrapper_cfg["use_attention_mask"] = rbln_config.model_cfg.get("use_attention_mask")
 
         return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
 
@@ -448,11 +449,12 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_max_seq_len = rbln_kwargs.get("max_seq_len", None)
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
         rbln_use_inputs_embeds = rbln_kwargs.get("use_inputs_embeds", None)
+        rbln_use_attention_mask = rbln_kwargs.get("rbln_use_attention_mask", True)
         rbln_attn_impl = rbln_kwargs.get("attn_impl", None)
         rbln_kvcache_partition_len = rbln_kwargs.get("kvcache_partition_len", None)
         rbln_quantization = QuantizationManager.validate_quantization_config(rbln_kwargs.get("quantization", None))
         rbln_prefill_chunk_size = rbln_kwargs.get("prefill_chunk_size", None)
-
+        
         if rbln_prefill_chunk_size is None:
             rbln_prefill_chunk_size = 128
         elif rbln_prefill_chunk_size % 64 != 0 or rbln_prefill_chunk_size == 0:
@@ -495,13 +497,20 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
             input_info = [
                 main_input,
-                ("attention_mask", [batch_size, 1, query_length, rbln_max_seq_len], "float32"),
                 (
                     "cache_position",
                     [batch_size, query_length],
                     "int32",
                 ),
             ]
+            
+            if rbln_use_attention_mask:
+                input_info.extend(
+                    [
+                        ("attention_mask", [batch_size, 1, query_length, rbln_max_seq_len], "float32"),
+                    ]
+                )
+            
             if query_length > 1:
                 input_info.extend(
                     [
@@ -555,6 +564,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 "max_seq_len": rbln_max_seq_len,
                 "batch_size": rbln_batch_size,
                 "prefill_chunk_size": rbln_prefill_chunk_size,
+                "use_attention_mask": rbln_use_attention_mask,
                 "use_inputs_embeds": rbln_use_inputs_embeds,
                 "kvcache_partition_len": rbln_kvcache_partition_len,
                 "attn_impl": rbln_attn_impl,
