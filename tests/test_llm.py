@@ -210,7 +210,7 @@ class TestBartModel(LLMTest.TestLLM):
         with self.subTest():
             with pytest.raises(ValueError):
                 _ = RBLNAutoModelForCausalLM.from_pretrained(
-                    self.RBLN_LOCAL_DIR,
+                    self.get_rbln_local_dir(),
                     export=False,
                     rbln_create_runtimes=False,
                     **self.HF_CONFIG_KWARGS,

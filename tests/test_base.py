@@ -291,3 +291,7 @@ class DisallowedTestBase:
             finally:
                 if os.path.exists(self.get_rbln_local_dir()):
                     shutil.rmtree(self.get_rbln_local_dir())
+
+        @classmethod
+        def get_rbln_local_dir(cls):
+            return os.path.basename(cls.HF_MODEL_ID) + "-local"
