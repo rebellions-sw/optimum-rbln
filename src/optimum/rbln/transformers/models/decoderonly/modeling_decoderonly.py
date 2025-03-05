@@ -454,7 +454,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_kvcache_partition_len = rbln_kwargs.get("kvcache_partition_len", None)
         rbln_quantization = QuantizationManager.validate_quantization_config(rbln_kwargs.get("quantization", None))
         rbln_prefill_chunk_size = rbln_kwargs.get("prefill_chunk_size", None)
-        
+
         if rbln_prefill_chunk_size is None:
             rbln_prefill_chunk_size = 128
         elif rbln_prefill_chunk_size % 64 != 0 or rbln_prefill_chunk_size == 0:
@@ -503,14 +503,14 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     "int32",
                 ),
             ]
-            
+
             if rbln_use_attention_mask:
                 input_info.extend(
                     [
                         ("attention_mask", [batch_size, 1, query_length, rbln_max_seq_len], "float32"),
                     ]
                 )
-            
+
             if query_length > 1:
                 input_info.extend(
                     [

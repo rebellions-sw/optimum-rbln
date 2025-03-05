@@ -114,7 +114,6 @@ def register_rbln_custom_masked_attention():
         return q, kcache, vcache
 
 
-
 @lru_cache
 def register_rbln_custom_causal_masked_attention():
     torch.library.define(
@@ -201,7 +200,6 @@ def register_rbln_custom_causal_masked_attention():
     @register_fake("rbln_custom_ops::causal_masked_attn_prefill")
     def attn_prefill_abstract(q, k, v, kcache, vcache, batch, seq, partition):
         return q, kcache, vcache
-
 
 
 @lru_cache

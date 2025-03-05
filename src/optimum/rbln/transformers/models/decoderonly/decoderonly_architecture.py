@@ -19,7 +19,12 @@ import torch
 from torch import nn
 from transformers import PretrainedConfig, PreTrainedModel
 
-from ....ops import register_rbln_custom_masked_attention,register_rbln_custom_causal_masked_attention, register_rbln_custom_flash_causal_masked_attention,register_rbln_custom_flash_masked_attention
+from ....ops import (
+    register_rbln_custom_causal_masked_attention,
+    register_rbln_custom_flash_causal_masked_attention,
+    register_rbln_custom_flash_masked_attention,
+    register_rbln_custom_masked_attention,
+)
 from ....utils import logging
 from ...modeling_rope_utils import ROPE_INIT_FUNCTIONS
 
@@ -141,7 +146,7 @@ class DecoderOnlyWrapper(nn.Module):
 
         self.attn_impl = attn_impl
         self.use_attention_mask = use_attention_mask
-        
+
         if self.attn_impl == "flash_attn":
             self.kvcache_partition_len = kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
             if self.use_attention_mask:
@@ -178,7 +183,9 @@ class DecoderOnlyWrapper(nn.Module):
                 new_self_attn = DecoderOnlyAttention(layer.self_attn, self.use_attention_mask)
             elif self.attn_impl == "flash_attn":
                 new_self_attn = DecoderOnlyFlashAttention(
-                    layer.self_attn, kvcache_partition_len=self.kvcache_partition_len, use_attention_mask=self.use_attention_mask
+                    layer.self_attn,
+                    kvcache_partition_len=self.kvcache_partition_len,
+                    use_attention_mask=self.use_attention_mask,
                 )
             else:
                 raise NotImplementedError(f"Unknwon attn : {self.attn_impl}")
@@ -235,7 +242,7 @@ class DecoderOnlyWrapper(nn.Module):
                     *past_key_values,
                 ) = args
                 attention_mask = None
-                
+
         else:
             raise ValueError(f"Unknown phase: {self.phase}")
 
@@ -602,7 +609,7 @@ class DecoderOnlyAttention(nn.Module):
         self.attention.phase = phase
 
     def get_attention(self):
-        return AttentionOp(self.num_heads, self.head_dim, self.num_key_value_heads,self.use_attention_mask)
+        return AttentionOp(self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask)
 
     def __post_init__(self):
         self.q_proj = self._original_mod.q_proj
@@ -683,7 +690,7 @@ class AttentionOp(nn.Module):
         self.head_dim = head_dim
         self.num_key_value_heads = num_key_value_heads
         self.phase = "prefill"
-        self.use_attention_mask = use_attention_mask            
+        self.use_attention_mask = use_attention_mask
 
     def forward(
         self,
@@ -885,7 +892,13 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
         super().__init__(self_attn=self_attn)
 
     def get_attention(self):
-        return FlashAttentionOp(self.num_heads, self.head_dim, self.num_key_value_heads, self.kvcache_partition_size, self.use_attention_mask)
+        return FlashAttentionOp(
+            self.num_heads,
+            self.head_dim,
+            self.num_key_value_heads,
+            self.kvcache_partition_size,
+            self.use_attention_mask,
+        )
 
     def forward(
         self,
@@ -932,8 +945,20 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
 
 
 class FlashAttentionOp(AttentionOp):
-    def __init__(self, num_heads: int, head_dim: int, num_key_value_heads: int, kvcache_partition_len: int, use_attention_mask: bool):
-        super().__init__(num_heads=num_heads, head_dim=head_dim, num_key_value_heads=num_key_value_heads,use_attention_mask=use_attention_mask)
+    def __init__(
+        self,
+        num_heads: int,
+        head_dim: int,
+        num_key_value_heads: int,
+        kvcache_partition_len: int,
+        use_attention_mask: bool,
+    ):
+        super().__init__(
+            num_heads=num_heads,
+            head_dim=head_dim,
+            num_key_value_heads=num_key_value_heads,
+            use_attention_mask=use_attention_mask,
+        )
         self.kvcache_partition_size = kvcache_partition_len
 
     def forward(

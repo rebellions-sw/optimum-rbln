@@ -59,7 +59,7 @@ def register_rbln_custom_flash_masked_attention():
     @register_fake("rbln_custom_ops::flash_masked_attn_prefill")
     def flash_attn_prefill_abstract(q, k, v, m, kcache, vcache, batch, seq, scale, partition):
         return q, kcache, vcache
-    
+
 
 @lru_cache
 def register_rbln_custom_flash_causal_masked_attention():
@@ -96,5 +96,3 @@ def register_rbln_custom_flash_causal_masked_attention():
     @register_fake("rbln_custom_ops::flash_causal_masked_attn_prefill")
     def flash_attn_prefill_abstract(q, k, v, kcache, vcache, batch, seq, scale, partition):
         return q, kcache, vcache
-    
-
