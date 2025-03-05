@@ -125,7 +125,7 @@ class BaseTest:
                 self.assertFalse(HF_AUTH_TOKEN is None)
                 self.assertFalse(HF_USER_ID is None)
 
-                if self.is_diffuser:
+                if self.is_diffuser():
                     TOKEN_KEY = "token"
                     REPO_KEY = "repo_id"
                     self.model.text_encoder.config.from_local = remote_hash
