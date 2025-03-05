@@ -477,7 +477,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_max_seq_len = rbln_kwargs.get("max_seq_len", None)
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
         rbln_use_inputs_embeds = rbln_kwargs.get("use_inputs_embeds", None)
-        rbln_use_attention_mask = rbln_kwargs.get("rbln_use_attention_mask", True)
+        rbln_use_attention_mask = rbln_kwargs.get("use_attention_mask", True)
         rbln_attn_impl = rbln_kwargs.get("attn_impl", None)
         rbln_kvcache_partition_len = rbln_kwargs.get("kvcache_partition_len", None)
         rbln_quantization = QuantizationManager.validate_quantization_config(rbln_kwargs.get("quantization", None))
