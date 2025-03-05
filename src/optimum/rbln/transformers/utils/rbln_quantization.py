@@ -130,11 +130,17 @@ def prepare_model_for_quantization(
         replace_method = create_fp8linear
     else:
         replace_method = None
-    update_layers_to_quantize(model, replace_method=replace_method)
+
+    # TODO(jongho): organized quantization config
+    kvcache_scale = False
+    if "kvcache" in rbln_quantization and rbln_quantization["kvcache"] == "fp8":
+        kvcache_scale = True
+
+    update_layers_to_quantize(model, replace_method=replace_method, kvcache_scale=kvcache_scale)
     load_weights(model, model_id, n_layer)
 
 
-def update_layers_to_quantize(module: torch.nn.Module, replace_method: Callable) -> None:
+def update_layers_to_quantize(module: torch.nn.Module, replace_method: Callable, kvcache_scale: bool = False) -> None:
     """
     Updates specified linear layers to quantized (qlinear) layers in the given module.
     """
@@ -150,6 +156,9 @@ def update_layers_to_quantize(module: torch.nn.Module, replace_method: Callable)
             parent_module, layer_name = get_parent_and_child(module, name)
             setattr(parent_module, layer_name, replace_method(layer))
             processed_layers.append(name)
+        elif kvcache_scale and is_target_for_adding_kv_scales(name):
+            layer.k_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
+            layer.v_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
 
     if processed_layers:
         logger.debug(f"Updated the following linear layers to quantized layers:\n {{{', '.join(processed_layers)}}}")
@@ -167,6 +176,7 @@ def load_weights(model, model_id, n_layer=None):
 
     target_layers = list(range(n_layer)) if n_layer is not None else None
 
+    unloaded_keys = []
     for safetensor_file in safetensor_files:
         file_data = load_file(safetensor_file)
         for key, value in file_data.items():
@@ -180,6 +190,14 @@ def load_weights(model, model_id, n_layer=None):
                 model_params[key].data.copy_(value)
             elif key in model_buffers:
                 model_buffers[key].data.copy_(value)
+            elif "kv_scale" in key:
+                model_params[key.replace("kv_scale", "k_scale")].data.copy_(value)
+                model_params[key.replace("kv_scale", "v_scale")].data.copy_(value)
+            else:
+                unloaded_keys.append(key)
+
+    if len(unloaded_keys) > 0:
+        logger.warning(f"There are unexpected parameters/buffers on the checkpoint: {unloaded_keys}")
 
     logger.debug("Loaded the quantized weights into the CPU.")
 
@@ -189,6 +207,11 @@ def is_target_for_qlinear_replacement(layer_name: str, layer: torch.nn.Module) -
     Checks if a layer is a target for qlinear replacement.
     """
     return layer_name.split(".")[-1] in QUANTIZED_WEIGHTS and isinstance(layer, torch.nn.Linear)
+
+
+def is_target_for_adding_kv_scales(layer_name: str) -> bool:
+    # FIXME
+    return layer_name.split(".")[-1] in ["self_attn"]
 
 
 def get_parent_and_child(module: torch.nn.Module, full_name: str) -> tuple:
@@ -263,7 +286,7 @@ def create_fp8linear(layer: Linear) -> Linear:
 
         return output
 
-    layer.weight = Parameter(layer.weight.to(torch.float32), requires_grad=False)
+    layer.weight = Parameter(layer.weight.to(torch.float8_e4m3fn), requires_grad=False)
     layer.weight_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
     layer.input_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
     layer.forward = lambda inputs: fp8linear_forward(layer, inputs)
