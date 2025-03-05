@@ -389,8 +389,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         return rbln_config
 
     @classmethod
-    @property
-    def hf_class(cls):
+    def get_hf_class(cls):
         """
         Lazily loads and caches the corresponding Hugging Face model class.
         Removes 'RBLN' prefix from the class name to get the original class name

@@ -58,7 +58,7 @@ class RBLNXLMRobertaModel(RBLNModel):
         if max_position_embeddings is not None and rbln_max_seq_len > max_position_embeddings:
             raise ValueError("`rbln_enc_max_seq_len` should be less or equal than max_position_embeddings!")
 
-        signature_params = inspect.signature(cls.hf_class.forward).parameters.keys()
+        signature_params = inspect.signature(cls.get_hf_class().forward).parameters.keys()
 
         if rbln_model_input_names is None:
             for tokenizer in preprocessors:
