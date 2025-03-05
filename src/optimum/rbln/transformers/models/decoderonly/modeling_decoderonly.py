@@ -57,9 +57,11 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         self.phase = phase
         self.batch_size = batch_size
 
-        # shared tensor between prefill and decode phase
-        self.dec_attn_mask = dec_attn_mask
         self.use_attention_mask = use_attention_mask
+        
+        if self.use_attention_mask:
+            # shared tensor between prefill and decode phase
+            self.dec_attn_mask = dec_attn_mask
 
         if self.phase == "prefill":
             vocab_size = kwargs.pop("vocab_size")
