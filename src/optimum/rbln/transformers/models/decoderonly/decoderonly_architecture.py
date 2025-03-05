@@ -146,7 +146,6 @@ class DecoderOnlyWrapper(nn.Module):
 
         self.attn_impl = attn_impl
         self.use_attention_mask = use_attention_mask
-
         if self.attn_impl == "flash_attn":
             self.kvcache_partition_len = kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
             if self.use_attention_mask:
@@ -168,7 +167,7 @@ class DecoderOnlyWrapper(nn.Module):
                 f" or equal to max_seq_len({max_seq_len})!"
             )
 
-        self.causal_lm = self.convert_to_rbln_causal_lm(causal_lm)
+        self.causal_lm = self.convert_to_rbln_causal_lm(causal_lm, max_seq_len)
 
         self.num_hidden_layers = getattr(self.config, "num_hidden_layers", None) or getattr(self.config, "n_layer")
         self._phase = "prefill"
@@ -176,7 +175,7 @@ class DecoderOnlyWrapper(nn.Module):
     def get_rotary_emb(self, max_seq_len):
         return RotaryEmbedding(config=self.config, max_seq_len_cached=max_seq_len)
 
-    def convert_to_rbln_causal_lm(self, causal_lm: PreTrainedModel):
+    def convert_to_rbln_causal_lm(self, causal_lm: PreTrainedModel, max_seq_len: int):
         new_layers = []
         for layer in causal_lm.model.layers:
             if self.attn_impl == "eager":
@@ -192,7 +191,7 @@ class DecoderOnlyWrapper(nn.Module):
 
             new_layer = DecoderOnlyLayer(layer, new_self_attn)
             new_layers.append(new_layer)
-        new_model = DecoderOnlyModel(causal_lm.model, new_layers, partition_len=self.kvcache_partition_len)
+        new_model = DecoderOnlyModel(causal_lm.model, new_layers, partition_len=self.kvcache_partition_len, max_seq_len = max_seq_len)
         new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm
 
@@ -373,12 +372,13 @@ class DecoderOnlyModel(nn.Module):
         _phase: Current processing phase ("prefill" or "decode")
     """
 
-    def __init__(self, model, layers: List["DecoderOnlyLayer"], partition_len=None):
+    def __init__(self, model, layers: List["DecoderOnlyLayer"], partition_len=None, max_seq_len=None):
         super().__init__()
         self._original_mod = model
         self.layers = nn.ModuleList(layers)
         self._phase = "prefill"
         self.partition_len = partition_len
+        self.max_seq_len = max_seq_len
 
     @property
     def phase(self):
@@ -445,7 +445,7 @@ class DecoderOnlyModel(nn.Module):
 
         # get cos,sin vector if needed
         if rotary_emb is not None:
-            cos, sin = rotary_emb(hidden_states, attention_mask.shape[-1])  # dtype carrier, max_seq_len
+            cos, sin = rotary_emb(hidden_states, self.max_seq_len)  # dtype carrier, max_seq_len
             cos, sin = slice_and_unsqueeze_cos_sin(cos, sin, cache_position)
         else:
             batch_size = inputs_embeds.shape[0]
@@ -723,7 +723,8 @@ class AttentionOp(nn.Module):
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
         key_state = key_state.unsqueeze(2)  # 1, 32, 1, 128, 128
         value_state = value_state.unsqueeze(2)
-        attn_mask = attn_mask.unsqueeze(2)
+        if self.use_attention_mask:
+            attn_mask = attn_mask.unsqueeze(2)
 
         if self.phase == "decode":
             batch_size = key_state.shape[0]
