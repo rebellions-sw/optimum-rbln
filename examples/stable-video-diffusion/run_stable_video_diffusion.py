@@ -29,10 +29,10 @@ def main(
             rbln_num_frames=num_frames,
             rbln_decode_chunk_size=decode_chunk_size,
             rbln_config={
-                "unet" : {"device": 0},
-                "image_encoder" : {"device": 0},
+                "unet": {"device": 0},
+                "image_encoder": {"device": 0},
                 "vae": {"device": 1},
-            }
+            },
         )
         pipe.save_pretrained(os.path.basename(model_id))
     else:
@@ -40,10 +40,10 @@ def main(
             model_id=os.path.basename(model_id),
             export=False,
             rbln_config={
-                "unet" : {"device": 0},
-                "image_encoder" : {"device": 0},
+                "unet": {"device": 0},
+                "image_encoder": {"device": 0},
                 "vae": {"device": 1},
-            }
+            },
         )
 
     generator = torch.manual_seed(42)

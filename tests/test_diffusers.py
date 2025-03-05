@@ -226,10 +226,12 @@ class TestKandinskyV22InpaintingModel(BaseTest.TestModel):
         "rbln_img_height": 512,
     }
 
+
 class TestSVDImg2VidModel(BaseTest.TestModel):
     RBLN_CLASS = RBLNStableVideoDiffusionPipeline
     HF_MODEL_ID = "stabilityai/stable-video-diffusion-img2vid"
     from torchvision.transforms.functional import to_pil_image
+
     GENERATION_KWARGS = {
         "num_inference_steps": 1,
         "generator": torch.manual_seed(42),
@@ -254,6 +256,7 @@ class TestSVDXTImg2VidModel(BaseTest.TestModel):
     RBLN_CLASS = RBLNStableVideoDiffusionPipeline
     HF_MODEL_ID = "stabilityai/stable-video-diffusion-img2vid-xt"
     from torchvision.transforms.functional import to_pil_image
+
     GENERATION_KWARGS = {
         "num_inference_steps": 1,
         "generator": torch.manual_seed(42),
@@ -272,6 +275,7 @@ class TestSVDXTImg2VidModel(BaseTest.TestModel):
             "vae": {"rbln_device": -1},
         },
     }
+
 
 if __name__ == "__main__":
     unittest.main()

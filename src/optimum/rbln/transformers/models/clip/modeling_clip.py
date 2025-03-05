@@ -139,10 +139,6 @@ class RBLNCLIPVisionModel(RBLNModel):
         return _VisionEncoder(model).eval()
 
     @classmethod
-    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
-        return rbln_config
-
-    @classmethod
     def _get_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor"],
