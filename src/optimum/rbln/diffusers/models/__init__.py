@@ -1,4 +1,4 @@
-# Copyright 2024 Rebellions Inc.
+# Copyright 2025 Rebellions Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,15 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Portions of this software are licensed under the Apache License,
-# Version 2.0. See the NOTICE file distributed with this work for
-# additional information regarding copyright ownership.
-
-# All other portions of this software, including proprietary code,
-# are the intellectual property of Rebellions Inc. and may not be
-# copied, modified, or distributed without prior written permission
-# from Rebellions Inc.
-
 from typing import TYPE_CHECKING
 
 from transformers.utils import _LazyModule
@@ -29,20 +20,26 @@ from transformers.utils import _LazyModule
 _import_structure = {
     "autoencoders": [
         "RBLNAutoencoderKL",
+        "RBLNVQModel",
     ],
     "unets": [
         "RBLNUNet2DConditionModel",
     ],
     "controlnet": ["RBLNControlNetModel"],
-    "transformers": ["RBLNSD3Transformer2DModel"],
+    "transformers": [
+        "RBLNPriorTransformer",
+        "RBLNSD3Transformer2DModel",
+    ],
 }
 
 if TYPE_CHECKING:
     from .autoencoders import (
         RBLNAutoencoderKL,
+        RBLNVQModel,
     )
     from .controlnet import RBLNControlNetModel
     from .transformers import (
+        RBLNPriorTransformer,
         RBLNSD3Transformer2DModel,
     )
     from .unets import (

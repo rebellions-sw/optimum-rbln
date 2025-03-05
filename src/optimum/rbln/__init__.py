@@ -1,4 +1,4 @@
-# Copyright 2024 Rebellions Inc.
+# Copyright 2025 Rebellions Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,15 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-# Portions of this software are licensed under the Apache License,
-# Version 2.0. See the NOTICE file distributed with this work for
-# additional information regarding copyright ownership.
-
-# All other portions of this software, including proprietary code,
-# are the intellectual property of Rebellions Inc. and may not be
-# copied, modified, or distributed without prior written permission
-# from Rebellions Inc.
 
 from typing import TYPE_CHECKING
 
@@ -57,6 +48,7 @@ _import_structure = {
         "RBLNCLIPTextModel",
         "RBLNCLIPTextModelWithProjection",
         "RBLNCLIPVisionModel",
+        "RBLNCLIPVisionModelWithProjection",
         "RBLNDPTForDepthEstimation",
         "RBLNExaoneForCausalLM",
         "RBLNGemmaForCausalLM",
@@ -80,13 +72,18 @@ _import_structure = {
         "RBLNRobertaForSequenceClassification",
         "RBLNRobertaForMaskedLM",
         "RBLNViTForImageClassification",
+        "RBLNBertForMaskedLM",
     ],
     "diffusers": [
+        "RBLNAutoencoderKL",
+        "RBLNControlNetModel",
+        "RBLNPriorTransformer",
+        "RBLNKandinskyV22InpaintCombinedPipeline",
+        "RBLNKandinskyV22InpaintPipeline",
+        "RBLNKandinskyV22PriorPipeline",
         "RBLNStableDiffusionPipeline",
         "RBLNStableDiffusionXLPipeline",
-        "RBLNAutoencoderKL",
         "RBLNUNet2DConditionModel",
-        "RBLNControlNetModel",
         "RBLNStableDiffusionImg2ImgPipeline",
         "RBLNStableDiffusionInpaintPipeline",
         "RBLNStableDiffusionControlNetImg2ImgPipeline",
@@ -96,6 +93,7 @@ _import_structure = {
         "RBLNStableDiffusionControlNetPipeline",
         "RBLNStableDiffusionXLControlNetPipeline",
         "RBLNStableDiffusionXLControlNetImg2ImgPipeline",
+        "RBLNVQModel",
         "RBLNSD3Transformer2DModel",
         "RBLNStableDiffusion3Img2ImgPipeline",
         "RBLNStableDiffusion3InpaintPipeline",
@@ -109,7 +107,11 @@ if TYPE_CHECKING:
         RBLNAutoencoderKL,
         RBLNControlNetModel,
         RBLNDiffusionMixin,
+        RBLNKandinskyV22InpaintCombinedPipeline,
+        RBLNKandinskyV22InpaintPipeline,
+        RBLNKandinskyV22PriorPipeline,
         RBLNMultiControlNetModel,
+        RBLNPriorTransformer,
         RBLNSD3Transformer2DModel,
         RBLNStableDiffusion3Img2ImgPipeline,
         RBLNStableDiffusion3InpaintPipeline,
@@ -125,6 +127,7 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLInpaintPipeline,
         RBLNStableDiffusionXLPipeline,
         RBLNUNet2DConditionModel,
+        RBLNVQModel,
     )
     from .modeling import (
         RBLNBaseModel,
@@ -150,11 +153,13 @@ if TYPE_CHECKING:
         RBLNAutoModelForVision2Seq,
         RBLNBartForConditionalGeneration,
         RBLNBartModel,
+        RBLNBertForMaskedLM,
         RBLNBertForQuestionAnswering,
         RBLNBertModel,
         RBLNCLIPTextModel,
         RBLNCLIPTextModelWithProjection,
         RBLNCLIPVisionModel,
+        RBLNCLIPVisionModelWithProjection,
         RBLNDistilBertForQuestionAnswering,
         RBLNDPTForDepthEstimation,
         RBLNExaoneForCausalLM,

@@ -1,4 +1,4 @@
-# Copyright 2024 Rebellions Inc.
+# Copyright 2025 Rebellions Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,16 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Portions of this software are licensed under the Apache License,
-# Version 2.0. See the NOTICE file distributed with this work for
-# additional information regarding copyright ownership.
-
-# All other portions of this software, including proprietary code,
-# are the intellectual property of Rebellions Inc. and may not be
-# copied, modified, or distributed without prior written permission
-# from Rebellions Inc.
-
-import logging
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
 
 import torch
@@ -32,14 +22,15 @@ from transformers import (
     CLIPVisionModel,
 )
 from transformers.modeling_outputs import BaseModelOutputWithPooling
-from transformers.models.clip.modeling_clip import CLIPTextModelOutput
+from transformers.models.clip.modeling_clip import CLIPTextModelOutput, CLIPVisionModelOutput
 
 from ....diffusers.modeling_diffusers import RBLNDiffusionMixin
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
+from ....utils.logging import get_logger
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, CLIPTextModel
@@ -126,6 +117,10 @@ class RBLNCLIPVisionModel(RBLNModel):
         return _VisionEncoder(model).eval()
 
     @classmethod
+    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
+        return rbln_config
+
+    @classmethod
     def _get_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
@@ -187,4 +182,25 @@ class RBLNCLIPVisionModel(RBLNModel):
             last_hidden_state=output[0],
             pooler_output=output[1],
             hidden_states=output[2:],
+        )
+
+
+class RBLNCLIPVisionModelWithProjection(RBLNCLIPVisionModel):
+    def forward(
+        self,
+        pixel_values: Optional[torch.FloatTensor] = None,
+        **kwargs,
+    ) -> Union[Tuple, CLIPVisionModelOutput]:
+        if len(kwargs) > 0 and any(kwargs.values()):
+            logger.warning(f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__}.")
+
+        output = super().forward(pixel_values)
+        image_embeds = output[0]
+        last_hidden_state = output[1]
+        hidden_states = output[2:]
+
+        return CLIPVisionModelOutput(
+            image_embeds=image_embeds,
+            last_hidden_state=last_hidden_state,
+            hidden_states=hidden_states,
         )

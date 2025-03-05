@@ -1,4 +1,4 @@
-# Copyright 2024 Rebellions Inc.
+# Copyright 2025 Rebellions Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,15 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-# Portions of this software are licensed under the Apache License,
-# Version 2.0. See the NOTICE file distributed with this work for
-# additional information regarding copyright ownership.
-
-# All other portions of this software, including proprietary code,
-# are the intellectual property of Rebellions Inc. and may not be
-# copied, modified, or distributed without prior written permission
-# from Rebellions Inc.
 
 from functools import lru_cache
 
@@ -44,16 +35,16 @@ def register_rbln_custom_flash_attention():
     def flash_attn_decode_cpu(q, k, v, mask, kcache, vcache, seq, scale, partition):
         return (
             q,
-            torch.empty(1, *kcache.shape[1:], device=kcache.device, dtype=kcache.dtype),
-            torch.empty(1, *vcache.shape[1:], device=vcache.device, dtype=vcache.dtype),
+            torch.empty(*kcache.shape, device=kcache.device, dtype=kcache.dtype),
+            torch.empty(*vcache.shape, device=vcache.device, dtype=vcache.dtype),
         )
 
     @register_fake("rbln_custom_ops::flash_attn_decode")
     def flash_attn_decode_abstract(q, k, v, m, kcache, vcache, seq, scale, partition):
         return (
             q,
-            torch.empty(1, *kcache.shape[1:], device=kcache.device, dtype=kcache.dtype),
-            torch.empty(1, *vcache.shape[1:], device=vcache.device, dtype=vcache.dtype),
+            torch.empty(*kcache.shape, device=kcache.device, dtype=kcache.dtype),
+            torch.empty(*vcache.shape, device=vcache.device, dtype=vcache.dtype),
         )
 
     torch.library.define(

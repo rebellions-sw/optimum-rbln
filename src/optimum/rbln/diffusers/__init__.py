@@ -1,4 +1,4 @@
-# Copyright 2024 Rebellions Inc.
+# Copyright 2025 Rebellions Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,15 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Portions of this software are licensed under the Apache License,
-# Version 2.0. See the NOTICE file distributed with this work for
-# additional information regarding copyright ownership.
-
-# All other portions of this software, including proprietary code,
-# are the intellectual property of Rebellions Inc. and may not be
-# copied, modified, or distributed without prior written permission
-# from Rebellions Inc.
-
 from typing import TYPE_CHECKING
 
 from diffusers.pipelines.pipeline_utils import ALL_IMPORTABLE_CLASSES, LOADABLE_CLASSES
@@ -33,6 +24,9 @@ ALL_IMPORTABLE_CLASSES.update(LOADABLE_CLASSES["optimum.rbln"])
 
 _import_structure = {
     "pipelines": [
+        "RBLNKandinskyV22InpaintCombinedPipeline",
+        "RBLNKandinskyV22InpaintPipeline",
+        "RBLNKandinskyV22PriorPipeline",
         "RBLNStableDiffusionPipeline",
         "RBLNStableDiffusionXLPipeline",
         "RBLNStableDiffusionImg2ImgPipeline",
@@ -53,6 +47,8 @@ _import_structure = {
         "RBLNUNet2DConditionModel",
         "RBLNControlNetModel",
         "RBLNSD3Transformer2DModel",
+        "RBLNPriorTransformer",
+        "RBLNVQModel",
     ],
     "modeling_diffusers": [
         "RBLNDiffusionMixin",
@@ -64,10 +60,15 @@ if TYPE_CHECKING:
     from .models import (
         RBLNAutoencoderKL,
         RBLNControlNetModel,
+        RBLNPriorTransformer,
         RBLNSD3Transformer2DModel,
         RBLNUNet2DConditionModel,
+        RBLNVQModel,
     )
     from .pipelines import (
+        RBLNKandinskyV22InpaintCombinedPipeline,
+        RBLNKandinskyV22InpaintPipeline,
+        RBLNKandinskyV22PriorPipeline,
         RBLNMultiControlNetModel,
         RBLNStableDiffusion3Img2ImgPipeline,
         RBLNStableDiffusion3InpaintPipeline,

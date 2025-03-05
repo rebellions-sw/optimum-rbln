@@ -1,4 +1,4 @@
-# Copyright 2024 Rebellions Inc.
+# Copyright 2025 Rebellions Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,15 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Portions of this software are licensed under the Apache License,
-# Version 2.0. See the NOTICE file distributed with this work for
-# additional information regarding copyright ownership.
-
-# All other portions of this software, including proprietary code,
-# are the intellectual property of Rebellions Inc. and may not be
-# copied, modified, or distributed without prior written permission
-# from Rebellions Inc.
-
 from typing import TYPE_CHECKING
 
 from transformers.utils import _LazyModule
@@ -33,6 +24,11 @@ _import_structure = {
         "RBLNStableDiffusionControlNetPipeline",
         "RBLNStableDiffusionXLControlNetImg2ImgPipeline",
         "RBLNStableDiffusionXLControlNetPipeline",
+    ],
+    "kandinsky2_2": [
+        "RBLNKandinskyV22InpaintCombinedPipeline",
+        "RBLNKandinskyV22InpaintPipeline",
+        "RBLNKandinskyV22PriorPipeline",
     ],
     "stable_diffusion": [
         "RBLNStableDiffusionImg2ImgPipeline",
@@ -57,6 +53,11 @@ if TYPE_CHECKING:
         RBLNStableDiffusionControlNetPipeline,
         RBLNStableDiffusionXLControlNetImg2ImgPipeline,
         RBLNStableDiffusionXLControlNetPipeline,
+    )
+    from .kandinsky2_2 import (
+        RBLNKandinskyV22InpaintCombinedPipeline,
+        RBLNKandinskyV22InpaintPipeline,
+        RBLNKandinskyV22PriorPipeline,
     )
     from .stable_diffusion import (
         RBLNStableDiffusionImg2ImgPipeline,
