@@ -243,7 +243,9 @@ class RBLNDiffusionMixin:
                     submodule_config["guidance_scale"] = guidance_scale
                 if submodule_name not in connected_pipe_config:
                     connected_pipe_config[submodule_name] = {}
-                connected_pipe_config[submodule_name].update({k: v for k, v in submodule_config.items() if k not in connected_pipe_config[submodule_name]})
+                connected_pipe_config[submodule_name].update(
+                    {k: v for k, v in submodule_config.items() if k not in connected_pipe_config[submodule_name]}
+                )
             prepared_config[connected_pipe_name] = connected_pipe_config
         prepared_config.update(rbln_config)
         return prepared_config
@@ -285,7 +287,9 @@ class RBLNDiffusionMixin:
             connected_pipe_config = {}
             connected_pipe_config.update(pipe_global_config)
             connected_pipe_config.update(rbln_config[connected_pipe_name])
-            connected_pipe_compiled_submodules = connected_pipe_cls._compile_submodules(connected_pipe, connected_pipe_submodules, model_save_dir, connected_pipe_config, prefix)
+            connected_pipe_compiled_submodules = connected_pipe_cls._compile_submodules(
+                connected_pipe, connected_pipe_submodules, model_save_dir, connected_pipe_config, prefix
+            )
             for submodule_name, compiled_submodule in connected_pipe_compiled_submodules.items():
                 compiled_submodules[prefix + submodule_name] = compiled_submodule
         return compiled_submodules
