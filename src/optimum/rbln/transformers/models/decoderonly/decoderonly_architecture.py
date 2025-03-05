@@ -148,7 +148,7 @@ class DecoderOnlyWrapper(nn.Module):
         elif self.attn_impl == "eager":
             self.kvcache_partition_len = None
             if self.use_attention_mask:
-                register_rbln_custom_causal_masked_attention()
+                register_rbln_custom_masked_attention()
             else:
                 register_rbln_custom_causal_masked_attention()
         else:
