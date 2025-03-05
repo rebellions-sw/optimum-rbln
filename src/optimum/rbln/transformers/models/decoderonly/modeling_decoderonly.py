@@ -50,6 +50,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         phase: str,
         batch_size: int,
         dec_attn_mask: torch.Tensor,
+        use_attention_mask: bool,
         **kwargs: Any,
     ) -> None:
         super().__init__(runtime, **kwargs)
@@ -58,6 +59,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
         # shared tensor between prefill and decode phase
         self.dec_attn_mask = dec_attn_mask
+        self.use_attention_mask = use_attention_mask
 
         if self.phase == "prefill":
             vocab_size = kwargs.pop("vocab_size")
@@ -110,6 +112,12 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         if batch_size != cache_position.shape[0]:
             raise RuntimeError(f"Cache position size mismatch: got {cache_position.shape[0]}, expected {batch_size}.")
 
+        if not self.use_attention_mask:
+            logits = super().forward(
+                inputs,
+                cache_position,
+            )
+
         if attention_mask is None:
             for b_idx in range(batch_size):
                 decoding_step = cache_position[b_idx].item()
@@ -156,7 +164,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             )
 
         # Initialize attention mask for chunked processing
-        chunked_attention_mask = torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
+        if self.use_attention_mask:
+            chunked_attention_mask = torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
 
         # Buffer for storing output logits
         out_buffers = [
@@ -195,22 +204,35 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             input_chunk = inputs[:, step : step + self.prefill_chunk_size]
             cache_pos_chunk = cache_position[:, step : step + self.prefill_chunk_size]
 
-            # Update attention mask to ensure proper causal behavior
-            if step >= self.prefill_chunk_size:
-                chunked_attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
-            chunked_attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
+            if self.use_attention_mask:
+                # Update attention mask to ensure proper causal behavior
+                if step >= self.prefill_chunk_size:
+                    chunked_attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
+                chunked_attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
 
             # Define batch position and query position
             batch_position = torch.tensor(batch_idx, dtype=torch.int16)
             query_position = torch.tensor((query_length - 1) % self.prefill_chunk_size, dtype=torch.int16)
 
+            if self.use_attention_mask:
+                args = (
+                    input_chunk,
+                    chunked_attention_mask,
+                    cache_pos_chunk,
+                    batch_position,
+                    query_position,
+                )
+            else:
+                args = (
+                    input_chunk,
+                    cache_pos_chunk,
+                    batch_position,
+                    query_position,
+                )
+
             # Forward pass for the current chunk
             logits = super().forward(
-                input_chunk,
-                chunked_attention_mask,
-                cache_pos_chunk,
-                batch_position,
-                query_position,
+                *args,
                 out=out_buffers,
             )
 
@@ -256,6 +278,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         self.batch_size = self.rbln_config.model_cfg["batch_size"]
         self.max_seq_len = self.rbln_config.model_cfg["max_seq_len"]
         self.prefill_chunk_size = self.rbln_config.model_cfg["prefill_chunk_size"]
+        self.use_attention_mask = self.rbln_config.model_cfg["use_attention_mask"]
 
         main_input_name = self.main_input_name
         if self.rbln_config.model_cfg["use_inputs_embeds"]:
@@ -282,6 +305,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             vocab_size=self.config.vocab_size,
             max_seq_len=self.max_seq_len,
             prefill_chunk_size=self.prefill_chunk_size,
+            use_attention_mask=self.use_attention_mask,
         )
         self.decoder = RBLNRuntimeModel(
             runtime=self.model[1],
@@ -290,6 +314,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             phase="decode",
             batch_size=self.batch_size,
             dec_attn_mask=dec_attn_mask,
+            use_attention_mask=self.use_attention_mask,
         )
 
     @classmethod
