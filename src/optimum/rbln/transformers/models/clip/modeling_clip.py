@@ -190,8 +190,7 @@ class RBLNCLIPVisionModel(RBLNModel):
         return BaseModelOutputWithPooling(
             last_hidden_state=output[0],
             pooler_output=output[1],
-            hidden_states=output[2] if len(output) > 2 else None,
-            attentions=output[3] if len(output) > 3 else None,
+            hidden_states=output[2:],
         )
 
 
@@ -212,6 +211,5 @@ class RBLNCLIPVisionModelWithProjection(RBLNCLIPVisionModel):
         return CLIPVisionModelOutput(
             image_embeds=output[0],
             last_hidden_state=output[1],
-            hidden_states=output[2] if len(output) > 2 else None,
-            attentions=output[3] if len(output) > 3 else None,
+            hidden_states=output[2:],
         )
