@@ -34,6 +34,7 @@ _import_structure = {
         "RBLNStableDiffusionImg2ImgPipeline",
         "RBLNStableDiffusionPipeline",
         "RBLNStableDiffusionInpaintPipeline",
+        "RBLNStableVideoDiffusionPipeline",
     ],
     "stable_diffusion_xl": [
         "RBLNStableDiffusionXLImg2ImgPipeline",
@@ -44,6 +45,9 @@ _import_structure = {
         "RBLNStableDiffusion3Pipeline",
         "RBLNStableDiffusion3Img2ImgPipeline",
         "RBLNStableDiffusion3InpaintPipeline",
+    ],
+    "stable_video_diffusion": [
+        "RBLNStableVideoDiffusionPipeline",
     ],
 }
 if TYPE_CHECKING:
@@ -63,6 +67,7 @@ if TYPE_CHECKING:
         RBLNStableDiffusionImg2ImgPipeline,
         RBLNStableDiffusionInpaintPipeline,
         RBLNStableDiffusionPipeline,
+        RBLNStableVideoDiffusionPipeline,
     )
     from .stable_diffusion_3 import (
         RBLNStableDiffusion3Img2ImgPipeline,
@@ -74,6 +79,7 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLInpaintPipeline,
         RBLNStableDiffusionXLPipeline,
     )
+    from .stable_video_diffusion import RBLNStableVideoDiffusionPipeline
 else:
     import sys
 
