@@ -19,7 +19,7 @@ import torch
 from torch import nn
 from transformers import PretrainedConfig, PreTrainedModel
 
-from ....ops import register_rbln_custom_masked_attention,register_rbln_custom_causal_masked_attention, register_rbln_custom_flash_attention
+from ....ops import register_rbln_custom_masked_attention,register_rbln_custom_causal_masked_attention, register_rbln_custom_flash_causal_masked_attention,register_rbln_custom_flash_masked_attention
 from ....utils import logging
 from ...modeling_rope_utils import ROPE_INIT_FUNCTIONS
 
@@ -144,7 +144,10 @@ class DecoderOnlyWrapper(nn.Module):
         
         if self.attn_impl == "flash_attn":
             self.kvcache_partition_len = kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
-            register_rbln_custom_flash_attention()
+            if self.use_attention_mask:
+                register_rbln_custom_flash_masked_attention()
+            else:
+                register_rbln_custom_flash_causal_masked_attention()
         elif self.attn_impl == "eager":
             self.kvcache_partition_len = None
             if self.use_attention_mask:
@@ -175,7 +178,7 @@ class DecoderOnlyWrapper(nn.Module):
                 new_self_attn = DecoderOnlyAttention(layer.self_attn, self.use_attention_mask)
             elif self.attn_impl == "flash_attn":
                 new_self_attn = DecoderOnlyFlashAttention(
-                    layer.self_attn, kvcache_partition_len=self.kvcache_partition_len
+                    layer.self_attn, kvcache_partition_len=self.kvcache_partition_len, use_attention_mask=self.use_attention_mask
                 )
             else:
                 raise NotImplementedError(f"Unknwon attn : {self.attn_impl}")
@@ -876,12 +879,13 @@ class RotaryEmbedding(nn.Module):
 
 
 class DecoderOnlyFlashAttention(DecoderOnlyAttention):
-    def __init__(self, self_attn, kvcache_partition_len):
+    def __init__(self, self_attn, kvcache_partition_len, use_attention_mask):
         self.kvcache_partition_size = kvcache_partition_len
+        self.use_attention_mask = use_attention_mask
         super().__init__(self_attn=self_attn)
 
     def get_attention(self):
-        return FlashAttentionOp(self.num_heads, self.head_dim, self.num_key_value_heads, self.kvcache_partition_size)
+        return FlashAttentionOp(self.num_heads, self.head_dim, self.num_key_value_heads, self.kvcache_partition_size, self.use_attention_mask)
 
     def forward(
         self,
@@ -928,8 +932,8 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
 
 
 class FlashAttentionOp(AttentionOp):
-    def __init__(self, num_heads: int, head_dim: int, num_key_value_heads: int, kvcache_partition_len: int):
-        super().__init__(num_heads=num_heads, head_dim=head_dim, num_key_value_heads=num_key_value_heads)
+    def __init__(self, num_heads: int, head_dim: int, num_key_value_heads: int, kvcache_partition_len: int, use_attention_mask: bool):
+        super().__init__(num_heads=num_heads, head_dim=head_dim, num_key_value_heads=num_key_value_heads,use_attention_mask=use_attention_mask)
         self.kvcache_partition_size = kvcache_partition_len
 
     def forward(
@@ -963,30 +967,55 @@ class FlashAttentionOp(AttentionOp):
         )
 
         if self.phase == "decode":
-            attn_output, key_state, value_state = torch.ops.rbln_custom_ops.flash_attn_decode(
-                query_state,
-                key_state,
-                value_state,
-                attn_mask,
-                past_key_state.unsqueeze(2),
-                past_value_state.unsqueeze(2),
-                seq_position,
-                scale,
-                self.kvcache_partition_size,
-            )
+            if self.use_attention_mask:
+                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.flash_masked_attn_decode(
+                    query_state,
+                    key_state,
+                    value_state,
+                    attn_mask,
+                    past_key_state.unsqueeze(2),
+                    past_value_state.unsqueeze(2),
+                    seq_position,
+                    scale,
+                    self.kvcache_partition_size,
+                )
+            else:
+                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.flash_causal_masked_attn_decode(
+                    query_state,
+                    key_state,
+                    value_state,
+                    past_key_state.unsqueeze(2),
+                    past_value_state.unsqueeze(2),
+                    seq_position,
+                    scale,
+                    self.kvcache_partition_size,
+                )
         else:
-            attn_output, key_state, value_state = torch.ops.rbln_custom_ops.flash_attn_prefill(
-                query_state,
-                key_state,
-                value_state,
-                attn_mask,
-                past_key_state.unsqueeze(2),
-                past_value_state.unsqueeze(2),
-                batch_position,
-                seq_position,
-                scale,
-                self.kvcache_partition_size,
-            )
+            if self.use_attention_mask:
+                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.flash_masked_attn_prefill(
+                    query_state,
+                    key_state,
+                    value_state,
+                    attn_mask,
+                    past_key_state.unsqueeze(2),
+                    past_value_state.unsqueeze(2),
+                    batch_position,
+                    seq_position,
+                    scale,
+                    self.kvcache_partition_size,
+                )
+            else:
+                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.flash_causal_masked_attn_prefill(
+                    query_state,
+                    key_state,
+                    value_state,
+                    past_key_state.unsqueeze(2),
+                    past_value_state.unsqueeze(2),
+                    batch_position,
+                    seq_position,
+                    scale,
+                    self.kvcache_partition_size,
+                )
 
         # reshape for removing repeat_kv
         attn_output = attn_output.view(batch_size, self.num_heads, -1, self.head_dim)
