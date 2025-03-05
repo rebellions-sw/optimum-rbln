@@ -76,6 +76,7 @@ _import_structure = {
     ],
     "diffusers": [
         "RBLNAutoencoderKL",
+        "RBLNAutoencoderKLTemporalDecoder",
         "RBLNControlNetModel",
         "RBLNPriorTransformer",
         "RBLNKandinskyV22InpaintCombinedPipeline",
@@ -83,8 +84,6 @@ _import_structure = {
         "RBLNKandinskyV22PriorPipeline",
         "RBLNStableDiffusionPipeline",
         "RBLNStableDiffusionXLPipeline",
-        "RBLNAutoencoderKL",
-        "RBLNAutoencoderKLTemporalDecoder",
         "RBLNUNet2DConditionModel",
         "RBLNUNetSpatioTemporalConditionModel",
         "RBLNStableDiffusionImg2ImgPipeline",
