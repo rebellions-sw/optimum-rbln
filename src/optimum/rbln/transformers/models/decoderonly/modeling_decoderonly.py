@@ -28,7 +28,7 @@ from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
-from ...utils.rbln_quantization import QuantizationManager
+from ...utils.rbln_quantization import QuantizationManager, prepare_model_for_quantization
 from .decoderonly_architecture import (
     DecoderOnlyWrapper,
     validate_attention_method,
@@ -326,8 +326,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         trust_remote_code: bool = False,
         **kwargs,
     ):
-        from ...utils.rbln_quantization import prepare_model_for_quantization
-
         kwargs = cls.update_kwargs(kwargs)
 
         if config is None:
@@ -344,7 +342,17 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         with no_init_weights():
             model = AutoModelForCausalLM.from_config(config)
 
-        prepare_model_for_quantization(model, model_id, kwargs.get("num_hidden_layers"))
+        # Pass additional parameters for Hugging Face Hub access
+        model = prepare_model_for_quantization(
+            model,
+            model_id,
+            kwargs.get("num_hidden_layers"),
+            use_auth_token=use_auth_token,
+            revision=revision,
+            cache_dir=cache_dir,
+            force_download=force_download,
+            local_files_only=local_files_only,
+        )
 
         return model
 
