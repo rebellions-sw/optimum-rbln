@@ -32,7 +32,6 @@ from .vae import (
 
 
 if TYPE_CHECKING:
-    import torch
     from transformers import AutoFeatureExtractor, AutoProcessor, PretrainedConfig
 
 logger = get_logger(__name__)
