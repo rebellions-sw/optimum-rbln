@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     import torch
     from transformers import AutoFeatureExtractor, AutoProcessor, PretrainedConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
