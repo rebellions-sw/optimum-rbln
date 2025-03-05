@@ -117,7 +117,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 inputs,
                 cache_position,
             )
-
+            return logits
+    
         if attention_mask is None:
             for b_idx in range(batch_size):
                 decoding_step = cache_position[b_idx].item()
