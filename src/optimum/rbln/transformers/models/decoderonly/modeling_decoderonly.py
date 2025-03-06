@@ -239,9 +239,10 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 out=out_buffers,
             )
 
-        # Update decoder attention mask with processed KV-cache length from prefill phase
-        self.dec_attn_mask[batch_idx].fill_(0)
-        self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
+        if self.use_attention_mask:
+            # Update decoder attention mask with processed KV-cache length from prefill phase
+            self.dec_attn_mask[batch_idx].fill_(0)
+            self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
 
         return logits
 
