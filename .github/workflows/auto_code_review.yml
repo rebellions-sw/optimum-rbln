@@ -1,6 +1,10 @@
 name: Auto Code Review
 
 on:
+  pull_request_review:
+    types: [created, edited]
+  pull_request_review_comment:
+    types: [created]
   issue_comment:
     types: [created]
 
