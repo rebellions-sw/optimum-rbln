@@ -12,7 +12,22 @@ env:
   REBEL_COMPILER_VERSION: 0.7.2
 
 jobs:
+  check-skip-ci:
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ contains(github.event.pull_request.head.commit.message, '[skip ci]') }}
+    steps:
+      - name: Check if [skip ci] is in commit message
+        run: |
+          if ${{ contains(github.event.pull_request.head.commit.message, '[skip ci]') }}; then
+            echo "Found [skip ci] in commit message, skipping CI"
+          else
+            echo "No [skip ci] found, continuing with CI"
+          fi
+
   check-rebel-compiler-version:
+    needs: check-skip-ci
+    if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' }}
     runs-on: rebel-k8s-runner
     outputs:
       is_deploy_version: ${{ steps.check_prod.outputs.IS_PROD }}
@@ -53,8 +68,8 @@ jobs:
 
   check-team-member:
     runs-on: rebel-k8s-runner
-    needs: check-rebel-compiler-version
-    if: ${{ needs.check-rebel-compiler-version.outputs.is_deploy_version == 'true' }}
+    needs: [check-skip-ci, check-rebel-compiler-version]
+    if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' && needs.check-rebel-compiler-version.outputs.is_deploy_version == 'true' }}
     outputs:
       is_team_member: ${{ steps.check_member.outputs.IS_TEAM_MEMBER }}
     steps:
@@ -78,8 +93,8 @@ jobs:
           fi
 
   optimum-rbln-pytest:
-    needs: [check-rebel-compiler-version, check-team-member]
-    if: ${{ needs.check-team-member.outputs.is_team_member == 'true' }}
+    needs: [check-skip-ci, check-rebel-compiler-version, check-team-member]
+    if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' && needs.check-team-member.outputs.is_team_member == 'true' }}
     uses: ./.github/workflows/rbln_optimum_pytest.yaml
     with:
       ref: ${{ github.event.pull_request.head.sha }}
@@ -87,8 +102,8 @@ jobs:
     secrets: inherit
 
   optimum-rbln-inference-test:
-    needs: [check-rebel-compiler-version, check-team-member]
-    if: ${{ needs.check-team-member.outputs.is_team_member == 'true' }}
+    needs: [check-skip-ci, check-rebel-compiler-version, check-team-member]
+    if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' && needs.check-team-member.outputs.is_team_member == 'true' }}
     uses: ./.github/workflows/rbln_optimum_inference_test.yaml
     with:
       ref: ${{ github.event.pull_request.head.sha }}
