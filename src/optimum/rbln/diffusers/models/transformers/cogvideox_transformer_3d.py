@@ -115,7 +115,7 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
         # torch.Size([2, 226, 4096])
         # timestep.shape
         # torch.Size([2]), tensor([999, 999])
-        
+
         input_info = [
             (
                 "hidden_states",

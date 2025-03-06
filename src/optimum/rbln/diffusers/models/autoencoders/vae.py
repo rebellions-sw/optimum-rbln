@@ -186,7 +186,7 @@ class _VAECogVideoXDecoder(torch.nn.Module):
     def __init__(self, cog_video_x: AutoencoderKLCogVideoX):
         super().__init__()
         self.cog_video_x = cog_video_x
-        
+
     def _decode(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
         batch_size, num_channels, num_frames, height, width = z.shape
 

@@ -71,10 +71,10 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
 
             return dec_compiled_model
 
-        if rbln_config.model_cfg.get("img2img_pipeline") or rbln_config.model_cfg.get("inpaint_pipeline"):
-            return compile_img2video()
-        else:
-            return compile_text2video()
+        # if rbln_config.model_cfg.get("img2img_pipeline") or rbln_config.model_cfg.get("inpaint_pipeline"):
+        #     return compile_img2video()
+        # else:
+        return compile_text2video()
 
     @classmethod
     def get_vae_sample_size(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Union[int, Tuple[int, int]]:
@@ -134,7 +134,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
 
         if rbln_batch_size is None:
             rbln_batch_size = 1
-            
+
         # if sample_size is None:
         #     sample_size = model_config.sample_size
 
@@ -187,6 +187,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
             input_info=[
                 (
                     "z",
+                    #FIXME: for temporal, need generalize
                     [rbln_batch_size, model_config.latent_channels, 49, model_config.sample_height // 8, model_config.sample_width // 8],
                     "float32",
                 )
