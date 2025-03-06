@@ -43,10 +43,10 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
         super().__post_init__(**kwargs)
 
         # if self.rbln_config.model_cfg.get("img2img_pipeline") or self.rbln_config.model_cfg.get("inpaint_pipeline"):
-        self.encoder = RBLNRuntimeVAECogVideoXEncoder(runtime=self.model[0], main_input_name="x")
-        self.decoder = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model[1], main_input_name="z")
+        # self.encoder = RBLNRuntimeVAECogVideoXEncoder(runtime=self.model[0], main_input_name="x")
+        # self.decoder = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model[1], main_input_name="z")
         # else:
-        #     self.decoder = RBLNRuntimeVAEDecoder(runtime=self.model[0], main_input_name="z")
+        self.decoder = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model[0], main_input_name="z")
 
         self.image_size = self.rbln_config.model_cfg["sample_size"]
 
