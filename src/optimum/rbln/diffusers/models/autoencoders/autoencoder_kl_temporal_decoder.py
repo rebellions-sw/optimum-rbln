@@ -113,10 +113,12 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
             if decode_chunk_size is None:
                 decode_chunk_size = num_frames
 
-            def chunk_frame(a, b):
+            def chunk_frame(num_frames, decode_chunk_size):
                 # get closest divisor to num_frames
-                divisors = [i for i in range(1, a) if a % i == 0]
-                closest = min(divisors, key=lambda x: abs(x - b))
+                divisors = [i for i in range(1, num_frames) if num_frames % i == 0]
+                closest = min(divisors, key=lambda x: abs(x - decode_chunk_size))
+                if decode_chunk_size != closest:
+                    logger.warning(f"To ensure successful model compilation and prevent device OOM, {decode_chunk_size} is set to {closest}.")
                 return closest
 
             decode_chunk_size = chunk_frame(num_frames, decode_chunk_size)
