@@ -15,7 +15,7 @@
 import functools
 import glob
 import os
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Union
 
 import torch
 from safetensors.torch import load_file
@@ -119,10 +119,16 @@ def prepare_model_for_quantization(
     model: torch.nn.Module,
     model_id: str,
     n_layer: Optional[int] = None,
+    use_auth_token: Optional[Union[bool, str]] = None,
+    revision: Optional[str] = None,
+    cache_dir: Optional[str] = None,
+    force_download: bool = False,
+    local_files_only: bool = False,
     rbln_quantization: Optional[Dict[str, str]] = {},
-) -> None:
+) -> torch.nn.Module:
     """
     Prepare the model for quantization by updating specified linear layers to quantized (qlinear) layers.
+    Supports both local directories and Hugging Face Hub model IDs.
     """
     if rbln_quantization["precision"] == "w4a16":
         replace_method = create_qlinear
@@ -137,20 +143,27 @@ def prepare_model_for_quantization(
         kvcache_scale = True
 
     update_layers_to_quantize(model, replace_method=replace_method, kvcache_scale=kvcache_scale)
-    load_weights(model, model_id, n_layer)
+    load_weights(
+        model,
+        model_id,
+        n_layer,
+        use_auth_token=use_auth_token,
+        revision=revision,
+        cache_dir=cache_dir,
+        force_download=force_download,
+        local_files_only=local_files_only,
+    )
+    return model
 
 
 def update_layers_to_quantize(module: torch.nn.Module, replace_method: Callable, kvcache_scale: bool = False) -> None:
     """
     Updates specified linear layers to quantized (qlinear) layers in the given module.
     """
-
-    logger.debug("Updating layers to be quantized")  # TODO(jongho): remove.
     if replace_method not in [create_fp8linear, create_qlinear]:
         raise NotImplementedError
 
     processed_layers = []
-
     for name, layer in module.named_modules():
         if is_target_for_qlinear_replacement(name, layer):
             parent_module, layer_name = get_parent_and_child(module, name)
@@ -164,15 +177,57 @@ def update_layers_to_quantize(module: torch.nn.Module, replace_method: Callable,
         logger.debug(f"Updated the following linear layers to quantized layers:\n {{{', '.join(processed_layers)}}}")
 
 
-def load_weights(model, model_id, n_layer=None):
+def load_weights(
+    model,
+    model_id,
+    n_layer=None,
+    use_auth_token=None,
+    revision=None,
+    cache_dir=None,
+    force_download=False,
+    local_files_only=False,
+):
     """
     Load safetensor file data directly into the model, filtering by layer if n_layer is provided.
+    Supports both local directories and HuggingFace Hub.
     """
-    logger.debug("Loading the quantized weights into the CPU.")  # TODO(jongho): remove.
 
     model_params = dict(model.named_parameters(recurse=True))
     model_buffers = dict(model.named_buffers(recurse=True))
-    safetensor_files = glob.glob(f"{model_id}/*.safetensors")
+
+    # Check if model_id is a local directory or a HuggingFace Hub ID
+    if os.path.isdir(model_id):
+        # Local directory path
+        safetensor_files = glob.glob(f"{model_id}/*.safetensors")
+    else:
+        # Hugging Face Hub ID - download safetensors files
+        from huggingface_hub import hf_hub_download, list_repo_files
+
+        try:
+            # List all files in the repository
+            repo_files = list_repo_files(model_id, revision=revision, token=use_auth_token)
+            # Filter for safetensors files
+            safetensor_files = []
+
+            for file in repo_files:
+                if file.endswith(".safetensors"):
+                    # Download the safetensors file
+                    downloaded_file = hf_hub_download(
+                        repo_id=model_id,
+                        filename=file,
+                        revision=revision,
+                        token=use_auth_token,
+                        cache_dir=cache_dir,
+                        force_download=force_download,
+                        local_files_only=local_files_only,
+                    )
+                    safetensor_files.append(downloaded_file)
+        except Exception as e:
+            logger.error(f"Failed to download safetensors files from Hugging Face Hub: {e}")
+            raise
+
+    if not safetensor_files:
+        raise FileNotFoundError(f"No safetensors files found for model_id: {model_id}")
 
     target_layers = list(range(n_layer)) if n_layer is not None else None
 
@@ -198,8 +253,6 @@ def load_weights(model, model_id, n_layer=None):
 
     if len(unloaded_keys) > 0:
         logger.warning(f"There are unexpected parameters/buffers on the checkpoint: {unloaded_keys}")
-
-    logger.debug("Loaded the quantized weights into the CPU.")
 
 
 def is_target_for_qlinear_replacement(layer_name: str, layer: torch.nn.Module) -> bool:
