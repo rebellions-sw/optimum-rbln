@@ -71,13 +71,11 @@ class RBLNDiffusionMixin:
     _prefix = {}
 
     @classmethod
-    @property
-    def img2img_pipeline(cls):
+    def is_img2img_pipeline(cls):
         return "Img2Img" in cls.__name__
 
     @classmethod
-    @property
-    def inpaint_pipeline(cls):
+    def is_inpaint_pipeline(cls):
         return "Inpaint" in cls.__name__
 
     @classmethod
@@ -100,8 +98,8 @@ class RBLNDiffusionMixin:
             submodule_config.update({k: v for k, v in pipe_global_config.items() if k not in submodule_config})
             submodule_config.update(
                 {
-                    "img2img_pipeline": cls.img2img_pipeline,
-                    "inpaint_pipeline": cls.inpaint_pipeline,
+                    "img2img_pipeline": cls.is_img2img_pipeline(),
+                    "inpaint_pipeline": cls.is_inpaint_pipeline(),
                 }
             )
             submodule_config = submodule_cls.update_rbln_config_using_pipe(model, submodule_config)
