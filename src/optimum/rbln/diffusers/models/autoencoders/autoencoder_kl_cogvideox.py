@@ -79,7 +79,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
     @classmethod
     def get_vae_sample_size(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Union[int, Tuple[int, int]]:
         image_size = (rbln_config.get("img_height"), rbln_config.get("img_width"))
-        breakpoint()
+
         noise_module = getattr(pipe, "unet", None) or getattr(pipe, "transformer", None)
         vae_scale_factor = (
             pipe.vae_scale_factor
