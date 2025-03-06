@@ -12,50 +12,49 @@ from ...modeling_diffusers import RBLNDiffusionMixin
 
 
 class RBLNFluxPipeline(RBLNDiffusionMixin, FluxPipeline):
-    # _submodules = ["transformer", "text_encoder", "text_encoder_2", "vae"]
-    # _submodules = ["text_encoder_2", "vae", "text_encoder"]
     original_class = FluxPipeline
     _submodules = ["transformer"]
-    # _submodules = ["text_encoder"]
+    # _submodules = ["text_encoder", "text_encoder_2"] -> verification done
     # _submodules = ["text_encoder_2"]
-    # _submodules = ["vae"]
+    # _submodules = ["vae"] -> verification done
     
     # text_encoder_2 -> t5 encoder model
     # text_encoder -> clip text model
     
-    def __init__(
-        self,
-        scheduler: FlowMatchEulerDiscreteScheduler,
-        vae: AutoencoderKL,
-        text_encoder: CLIPTextModel,
-        tokenizer: CLIPTokenizer,
-        text_encoder_2: T5EncoderModel,
-        tokenizer_2: T5TokenizerFast,
-        transformer: FluxTransformer2DModel,
-    ):
-        super().__init__(
-            scheduler=scheduler,
-            vae=vae,
-            text_encoder=text_encoder,
-            tokenizer=tokenizer,
-            text_encoder_2=text_encoder_2,
-            tokenizer_2=tokenizer_2,
-            transformer=transformer,
-        )
+    # for sin, cos into relay graph
+    # def __init__(
+    #     self,
+    #     scheduler: FlowMatchEulerDiscreteScheduler,
+    #     vae: AutoencoderKL,
+    #     text_encoder: CLIPTextModel,
+    #     tokenizer: CLIPTokenizer,
+    #     text_encoder_2: T5EncoderModel,
+    #     tokenizer_2: T5TokenizerFast,
+    #     transformer: FluxTransformer2DModel,
+    # ):
+    #     super().__init__(
+    #         scheduler=scheduler,
+    #         vae=vae,
+    #         text_encoder=text_encoder,
+    #         tokenizer=tokenizer,
+    #         text_encoder_2=text_encoder_2,
+    #         tokenizer_2=tokenizer_2,
+    #         transformer=transformer,
+    #     )
         
-        # for sin, cos into relay graph
-        # if transformer is not None:
-        #     axes_dims_rope = transformer.config.axes_dims_rope
-        #     transformer.pos_embed = CustomFluxPosEmbed(theta=10000, axes_dim=axes_dims_rope)
+        
+    #     # if transformer is not None:
+    #     #     axes_dims_rope = transformer.config.axes_dims_rope
+    #     #     transformer.pos_embed = CustomFluxPosEmbed(theta=10000, axes_dim=axes_dims_rope)
 
-        self.vae_scale_factor = (
-            2 ** (len(self.vae.config.block_out_channels)) if hasattr(self, "vae") and self.vae is not None else 16
-        )
-        self.image_processor = VaeImageProcessor(vae_scale_factor=self.vae_scale_factor)
-        self.tokenizer_max_length = (
-            self.tokenizer.model_max_length if hasattr(self, "tokenizer") and self.tokenizer is not None else 77
-        )
-        self.default_sample_size = 64
+    #     self.vae_scale_factor = (
+    #         2 ** (len(self.vae.config.block_out_channels)) if hasattr(self, "vae") and self.vae is not None else 16
+    #     )
+    #     self.image_processor = VaeImageProcessor(vae_scale_factor=self.vae_scale_factor)
+    #     self.tokenizer_max_length = (
+    #         self.tokenizer.model_max_length if hasattr(self, "tokenizer") and self.tokenizer is not None else 77
+    #     )
+    #     self.default_sample_size = 64
 
 
 # for sin, cos into relay graph
