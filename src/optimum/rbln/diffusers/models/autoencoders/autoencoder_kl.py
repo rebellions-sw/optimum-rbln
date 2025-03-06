@@ -101,14 +101,24 @@ class RBLNAutoencoderKL(RBLNModel):
                 sample_size = noise_module.config.sample_size * vae_scale_factor
             else:
                 # In case of text2img, sample size of vae decoder is determined by unet.
-                noise_module_sample_size = noise_module.config.sample_size
-                if isinstance(noise_module_sample_size, int):
-                    sample_size = noise_module_sample_size * vae_scale_factor
-                else:
-                    sample_size = (
-                        noise_module_sample_size[0] * vae_scale_factor,
-                        noise_module_sample_size[1] * vae_scale_factor,
-                    )
+                if hasattr(pipe, "unet"):
+                    noise_module_sample_size = noise_module.config.sample_size
+                    if isinstance(noise_module_sample_size, int):
+                        sample_size = noise_module_sample_size * pipe.vae_scale_factor
+                    else:
+                        sample_size = (
+                            noise_module_sample_size[0] * pipe.vae_scale_factor,
+                            noise_module_sample_size[1] * pipe.vae_scale_factor,
+                        )
+                elif hasattr(pipe, "transformer"):
+                    noise_module_sample_size = pipe.default_sample_size
+                    if isinstance(noise_module_sample_size, int):
+                        sample_size = noise_module_sample_size * pipe.vae_scale_factor
+                    else:
+                        sample_size = (
+                            noise_module_sample_size[0] * pipe.vae_scale_factor,
+                            noise_module_sample_size[1] * pipe.vae_scale_factor,
+                        )
         else:
             sample_size = (image_size[0], image_size[1])
 
