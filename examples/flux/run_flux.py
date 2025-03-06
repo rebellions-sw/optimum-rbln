@@ -11,6 +11,7 @@ def main(
     from_diffusers: bool = False,
     prompt: str = "A cat holding a sign that says hello world",
 ):
+    # golden inference
     # original_model = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-dev", torch_dtype=torch.bfloat16)
     # image = original_model(prompt, num_inference_steps=50, max_sequence_length=512, guidance_scale=3.5, generator=torch.manual_seed(0)).images[0]
     # image.save("original.png")

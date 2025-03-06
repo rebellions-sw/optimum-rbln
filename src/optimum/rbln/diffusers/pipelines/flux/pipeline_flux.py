@@ -16,6 +16,10 @@ class RBLNFluxPipeline(RBLNDiffusionMixin, FluxPipeline):
     # _submodules = ["text_encoder_2", "vae", "text_encoder"]
     original_class = FluxPipeline
     _submodules = ["transformer"]
+    # _submodules = ["text_encoder"]
+    # _submodules = ["text_encoder_2"]
+    # _submodules = ["vae"]
+    
     # text_encoder_2 -> t5 encoder model
     # text_encoder -> clip text model
     
@@ -29,7 +33,6 @@ class RBLNFluxPipeline(RBLNDiffusionMixin, FluxPipeline):
         tokenizer_2: T5TokenizerFast,
         transformer: FluxTransformer2DModel,
     ):
-        # 부모 클래스 초기화
         super().__init__(
             scheduler=scheduler,
             vae=vae,
@@ -39,7 +42,8 @@ class RBLNFluxPipeline(RBLNDiffusionMixin, FluxPipeline):
             tokenizer_2=tokenizer_2,
             transformer=transformer,
         )
-
+        
+        # for sin, cos into relay graph
         # if transformer is not None:
         #     axes_dims_rope = transformer.config.axes_dims_rope
         #     transformer.pos_embed = CustomFluxPosEmbed(theta=10000, axes_dim=axes_dims_rope)
@@ -54,8 +58,7 @@ class RBLNFluxPipeline(RBLNDiffusionMixin, FluxPipeline):
         self.default_sample_size = 64
 
 
-
-
+# for sin, cos into relay graph
 # class CustomFluxPosEmbed(FluxPosEmbed):
 #     def __init__(self, theta: int, axes_dim: Tuple[int, ...]):
 #         super().__init__(theta, axes_dim)
