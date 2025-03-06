@@ -50,11 +50,13 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         phase: str,
         batch_size: int,
         dec_attn_mask: torch.Tensor,
+        attn_impl: str,
         **kwargs: Any,
     ) -> None:
         super().__init__(runtime, **kwargs)
         self.phase = phase
         self.batch_size = batch_size
+        self.attn_impl = attn_impl
 
         # shared tensor between prefill and decode phase
         self.dec_attn_mask = dec_attn_mask
@@ -105,6 +107,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         attention_mask: Optional[torch.Tensor] = None,
         block_tables: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
+
         batch_size = inputs.shape[0]
         if batch_size != self.batch_size:
             raise RuntimeError(
@@ -114,25 +117,23 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         if batch_size != cache_position.shape[0]:
             raise RuntimeError(f"Cache position size mismatch: got {cache_position.shape[0]}, expected {batch_size}.")
 
-        if attention_mask is None:
-            for b_idx in range(batch_size):
-                decoding_step = cache_position[b_idx].item()
-                if not (0 <= decoding_step < self.dec_attn_mask.shape[-1]):
-                    raise ValueError(
-                        f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
-                    )
-                if block_tables is not None:
-                    self.dec_attn_mask[b_idx].fill_(0)
-                    self.dec_attn_mask[b_idx, :, :, :decoding_step + 1] = 1
-                else:
+        if self.attn_impl == "paged_attn":
+            args = (inputs, cache_position, block_tables)
+        else:        
+            if attention_mask:
+                args = (inputs, attention_mask, cache_position, block_tables)
+            else:
+                for b_idx in range(batch_size):
+                    decoding_step = cache_position[b_idx].item()
+                    if not (0 <= decoding_step < self.dec_attn_mask.shape[-1]):
+                        raise ValueError(
+                            f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
+                        )
                     self.dec_attn_mask[b_idx, :, :, decoding_step] = 1
-        
-        logits = super().forward(
-            inputs,
-            self.dec_attn_mask if attention_mask is None else attention_mask,
-            cache_position,
-            block_tables,
-        )
+                
+                args = (inputs, self.dec_attn_mask, cache_position, block_tables)
+            
+        logits = super().forward(*args)
 
         return logits
 
@@ -149,7 +150,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         Instead of processing the entire sequence at once, the input is divided into chunks of size `prefill_chunk_size`,
         and each chunk is processed sequentially. This allows for better memory utilization and compatibility with continuous batching.
         """
-        if block_tables is None and (batch_idx is None or batch_idx >= self.batch_size):
+        if self.attn_impl is not "paged_attn" and (batch_idx is None or batch_idx >= self.batch_size):
             raise RuntimeError(
                 f"Invalid batch_idx ({batch_idx}). It must be a non-null value less than the batch size ({self.batch_size})."
             )
@@ -164,8 +165,9 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 f"Input length ({query_length}) exceeds the maximum allowed sequence length ({self.max_seq_len})."
             )
 
-        # Initialize attention mask for chunked processing
-        chunked_attention_mask = torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
+        if self.attn_impl is not "paged_attn":
+            # Initialize attention mask for chunked processing
+            chunked_attention_mask = torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
 
         # Buffer for storing output logits
         out_buffers = [
@@ -204,13 +206,15 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             input_chunk = inputs[:, step : step + self.prefill_chunk_size]
             cache_pos_chunk = cache_position[:, step : step + self.prefill_chunk_size]
 
+            #FIXME refactor
             # Update attention mask to ensure proper causal behavior
-            if step >= self.prefill_chunk_size:
-                chunked_attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
-            chunked_attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
+            if self.attn_impl is not "paged_attn":
+                if step >= self.prefill_chunk_size:
+                    chunked_attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
+                chunked_attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
+                batch_position = torch.tensor(batch_idx, dtype=torch.int16)
 
             # Define batch position and query position
-            batch_position = torch.tensor(batch_idx, dtype=torch.int16) if block_tables is None else None
             query_position = torch.tensor((query_length - 1) % self.prefill_chunk_size, dtype=torch.int16)
 
             # Forward pass for the current chunk
@@ -218,14 +222,13 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 input_chunk,
                 chunked_attention_mask,
                 cache_pos_chunk,
-                batch_position,
                 query_position,
-                block_tables=block_tables,
+                block_tables if self.attn_impl == "paged_attn" else batch_position,
                 out=out_buffers,
             )
 
         # Update decoder attention mask with processed KV-cache length from prefill phase
-        if block_tables is not None:
+        if self.attn_impl is not "paged_attn":
             self.dec_attn_mask[batch_idx].fill_(0)
             self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
 
@@ -267,6 +270,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         self.batch_size = self.rbln_config.model_cfg["batch_size"]
         self.max_seq_len = self.rbln_config.model_cfg["max_seq_len"]
         self.prefill_chunk_size = self.rbln_config.model_cfg["prefill_chunk_size"]
+        self.attn_impl = self.rbln_config.model_cfg["attn_impl"]
 
         main_input_name = self.main_input_name
         if self.rbln_config.model_cfg["use_inputs_embeds"]:
@@ -282,7 +286,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         else:
             self.embed_tokens = None
 
-        dec_attn_mask = torch.zeros(self.batch_size, 1, 1, self.max_seq_len, dtype=torch.float32)
+        dec_attn_mask = None if self.attn_impl == "paged_attn" else torch.zeros(self.batch_size, 1, 1, self.max_seq_len, dtype=torch.float32)
         self.prefill_decoder = RBLNRuntimeModel(
             runtime=self.model[0],
             main_input_name=main_input_name,
@@ -293,6 +297,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             vocab_size=self.config.vocab_size,
             max_seq_len=self.max_seq_len,
             prefill_chunk_size=self.prefill_chunk_size,
+            attn_impl=self.attn_impl
         )
         self.decoder = RBLNRuntimeModel(
             runtime=self.model[1],
@@ -301,6 +306,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             phase="decode",
             batch_size=self.batch_size,
             dec_attn_mask=dec_attn_mask,
+            attn_impl=self.attn_impl
         )
 
     @classmethod
@@ -527,8 +533,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 else:
                     input_info.extend(
                         [
-                            ("batch_position", [], "int16"),
                             ("query_position", [], "int16"),
+                            ("batch_position", [], "int16"),
                         ]
                     )
             kvcache_batch_size = rbln_batch_size
@@ -708,13 +714,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         The decoder stage operates as usual, processing inputs in batch mode.
         """
         # Prefll
-        # FIXME
-        paged_attn = True
-        block_tables = None
-        if paged_attn:
-            block_tables = torch.tensor([[0,1]], dtype=torch.int16)
-            # block_tables = torch.tensor([[0,1], [2,3]], dtype=torch.int16)
-
         if cache_position is None:
             logits = []
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
@@ -728,7 +727,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                     cache_position=cache_position,
                     batch_idx=b_idx,
-                    block_tables= block_tables[b_idx].unsqueeze(0) if block_tables is not None else block_tables
                 )
                 logits.append(logit)
 
@@ -739,7 +737,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
-                block_tables=block_tables,
             )
 
         return RBLNDecoderOnlyOutput(
