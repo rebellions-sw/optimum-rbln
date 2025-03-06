@@ -977,7 +977,8 @@ class FlashAttentionOp(AttentionOp):
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
         key_state = key_state.unsqueeze(2)
         value_state = value_state.unsqueeze(2)
-        attn_mask = attn_mask.unsqueeze(2)
+        if self.use_attention_mask:
+            attn_mask = attn_mask.unsqueeze(2)
 
         if self.phase == "decode":
             batch_size = key_state.shape[0]
