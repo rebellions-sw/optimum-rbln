@@ -19,7 +19,12 @@ import torch
 from torch import nn
 from transformers import PretrainedConfig, PreTrainedModel
 
-from ....ops import register_rbln_custom_attention, register_rbln_custom_flash_attention
+from ....ops import (
+    register_rbln_custom_attention,
+    register_rbln_custom_attention_kv_fp8,
+    register_rbln_custom_flash_attention,
+    register_rbln_custom_flash_attention_kv_fp8,
+)
 from ....utils import logging
 from ...modeling_rope_utils import ROPE_INIT_FUNCTIONS
 
@@ -142,9 +147,11 @@ class DecoderOnlyWrapper(nn.Module):
         if self.attn_impl == "flash_attn":
             self.kvcache_partition_len = kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
             register_rbln_custom_flash_attention()
+            register_rbln_custom_flash_attention_kv_fp8()
         elif self.attn_impl == "eager":
             self.kvcache_partition_len = None
             register_rbln_custom_attention()
+            register_rbln_custom_attention_kv_fp8()
         else:
             raise ValueError(f"Unknown attn_impl : {self.attn_impl}")
 
@@ -628,6 +635,10 @@ class DecoderOnlyAttention(nn.Module):
         if batch_size > 1 and self.phase == "prefill":
             raise NotImplementedError(f"batch size should be 1 if prefill phase, but got {batch_size}.")
 
+        # Get KV cache scales if using FP8 KV cache
+        k_scale = getattr(self._original_mod, "k_scale", None)
+        v_scale = getattr(self._original_mod, "v_scale", None)
+
         attn_output, key_state, value_state = self.attention(
             query_states,
             key_states,
@@ -638,6 +649,8 @@ class DecoderOnlyAttention(nn.Module):
             batch_position=None if self.phase == "decode" else batch_position,
             seq_position=seq_positions,
             scale=self.scale,
+            k_scale=k_scale,
+            v_scale=v_scale,
         )
         key_states = key_state
         value_states = value_state
@@ -648,7 +661,7 @@ class DecoderOnlyAttention(nn.Module):
 
 
 class AttentionOp(nn.Module):
-    def __init__(self, num_heads: int, head_dim: int, num_key_value_heads: int):
+    def __init__(self, num_heads: int, head_dim: int, num_key_value_heads: int, use_kv_fp8: bool = False):
         super().__init__()
         self.num_heads = num_heads
         self.head_dim = head_dim
@@ -666,6 +679,8 @@ class AttentionOp(nn.Module):
         past_value_state: torch.Tensor,
         seq_position: torch.Tensor,
         scale: torch.Tensor,
+        k_scale: Optional[torch.Tensor] = None,
+        v_scale: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Compute attention with static shapes and explicit cache management.
 
@@ -701,30 +716,65 @@ class AttentionOp(nn.Module):
             self.head_dim,
         )
 
-        if self.phase == "decode":
-            attn_output, key_state, value_state = torch.ops.rbln_custom_ops.attn_decode(
-                query_state,
-                key_state,
-                value_state,
-                attn_mask,
-                past_key_state.unsqueeze(2),
-                past_value_state.unsqueeze(2),
-                seq_position,
-                scale,
-            )
+        # Check if we're using FP8 KV cache based on the dtype of past_key_state
+        use_fp8_kv_cache = False
+        if past_key_state.dtype == torch.float8_e4m3fn:
+            if k_scale is None or v_scale is None:
+                raise ValueError("k_scale and v_scale must be provided if past_key_state is of type float8_e4m3fn")
+            use_fp8_kv_cache = True
 
+        if use_fp8_kv_cache:
+            if self.phase == "decode":
+                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.attn_decode_kv_fp8(
+                    query_state,
+                    key_state,
+                    value_state,
+                    attn_mask,
+                    past_key_state.unsqueeze(2),
+                    past_value_state.unsqueeze(2),
+                    seq_position,
+                    scale,
+                    k_scale,
+                    v_scale,
+                )
+            else:
+                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.attn_prefill_kv_fp8(
+                    query_state,
+                    key_state,
+                    value_state,
+                    attn_mask,
+                    past_key_state.unsqueeze(2),
+                    past_value_state.unsqueeze(2),
+                    batch_position,
+                    seq_position,
+                    scale,
+                    k_scale,
+                    v_scale,
+                )
         else:
-            attn_output, key_state, value_state = torch.ops.rbln_custom_ops.attn_prefill(
-                query_state,
-                key_state,
-                value_state,
-                attn_mask,
-                past_key_state.unsqueeze(2),
-                past_value_state.unsqueeze(2),
-                batch_position,
-                seq_position,
-                scale,
-            )
+            if self.phase == "decode":
+                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.attn_decode(
+                    query_state,
+                    key_state,
+                    value_state,
+                    attn_mask,
+                    past_key_state.unsqueeze(2),
+                    past_value_state.unsqueeze(2),
+                    seq_position,
+                    scale,
+                )
+            else:
+                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.attn_prefill(
+                    query_state,
+                    key_state,
+                    value_state,
+                    attn_mask,
+                    past_key_state.unsqueeze(2),
+                    past_value_state.unsqueeze(2),
+                    batch_position,
+                    seq_position,
+                    scale,
+                )
 
         attn_output = attn_output.view(batch_size, self.num_heads, -1, self.head_dim)
         attn_output = attn_output.transpose(1, 2).contiguous()
@@ -878,7 +928,13 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
 
 
 class FlashAttentionOp(AttentionOp):
-    def __init__(self, num_heads: int, head_dim: int, num_key_value_heads: int, kvcache_partition_len: int):
+    def __init__(
+        self,
+        num_heads: int,
+        head_dim: int,
+        num_key_value_heads: int,
+        kvcache_partition_len: int,
+    ):
         super().__init__(num_heads=num_heads, head_dim=head_dim, num_key_value_heads=num_key_value_heads)
         self.kvcache_partition_size = kvcache_partition_len
 
@@ -893,6 +949,8 @@ class FlashAttentionOp(AttentionOp):
         past_value_state,
         seq_position,
         scale,
+        k_scale: Optional[torch.Tensor] = None,
+        v_scale: Optional[torch.Tensor] = None,
     ):
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
         key_state = key_state.unsqueeze(2)
@@ -912,31 +970,69 @@ class FlashAttentionOp(AttentionOp):
             self.head_dim,
         )
 
-        if self.phase == "decode":
-            attn_output, key_state, value_state = torch.ops.rbln_custom_ops.flash_attn_decode(
-                query_state,
-                key_state,
-                value_state,
-                attn_mask,
-                past_key_state.unsqueeze(2),
-                past_value_state.unsqueeze(2),
-                seq_position,
-                scale,
-                self.kvcache_partition_size,
-            )
+        # Check if we're using FP8 KV cache based on the dtype of past_key_state
+        use_fp8_kv_cache = False
+        if past_key_state.dtype == torch.float8_e4m3fn:
+            if k_scale is None or v_scale is None:
+                raise ValueError("k_scale and v_scale must be provided if past_key_state is of type float8_e4m3fn")
+            use_fp8_kv_cache = True
+
+        if use_fp8_kv_cache:
+            if self.phase == "decode":
+                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.flash_attn_decode_kv_fp8(
+                    query_state,
+                    key_state,
+                    value_state,
+                    attn_mask,
+                    past_key_state.unsqueeze(2),
+                    past_value_state.unsqueeze(2),
+                    seq_position,
+                    scale,
+                    self.kvcache_partition_size,
+                    k_scale,
+                    v_scale,
+                )
+            else:
+                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.flash_attn_prefill_kv_fp8(
+                    query_state,
+                    key_state,
+                    value_state,
+                    attn_mask,
+                    past_key_state.unsqueeze(2),
+                    past_value_state.unsqueeze(2),
+                    batch_position,
+                    seq_position,
+                    scale,
+                    self.kvcache_partition_size,
+                    k_scale,
+                    v_scale,
+                )
         else:
-            attn_output, key_state, value_state = torch.ops.rbln_custom_ops.flash_attn_prefill(
-                query_state,
-                key_state,
-                value_state,
-                attn_mask,
-                past_key_state.unsqueeze(2),
-                past_value_state.unsqueeze(2),
-                batch_position,
-                seq_position,
-                scale,
-                self.kvcache_partition_size,
-            )
+            if self.phase == "decode":
+                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.flash_attn_decode(
+                    query_state,
+                    key_state,
+                    value_state,
+                    attn_mask,
+                    past_key_state.unsqueeze(2),
+                    past_value_state.unsqueeze(2),
+                    seq_position,
+                    scale,
+                    self.kvcache_partition_size,
+                )
+            else:
+                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.flash_attn_prefill(
+                    query_state,
+                    key_state,
+                    value_state,
+                    attn_mask,
+                    past_key_state.unsqueeze(2),
+                    past_value_state.unsqueeze(2),
+                    batch_position,
+                    seq_position,
+                    scale,
+                    self.kvcache_partition_size,
+                )
 
         # reshape for removing repeat_kv
         attn_output = attn_output.view(batch_size, self.num_heads, -1, self.head_dim)

@@ -35,16 +35,16 @@ def register_rbln_custom_flash_attention():
     def flash_attn_decode_cpu(q, k, v, mask, kcache, vcache, seq, scale, partition):
         return (
             q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
+            torch.empty(*kcache.shape, dtype=kcache.dtype, device=kcache.device),
+            torch.empty(*vcache.shape, dtype=vcache.dtype, device=vcache.device),
         )
 
     @register_fake("rbln_custom_ops::flash_attn_decode")
     def flash_attn_decode_abstract(q, k, v, m, kcache, vcache, seq, scale, partition):
         return (
             q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
+            torch.empty(*kcache.shape, dtype=kcache.dtype, device=kcache.device),
+            torch.empty(*vcache.shape, dtype=vcache.dtype, device=vcache.device),
         )
 
     torch.library.define(
@@ -59,3 +59,52 @@ def register_rbln_custom_flash_attention():
     @register_fake("rbln_custom_ops::flash_attn_prefill")
     def flash_attn_prefill_abstract(q, k, v, m, kcache, vcache, batch, seq, scale, partition):
         return q, kcache, vcache
+
+
+@lru_cache
+def register_rbln_custom_flash_attention_kv_fp8():
+    torch.library.define(
+        "rbln_custom_ops::flash_attn_decode_kv_fp8",
+        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, Tensor f, Tensor g) -> Tensor[]",
+    )
+
+    @torch.library.impl("rbln_custom_ops::flash_attn_decode_kv_fp8", "cpu")
+    def flash_attn_decode_kv_fp8_cpu(q, k, v, mask, kcache, vcache, seq, scale, partition_len, k_scale, v_scale):
+        return (
+            q,
+            torch.empty(*kcache.shape, dtype=kcache.dtype, device=kcache.device),
+            torch.empty(*vcache.shape, dtype=vcache.dtype, device=vcache.device),
+        )
+
+    @register_fake("rbln_custom_ops::flash_attn_decode_kv_fp8")
+    def flash_attn_decode_kv_fp8_abstract(q, k, v, m, kcache, vcache, seq, partition, partition_len, k_scale, v_scale):
+        return (
+            q,
+            torch.empty(*kcache.shape, dtype=kcache.dtype, device=kcache.device),
+            torch.empty(*vcache.shape, dtype=vcache.dtype, device=vcache.device),
+        )
+
+    torch.library.define(
+        "rbln_custom_ops::flash_attn_prefill_kv_fp8",
+        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, Tensor f, Tensor g, Tensor h) -> Tensor[]",
+    )
+
+    @torch.library.impl("rbln_custom_ops::flash_attn_prefill_kv_fp8", "cpu")
+    def flash_attn_prefill_kv_fp8_cpu(
+        q, k, v, mask, kcache, vcache, batch, seq, scale, partition_len, k_scale, v_scale
+    ):
+        return (
+            q,
+            torch.empty(1, *kcache.shape[1:], dtype=kcache.dtype, device=kcache.device),
+            torch.empty(1, *vcache.shape[1:], dtype=vcache.dtype, device=vcache.device),
+        )
+
+    @register_fake("rbln_custom_ops::flash_attn_prefill_kv_fp8")
+    def flash_attn_prefill_kv_fp8_abstract(
+        q, k, v, m, kcache, vcache, batch, seq, partition, partition_len, k_scale, v_scale
+    ):
+        return (
+            q,
+            torch.empty(1, *kcache.shape[1:], dtype=kcache.dtype, device=kcache.device),
+            torch.empty(1, *vcache.shape[1:], dtype=vcache.dtype, device=vcache.device),
+        )

@@ -463,6 +463,12 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_quantization = QuantizationManager.validate_quantization_config(rbln_kwargs.get("quantization", None))
         rbln_prefill_chunk_size = rbln_kwargs.get("prefill_chunk_size", None)
 
+        rbln_kvcache = None
+        if rbln_quantization is not None:
+            rbln_kvcache = rbln_quantization.get("kvcache")
+        if rbln_kvcache is None:
+            rbln_kvcache = "fp16"
+
         if rbln_prefill_chunk_size is None:
             rbln_prefill_chunk_size = 128
         elif rbln_prefill_chunk_size % 64 != 0 or rbln_prefill_chunk_size == 0:
@@ -530,7 +536,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                             rbln_max_seq_len,
                             head_dim,
                         ],
-                        "float32",
+                        "float32" if rbln_kvcache == "fp16" else "float8_e4m3fn",
                     )
                     for i in range(num_hidden_layers * 2)
                 ]
@@ -568,6 +574,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 "use_inputs_embeds": rbln_use_inputs_embeds,
                 "kvcache_partition_len": rbln_kvcache_partition_len,
                 "attn_impl": rbln_attn_impl,
+                "kvcache": rbln_kvcache,
             }
         )
 

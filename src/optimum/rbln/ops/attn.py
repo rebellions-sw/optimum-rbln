@@ -62,16 +62,16 @@ def register_rbln_custom_attention():
         """
         return (
             q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
+            torch.empty(*kcache.shape, dtype=kcache.dtype, device=kcache.device),
+            torch.empty(*vcache.shape, dtype=vcache.dtype, device=vcache.device),
         )
 
     @register_fake("rbln_custom_ops::attn_decode")
     def attn_decode_abstract(q, k, v, m, kcache, vcache, seq, partition):
         return (
             q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
+            torch.empty(*kcache.shape, dtype=kcache.dtype, device=kcache.device),
+            torch.empty(*vcache.shape, dtype=vcache.dtype, device=vcache.device),
         )
 
     torch.library.define(
@@ -152,16 +152,16 @@ def register_rbln_custom_attention_add_softmax():
         """
         return (
             q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
+            torch.empty(*kcache.shape, dtype=kcache.dtype, device=kcache.device),
+            torch.empty(*vcache.shape, dtype=vcache.dtype, device=vcache.device),
         )
 
     @register_fake("rbln_custom_ops::attn_decode_add_softmax")
     def attn_decode_add_softmax_abstract(q, k, v, m, kcache, vcache, seq, partition):
         return (
             q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
+            torch.empty(*kcache.shape, dtype=kcache.dtype, device=kcache.device),
+            torch.empty(*vcache.shape, dtype=vcache.dtype, device=vcache.device),
         )
 
     torch.library.define(
@@ -199,14 +199,51 @@ def register_rbln_custom_attention_add_softmax():
         """
         return (
             q,
-            torch.empty(1, *kcache.shape[1:], device=kcache.device),
-            torch.empty(1, *vcache.shape[1:], device=vcache.device),
+            torch.empty(1, *kcache.shape[1:], dtype=kcache.dtype, device=kcache.device),
+            torch.empty(1, *vcache.shape[1:], dtype=vcache.dtype, device=vcache.device),
         )
 
     @register_fake("rbln_custom_ops::attn_prefill_add_softmax")
     def attn_prefill_add_softmax_abstract(q, k, v, m, kcache, vcache, batch, seq, partition):
         return (
             q,
-            torch.empty(1, *kcache.shape[1:], device=kcache.device),
-            torch.empty(1, *vcache.shape[1:], device=vcache.device),
+            torch.empty(1, *kcache.shape[1:], dtype=kcache.dtype, device=kcache.device),
+            torch.empty(1, *vcache.shape[1:], dtype=vcache.dtype, device=vcache.device),
         )
+
+
+@lru_cache
+def register_rbln_custom_attention_kv_fp8():
+    torch.library.define(
+        "rbln_custom_ops::attn_decode_kv_fp8",
+        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, Tensor f) -> Tensor[]",
+    )
+
+    @torch.library.impl("rbln_custom_ops::attn_decode_kv_fp8", "cpu")
+    def attn_decode_kv_fp8_cpu(q, k, v, mask, kcache, vcache, seq, scale, k_scale, v_scale):
+        return (
+            q,
+            torch.empty(*kcache.shape, dtype=kcache.dtype, device=kcache.device),
+            torch.empty(*vcache.shape, dtype=vcache.dtype, device=vcache.device),
+        )
+
+    @register_fake("rbln_custom_ops::attn_decode_kv_fp8")
+    def attn_decode_kv_fp8_abstract(q, k, v, m, kcache, vcache, seq, partition, k_scale, v_scale):
+        return (
+            q,
+            torch.empty(*kcache.shape, dtype=kcache.dtype, device=kcache.device),
+            torch.empty(*vcache.shape, dtype=vcache.dtype, device=vcache.device),
+        )
+
+    torch.library.define(
+        "rbln_custom_ops::attn_prefill_kv_fp8",
+        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, Tensor f, Tensor g) -> Tensor[]",
+    )
+
+    @torch.library.impl("rbln_custom_ops::attn_prefill_kv_fp8", "cpu")
+    def attn_prefill_kv_fp8_cpu(q, k, v, mask, kcache, vcache, batch, seq, scale, k_scale, v_scale):
+        return q, kcache, vcache
+
+    @register_fake("rbln_custom_ops::attn_prefill_kv_fp8")
+    def attn_prefill_kv_fp8_abstract(q, k, v, m, kcache, vcache, batch, seq, partition, k_scale, v_scale):
+        return q, kcache, vcache
