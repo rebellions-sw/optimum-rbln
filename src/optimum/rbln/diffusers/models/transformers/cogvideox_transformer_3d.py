@@ -121,6 +121,7 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
                 "hidden_states",
                 [
                     rbln_batch_size,
+                    #FIXME: for temporal, need generalize
                     13,
                     model_config.out_channels,
                     model_config.sample_height,
