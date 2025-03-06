@@ -889,8 +889,8 @@ class RotaryEmbedding(nn.Module):
 class DecoderOnlyFlashAttention(DecoderOnlyAttention):
     def __init__(self, self_attn, kvcache_partition_len, use_attention_mask):
         self.kvcache_partition_size = kvcache_partition_len
-        self.use_attention_mask = use_attention_mask
-        super().__init__(self_attn=self_attn)
+        # self.use_attention_mask = use_attention_mask
+        super().__init__(self_attn=self_attn, use_attention_mask=use_attention_mask)
 
     def get_attention(self):
         return FlashAttentionOp(
