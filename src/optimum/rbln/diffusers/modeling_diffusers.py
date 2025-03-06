@@ -79,8 +79,7 @@ class RBLNDiffusionMixin:
         return "Inpaint" in cls.__name__
 
     @classmethod
-    @property
-    def img2vid_pipeline(cls):
+    def is_img2vid_pipeline(cls):
         return "Video" in cls.__name__
 
     @classmethod
@@ -103,11 +102,9 @@ class RBLNDiffusionMixin:
             submodule_config.update({k: v for k, v in pipe_global_config.items() if k not in submodule_config})
             submodule_config.update(
                 {
-                    "img2img_pipeline": cls.img2img_pipeline,
-                    "inpaint_pipeline": cls.inpaint_pipeline,
-                    "img2vid_pipeline": cls.img2vid_pipeline,
                     "img2img_pipeline": cls.is_img2img_pipeline(),
                     "inpaint_pipeline": cls.is_inpaint_pipeline(),
+                    "img2vid_pipeline": cls.is_img2vid_pipeline(),
                 }
             )
             submodule_config = submodule_cls.update_rbln_config_using_pipe(model, submodule_config)
