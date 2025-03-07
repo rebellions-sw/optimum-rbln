@@ -132,8 +132,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
         logits = super().forward(
             inputs,
-            self.dec_attn_mask if attention_mask is None else attention_mask,
             cache_position,
+            self.dec_attn_mask if attention_mask is None else attention_mask,
         )
 
         return logits
@@ -220,8 +220,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             if self.use_attention_mask:
                 args = (
                     input_chunk,
-                    chunked_attention_mask,
                     cache_pos_chunk,
+                    chunked_attention_mask,
                     batch_position,
                     query_position,
                 )
