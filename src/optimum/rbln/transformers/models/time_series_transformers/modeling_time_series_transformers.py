@@ -43,6 +43,7 @@ from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.runtime_utils import RBLNPytorchRuntime
 from .time_series_transformers_architecture import TimeSeriesTransformersWrapper
 
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -106,8 +107,8 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         outputs = super().forward(inputs_embeds, attention_mask, cache_position)
 
         return RBLNSeq2SeqTSDecoderOutput(
-            params = outputs[:-1],
-            last_hidden_states = outputs[-1],
+            params=outputs[:-1],
+            last_hidden_states=outputs[-1],
         )
 
 
@@ -115,7 +116,6 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
 class RBLNSeq2SeqTSDecoderOutput(ModelOutput):
     last_hidden_states: torch.FloatTensor = None
     params: Tuple[torch.FloatTensor] = None
-
 
 
 class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
@@ -152,7 +152,6 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         val = getattr(TimeSeriesTransformerForPrediction, __name)
         if val is not None and isinstance(val, Callable) and "self" in set(inspect.signature(val).parameters):
             return redirect(val)
-
 
     @classmethod
     def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: "RBLNConfig"):
