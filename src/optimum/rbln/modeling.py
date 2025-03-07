@@ -196,7 +196,7 @@ class RBLNModel(RBLNBaseModel):
         **kwargs,
     ) -> "PreTrainedModel":
         kwargs = cls.update_kwargs(kwargs)
-        return cls.hf_class.from_pretrained(
+        return cls.get_hf_class().from_pretrained(
             model_id,
             subfolder=subfolder,
             revision=revision,

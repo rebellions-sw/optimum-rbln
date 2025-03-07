@@ -73,7 +73,7 @@ class RBLNModelForQuestionAnswering(RBLNModel):
         if rbln_batch_size is None:
             rbln_batch_size = 1
 
-        signature_params = inspect.signature(cls.hf_class.forward).parameters.keys()
+        signature_params = inspect.signature(cls.get_hf_class().forward).parameters.keys()
 
         if rbln_model_input_names is None:
             for tokenizer in preprocessors:
@@ -289,7 +289,7 @@ class RBLNModelForSequenceClassification(RBLNModel):
         if max_position_embeddings is not None and rbln_max_seq_len > max_position_embeddings:
             raise ValueError("`rbln_enc_max_seq_len` should be less or equal than max_position_embeddings!")
 
-        signature_params = inspect.signature(cls.hf_class.forward).parameters.keys()
+        signature_params = inspect.signature(cls.get_hf_class().forward).parameters.keys()
 
         if rbln_model_input_names is None:
             for tokenizer in preprocessors:
@@ -362,7 +362,7 @@ class RBLNModelForMaskedLM(RBLNModel):
         if max_position_embeddings is not None and rbln_max_seq_len > max_position_embeddings:
             raise ValueError("`rbln_enc_max_seq_len` should be less or equal than max_position_embeddings!")
 
-        signature_params = inspect.signature(cls.hf_class.forward).parameters.keys()
+        signature_params = inspect.signature(cls.get_hf_class().forward).parameters.keys()
 
         if rbln_model_input_names is None:
             for tokenizer in preprocessors:
