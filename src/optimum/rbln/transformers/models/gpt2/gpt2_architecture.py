@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
 
 class GPT2Wrapper(DecoderOnlyWrapper):
-    def convert_to_rbln_causal_lm(self, causal_lm: "GPT2LMHeadModel"):
+    def convert_to_rbln_causal_lm(self, causal_lm: "GPT2LMHeadModel", max_seq_len: int):
         if self.attn_impl != "eager":
             raise NotImplementedError(f"flash attention ({self.attn_impl}) is not implemented for {self.__class__}")
         new_layers = []
@@ -40,7 +40,7 @@ class GPT2Wrapper(DecoderOnlyWrapper):
             new_self_attn = GPT2Attention(layer.attn)
             new_layer = GPT2Layer(layer, new_self_attn)
             new_layers.append(new_layer)
-        new_model = GPT2Model(causal_lm.transformer, new_layers)
+        new_model = GPT2Model(causal_lm.transformer, new_layers, max_seq_len=max_seq_len)
         new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm
 

@@ -29,11 +29,11 @@ if TYPE_CHECKING:
 
 
 class GemmaWrapper(DecoderOnlyWrapper):
-    def convert_to_rbln_causal_lm(self, causal_lm: "GemmaForCausalLM"):
+    def convert_to_rbln_causal_lm(self, causal_lm: "GemmaForCausalLM", max_seq_len: int):
         new_layers = []
         for layer in causal_lm.model.layers:
             if self.attn_impl == "eager":
-                new_self_attn = DecoderOnlyAttention(layer.self_attn)
+                new_self_attn = DecoderOnlyAttention(layer.self_attn, self.use_attention_mask)
             elif self.attn_impl == "flash_attn":
                 new_self_attn = DecoderOnlyFlashAttention(
                     layer.self_attn, kvcache_partition_len=self.kvcache_partition_len
@@ -42,7 +42,7 @@ class GemmaWrapper(DecoderOnlyWrapper):
                 raise NotImplementedError(f"Unknwon attn : {self.attn_impl}")
             new_layer = DecoderOnlyLayer(layer, new_self_attn)
             new_layers.append(new_layer)
-        new_model = GemmaModel(causal_lm.model, new_layers, partition_len=self.kvcache_partition_len)
+        new_model = GemmaModel(causal_lm.model, new_layers, partition_len=self.kvcache_partition_len, max_seq_len=max_seq_len)
         new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm
 

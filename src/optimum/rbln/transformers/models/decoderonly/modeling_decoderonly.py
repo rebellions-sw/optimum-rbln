@@ -232,7 +232,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     batch_position,
                     query_position,
                 )
-
             # Forward pass for the current chunk
             logits = super().forward(
                 *args,
