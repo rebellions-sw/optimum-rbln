@@ -79,14 +79,15 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             )
 
     def update_block_tables(self, cache_position: torch.Tensor, batch_idx: int = None):       
-        def fill_block_tables_if_need(batch_idx, block_idx):
+        
+        def fill_block_tables(batch_idx, block_idx):
             if self.block_tables[batch_idx][block_idx] == self.empty_block:
                 if self.free_blocks:
                     block = self.free_blocks.popleft()
                     self.block_tables[batch_idx][block_idx] = block
                 else:
                     raise RuntimeError("Not available blocks")
-        
+
         # Prefill: reset block_tables and refill free_blocks
         if batch_idx is not None:            
             prev_blocks = self.block_tables[batch_idx][self.block_tables[batch_idx] != self.empty_block].tolist()
@@ -96,16 +97,15 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             
             for position in range(s, e + 1, self.kvcache_block_size):
                 block_idx = position // self.kvcache_block_size
-                
                 if batch_idx >= len(self.block_tables) or block_idx >= len(self.block_tables[batch_idx]):
                     raise IndexError(f"Invalid index: batch_idx={batch_idx}, block_idx={block_idx}")
 
-                fill_block_tables_if_need(batch_idx, block_idx)     
+                fill_block_tables(batch_idx, block_idx)     
         else:
             for b_idx in range(self.batch_size):
                 position = cache_position[b_idx][0].item()
                 block_idx = position // self.kvcache_block_size
-                fill_block_tables_if_need(b_idx, block_idx)
+                fill_block_tables(b_idx, block_idx)
     
     def forward(
         self,
@@ -127,7 +127,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             inputs = inputs_embeds
         
         if block_tables is None:
-            self.update_block_tables(cache_position)
+            self.update_block_tables(cache_position,batch_idx=batch_idx)
             block_tables = self.block_tables[batch_idx].unsqueeze(0) if batch_idx is not None else self.block_tables
 
         if self.phase == "decode":
@@ -252,21 +252,20 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             # Define batch position and query position
             # batch_position = torch.tensor(batch_idx, dtype=torch.int16) if block_tables is None else None
             query_position = torch.tensor((query_length - 1) % self.prefill_chunk_size, dtype=torch.int16)
-
+            
             # Forward pass for the current chunk
             logits = super().forward(
                 input_chunk,
                 chunked_attention_mask,
                 cache_pos_chunk,
                 query_position,
-                block_tables= block_tables,
+                block_tables,
                 out=out_buffers,
             )
 
         # Update decoder attention mask with processed KV-cache length from prefill phase
-        if block_tables is not None:
-            self.dec_attn_mask[batch_idx].fill_(0)
-            self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
+        self.dec_attn_mask[batch_idx].fill_(0)
+        self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
 
         return logits
 
