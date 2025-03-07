@@ -32,11 +32,11 @@ if TYPE_CHECKING:
 
 
 class PhiWrapper(DecoderOnlyWrapper):
-    def convert_to_rbln_causal_lm(self, causal_lm: "PhiForCausalLM"):
+    def convert_to_rbln_causal_lm(self, causal_lm: "PhiForCausalLM", max_seq_len: int):
         new_layers = []
         for layer in causal_lm.model.layers:
             if self.attn_impl == "eager":
-                new_self_attn = PhiAttention(layer.self_attn)
+                new_self_attn = PhiAttention(layer.self_attn, self.use_attention_mask)
             elif self.attn_impl == "flash_attn":
                 raise NotImplementedError(f"flash attn for {self.__class__} is not implemented yet.")
             else:

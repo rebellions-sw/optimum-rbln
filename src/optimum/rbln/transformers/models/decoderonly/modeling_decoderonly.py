@@ -58,7 +58,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         self.batch_size = batch_size
 
         self.use_attention_mask = use_attention_mask
-        
+
         if self.use_attention_mask:
             # shared tensor between prefill and decode phase
             self.dec_attn_mask = dec_attn_mask
@@ -120,7 +120,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 cache_position,
             )
             return logits
-    
+
         if attention_mask is None:
             for b_idx in range(batch_size):
                 decoding_step = cache_position[b_idx].item()

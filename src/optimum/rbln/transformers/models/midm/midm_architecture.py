@@ -55,15 +55,15 @@ class MidmLMHeadModelWrapper(DecoderOnlyWrapper):
         self.config.partial_rotary_factor = self.config.rotary_percentage
         return super().get_rotary_emb(max_seq_len=max_seq_len)
 
-    def convert_to_rbln_causal_lm(self, causal_lm: "MidmLMHeadModel"):
+    def convert_to_rbln_causal_lm(self, causal_lm: "MidmLMHeadModel", max_seq_len: int):
         if self.attn_impl != "eager":
             raise NotImplementedError(f"flash attention ({self.attn_impl}) is not implemented for {self.__class__}")
         new_layers = []
         for layer in causal_lm.transformer.h:
-            new_self_attn = MidmAttention(layer.attn)
+            new_self_attn = MidmAttention(layer.attn, self.use_attention_mask)
             new_layer = MidmLayer(layer, new_self_attn)
             new_layers.append(new_layer)
-        new_model = MidmModel(causal_lm.transformer, new_layers)
+        new_model = MidmModel(causal_lm.transformer, new_layers, max_seq_len=max_seq_len)
         new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm
 

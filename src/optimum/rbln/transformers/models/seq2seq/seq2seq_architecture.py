@@ -18,7 +18,7 @@ import torch
 from torch import nn
 from transformers.utils import logging
 
-from ....ops import register_rbln_custom_masked_attention, register_rbln_custom_cache_update
+from ....ops import register_rbln_custom_cache_update, register_rbln_custom_masked_attention
 
 
 logger = logging.get_logger(__name__)
