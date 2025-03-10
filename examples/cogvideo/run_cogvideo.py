@@ -30,7 +30,7 @@ prompt = "A panda, dressed in a small, red jacket and a tiny hat, sits on a wood
 model_id = "THUDM/CogVideoX-2b"
 pipe = RBLNCogVideoXPipeline.from_pretrained(
     model_id=model_id,
-    export=False,
+    export=True,
 )
 pipe.save_pretrained(os.path.basename(model_id))
 
