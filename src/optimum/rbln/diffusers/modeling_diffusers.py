@@ -453,11 +453,6 @@ class RBLNDiffusionMixin:
 
         Example:
             ```python
-            if hasattr(self, "movq"):
-                compiled_image_size = self.movq.image_size
-                kwargs["height"] = compiled_image_size[0]
-                kwargs["width"] = compiled_image_size[1]
-
             compiled_num_frames = self.unet.rbln_config.model_cfg.get("num_frames", None)
             if compiled_num_frames is not None:
                 kwargs["num_frames"] = self.unet.rbln_config.model_cfg.get("num_frames")
