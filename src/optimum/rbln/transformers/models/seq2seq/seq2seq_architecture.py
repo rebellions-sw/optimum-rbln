@@ -170,8 +170,8 @@ class Seq2SeqDecoderWrapper(nn.Module):
     ) -> Tuple[torch.FloatTensor, Tuple[torch.FloatTensor]]:
         self_past_key_values = ()
         cross_past_key_values = ()
-        self_kv_cache = kv_cache[: self.num_layers * 2]
-        cross_kv_cache = kv_cache[self.num_layers * 2 :]
+        self_kv_cache = kv_cache[self.num_layers * 2 :]
+        cross_kv_cache = kv_cache[: self.num_layers * 2]
         for i in range(0, self.num_layers * 2, 2):
             self_past_key_values = self_past_key_values + ((self_kv_cache[i], self_kv_cache[i + 1]),)
             cross_past_key_values = cross_past_key_values + ((cross_kv_cache[i], cross_kv_cache[i + 1]),)
