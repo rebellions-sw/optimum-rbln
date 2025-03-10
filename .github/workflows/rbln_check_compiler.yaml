@@ -41,6 +41,7 @@ jobs:
           REBEL_PYPI_USERNAME: ${{ secrets.REBEL_PYPI_USERNAME }}
           REBEL_PYPI_PASSWORD: ${{ secrets.REBEL_PYPI_PASSWORD }}
         run: |
+          set -e
           PYPI_URL=$(echo $REBEL_PYPI_ENDPOINT | sed "s/\/\//\0$REBEL_PYPI_USERNAME:$REBEL_PYPI_PASSWORD@/")
           pip3 install --extra-index-url $PYPI_URL rebel-compiler==${{ inputs.compiler_version }}
           echo "COMPILER_VERSION=${{ inputs.compiler_version }}" >> $GITHUB_OUTPUT

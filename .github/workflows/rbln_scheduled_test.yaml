@@ -2,26 +2,40 @@ name: Optimum-rbln / Scheduled Test
 
 on:
   schedule:
-    # 매일 새벽 2시에 실행 (UTC 기준 17:00, 한국 시간으로 새벽 2:00)
+    # Run every day at 2am (17:00 UTC, 2:00am KST)
     - cron: '0 17 * * *'
 
 env:
-  REBEL_COMPILER_VERSION: 0.7.2
   HF_USER_ID: ${{ secrets.HF_USER_ID }}
   HF_AUTH_TOKEN: ${{ secrets.HF_AUTH_TOKEN }}
 
 jobs:
+  load-version:
+    runs-on: rebel-k8s-runner
+    outputs:
+      compiler_version: ${{ steps.get_version.outputs.compiler_version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Get compiler version
+        id: get_version
+        run: |
+          VERSION=$(grep rebel_compiler_version .github/version.yaml | cut -d ':' -f2 | tr -d ' ')
+          echo "compiler_version=$VERSION" >> $GITHUB_OUTPUT
+
   check-compiler:
+    needs: load-version
     uses: ./.github/workflows/rbln_check_compiler.yaml
     with:
-      compiler_version: ${{ vars.REBEL_COMPILER_VERSION }}
+      compiler_version: ${{ needs.load-version.outputs.compiler_version }}
     secrets:
       REBEL_PYPI_USERNAME: ${{ secrets.REBEL_PYPI_USERNAME }}
       REBEL_PYPI_PASSWORD: ${{ secrets.REBEL_PYPI_PASSWORD }}
       CHECK_DEPLOY: ${{ secrets.CHECK_DEPLOY }}
 
   optimum-rbln-pytest:
-    needs: check-compiler
+    needs: [load-version, check-compiler]
     if: ${{ needs.check-compiler.outputs.is_deploy_version == 'true' }}
     uses: ./.github/workflows/rbln_optimum_pytest.yaml
     with:
