@@ -14,6 +14,7 @@
 
 import inspect
 from dataclasses import dataclass
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -471,11 +472,17 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_max_seq_len = rbln_kwargs.get("max_seq_len", None)
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
         rbln_use_inputs_embeds = rbln_kwargs.get("use_inputs_embeds", None)
-        rbln_use_attention_mask = rbln_kwargs.get("use_attention_mask", False)
+        rbln_use_attention_mask = rbln_kwargs.get("use_attention_mask", None)
         rbln_attn_impl = rbln_kwargs.get("attn_impl", None)
         rbln_kvcache_partition_len = rbln_kwargs.get("kvcache_partition_len", None)
         rbln_quantization = QuantizationManager.validate_quantization_config(rbln_kwargs.get("quantization", None))
         rbln_prefill_chunk_size = rbln_kwargs.get("prefill_chunk_size", None)
+
+        if rbln_use_attention_mask is None:
+            rbln_use_attention_mask = False
+            rbln_npu = rbln_kwargs.get("npu", None) or rebel.get_npu_name()
+            if rbln_npu == "RBLN-CA02":
+                rbln_use_attention_mask = True 
 
         if rbln_prefill_chunk_size is None:
             rbln_prefill_chunk_size = 128
