@@ -531,26 +531,24 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                             ("query_position", [], "int16"),
                         ]
                     )
-            kvcache_batch_size = rbln_batch_size
-            kvcache_seq_len = rbln_max_seq_len
 
-            if attn_impl == "paged_attn":
-                kvcache_batch_size = 1
+            kvcache_seq_len = rbln_max_seq_len
+            max_block_nums = rbln_batch_size       
+            if attn_impl == "paged_attn":    
                 max_block_cnt = rbln_max_seq_len // rbln_kvcache_block_size
+                max_block_nums = max_block_cnt * rbln_batch_size
                 if query_length > 1:
                     input_info.extend([("block_tables", [1, max_block_cnt], "int16")])
                 else:
                     input_info.extend([("block_tables", [batch_size, max_block_cnt], "int16")])
-                
-                # kvcache_seq_len = cls.estimate_paged_attn_num_blocks() * rbln_kvcache_block_size
-                kvcache_seq_len = 2 * rbln_kvcache_block_size
-
+                kvcache_seq_len = rbln_kvcache_block_size
+                            
             input_info.extend(
                 [
                     (
                         f"past_key_values_{i}",
                         [
-                            kvcache_batch_size,
+                            max_block_nums,
                             num_key_value_heads,
                             kvcache_seq_len,
                             head_dim,
