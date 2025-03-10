@@ -14,7 +14,6 @@
 
 import inspect
 from dataclasses import dataclass
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -482,7 +481,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             rbln_use_attention_mask = False
             rbln_npu = rbln_kwargs.get("npu", None) or rebel.get_npu_name()
             if rbln_npu == "RBLN-CA02":
-                rbln_use_attention_mask = True 
+                rbln_use_attention_mask = True
 
         if rbln_prefill_chunk_size is None:
             rbln_prefill_chunk_size = 128
