@@ -13,7 +13,7 @@ env:
 
 jobs:
   check-skip-ci:
-    runs-on: ubuntu-latest
+    runs-on: rebel-k8s-runner
     outputs:
       should_skip: ${{ contains(github.event.pull_request.head.commit.message, '[skip ci]') }}
     steps:
