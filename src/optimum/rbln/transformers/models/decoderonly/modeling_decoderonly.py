@@ -88,8 +88,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 else:
                     raise RuntimeError("Not available blocks")
 
-        #Prefill
-        if batch_idx is not None:            
+        if self.phase == "prefill":            
             #reset block_tables and refill free_block_pool
             prev_blocks = self.block_tables[batch_idx][self.block_tables[batch_idx] != self.empty_block].tolist()
             self.block_tables[batch_idx].fill_(self.empty_block)
