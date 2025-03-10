@@ -18,3 +18,4 @@ from .attn import (
     register_rbln_custom_masked_attention,
 )
 from .flash_attn import register_rbln_custom_flash_causal_masked_attention, register_rbln_custom_flash_masked_attention
+from .kv_cache_update import register_rbln_custom_cache_update
