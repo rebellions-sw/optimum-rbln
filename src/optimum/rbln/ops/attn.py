@@ -28,7 +28,7 @@ else:
 def register_rbln_custom_masked_attention():
     torch.library.define(
         "rbln_custom_ops::masked_attn_decode",
-        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d) -> Tensor[]",
+        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d) -> Tensor",
     )
 
     @torch.library.impl("rbln_custom_ops::masked_attn_decode", "cpu")
@@ -55,28 +55,17 @@ def register_rbln_custom_masked_attention():
         - scale: [] - Attention scale factor
 
         Returns:
-            Tuple[Tensor, Tensor, Tensor]:
-            - attn_output: [batch=1, n_heads, n_groups, 1, head_dim] - Attention output
-            - kcache: Same shape as input kcache, batch=1 - Placeholder for compiler
-            - vcache: Same shape as input vcache, batch=1 - Placeholder for compiler
+            Tensor: attn_output: [batch=1, n_heads, n_groups, 1, head_dim] - Attention output
         """
-        return (
-            q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
-        )
+        return q
 
     @register_fake("rbln_custom_ops::masked_attn_decode")
     def attn_decode_abstract(q, k, v, m, kcache, vcache, seq, partition):
-        return (
-            q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
-        )
+        return q
 
     torch.library.define(
         "rbln_custom_ops::masked_attn_prefill",
-        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e) -> Tensor[]",
+        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e) -> Tensor",
     )
 
     @torch.library.impl("rbln_custom_ops::masked_attn_prefill", "cpu")
@@ -102,23 +91,20 @@ def register_rbln_custom_masked_attention():
         - scale: [] - Attention scale factor
 
         Returns:
-            Tuple[Tensor, Tensor, Tensor]:
-            - attn_output: [batch=1, n_heads, n_groups, seq_len, head_dim] - Attention output
-            - empty_kcache: Same shape as input kcache - Placeholder for compiler
-            - empty_vcache: Same shape as input vcache - Placeholder for compiler
+            Tensor: attn_output: [batch=1, n_heads, n_groups, seq_len, head_dim] - Attention output
         """
-        return q, kcache, vcache
+        return q
 
     @register_fake("rbln_custom_ops::masked_attn_prefill")
     def attn_prefill_abstract(q, k, v, m, kcache, vcache, batch, seq, partition):
-        return q, kcache, vcache
+        return q
 
 
 @lru_cache
 def register_rbln_custom_causal_masked_attention():
     torch.library.define(
         "rbln_custom_ops::causal_masked_attn_decode",
-        "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d) -> Tensor[]",
+        "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d) -> Tensor",
     )
 
     @torch.library.impl("rbln_custom_ops::causal_masked_attn_decode", "cpu")
@@ -144,28 +130,17 @@ def register_rbln_custom_causal_masked_attention():
         - scale: [] - Attention scale factor
 
         Returns:
-            Tuple[Tensor, Tensor, Tensor]:
-            - attn_output: [batch=1, n_heads, n_groups, 1, head_dim] - Attention output
-            - kcache: Same shape as input kcache, batch=1 - Placeholder for compiler
-            - vcache: Same shape as input vcache, batch=1 - Placeholder for compiler
+            Tensor: attn_output: [batch=1, n_heads, n_groups, 1, head_dim] - Attention output
         """
-        return (
-            q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
-        )
+        return q
 
     @register_fake("rbln_custom_ops::causal_masked_attn_decode")
     def attn_decode_abstract(q, k, v, kcache, vcache, seq, partition):
-        return (
-            q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
-        )
+        return q
 
     torch.library.define(
         "rbln_custom_ops::causal_masked_attn_prefill",
-        "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e) -> Tensor[]",
+        "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e) -> Tensor",
     )
 
     @torch.library.impl("rbln_custom_ops::causal_masked_attn_prefill", "cpu")
@@ -190,23 +165,20 @@ def register_rbln_custom_causal_masked_attention():
         - scale: [] - Attention scale factor
 
         Returns:
-            Tuple[Tensor, Tensor, Tensor]:
-            - attn_output: [batch=1, n_heads, n_groups, seq_len, head_dim] - Attention output
-            - empty_kcache: Same shape as input kcache - Placeholder for compiler
-            - empty_vcache: Same shape as input vcache - Placeholder for compiler
+            Tensor: attn_output: [batch=1, n_heads, n_groups, seq_len, head_dim] - Attention output
         """
-        return q, kcache, vcache
+        return q
 
     @register_fake("rbln_custom_ops::causal_masked_attn_prefill")
     def attn_prefill_abstract(q, k, v, kcache, vcache, batch, seq, partition):
-        return q, kcache, vcache
+        return q
 
 
 @lru_cache
 def register_rbln_custom_attention_add_softmax():
     torch.library.define(
         "rbln_custom_ops::attn_decode_add_softmax",
-        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d) -> Tensor[]",
+        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d) -> Tensor",
     )
 
     @torch.library.impl("rbln_custom_ops::attn_decode_add_softmax", "cpu")
@@ -233,28 +205,17 @@ def register_rbln_custom_attention_add_softmax():
         - scale: [] - Attention scale factor
 
         Returns:
-            Tuple[Tensor, Tensor, Tensor]:
-            - attn_output: [batch=1, n_heads, 1, 1, head_dim] - Attention output
-            - kcache: Same shape as input kcache, batch=1 - Placeholder for compiler
-            - vcache: Same shape as input vcache, batch=1 - Placeholder for compiler
+            Tensor: attn_output: [batch=1, n_heads, 1, 1, head_dim] - Attention output
         """
-        return (
-            q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
-        )
+        return q
 
     @register_fake("rbln_custom_ops::attn_decode_add_softmax")
     def attn_decode_add_softmax_abstract(q, k, v, m, kcache, vcache, seq, partition):
-        return (
-            q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
-        )
+        return q
 
     torch.library.define(
         "rbln_custom_ops::attn_prefill_add_softmax",
-        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e) -> Tensor[]",
+        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e) -> Tensor",
     )
 
     @torch.library.impl("rbln_custom_ops::attn_prefill_add_softmax", "cpu")
@@ -280,21 +241,10 @@ def register_rbln_custom_attention_add_softmax():
         - scale: [] - Attention scale factor
 
         Returns:
-            Tuple[Tensor, Tensor, Tensor]:
-            - attn_output: [batch=1, n_heads, seq_len, 1, head_dim] - Attention output
-            - empty_kcache: Same shape as input kcache - Placeholder for compiler
-            - empty_vcache: Same shape as input vcache - Placeholder for compiler
+            Tensor: attn_output: [batch=1, n_heads, seq_len, 1, head_dim] - Attention output
         """
-        return (
-            q,
-            torch.empty(1, *kcache.shape[1:], device=kcache.device),
-            torch.empty(1, *vcache.shape[1:], device=vcache.device),
-        )
+        return q
 
     @register_fake("rbln_custom_ops::attn_prefill_add_softmax")
     def attn_prefill_add_softmax_abstract(q, k, v, m, kcache, vcache, batch, seq, partition):
-        return (
-            q,
-            torch.empty(1, *kcache.shape[1:], device=kcache.device),
-            torch.empty(1, *vcache.shape[1:], device=vcache.device),
-        )
+        return q
