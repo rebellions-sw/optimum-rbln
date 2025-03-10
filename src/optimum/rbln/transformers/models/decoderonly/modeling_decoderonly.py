@@ -59,9 +59,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
         self.use_attention_mask = use_attention_mask
 
-        if self.use_attention_mask:
-            # shared tensor between prefill and decode phase
-            self.dec_attn_mask = dec_attn_mask
+        # shared tensor between prefill and decode phase
+        self.dec_attn_mask = dec_attn_mask
 
         if self.phase == "prefill":
             vocab_size = kwargs.pop("vocab_size")
@@ -114,14 +113,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         if batch_size != cache_position.shape[0]:
             raise RuntimeError(f"Cache position size mismatch: got {cache_position.shape[0]}, expected {batch_size}.")
 
-        if not self.use_attention_mask:
-            logits = super().forward(
-                inputs,
-                cache_position,
-            )
-            return logits
-
-        if attention_mask is None:
+        if self.use_attention_mask and attention_mask is None:
             for b_idx in range(batch_size):
                 decoding_step = cache_position[b_idx].item()
                 if not (0 <= decoding_step < self.dec_attn_mask.shape[-1]):
@@ -129,11 +121,13 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                         f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
                     )
                 self.dec_attn_mask[b_idx, :, :, decoding_step] = 1
+            
+            attention_mask = self.dec_attn_mask
 
         logits = super().forward(
             inputs,
             cache_position,
-            self.dec_attn_mask if attention_mask is None else attention_mask,
+            attention_mask if self.use_use_attn_mask else None,
         )
 
         return logits
