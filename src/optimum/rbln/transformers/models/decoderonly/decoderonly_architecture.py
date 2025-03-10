@@ -416,7 +416,9 @@ class DecoderOnlyModel(nn.Module):
     def hidden_multiplier(self):
         return 1
 
-    def convert_sequence_positions_for_paged_attn(self, seq_positions, max_seq_len):
+    def convert_sequence_positions_for_flash_attn(self, seq_positions, max_seq_len):
+        if self.attn_impl not in ["flash_attn"]:
+            raise NotImplementedError(f"Unknown attn_impl ({self.attn_impl}).")
         partition_len = self.partition_len
         num_partition = max_seq_len // partition_len
 
@@ -478,9 +480,10 @@ class DecoderOnlyModel(nn.Module):
 
         # (batch, seq_len) -> (batch,)
         seq_positions = cache_position[:, 0]
-        seq_positions = self.convert_sequence_positions_for_paged_attn(
-            seq_positions=seq_positions, max_seq_len=self.max_seq_len
-        )
+        if self.attn_impl == "flash_attn":
+            seq_positions = self.convert_sequence_positions_for_flash_attn(
+                seq_positions=seq_positions, max_seq_len=self.max_seq_len
+            )
 
         present_key_values = past_key_values
         for layer in self.layers:
@@ -711,7 +714,6 @@ class AttentionOp(nn.Module):
         key_state: torch.Tensor,
         value_state: torch.Tensor,
         attn_mask: torch.Tensor,
-        batch_position: torch.Tensor,
         past_key_state: torch.Tensor,
         past_value_state: torch.Tensor,
         seq_position: torch.Tensor,
@@ -726,7 +728,6 @@ class AttentionOp(nn.Module):
             key_state: Key tensor [1, num_heads, seq_len, head_dim]
             value_state: Value tensor [1, num_heads, seq_len, head_dim]
             attn_mask: Attention mask tensor ∈ {0, 1}
-            batch_position: Batch index for cache lookup
             past_key_state: Previous key cache states
             past_value_state: Previous value cache states
             seq_position: Current position in sequence
@@ -928,7 +929,6 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
         hidden_states: torch.Tensor,
         attention_mask: torch.Tensor,
         seq_positions: torch.LongTensor,
-        batch_position: torch.Tensor,
         past_key_values: Tuple[Tuple[torch.Tensor]],
         cos: Optional[torch.Tensor] = None,
         sin: Optional[torch.Tensor] = None,
@@ -955,7 +955,6 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
             attention_mask,
             past_key_state=past_key_values[self.layer_idx][0],
             past_value_state=past_key_values[self.layer_idx][1],
-            batch_position=None if self.phase == "decode" else batch_position,
             seq_position=seq_positions,
             scale=self.scale,
             block_tables=block_tables,
@@ -993,7 +992,6 @@ class FlashAttentionOp(AttentionOp):
         key_state,
         value_state,
         attn_mask,
-        batch_position,
         past_key_state,
         past_value_state,
         seq_position,
