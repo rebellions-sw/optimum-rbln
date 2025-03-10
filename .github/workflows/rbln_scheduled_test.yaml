@@ -1,0 +1,47 @@
+name: Optimum-rbln / Scheduled Test
+
+on:
+  schedule:
+    # 매일 새벽 2시에 실행 (UTC 기준 17:00, 한국 시간으로 새벽 2:00)
+    - cron: '0 17 * * *'
+
+env:
+  REBEL_COMPILER_VERSION: 0.7.2
+  HF_USER_ID: ${{ secrets.HF_USER_ID }}
+  HF_AUTH_TOKEN: ${{ secrets.HF_AUTH_TOKEN }}
+
+jobs:
+  check-compiler:
+    uses: ./.github/workflows/rbln_check_compiler.yaml
+    with:
+      compiler_version: ${{ vars.REBEL_COMPILER_VERSION }}
+    secrets:
+      REBEL_PYPI_USERNAME: ${{ secrets.REBEL_PYPI_USERNAME }}
+      REBEL_PYPI_PASSWORD: ${{ secrets.REBEL_PYPI_PASSWORD }}
+      CHECK_DEPLOY: ${{ secrets.CHECK_DEPLOY }}
+
+  optimum-rbln-pytest:
+    needs: check-compiler
+    if: ${{ needs.check-compiler.outputs.is_deploy_version == 'true' }}
+    uses: ./.github/workflows/rbln_optimum_pytest.yaml
+    with:
+      ref: main
+      rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
+    secrets:
+      REBEL_PYPI_USERNAME: ${{ secrets.REBEL_PYPI_USERNAME }}
+      REBEL_PYPI_PASSWORD: ${{ secrets.REBEL_PYPI_PASSWORD }}
+      HF_USER_ID: ${{ secrets.HF_USER_ID }}
+      HF_AUTH_TOKEN: ${{ secrets.HF_AUTH_TOKEN }}
+
+  optimum-rbln-inference-test:
+    needs: check-compiler
+    if: ${{ needs.check-compiler.outputs.is_deploy_version == 'true' }}
+    uses: ./.github/workflows/rbln_optimum_inference_test.yaml
+    with:
+      ref: main
+      rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
+    secrets:
+      REBEL_PYPI_USERNAME: ${{ secrets.REBEL_PYPI_USERNAME }}
+      REBEL_PYPI_PASSWORD: ${{ secrets.REBEL_PYPI_PASSWORD }}
+      HF_USER_ID: ${{ secrets.HF_USER_ID }}
+      HF_AUTH_TOKEN: ${{ secrets.HF_AUTH_TOKEN }} 
