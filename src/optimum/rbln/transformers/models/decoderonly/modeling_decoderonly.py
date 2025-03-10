@@ -121,7 +121,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                         f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
                     )
                 self.dec_attn_mask[b_idx, :, :, decoding_step] = 1
-            
+
             attention_mask = self.dec_attn_mask
 
         logits = super().forward(
