@@ -127,7 +127,7 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
         )
 
         if rbln_config.get("img2vid_pipeline"):
-            if rbln_config["num_frames"] is None :
+            if rbln_config["num_frames"] is None:
                 rbln_config["num_frames"] = pipe.unet.config.num_frames
 
         return rbln_config
