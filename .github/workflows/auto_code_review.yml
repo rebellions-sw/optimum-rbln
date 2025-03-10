@@ -70,4 +70,3 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.check.outputs.pr_number }}
         run: python .github/scripts/auto_code_review.py
-
