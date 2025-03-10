@@ -80,7 +80,7 @@ class RBLNDiffusionMixin:
 
     @classmethod
     def is_img2vid_pipeline(cls):
-        return "Video" in cls.__name__
+        return "StableVideoDiffusion" in cls.__name__
 
     @classmethod
     def get_submodule_rbln_config(
