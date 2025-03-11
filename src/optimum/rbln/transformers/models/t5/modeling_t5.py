@@ -85,7 +85,6 @@ class RBLNT5EncoderModel(RBLNModel):
             max_sequence_length =pipe.transformer.max_text_seq_length
         else : 
             max_sequence_length = rbln_config.get("max_sequence_length", 256)
-        max_sequence_length = rbln_config.get("max_sequence_length", 256)
         model_input_names = ["input_ids"]
 
         rbln_config.update(
