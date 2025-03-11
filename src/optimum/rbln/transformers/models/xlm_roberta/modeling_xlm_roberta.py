@@ -99,15 +99,3 @@ class RBLNXLMRobertaModel(RBLNModel):
         )
         rbln_config.model_cfg.update({"max_seq_len": rbln_max_seq_len})
         return rbln_config
-
-    def forward(
-        self,
-        input_ids: "torch.Tensor",
-        attention_mask: "torch.Tensor",
-        token_type_ids: "torch.Tensor" = None,
-        **kwargs,
-    ):
-        if token_type_ids is None:
-            token_type_ids = torch.zeros_like(input=input_ids, dtype=torch.int64)
-        output = super().forward(input_ids, attention_mask, token_type_ids)
-        return output
