@@ -51,13 +51,10 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         phase: str,
         batch_size: int,
         dec_attn_mask: torch.Tensor,
-<<<<<<< HEAD
         block_tables: torch.Tensor,
         free_block_pool: Deque,
         kvcache_block_size: int,
         kvcache_num_blocks: int,
-=======
->>>>>>> origin/main
         use_attention_mask: bool,
         **kwargs: Any,
     ) -> None:
@@ -65,10 +62,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         self.phase = phase
         self.batch_size = batch_size
 
-<<<<<<< HEAD
         # shared data structures between prefill and decode phase
-=======
->>>>>>> origin/main
         self.use_attention_mask = use_attention_mask
 
         # shared tensor between prefill and decode phase
@@ -195,12 +189,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         logits = super().forward(
             inputs,
             cache_position,
-<<<<<<< HEAD
             attention_mask if self.use_use_attn_mask else None,
             block_tables,
-=======
-            attention_mask if self.use_attention_mask else None,
->>>>>>> origin/main
         )
 
         return logits
@@ -298,7 +288,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 )
             # Forward pass for the current chunk
             logits = super().forward(
-<<<<<<< HEAD
                 input_chunk,
                 cache_pos_chunk,
                 chunked_attention_mask if self.use_attention_mask else None,
@@ -309,14 +298,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
         # Update decoder attention mask with processed KV-cache length from prefill phase
         if not is_external_block_tables and self.use_attention_mask:
-=======
-                *args,
-                out=out_buffers,
-            )
-
-        if self.use_attention_mask:
-            # Update decoder attention mask with processed KV-cache length from prefill phase
->>>>>>> origin/main
             self.dec_attn_mask[batch_idx].fill_(0)
             self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
 
@@ -358,12 +339,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         self.batch_size = self.rbln_config.model_cfg["batch_size"]
         self.max_seq_len = self.rbln_config.model_cfg["max_seq_len"]
         self.prefill_chunk_size = self.rbln_config.model_cfg["prefill_chunk_size"]
-<<<<<<< HEAD
         self.kvcache_block_size = self.rbln_config.model_cfg["kvcache_block_size"]
         # FIXME get kvcache_num_blocks from compiled results.
         self.kvcache_num_blocks = self.rbln_config.model_cfg["kvcache_num_blocks"]
-=======
->>>>>>> origin/main
         self.use_attention_mask = self.rbln_config.model_cfg["use_attention_mask"]
 
         main_input_name = self.main_input_name
@@ -399,10 +377,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             kvcache_num_blocks=self.kvcache_num_blocks,
             vocab_size=self.config.vocab_size,
             prefill_chunk_size=self.prefill_chunk_size,
-<<<<<<< HEAD
             max_seq_len=self.max_seq_len,
-=======
->>>>>>> origin/main
             use_attention_mask=self.use_attention_mask,
         )
         self.decoder = RBLNRuntimeModel(
@@ -412,13 +387,10 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             phase="decode",
             batch_size=self.batch_size,
             dec_attn_mask=dec_attn_mask,
-<<<<<<< HEAD
             block_tables=block_tables,
             free_block_pool=free_block_pool,
             kvcache_block_size=self.kvcache_block_size,
             kvcache_num_blocks=self.kvcache_num_blocks,
-=======
->>>>>>> origin/main
             use_attention_mask=self.use_attention_mask,
         )
 
@@ -580,11 +552,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_max_seq_len = rbln_kwargs.get("max_seq_len", None)
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
         rbln_use_inputs_embeds = rbln_kwargs.get("use_inputs_embeds", None)
-<<<<<<< HEAD
         rbln_use_attention_mask = rbln_kwargs.get("use_attention_mask", True)
-=======
-        rbln_use_attention_mask = rbln_kwargs.get("use_attention_mask", None)
->>>>>>> origin/main
         rbln_attn_impl = rbln_kwargs.get("attn_impl", None)
         rbln_kvcache_partition_len = rbln_kwargs.get("kvcache_partition_len", None)
         rbln_kvcache_block_size = rbln_kwargs.get("kvcache_block_size", None)

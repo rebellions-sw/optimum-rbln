@@ -66,13 +66,8 @@ def register_rbln_custom_paged_attention():
             torch.empty(*vcache.shape, device=vcache.device),
         )
 
-<<<<<<< HEAD
     @register_fake("rbln_custom_ops::paged_attn_decode")
     def attn_decode_abstract(q, k, v, m, kcache, vcache, seq, scale, block_table, block_size):
-=======
-    @register_fake("rbln_custom_ops::masked_attn_decode")
-    def attn_decode_abstract(q, k, v, m, kcache, vcache, seq, partition):
->>>>>>> origin/main
         return (
             q,
             torch.empty(*kcache.shape, device=kcache.device),
@@ -80,21 +75,12 @@ def register_rbln_custom_paged_attention():
         )
 
     torch.library.define(
-<<<<<<< HEAD
         "rbln_custom_ops::paged_attn_prefill",
         "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f) -> Tensor[]",
     )
 
     @torch.library.impl("rbln_custom_ops::paged_attn_prefill", "cpu")
     def attn_prefill_cpu(q, k, v, mask, kcache, vcache, seq, scale, block_table, block_size):
-=======
-        "rbln_custom_ops::masked_attn_prefill",
-        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e) -> Tensor[]",
-    )
-
-    @torch.library.impl("rbln_custom_ops::masked_attn_prefill", "cpu")
-    def attn_prefill_cpu(q, k, v, mask, kcache, vcache, batch, seq, scale):
->>>>>>> origin/main
         """Defines the computation pattern for prefill phase attention with KV cache updates.
 
         IMPORTANT: This op serves as a pattern definition for the RBLN compiler to generate
@@ -123,7 +109,6 @@ def register_rbln_custom_paged_attention():
         """
         return q, kcache, vcache
 
-<<<<<<< HEAD
     @register_fake("rbln_custom_ops::paged_attn_prefill")
     def attn_prefill_abstract(q, k, v, m, kcache, vcache, seq, scale, block_table, block_size):
         return q, kcache, vcache
@@ -214,10 +199,6 @@ def register_rbln_custom_causal_paged_attention():
 
     @register_fake("rbln_custom_ops::causal_paged_attn_prefill")
     def attn_prefill_abstract(q, k, v, kcache, vcache, seq, scale, block_table, block_size):
-=======
-    @register_fake("rbln_custom_ops::masked_attn_prefill")
-    def attn_prefill_abstract(q, k, v, m, kcache, vcache, batch, seq, partition):
->>>>>>> origin/main
         return q, kcache, vcache
 
 
