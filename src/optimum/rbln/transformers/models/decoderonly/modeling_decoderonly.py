@@ -104,7 +104,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     raise IndexError(f"Invalid index: batch_idx={batch_idx}, block_idx={block_idx}")
                 update_block(batch_idx, block_idx)
 
-            return self.block_tables[batch_idx].unsqueeze(0)
+            return self.block_tables[batch_idx]
 
         # Decoder
         else:
