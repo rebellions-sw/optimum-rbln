@@ -21,8 +21,8 @@ from transformers import PretrainedConfig, PreTrainedModel
 
 from ....ops import (
     register_rbln_custom_causal_paged_attention,
-    register_rbln_custom_flash_causal_paged_attention,
-    register_rbln_custom_flash_paged_attention,
+    register_rbln_custom_paged_flash_causal_attention,
+    register_rbln_custom_paged_flash_attention,
     register_rbln_custom_paged_attention,
 )
 from ....utils import logging
@@ -154,9 +154,9 @@ class DecoderOnlyWrapper(nn.Module):
         if self.attn_impl == "flash_attn":
             self.kvcache_partition_len = kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
             if self.use_attention_mask:
-                register_rbln_custom_flash_paged_attention()
+                register_rbln_custom_paged_flash_attention()
             else:
-                register_rbln_custom_flash_causal_paged_attention()
+                register_rbln_custom_paged_flash_causal_attention()
         elif self.attn_impl == "eager":
             self.kvcache_partition_len = None
             if self.use_attention_mask:
@@ -1022,7 +1022,7 @@ class FlashAttentionOp(AttentionOp):
 
         if self.phase == "decode":
             if self.use_attention_mask:
-                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.flash_paged_attn_decode(
+                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_flash_attn_decode(
                     query_state,
                     key_state,
                     value_state,
@@ -1036,7 +1036,7 @@ class FlashAttentionOp(AttentionOp):
                     kvcache_block_size,
                 )
             else:
-                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.flash_causal_paged_attn_decode(
+                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_flash_causal_attn_decode(
                     query_state,
                     key_state,
                     value_state,
@@ -1050,7 +1050,7 @@ class FlashAttentionOp(AttentionOp):
                 )
         else:
             if self.use_attention_mask:
-                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.flash_paged_attn_prefill(
+                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_flash_attn_prefill(
                     query_state,
                     key_state,
                     value_state,
@@ -1064,7 +1064,7 @@ class FlashAttentionOp(AttentionOp):
                     kvcache_block_size,
                 )
             else:
-                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.flash_causal_paged_attn_prefill(
+                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_flash_causal_paged_attn_prefill(
                     query_state,
                     key_state,
                     value_state,

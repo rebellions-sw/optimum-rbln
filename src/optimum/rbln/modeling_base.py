@@ -364,6 +364,8 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
     @classmethod
     def compile(cls, model, rbln_compile_config: Optional[RBLNCompileConfig] = None, **kwargs):
+        import pdb
+        pdb.set_trace()
         compiled_model = rebel.compile_from_torch(
             model,
             input_info=rbln_compile_config.input_info,
