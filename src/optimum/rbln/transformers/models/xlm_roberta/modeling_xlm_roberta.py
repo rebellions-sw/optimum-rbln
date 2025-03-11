@@ -15,7 +15,6 @@
 import inspect
 from typing import TYPE_CHECKING, Optional, Union
 
-import torch
 from transformers import PretrainedConfig
 
 from ....modeling import RBLNModel
