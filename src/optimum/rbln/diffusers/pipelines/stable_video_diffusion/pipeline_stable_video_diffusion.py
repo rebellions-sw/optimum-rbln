@@ -39,8 +39,7 @@ class RBLNStableVideoDiffusionPipeline(RBLNDiffusionMixin, StableVideoDiffusionP
     """
 
     original_class = StableVideoDiffusionPipeline
-    # _submodules = ["image_encoder", "unet", "vae"]
-    _submodules = ["unet"]
+    _submodules = ["image_encoder", "unet", "vae"]
 
     def handle_additional_kwargs(self, **kwargs):
         compiled_num_frames = self.unet.rbln_config.model_cfg.get("num_frames")

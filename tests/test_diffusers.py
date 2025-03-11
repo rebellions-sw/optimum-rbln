@@ -235,20 +235,18 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
     GENERATION_KWARGS = {
         "num_inference_steps": 2,
         "generator": torch.manual_seed(42),
-        "image": to_pil_image(torch.randn(3, 32, 32, generator=torch.manual_seed(42)).clamp(0, 1)),
+        "image": torch.randn(1,3,32,32, generator=torch.manual_seed(42)).uniform_(0, 1),
         "num_frames": 2,
         "decode_chunk_size": 2,
-        "rbln_config": {
-            "image_encoder": {"rbln_device": 0},
-            "unet": {"rbln_device": 0},
-            "vae": {"rbln_device": -1},
-        },
+        "output_type": "pt",
+        "height": 32,
+        "width": 32,
     }
     RBLN_CLASS_KWARGS = {
         "rbln_img_width": 32,
         "rbln_img_height": 32,
-        "num_frames": 2,
-        "decode_chunk_size": 2,
+        "rbln_num_frames": 2,
+        "rbln_decode_chunk_size": 2,
         "rbln_config": {
             "image_encoder": {"rbln_device": 0},
             "unet": {"rbln_device": 0},
@@ -268,7 +266,8 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
             CLIPVisionConfig,
             CLIPVisionModelWithProjection,
         )
-        torch.manual_seed(0)
+        
+        torch.manual_seed(42)
         unet = UNetSpatioTemporalConditionModel(
             block_out_channels=(32, 64),
             layers_per_block=2,
@@ -301,7 +300,7 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
             use_karras_sigmas=True,
         )
 
-        torch.manual_seed(0)
+        torch.manual_seed(42)
         vae = AutoencoderKLTemporalDecoder(
             block_out_channels=[32, 64],
             in_channels=3,
@@ -310,7 +309,7 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
             latent_channels=4,
         )
 
-        torch.manual_seed(0)
+        torch.manual_seed(42)
         config = CLIPVisionConfig(
             hidden_size=32,
             projection_dim=32,
@@ -322,7 +321,7 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
         )
         image_encoder = CLIPVisionModelWithProjection(config)
 
-        torch.manual_seed(0)
+        torch.manual_seed(42)
         feature_extractor = CLIPImageProcessor(crop_size=32, size=32)
         components = {
             "unet": unet,
@@ -335,12 +334,13 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
     
     @classmethod
     def setUpClass(cls):
-        # import os
-        # import shutil
-        # # env_coverage = os.environ.get("OPTIMUM_RBLN_TEST_LEVEL", "default")
-        # # env_coverage = cls.TestLevel[env_coverage.upper()]
-        # if env_coverage.value < cls.TEST_LEVEL.value:
-        #     raise unittest.SkipTest(f"Skipped test : Test Coverage {env_coverage.name} < {cls.TEST_LEVEL.name}")
+        import os
+        import shutil
+        from .test_base import TestLevel
+        env_coverage = os.environ.get("OPTIMUM_RBLN_TEST_LEVEL", "default")
+        env_coverage = TestLevel[env_coverage.upper()]
+        if env_coverage.value < cls.TEST_LEVEL.value:
+            raise unittest.SkipTest(f"Skipped test : Test Coverage {env_coverage.name} < {cls.TEST_LEVEL.name}")
 
         if os.path.exists(cls.get_rbln_local_dir()):
             shutil.rmtree(cls.get_rbln_local_dir())
@@ -355,6 +355,14 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
             **cls.HF_CONFIG_KWARGS,
             **components,
         )
+        # return super().setUpClass()
+        
+    def test_generate(self):
+        inputs = self.get_inputs()
+        output = self.model(**inputs).frames[0]
+        output = self.postprocess(inputs, output)
+        if self.EXPECTED_OUTPUT:
+            self.assertEqual(output, self.EXPECTED_OUTPUT)
 
 if __name__ == "__main__":
     unittest.main()
