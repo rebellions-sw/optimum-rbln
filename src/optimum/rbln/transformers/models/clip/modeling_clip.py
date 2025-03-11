@@ -38,9 +38,6 @@ if TYPE_CHECKING:
         AutoFeatureExtractor,
         AutoProcessor,
         AutoTokenizer,
-        CLIPTextModel,
-        CLIPVisionModel,
-        CLIPVisionModelWithProjection,
     )
 
 

@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-class _UNet_STCD(torch.nn.Module):
+class _UNet_STCM(torch.nn.Module):
     def __init__(self, unet: "UNetSpatioTemporalConditionModel"):
         super().__init__()
         self.unet = unet
@@ -74,7 +74,7 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
 
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
-        return _UNet_STCD(model).eval()
+        return _UNet_STCM(model).eval()
 
     @classmethod
     def get_unet_sample_size(
@@ -127,7 +127,8 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
         )
 
         if rbln_config.get("img2vid_pipeline"):
-            rbln_config["num_frames"] = pipe.unet.config.num_frames
+            if rbln_config["num_frames"] is None:
+                rbln_config["num_frames"] = pipe.unet.config.num_frames
 
         return rbln_config
 

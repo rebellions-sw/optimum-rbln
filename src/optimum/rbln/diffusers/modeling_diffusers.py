@@ -80,7 +80,7 @@ class RBLNDiffusionMixin:
 
     @classmethod
     def is_img2vid_pipeline(cls):
-        return "Video" in cls.__name__
+        return "StableVideoDiffusion" in cls.__name__
 
     @classmethod
     def get_submodule_rbln_config(
@@ -453,11 +453,6 @@ class RBLNDiffusionMixin:
 
         Example:
             ```python
-            if hasattr(self, "movq"):
-                compiled_image_size = self.movq.image_size
-                kwargs["height"] = compiled_image_size[0]
-                kwargs["width"] = compiled_image_size[1]
-
             compiled_num_frames = self.unet.rbln_config.model_cfg.get("num_frames", None)
             if compiled_num_frames is not None:
                 kwargs["num_frames"] = self.unet.rbln_config.model_cfg.get("num_frames")
