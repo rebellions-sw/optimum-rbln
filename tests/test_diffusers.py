@@ -1,7 +1,17 @@
 import unittest
 
 import torch
-from diffusers import ControlNetModel
+from diffusers import (
+    AutoencoderKLTemporalDecoder,
+    ControlNetModel,
+    EulerDiscreteScheduler,
+    UNetSpatioTemporalConditionModel,
+)
+from transformers import (
+    CLIPImageProcessor,
+    CLIPVisionConfig,
+    CLIPVisionModelWithProjection,
+)
 
 from optimum.rbln import (
     RBLNKandinskyV22InpaintCombinedPipeline,
@@ -254,18 +264,8 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
     }
 
     @classmethod
+    # ref: https://github.com/huggingface/diffusers/blob/b88fef47851059ce32f161d17f00cd16d94af96a/tests/pipelines/stable_video_diffusion/test_stable_video_diffusion.py#L64
     def get_dummy_components(cls):
-        from diffusers import (
-            AutoencoderKLTemporalDecoder,
-            EulerDiscreteScheduler,
-            UNetSpatioTemporalConditionModel,
-        )
-        from transformers import (
-            CLIPImageProcessor,
-            CLIPVisionConfig,
-            CLIPVisionModelWithProjection,
-        )
-
         torch.manual_seed(42)
         unet = UNetSpatioTemporalConditionModel(
             block_out_channels=(32, 64),
@@ -333,19 +333,6 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
 
     @classmethod
     def setUpClass(cls):
-        import os
-        import shutil
-
-        from .test_base import TestLevel
-
-        env_coverage = os.environ.get("OPTIMUM_RBLN_TEST_LEVEL", "default")
-        env_coverage = TestLevel[env_coverage.upper()]
-        if env_coverage.value < cls.TEST_LEVEL.value:
-            raise unittest.SkipTest(f"Skipped test : Test Coverage {env_coverage.name} < {cls.TEST_LEVEL.name}")
-
-        if os.path.exists(cls.get_rbln_local_dir()):
-            shutil.rmtree(cls.get_rbln_local_dir())
-
         components = cls.get_dummy_components()
         cls.model = cls.RBLN_CLASS.from_pretrained(
             cls.HF_MODEL_ID,
@@ -356,7 +343,6 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
             **cls.HF_CONFIG_KWARGS,
             **components,
         )
-        # return super().setUpClass()
 
     def test_generate(self):
         inputs = self.get_inputs()
