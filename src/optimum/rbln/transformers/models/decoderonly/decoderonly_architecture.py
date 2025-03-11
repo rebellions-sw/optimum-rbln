@@ -243,16 +243,16 @@ class DecoderOnlyWrapper(nn.Module):
                     input_ids_or_inputs_embeds,
                     cache_position,
                     attention_mask,
-                    block_tables,
                     query_position,
+                    block_tables,
                     *past_key_values,
                 ) = args
             else:
                 (
                     input_ids_or_inputs_embeds,
                     cache_position,
-                    block_tables,
                     query_position,
+                    block_tables,
                     *past_key_values,
                 ) = args
                 attention_mask = None
