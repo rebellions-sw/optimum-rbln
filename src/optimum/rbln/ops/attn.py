@@ -99,7 +99,6 @@ def register_rbln_custom_paged_attention():
         - mask: [batch=1, 1, 1, seq_len, max_seq_len] - Attention mask
         - kcache: [batch_size, n_heads, 1, max_seq_len, head_dim] - Key cache
         - vcache: [batch_size, n_heads, 1, max_seq_len, head_dim] - Value cache
-        - batch: [1] - Batch index for cache access
         - seq: [1, 1] - Starting sequence position
         - scale: [] - Attention scale factor
         - block_table: [batch_size, max_seq_len // block_size] - Block indices for KV cache management
