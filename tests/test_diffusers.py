@@ -1,17 +1,7 @@
 import unittest
 
 import torch
-from diffusers import (
-    AutoencoderKLTemporalDecoder,
-    ControlNetModel,
-    EulerDiscreteScheduler,
-    UNetSpatioTemporalConditionModel,
-)
-from transformers import (
-    CLIPImageProcessor,
-    CLIPVisionConfig,
-    CLIPVisionModelWithProjection,
-)
+from diffusers import ControlNetModel
 
 from optimum.rbln import (
     RBLNKandinskyV22InpaintCombinedPipeline,
@@ -266,6 +256,16 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
     @classmethod
     # ref: https://github.com/huggingface/diffusers/blob/b88fef47851059ce32f161d17f00cd16d94af96a/tests/pipelines/stable_video_diffusion/test_stable_video_diffusion.py#L64
     def get_dummy_components(cls):
+        from diffusers import (
+            AutoencoderKLTemporalDecoder,
+            EulerDiscreteScheduler,
+            UNetSpatioTemporalConditionModel,
+        )
+        from transformers import (
+            CLIPImageProcessor,
+            CLIPVisionConfig,
+            CLIPVisionModelWithProjection,
+        )
         torch.manual_seed(42)
         unet = UNetSpatioTemporalConditionModel(
             block_out_channels=(32, 64),
