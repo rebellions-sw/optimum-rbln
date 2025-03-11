@@ -617,20 +617,18 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 )
 
             max_block_cnt = rbln_max_seq_len // rbln_kvcache_block_size
-            max_block_nums = max_block_cnt * rbln_batch_size
             
             if query_length > 1:
                 input_info.extend([("block_tables", [1, max_block_cnt], "int16")])
             else:
                 input_info.extend([("block_tables", [batch_size, max_block_cnt], "int16")])
 
-
             input_info.extend(
                 [
                     (
                         f"past_key_values_{i}",
                         [
-                            max_block_nums,
+                            rbln_kvcache_num_blocks,
                             num_key_value_heads,
                             rbln_kvcache_block_size,
                             head_dim,
