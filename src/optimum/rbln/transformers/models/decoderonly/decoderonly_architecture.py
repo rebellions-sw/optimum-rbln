@@ -480,6 +480,7 @@ class DecoderOnlyModel(nn.Module):
 
         # (batch, seq_len) -> (batch,)
         if self.attn_impl == "flash_attn":
+            seq_positions = cache_position[:, 0]
             seq_positions = self.convert_sequence_positions_for_flash_attn(
                 seq_positions=seq_positions, max_seq_len=self.max_seq_len
             )
