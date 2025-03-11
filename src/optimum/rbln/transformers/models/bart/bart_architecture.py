@@ -142,7 +142,7 @@ class BartSelfAttention(Seq2SeqSelfAttention):
         self.num_heads = self._original_mod.num_heads
         self.head_dim = self._original_mod.embed_dim // self._original_mod.num_heads
         self.scaling = self.head_dim**-0.5
-        self.attn_decode = torch.ops.rbln_custom_ops.attn_decode
+        self.attn_decode = torch.ops.rbln_custom_ops.masked_attn_decode
 
     def projection(self, hidden_states) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         query_states = self.q_proj(hidden_states) * self.scaling

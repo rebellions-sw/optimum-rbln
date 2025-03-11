@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .attn import register_rbln_custom_attention, register_rbln_custom_attention_add_softmax
-from .flash_attn import register_rbln_custom_flash_attention
+from .attn import (
+    register_rbln_custom_attention_add_softmax,
+    register_rbln_custom_causal_masked_attention,
+    register_rbln_custom_masked_attention,
+)
+from .flash_attn import register_rbln_custom_flash_causal_masked_attention, register_rbln_custom_flash_masked_attention
 from .kv_cache_update import register_rbln_custom_cache_update
