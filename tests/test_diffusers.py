@@ -266,6 +266,7 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
             CLIPVisionConfig,
             CLIPVisionModelWithProjection,
         )
+
         torch.manual_seed(42)
         unet = UNetSpatioTemporalConditionModel(
             block_out_channels=(32, 64),
