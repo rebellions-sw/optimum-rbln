@@ -51,10 +51,13 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         phase: str,
         batch_size: int,
         dec_attn_mask: torch.Tensor,
+<<<<<<< HEAD
         block_tables: torch.Tensor,
         free_block_pool: Deque,
         kvcache_block_size: int,
         kvcache_num_blocks: int,
+=======
+>>>>>>> origin/main
         use_attention_mask: bool,
         **kwargs: Any,
     ) -> None:
@@ -62,7 +65,10 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         self.phase = phase
         self.batch_size = batch_size
 
+<<<<<<< HEAD
         # shared data structures between prefill and decode phase
+=======
+>>>>>>> origin/main
         self.use_attention_mask = use_attention_mask
 
         # shared tensor between prefill and decode phase
@@ -184,11 +190,17 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
             attention_mask = self.dec_attn_mask
 
+            attention_mask = self.dec_attn_mask
+
         logits = super().forward(
             inputs,
             cache_position,
+<<<<<<< HEAD
             attention_mask if self.use_use_attn_mask else None,
             block_tables,
+=======
+            attention_mask if self.use_attention_mask else None,
+>>>>>>> origin/main
         )
 
         return logits
@@ -269,8 +281,24 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             # batch_position = torch.tensor(batch_idx, dtype=torch.int16) if block_tables is None else None
             query_position = torch.tensor((query_length - 1) % self.prefill_chunk_size, dtype=torch.int16)
 
+            if self.use_attention_mask:
+                args = (
+                    input_chunk,
+                    cache_pos_chunk,
+                    chunked_attention_mask,
+                    batch_position,
+                    query_position,
+                )
+            else:
+                args = (
+                    input_chunk,
+                    cache_pos_chunk,
+                    batch_position,
+                    query_position,
+                )
             # Forward pass for the current chunk
             logits = super().forward(
+<<<<<<< HEAD
                 input_chunk,
                 cache_pos_chunk,
                 chunked_attention_mask if self.use_attention_mask else None,
@@ -281,6 +309,14 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
         # Update decoder attention mask with processed KV-cache length from prefill phase
         if not is_external_block_tables and self.use_attention_mask:
+=======
+                *args,
+                out=out_buffers,
+            )
+
+        if self.use_attention_mask:
+            # Update decoder attention mask with processed KV-cache length from prefill phase
+>>>>>>> origin/main
             self.dec_attn_mask[batch_idx].fill_(0)
             self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
 
@@ -322,9 +358,12 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         self.batch_size = self.rbln_config.model_cfg["batch_size"]
         self.max_seq_len = self.rbln_config.model_cfg["max_seq_len"]
         self.prefill_chunk_size = self.rbln_config.model_cfg["prefill_chunk_size"]
+<<<<<<< HEAD
         self.kvcache_block_size = self.rbln_config.model_cfg["kvcache_block_size"]
         # FIXME get kvcache_num_blocks from compiled results.
         self.kvcache_num_blocks = self.rbln_config.model_cfg["kvcache_num_blocks"]
+=======
+>>>>>>> origin/main
         self.use_attention_mask = self.rbln_config.model_cfg["use_attention_mask"]
 
         main_input_name = self.main_input_name
@@ -360,7 +399,10 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             kvcache_num_blocks=self.kvcache_num_blocks,
             vocab_size=self.config.vocab_size,
             prefill_chunk_size=self.prefill_chunk_size,
+<<<<<<< HEAD
             max_seq_len=self.max_seq_len,
+=======
+>>>>>>> origin/main
             use_attention_mask=self.use_attention_mask,
         )
         self.decoder = RBLNRuntimeModel(
@@ -370,10 +412,13 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             phase="decode",
             batch_size=self.batch_size,
             dec_attn_mask=dec_attn_mask,
+<<<<<<< HEAD
             block_tables=block_tables,
             free_block_pool=free_block_pool,
             kvcache_block_size=self.kvcache_block_size,
             kvcache_num_blocks=self.kvcache_num_blocks,
+=======
+>>>>>>> origin/main
             use_attention_mask=self.use_attention_mask,
         )
 
@@ -448,7 +493,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         def redirect(func):
             return lambda *pargs, **kwargs: func(self, *pargs, **kwargs)
 
-        val = getattr(self.hf_class, __name, None) or getattr(PreTrainedModel, __name)
+        val = getattr(self.get_hf_class(), __name, None) or getattr(PreTrainedModel, __name)
         if isinstance(val, Callable) and "self" in set(inspect.signature(val).parameters):
             return redirect(val)
         return val
@@ -535,12 +580,22 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_max_seq_len = rbln_kwargs.get("max_seq_len", None)
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
         rbln_use_inputs_embeds = rbln_kwargs.get("use_inputs_embeds", None)
+<<<<<<< HEAD
         rbln_use_attention_mask = rbln_kwargs.get("use_attention_mask", True)
+=======
+        rbln_use_attention_mask = rbln_kwargs.get("use_attention_mask", None)
+>>>>>>> origin/main
         rbln_attn_impl = rbln_kwargs.get("attn_impl", None)
         rbln_kvcache_partition_len = rbln_kwargs.get("kvcache_partition_len", None)
         rbln_kvcache_block_size = rbln_kwargs.get("kvcache_block_size", None)
         rbln_quantization = QuantizationManager.validate_quantization_config(rbln_kwargs.get("quantization", None))
         rbln_prefill_chunk_size = rbln_kwargs.get("prefill_chunk_size", None)
+
+        if rbln_use_attention_mask is None:
+            rbln_use_attention_mask = False
+            rbln_npu = rbln_kwargs.get("npu", None) or rebel.get_npu_name()
+            if rbln_npu == "RBLN-CA02":
+                rbln_use_attention_mask = True
 
         if rbln_prefill_chunk_size is None:
             rbln_prefill_chunk_size = 128

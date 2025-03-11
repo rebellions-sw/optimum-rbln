@@ -67,52 +67,47 @@ class BaseTest:
             if env_coverage.value < cls.TEST_LEVEL.value:
                 raise unittest.SkipTest(f"Skipped test : Test Coverage {env_coverage.name} < {cls.TEST_LEVEL.name}")
 
-            if os.path.exists(cls.RBLN_LOCAL_DIR):
-                shutil.rmtree(cls.RBLN_LOCAL_DIR)
+            if os.path.exists(cls.get_rbln_local_dir()):
+                shutil.rmtree(cls.get_rbln_local_dir())
 
             cls.model = cls.RBLN_CLASS.from_pretrained(
                 cls.HF_MODEL_ID,
                 export=True,
-                model_save_dir=cls.RBLN_LOCAL_DIR,
+                model_save_dir=cls.get_rbln_local_dir(),
                 rbln_device=cls.DEVICE,
                 **cls.RBLN_CLASS_KWARGS,
                 **cls.HF_CONFIG_KWARGS,
             )
 
         @classmethod
-        @property
-        def RBLN_LOCAL_DIR(cls):
+        def get_rbln_local_dir(cls):
             return os.path.basename(cls.HF_MODEL_ID) + "-local"
 
         @classmethod
-        @property
-        def HF_AUTO_CLASS(cls):
+        def get_hf_auto_class(cls):
             if cls.RBLN_AUTO_CLASS is not None:
                 return getattr(transformers, cls.RBLN_AUTO_CLASS.__name__[4:])
             return None
 
         @classmethod
-        @property
-        def HF_CLASS(cls):
+        def get_hf_class(cls):
             return getattr(transformers, cls.RBLN_CLASS.__name__[4:])
 
         @classmethod
-        @property
-        def HF_REMOTE_DIR(cls):
+        def get_hf_remote_dir(cls):
             return "rbln-" + os.path.basename(cls.HF_MODEL_ID)
 
-        @property
         def is_diffuser(self):
             # Note that This is only True when it is a pipeline, not model (i.e. AutoEncoderKL)
             return isinstance(self.model, DiffusionPipeline)
 
         @classmethod
         def tearDownClass(cls):
-            if os.path.exists(cls.RBLN_LOCAL_DIR):
-                shutil.rmtree(cls.RBLN_LOCAL_DIR)
+            if os.path.exists(cls.get_rbln_local_dir()):
+                shutil.rmtree(cls.get_rbln_local_dir())
 
         def test_model_save_dir(self):
-            self.assertTrue(os.path.exists(self.RBLN_LOCAL_DIR), "model_save_dir does not work.")
+            self.assertTrue(os.path.exists(self.get_rbln_local_dir()), "model_save_dir does not work.")
 
         @require_hf_token
         @require_hf_user_id
@@ -130,7 +125,7 @@ class BaseTest:
                 self.assertFalse(HF_AUTH_TOKEN is None)
                 self.assertFalse(HF_USER_ID is None)
 
-                if self.is_diffuser:
+                if self.is_diffuser():
                     TOKEN_KEY = "token"
                     REPO_KEY = "repo_id"
                     self.model.text_encoder.config.from_local = remote_hash
@@ -145,23 +140,23 @@ class BaseTest:
                     private=True,
                     **{
                         TOKEN_KEY: HF_AUTH_TOKEN,
-                        REPO_KEY: f"{HF_USER_ID}/{self.HF_REMOTE_DIR}",
+                        REPO_KEY: f"{HF_USER_ID}/{self.get_hf_remote_dir()}",
                     },
                 )
 
                 # If our tests were moved to a public rather than a private repository,
                 # this logic could be as simple as downloading the config file directly
                 # and comparing it.
-                if self.is_diffuser:
+                if self.is_diffuser():
                     cfg = CLIPConfig.from_pretrained(
-                        f"{HF_USER_ID}/{self.HF_REMOTE_DIR}",
+                        f"{HF_USER_ID}/{self.get_hf_remote_dir()}",
                         subfolder="text_encoder",
                         private=True,
                         **{TOKEN_KEY: HF_AUTH_TOKEN},
                     )
                 else:
                     cfg = AutoConfig.from_pretrained(
-                        f"{HF_USER_ID}/{self.HF_REMOTE_DIR}",
+                        f"{HF_USER_ID}/{self.get_hf_remote_dir()}",
                         private=True,
                         **{TOKEN_KEY: HF_AUTH_TOKEN},
                     )
@@ -176,7 +171,7 @@ class BaseTest:
 
         def test_generate(self):
             inputs = self.get_inputs()
-            if self.is_diffuser:
+            if self.is_diffuser():
                 output = self.model(**inputs)[0]
             else:
                 if self.model.can_generate():
@@ -218,7 +213,7 @@ class BaseTest:
         def test_model_save_dir_load(self):
             # Test model_save_dir
             _ = self.RBLN_CLASS.from_pretrained(
-                self.RBLN_LOCAL_DIR,
+                self.get_rbln_local_dir(),
                 export=False,
                 rbln_create_runtimes=False,
                 **self.HF_CONFIG_KWARGS,
@@ -252,14 +247,14 @@ class BaseTest:
             HF_USER_ID = os.environ.get("HF_USER_ID", None)
 
             pull_model_dir = self.RBLN_CLASS._load_compiled_model_dir(
-                f"{HF_USER_ID}/{self.HF_REMOTE_DIR}",
+                f"{HF_USER_ID}/{self.get_hf_remote_dir()}",
                 HF_AUTH_TOKEN,
             )
 
-            path = Path(self.RBLN_LOCAL_DIR)
+            path = Path(self.get_rbln_local_dir())
             num_files = sum(1 for _ in path.rglob("*") if _.is_file())
 
-            assert len(filecmp.dircmp(pull_model_dir, self.RBLN_LOCAL_DIR).common) == num_files
+            assert len(filecmp.dircmp(pull_model_dir, self.get_rbln_local_dir()).common) == num_files
 
 
 class DisallowedTestBase:
@@ -283,7 +278,7 @@ class DisallowedTestBase:
                 _ = self.RBLN_CLASS.from_pretrained(
                     self.HF_MODEL_ID,
                     export=True,
-                    model_save_dir=self.RBLN_LOCAL_DIR,
+                    model_save_dir=self.get_rbln_local_dir(),
                     **self.RBLN_CLASS_KWARGS,
                     **self.HF_CONFIG_KWARGS,
                 )
@@ -294,9 +289,9 @@ class DisallowedTestBase:
                 pass
 
             finally:
-                if os.path.exists(self.RBLN_LOCAL_DIR):
-                    shutil.rmtree(self.RBLN_LOCAL_DIR)
+                if os.path.exists(self.get_rbln_local_dir()):
+                    shutil.rmtree(self.get_rbln_local_dir())
 
-        @property
-        def RBLN_LOCAL_DIR(self):
-            return os.path.basename(self.HF_MODEL_ID) + "-local"
+        @classmethod
+        def get_rbln_local_dir(cls):
+            return os.path.basename(cls.HF_MODEL_ID) + "-local"

@@ -96,3 +96,40 @@ def register_rbln_custom_flash_causal_paged_attention():
     @register_fake("rbln_custom_ops::flash_causal_paged_attn_prefill")
     def flash_attn_prefill_abstract(q, k, v, kcache, vcache, seq, scale, partition, block_table, block_size):
         return q, kcache, vcache
+
+
+@lru_cache
+def register_rbln_custom_flash_causal_masked_attention():
+    torch.library.define(
+        "rbln_custom_ops::flash_causal_masked_attn_decode",
+        "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d, int e) -> Tensor[]",
+    )
+
+    @torch.library.impl("rbln_custom_ops::flash_causal_masked_attn_decode", "cpu")
+    def flash_attn_decode_cpu(q, k, v, kcache, vcache, seq, scale, partition):
+        return (
+            q,
+            torch.empty(*kcache.shape, device=kcache.device),
+            torch.empty(*vcache.shape, device=vcache.device),
+        )
+
+    @register_fake("rbln_custom_ops::flash_causal_masked_attn_decode")
+    def flash_attn_decode_abstract(q, k, v, kcache, vcache, seq, scale, partition):
+        return (
+            q,
+            torch.empty(*kcache.shape, device=kcache.device),
+            torch.empty(*vcache.shape, device=vcache.device),
+        )
+
+    torch.library.define(
+        "rbln_custom_ops::flash_causal_masked_attn_prefill",
+        "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f) -> Tensor[]",
+    )
+
+    @torch.library.impl("rbln_custom_ops::flash_causal_masked_attn_prefill", "cpu")
+    def flash_attn_prefill_cpu(q, k, v, kcache, vcache, batch, seq, scale, partition):
+        return q, kcache, vcache
+
+    @register_fake("rbln_custom_ops::flash_causal_masked_attn_prefill")
+    def flash_attn_prefill_abstract(q, k, v, kcache, vcache, batch, seq, scale, partition):
+        return q, kcache, vcache
