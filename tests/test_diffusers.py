@@ -2,7 +2,6 @@ import unittest
 
 import torch
 from diffusers import ControlNetModel
-from torchvision.transforms.functional import to_pil_image
 
 from optimum.rbln import (
     RBLNKandinskyV22InpaintCombinedPipeline,
@@ -235,7 +234,7 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
     GENERATION_KWARGS = {
         "num_inference_steps": 2,
         "generator": torch.manual_seed(42),
-        "image": torch.randn(1,3,32,32, generator=torch.manual_seed(42)).uniform_(0, 1),
+        "image": torch.randn(1, 3, 32, 32, generator=torch.manual_seed(42)).uniform_(0, 1),
         "num_frames": 2,
         "decode_chunk_size": 2,
         "output_type": "pt",
@@ -253,7 +252,7 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
             "vae": {"rbln_device": -1},
         },
     }
-    
+
     @classmethod
     def get_dummy_components(cls):
         from diffusers import (
@@ -266,7 +265,7 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
             CLIPVisionConfig,
             CLIPVisionModelWithProjection,
         )
-        
+
         torch.manual_seed(42)
         unet = UNetSpatioTemporalConditionModel(
             block_out_channels=(32, 64),
@@ -331,12 +330,14 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
             "feature_extractor": feature_extractor,
         }
         return components
-    
+
     @classmethod
     def setUpClass(cls):
         import os
         import shutil
+
         from .test_base import TestLevel
+
         env_coverage = os.environ.get("OPTIMUM_RBLN_TEST_LEVEL", "default")
         env_coverage = TestLevel[env_coverage.upper()]
         if env_coverage.value < cls.TEST_LEVEL.value:
@@ -356,13 +357,14 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
             **components,
         )
         # return super().setUpClass()
-        
+
     def test_generate(self):
         inputs = self.get_inputs()
         output = self.model(**inputs).frames[0]
         output = self.postprocess(inputs, output)
         if self.EXPECTED_OUTPUT:
             self.assertEqual(output, self.EXPECTED_OUTPUT)
+
 
 if __name__ == "__main__":
     unittest.main()
