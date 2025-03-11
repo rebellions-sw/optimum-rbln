@@ -271,21 +271,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             # batch_position = torch.tensor(batch_idx, dtype=torch.int16) if block_tables is None else None
             query_position = torch.tensor((query_length - 1) % self.prefill_chunk_size, dtype=torch.int16)
 
-            if self.use_attention_mask:
-                args = (
-                    input_chunk,
-                    cache_pos_chunk,
-                    chunked_attention_mask,
-                    batch_position,
-                    query_position,
-                )
-            else:
-                args = (
-                    input_chunk,
-                    cache_pos_chunk,
-                    batch_position,
-                    query_position,
-                )
             # Forward pass for the current chunk
             logits = super().forward(
                 input_chunk,
@@ -343,7 +328,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         # FIXME get kvcache_num_blocks from compiled results.
         self.kvcache_num_blocks = self.rbln_config.model_cfg["kvcache_num_blocks"]
         self.use_attention_mask = self.rbln_config.model_cfg["use_attention_mask"]
-
         main_input_name = self.main_input_name
         if self.rbln_config.model_cfg["use_inputs_embeds"]:
             main_input_name = "inputs_embeds"
@@ -640,7 +624,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 )
 
             max_block_cnt = rbln_max_seq_len // rbln_kvcache_block_size
-            
+
             if query_length > 1:
                 input_info.extend([("block_tables", [1, max_block_cnt], "int16")])
             else:
