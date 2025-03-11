@@ -61,7 +61,7 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
         # elif img_height and img_width:
         #     sample_size = img_height // pipe.vae_scale_factor, img_width // pipe.vae_scale_factor
 
-        # max_sequence_length = pipe.tokenizer_2.model_max_length
+        # max_sequence_length = pipe.transfomer.max_text_seq_length
         batch_size = rbln_config.get("batch_size")
         if not batch_size:
             do_classifier_free_guidance = rbln_config.get("guidance_scale", 5.0) > 1.0
@@ -96,7 +96,9 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
         # if isinstance(sample_size, int):
         #     sample_size = (sample_size, sample_size)
 
-        # rbln_max_seqeunce_length = rbln_kwargs.get("max_sequence_length")
+        rbln_max_seqeunce_length = rbln_kwargs.get("max_sequence_length")
+        if rbln_max_seqeunce_length is None:
+            rbln_max_sequence_length = model_config.max_text_seq_length
         # if rbln_max_seqeunce_length is None:
         #     raise ValueError("rbln_max_seqeunce_length should be specified.")
 
@@ -133,7 +135,7 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
                 "encoder_hidden_states",
                 [
                     rbln_batch_size,
-                    model_config.max_text_seq_length,
+                    rbln_max_sequence_length,
                     model_config.text_embed_dim,
                 ],
                 "float32",
