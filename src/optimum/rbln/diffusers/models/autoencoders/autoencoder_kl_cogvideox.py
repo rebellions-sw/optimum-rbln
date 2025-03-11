@@ -42,17 +42,17 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
 
-        # if self.rbln_config.model_cfg.get("img2img_pipeline") or self.rbln_config.model_cfg.get("inpaint_pipeline"):
-        # self.encoder = RBLNRuntimeVAECogVideoXEncoder(runtime=self.model[0], main_input_name="x")
-        # self.decoder = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model[1], main_input_name="z")
-        # else:
-        self.decoder = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model[0], main_input_name="z")
+        if self.rbln_config.model_cfg.get("img2vid_pipeline"):
+            self.encoder = RBLNRuntimeVAECogVideoXEncoder(runtime=self.model[0], main_input_name="x")
+            self.decoder = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model[1], main_input_name="z")
+        else:
+            self.decoder = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model[0], main_input_name="z")
 
         self.image_size = self.rbln_config.model_cfg["sample_size"]
 
     @classmethod
     def get_compiled_model(cls, model, rbln_config: RBLNConfig):
-        def compile_img2video():
+        def compile_img2vid():
             encoder_model = _VAECogVideoXEncoder(model)
             decoder_model = _VAECogVideoXDecoder(model)
             encoder_model.eval()
@@ -63,7 +63,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
 
             return {"encoder": enc_compiled_model, "decoder": dec_compiled_model}
 
-        def compile_text2video():
+        def compile_txt2vid():
             decoder_model = _VAECogVideoXDecoder(model)
             decoder_model.eval()
 
@@ -71,10 +71,10 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
 
             return dec_compiled_model
 
-        # if rbln_config.model_cfg.get("img2img_pipeline") or rbln_config.model_cfg.get("inpaint_pipeline"):
-        #     return compile_img2video()
-        # else:
-        return compile_text2video()
+        if rbln_config.model_cfg.get("img2vid_pipeline"):
+            return compile_img2vid()
+        else:
+            return compile_txt2vid()
 
     @classmethod
     def get_vae_sample_size(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Union[int, Tuple[int, int]]:
@@ -96,10 +96,8 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
             raise ValueError("Both image height and image width must be given or not given")
 
         elif image_size[0] is None and image_size[1] is None:
-            if rbln_config["img2img_pipeline"]:
+            if rbln_config["img2vid_pipeline"]:
                 sample_size = noise_module.config.sample_size
-            elif rbln_config["inpaint_pipeline"]:
-                sample_size = noise_module.config.sample_size * vae_scale_factor
             else:
                 # In case of text2img, sample size of vae decoder is determined by unet.
                 noise_module_sample_size = noise_module.config.sample_size
@@ -118,7 +116,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
     @classmethod
     def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
         # rbln_config.update({"sample_size": cls.get_vae_sample_size(pipe, rbln_config)})
-        return rbln_config
+        return  # NOTE
 
     @classmethod
     def _get_rbln_config(
@@ -129,8 +127,8 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
     ) -> RBLNConfig:
         rbln_batch_size = rbln_kwargs.get("batch_size")
         # sample_size = rbln_kwargs.get("sample_size")
-        # is_img2img = rbln_kwargs.get("img2img_pipeline")
-        # is_inpaint = rbln_kwargs.get("inpaint_pipeline")
+        is_img2vid = rbln_kwargs.get("is_img2vid")
+        is_txt2vid = rbln_kwargs.get("is_txt2vid")
 
         if rbln_batch_size is None:
             rbln_batch_size = 1
