@@ -18,7 +18,7 @@ import torch
 from torch import nn
 from transformers.utils import logging
 
-from ....ops import register_rbln_custom_attention, register_rbln_custom_cache_update
+from ....ops import register_rbln_custom_cache_update, register_rbln_custom_masked_attention
 
 
 logger = logging.get_logger(__name__)
@@ -143,7 +143,7 @@ class Seq2SeqDecoderWrapper(nn.Module):
         It is inspired by the BART architecture, but it is designed to be flexible and can be overridden
         by subclasses to modify or add custom attributes as necessary.
         """
-        register_rbln_custom_attention()
+        register_rbln_custom_masked_attention()
         self.num_layers = self.config.decoder_layers
         self.conditional_generation = self.convert_to_rbln_conditional_generation(model)
 
@@ -459,7 +459,7 @@ class Seq2SeqSelfAttention(nn.Module):
             ),  # Unsqueeze group axis since CustomKernel expects it for group query attention
             past_key_value[0].view(bsz, self.num_heads, 1, -1, self.head_dim),
             past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
-            cache_position.squeeze(1),
+            cache_position,
             torch.tensor(1.0, dtype=torch.float32),  # scale
         )
 
