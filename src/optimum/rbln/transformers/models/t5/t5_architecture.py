@@ -71,6 +71,36 @@ class T5DecoderWrapper(Seq2SeqDecoderWrapper):
 
         return new_model
 
+    def forward(
+        self,
+        input_ids,
+        attention_mask,
+        encoder_attention_mask,
+        cache_position,
+        cross_kv_cache,
+        *self_kv_cache,
+    ) -> Tuple[torch.FloatTensor, Tuple[torch.FloatTensor]]:
+        self_past_key_values = ()
+        cross_past_key_values = ()
+
+        for i in range(0, self.num_layers * 2, 2):
+            self_past_key_values = self_past_key_values + ((self_kv_cache[i], self_kv_cache[i + 1]),)
+            cross_past_key_values = cross_past_key_values + ((cross_kv_cache[i], cross_kv_cache[i + 1]),)
+
+        # decode
+        lm_logits, self_present_key_values = self.conditional_generation(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            encoder_attention_mask=encoder_attention_mask,
+            self_past_key_values=self_past_key_values,
+            cross_past_key_values=cross_past_key_values,
+            cache_position=cache_position,
+        )
+
+        outputs = (lm_logits,) + self_present_key_values
+
+        return outputs
+
 
 class T5ForConditionalGeneration(Seq2SeqForConditionalGeneration):
     has_rescaling = True
@@ -141,13 +171,14 @@ class T5LayerSelfAttention(Seq2SeqSelfAttention):
         key_states = self.k_proj(hidden_states)
         value_states = self.v_proj(hidden_states)
         return query_states, key_states, value_states
-    
+
     def forward(
         self,
         hidden_states: torch.Tensor,
         past_key_value: Tuple[torch.Tensor],
         attention_mask: torch.Tensor,
         cache_position: torch.Tensor,
+        **kwargs,
     ) -> Tuple[torch.Tensor, Tuple[torch.Tensor]]:
         bsz, tgt_len, _ = hidden_states.size()
 

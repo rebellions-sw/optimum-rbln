@@ -346,7 +346,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         block_tables = torch.zeros(
             self.batch_size, self.max_seq_len // self.kvcache_block_size, dtype=torch.int16
         ).fill_(self.kvcache_num_blocks)
-        free_block_pool = deque([x for x in range(self.kvcache_num_blocks)])
+        free_block_pool = deque(x for x in range(self.kvcache_num_blocks))
 
         self.prefill_decoder = RBLNRuntimeModel(
             runtime=self.model[0],
@@ -536,7 +536,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_max_seq_len = rbln_kwargs.get("max_seq_len", None)
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
         rbln_use_inputs_embeds = rbln_kwargs.get("use_inputs_embeds", None)
-        rbln_use_attention_mask = rbln_kwargs.get("use_attention_mask", True)
+        rbln_use_attention_mask = rbln_kwargs.get("use_attention_mask", None)
         rbln_attn_impl = rbln_kwargs.get("attn_impl", None)
         rbln_kvcache_partition_len = rbln_kwargs.get("kvcache_partition_len", None)
         rbln_kvcache_block_size = rbln_kwargs.get("kvcache_block_size", None)

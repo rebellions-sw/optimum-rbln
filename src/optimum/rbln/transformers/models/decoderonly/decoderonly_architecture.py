@@ -21,9 +21,9 @@ from transformers import PretrainedConfig, PreTrainedModel
 
 from ....ops import (
     register_rbln_custom_causal_paged_attention,
-    register_rbln_custom_paged_flash_causal_attention,
-    register_rbln_custom_paged_flash_attention,
     register_rbln_custom_paged_attention,
+    register_rbln_custom_paged_flash_attention,
+    register_rbln_custom_paged_flash_causal_attention,
 )
 from ....utils import logging
 from ...modeling_rope_utils import ROPE_INIT_FUNCTIONS
