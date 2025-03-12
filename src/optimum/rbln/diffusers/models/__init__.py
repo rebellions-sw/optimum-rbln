@@ -37,14 +37,14 @@ _import_structure = {
 if TYPE_CHECKING:
     from .autoencoders import (
         RBLNAutoencoderKL,
-        RBLNVQModel,
         RBLNAutoencoderKLCogVideoX,
+        RBLNVQModel,
     )
     from .controlnet import RBLNControlNetModel
     from .transformers import (
+        RBLNCogVideoXTransformer3DModel,
         RBLNPriorTransformer,
         RBLNSD3Transformer2DModel,
-        RBLNCogVideoXTransformer3DModel,
     )
     from .unets import (
         RBLNUNet2DConditionModel,

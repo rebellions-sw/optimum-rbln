@@ -62,15 +62,16 @@ if TYPE_CHECKING:
     from .modeling_diffusers import RBLNDiffusionMixin
     from .models import (
         RBLNAutoencoderKL,
+        RBLNAutoencoderKLCogVideoX,
+        RBLNCogVideoXTransformer3DModel,
         RBLNControlNetModel,
         RBLNPriorTransformer,
         RBLNSD3Transformer2DModel,
         RBLNUNet2DConditionModel,
         RBLNVQModel,
-        RBLNAutoencoderKLCogVideoX,
-        RBLNCogVideoXTransformer3DModel,
     )
     from .pipelines import (
+        RBLNCogVideoXPipeline,
         RBLNKandinskyV22InpaintCombinedPipeline,
         RBLNKandinskyV22InpaintPipeline,
         RBLNKandinskyV22PriorPipeline,
@@ -88,7 +89,6 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLImg2ImgPipeline,
         RBLNStableDiffusionXLInpaintPipeline,
         RBLNStableDiffusionXLPipeline,
-        RBLNCogVideoXPipeline,
     )
 else:
     import sys

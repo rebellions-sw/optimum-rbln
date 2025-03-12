@@ -61,7 +61,7 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
 
         img_width = rbln_config.get("img_width", None)
         img_height = rbln_config.get("img_height", None)
-        
+
         if (img_height is None) ^ (img_width is None):
             sample_size = pipe.transformer.config.sample_height, pipe.transformer.config.sample_width
 
@@ -95,17 +95,17 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
     ) -> RBLNConfig:
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
         sample_size = rbln_kwargs.get("sample_size")
-        
+
         if sample_size is None:
             # NOTE(si): From diffusers >= v0.32.0, pipe.transformer.config.sample_height and pipe.transformer.config.sample_width is used explicitly.
             sample_size = model_config.sample_height, model_config.sample_width
-            
+
         vae_scale_factor_temporal = rbln_kwargs.get("vae_scale_factor_temporal", None)
         num_frames = rbln_kwargs.get("num_frames")
-        
-        if num_frames is None :
+
+        if num_frames is None:
             # NOTE: it is only for cogvideoX 1.0. cogvideoX1.5 is set to 81
-            num_frames = 49 
+            num_frames = 49
 
         rbln_max_seqeunce_length = rbln_kwargs.get("max_sequence_length")
         if rbln_max_seqeunce_length is None:
@@ -133,7 +133,6 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
                 "float32",
             ),
             ("timestep", [rbln_batch_size], "float32"),
-
         ]
 
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
@@ -171,7 +170,7 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
                 "For details, see: https://docs.rbln.ai/software/optimum/model_api.html#stable-diffusion"
             )
         sample = super().forward(hidden_states, encoder_hidden_states, timestep)
-        
+
         if not return_dict:
             return (sample,)
         return Transformer2DModelOutput(sample=sample)

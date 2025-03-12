@@ -13,5 +13,5 @@
 # limitations under the License.
 
 from .autoencoder_kl import RBLNAutoencoderKL
-from .vq_model import RBLNVQModel
 from .autoencoder_kl_cogvideox import RBLNAutoencoderKLCogVideoX
+from .vq_model import RBLNVQModel

@@ -1,7 +1,8 @@
-import torch
-from diffusers import CogVideoXPipeline
-from diffusers.utils import export_to_video
 import os
+
+import torch
+from diffusers.utils import export_to_video
+
 from optimum.rbln import RBLNCogVideoXPipeline
 
 

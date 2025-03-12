@@ -108,6 +108,9 @@ _import_structure = {
 if TYPE_CHECKING:
     from .diffusers import (
         RBLNAutoencoderKL,
+        RBLNAutoencoderKLCogVideoX,
+        RBLNCogVideoXPipeline,
+        RBLNCogVideoXTransformer3DModel,
         RBLNControlNetModel,
         RBLNDiffusionMixin,
         RBLNKandinskyV22InpaintCombinedPipeline,
@@ -131,9 +134,6 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLPipeline,
         RBLNUNet2DConditionModel,
         RBLNVQModel,
-        RBLNAutoencoderKLCogVideoX,
-        RBLNCogVideoXPipeline,
-        RBLNCogVideoXTransformer3DModel,
     )
     from .modeling import (
         RBLNBaseModel,

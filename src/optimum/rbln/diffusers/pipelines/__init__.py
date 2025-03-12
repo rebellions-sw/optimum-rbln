@@ -45,11 +45,12 @@ _import_structure = {
         "RBLNStableDiffusion3Img2ImgPipeline",
         "RBLNStableDiffusion3InpaintPipeline",
     ],
-    "cogvideo": [
-        "RBLNCogVideoXPipeline"
-    ]
+    "cogvideo": ["RBLNCogVideoXPipeline"],
 }
 if TYPE_CHECKING:
+    from .cogvideo import (
+        RBLNCogVideoXPipeline,
+    )
     from .controlnet import (
         RBLNMultiControlNetModel,
         RBLNStableDiffusionControlNetImg2ImgPipeline,
@@ -76,9 +77,6 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLImg2ImgPipeline,
         RBLNStableDiffusionXLInpaintPipeline,
         RBLNStableDiffusionXLPipeline,
-    )
-    from .cogvideo import (
-        RBLNCogVideoXPipeline,
     )
 else:
     import sys

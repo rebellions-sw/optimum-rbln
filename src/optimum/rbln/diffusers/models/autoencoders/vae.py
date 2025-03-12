@@ -15,8 +15,8 @@
 from typing import TYPE_CHECKING, List, Union
 
 import torch  # noqa: I001
-from diffusers import AutoencoderKL, VQModel, AutoencoderKLCogVideoX
-from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution, DecoderOutput
+from diffusers import AutoencoderKL, AutoencoderKLCogVideoX, VQModel
+from diffusers.models.autoencoders.vae import DecoderOutput, DiagonalGaussianDistribution
 from diffusers.models.autoencoders.vq_model import VQEncoderOutput
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
 
@@ -165,16 +165,16 @@ class _VAECogVideoXEncoder(torch.nn.Module):
             enc.append(x_intermediate)
 
         enc = torch.cat(enc, dim=2)
-        
+
         return enc
-    
+
     def encode(self, x: torch.Tensor, return_dict: bool = True):
         if self.use_slicing and x.shape[0] > 1:
             encoded_slices = [self._encode(x_slice) for x_slice in x.split(1)]
             h = torch.cat(encoded_slices)
         else:
             h = self._encode(x)
-        
+
         return h
 
     def forward(self, x: torch.Tensor):
@@ -190,7 +190,9 @@ class _VAECogVideoXDecoder(torch.nn.Module):
     def _decode(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
         batch_size, num_channels, num_frames, height, width = z.shape
 
-        if self.cog_video_x.use_tiling and (width > self.cog_video_x.tile_latent_min_width or height > self.cog_video_x.tile_latent_min_height):
+        if self.cog_video_x.use_tiling and (
+            width > self.cog_video_x.tile_latent_min_width or height > self.cog_video_x.tile_latent_min_height
+        ):
             return self.cog_video_x.tiled_decode(z, return_dict=return_dict)
 
         frame_batch_size = self.cog_video_x.num_latent_frames_batch_size

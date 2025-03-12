@@ -12,6 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .cogvideox_transformer_3d import RBLNCogVideoXTransformer3DModel
 from .prior_transformer import RBLNPriorTransformer
 from .transformer_sd3 import RBLNSD3Transformer2DModel
-from .cogvideox_transformer_3d import RBLNCogVideoXTransformer3DModel

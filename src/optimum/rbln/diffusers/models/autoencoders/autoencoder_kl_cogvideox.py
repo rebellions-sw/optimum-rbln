@@ -24,7 +24,12 @@ from ....modeling import RBLNModel
 from ....modeling_config import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
-from .vae import RBLNRuntimeVAECogVideoXDecoder, RBLNRuntimeVAECogVideoXEncoder, _VAECogVideoXDecoder, _VAECogVideoXEncoder
+from .vae import (
+    RBLNRuntimeVAECogVideoXDecoder,
+    RBLNRuntimeVAECogVideoXEncoder,
+    _VAECogVideoXDecoder,
+    _VAECogVideoXEncoder,
+)
 
 
 if TYPE_CHECKING:
@@ -178,15 +183,21 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
         #     return rbln_config
 
         # [batch_size, num_channels, num_frames, height, width]
-        # batch_size, model_config.latent_channels, self.transformer.config.sample_frames, 
-        # model_config.sample_height // vae_scale_factor , 
+        # batch_size, model_config.latent_channels, self.transformer.config.sample_frames,
+        # model_config.sample_height // vae_scale_factor ,
         # model_config.sample_width // vae_scale_factor
         vae_config = RBLNCompileConfig(
             input_info=[
                 (
                     "z",
-                    #FIXME: for temporal, need generalize
-                    [rbln_batch_size, model_config.latent_channels, 49, model_config.sample_height // 8, model_config.sample_width // 8],
+                    # FIXME: for temporal, need generalize
+                    [
+                        rbln_batch_size,
+                        model_config.latent_channels,
+                        49,
+                        model_config.sample_height // 8,
+                        model_config.sample_width // 8,
+                    ],
                     "float32",
                 )
             ]
