@@ -149,7 +149,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 attention_mask=attention_mask,
             )
         else:
-            return self.prefill_forward(inputs, cache_position, attention_mask, batch_idx, block_tables.squeeze(0))
+            return self.prefill_forward(inputs, cache_position, attention_mask, batch_idx, block_tables)
 
     def decode_forward(
         self,
