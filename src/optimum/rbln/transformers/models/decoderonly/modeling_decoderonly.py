@@ -189,7 +189,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         logits = super().forward(
             inputs,
             cache_position,
-            attention_mask if self.use_use_attn_mask else None,
+            attention_mask if self.use_attn_mask else None,
             block_tables,
         )
 
