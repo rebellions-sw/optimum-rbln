@@ -52,18 +52,13 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
     @classmethod
     def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
         sample_size = rbln_config.get("sample_size", None)
-        vae_scale_factor_spatial = (
-            2 ** (len(pipe.vae.config.block_out_channels) - 1) if hasattr(pipe, "vae") and pipe.vae is not None else 8
-        )
-        vae_scale_factor_temporal = (
-            pipe.vae.config.temporal_compression_ratio if hasattr(pipe, "vae") and pipe.vae is not None else 4
-        )
+        vae_scale_factor_spatial = pipe.vae_scale_factor_spatial
 
         img_width = rbln_config.get("img_width", None)
         img_height = rbln_config.get("img_height", None)
 
         if (img_height is None) ^ (img_width is None):
-            sample_size = pipe.transformer.config.sample_height, pipe.transformer.config.sample_width
+            raise ValueError("Both image height and image width must be given or not given")
 
         elif img_height and img_width:
             sample_size = img_height // vae_scale_factor_spatial, img_width // vae_scale_factor_spatial
@@ -83,7 +78,7 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
         return {
             "batch_size": batch_size,
             "sample_size": sample_size,
-            "vae_scale_factor_temporal": vae_scale_factor_temporal,
+            "vae_scale_factor_temporal": pipe.vae_scale_factor_temporal,
         }
 
     @classmethod
