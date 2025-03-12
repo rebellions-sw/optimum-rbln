@@ -18,7 +18,7 @@ import torch
 from torch import nn
 from transformers.utils import logging
 
-from ....ops import register_rbln_custom_cache_update, register_rbln_custom_masked_attention
+from ....ops import register_rbln_custom_cache_update, register_rbln_custom_paged_attention
 
 
 logger = logging.get_logger(__name__)
@@ -143,7 +143,7 @@ class Seq2SeqDecoderWrapper(nn.Module):
         It is inspired by the BART architecture, but it is designed to be flexible and can be overridden
         by subclasses to modify or add custom attributes as necessary.
         """
-        register_rbln_custom_masked_attention()
+        register_rbln_custom_paged_attention()
         self.num_layers = self.config.decoder_layers
         self.conditional_generation = self.convert_to_rbln_conditional_generation(model)
 
@@ -450,6 +450,11 @@ class Seq2SeqSelfAttention(nn.Module):
         key_states = self._shape(key_states, -1, bsz)
         value_states = self._shape(value_states, -1, bsz)
 
+        # def attn_decode_cpu(q, k, v, mask, kcache, vcache, seq, scale, block_table, block_size):
+        # FIXME : temporal block_table & block_size
+        block_tables = torch.arange(0, bsz, dtype=torch.int16).reshape(bsz, 1)
+        block_size = attention_mask.shape[-1]
+
         attn_output, key_states, value_states = self.attn_decode(
             query_states,
             key_states,
@@ -461,6 +466,8 @@ class Seq2SeqSelfAttention(nn.Module):
             past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
             cache_position,
             torch.tensor(1.0, dtype=torch.float32),  # scale
+            block_tables,
+            block_size,
         )
 
         attn_output = attn_output.view(bsz, self.num_heads, -1, self.head_dim).transpose(1, 2)
