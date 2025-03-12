@@ -1031,9 +1031,9 @@ class FlashAttentionOp(AttentionOp):
                     past_value_state.unsqueeze(2),
                     seq_position,
                     scale,
-                    self.kvcache_partition_size,
                     block_tables,
                     kvcache_block_size,
+                    self.kvcache_partition_size,
                 )
             else:
                 attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_flash_causal_attn_decode(
@@ -1044,9 +1044,9 @@ class FlashAttentionOp(AttentionOp):
                     past_value_state.unsqueeze(2),
                     seq_position,
                     scale,
-                    self.kvcache_partition_size,
                     block_tables,
                     kvcache_block_size,
+                    self.kvcache_partition_size,
                 )
         else:
             if self.use_attention_mask:
@@ -1059,12 +1059,12 @@ class FlashAttentionOp(AttentionOp):
                     past_value_state.unsqueeze(2),
                     seq_position,
                     scale,
-                    self.kvcache_partition_size,
                     block_tables,
                     kvcache_block_size,
+                    self.kvcache_partition_size,
                 )
             else:
-                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_flash_causal_paged_attn_prefill(
+                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_flash_causal_attn_prefill(
                     query_state,
                     key_state,
                     value_state,
@@ -1072,9 +1072,9 @@ class FlashAttentionOp(AttentionOp):
                     past_value_state.unsqueeze(2),
                     seq_position,
                     scale,
-                    self.kvcache_partition_size,
                     block_tables,
                     kvcache_block_size,
+                    self.kvcache_partition_size,
                 )
 
         # reshape for removing repeat_kv
@@ -1083,119 +1083,3 @@ class FlashAttentionOp(AttentionOp):
         attn_output = attn_output.reshape(batch_size, -1, self.num_heads * self.head_dim)
 
         return attn_output, key_state, value_state
-
-
-# class DecoderOnlyPagedAttention(DecoderOnlyAttention):
-#     def __init__(self, self_attn, kvcache_partition_len, kvcache_block_size):
-#         self.kvcache_partition_size = kvcache_partition_len
-#         self.kvcache_block_size = kvcache_block_size
-#         super().__init__(self_attn=self_attn)
-
-#     def get_attention(self):
-#         return PagedAttentionOp(self.num_heads, self.head_dim, self.num_key_value_heads, self.kvcache_partition_size, self.kvcache_block_size)
-
-#     def forward(
-#         self,
-#         hidden_states: torch.Tensor,
-#         attention_mask: torch.Tensor,
-#         seq_positions: torch.LongTensor,
-#         batch_position: torch.Tensor,
-#         past_key_values: Tuple[Tuple[torch.Tensor]],
-#         cos: Optional[torch.Tensor] = None,
-#         sin: Optional[torch.Tensor] = None,
-#         block_tables: Optional[torch.Tensor] = None,
-#     ):
-#         batch_size, query_length, _ = hidden_states.size()
-
-#         query_states, key_states, value_states = self.projection(hidden_states=hidden_states)
-
-#         query_states = query_states.view(batch_size, query_length, self.num_heads, self.head_dim).transpose(1, 2)
-#         key_states = key_states.view(batch_size, query_length, self.num_key_value_heads, self.head_dim).transpose(1, 2)
-#         value_states = value_states.view(batch_size, query_length, self.num_key_value_heads, self.head_dim).transpose(
-#             1, 2
-#         )
-#         # b, num_head, query, head_dim
-
-#         if cos is not None and sin is not None:
-#             query_states, key_states = self.apply_rotary_pos_embed(query_states, key_states, cos, sin)
-
-#         _key_states = []
-#         _value_states = []
-#         _attn_outputs = []
-#         for b in range(batch_size):
-#             attn_output, key_state, value_state = self.attention(
-#                 query_states[b].unsqueeze(0),
-#                 key_states[b].unsqueeze(0),
-#                 value_states[b].unsqueeze(0),
-#                 attention_mask[b].unsqueeze(0) if self.phase == "decode" else attention_mask,
-#                 past_key_state=past_key_values[self.layer_idx][0],
-#                 past_value_state=past_key_values[self.layer_idx][1],
-#                 seq_position=seq_positions,
-#                 scale=self.scale,
-#                 block_table=block_tables,
-#                 block_size=self.kvcache_block_size,
-#             )
-#             _key_states.append(key_state)
-#             _value_states.append(value_state)
-#             _attn_outputs.append(attn_output)
-#         key_states = torch.cat(_key_states, dim=0)
-#         value_states = torch.cat(_value_states, dim=0)
-#         attn_outputs = torch.cat(_attn_outputs, dim=0)
-
-#         attn_outputs = self.o_proj(attn_outputs)
-#         past_key_values[self.layer_idx] = key_states, value_states
-#         return attn_outputs, past_key_values
-
-
-# class PagedAttentionOp(AttentionOp):
-#     def __init__(self, num_heads: int, head_dim: int, num_key_value_heads: int, kvcache_partition_len: int, kvcache_block_size: int):
-#         super().__init__(num_heads=num_heads, head_dim=head_dim, num_key_value_heads=num_key_value_heads)
-#         self.kvcache_partition_size = kvcache_partition_len
-#         self.kvcache_block_size = kvcache_block_size
-
-#     def forward(
-#         self,
-#         query_state,
-#         key_state,
-#         value_state,
-#         attn_mask,
-#         past_key_state,
-#         past_value_state,
-#         seq_position,
-#         scale,
-#         block_table,
-#         block_size,
-#     ):
-#         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
-#         key_state = key_state.unsqueeze(2)
-#         value_state = value_state.unsqueeze(2)
-#         attn_mask = attn_mask.unsqueeze(2)
-
-#         query_state = query_state.view(
-#             1,
-#             self.num_key_value_heads,
-#             self.num_heads // self.num_key_value_heads,
-#             -1,  # seq len
-#             self.head_dim,
-#         )
-
-#         attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_attn(
-#             query_state,
-#             key_state,
-#             value_state,
-#             attn_mask,
-#             past_key_state.unsqueeze(2),
-#             past_value_state.unsqueeze(2),
-#             seq_position,
-#             scale,
-#             self.kvcache_partition_size,
-#             block_table,
-#             block_size,
-#         )
-
-#         # reshape for removing repeat_kv
-#         attn_output = attn_output.view(1, self.num_heads, -1, self.head_dim)
-#         attn_output = attn_output.transpose(1, 2).contiguous()
-#         attn_output = attn_output.reshape(1, -1, self.num_heads * self.head_dim)
-
-#         return attn_output, key_state, value_state
