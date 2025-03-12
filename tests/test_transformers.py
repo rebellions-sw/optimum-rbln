@@ -130,13 +130,13 @@ class TestT5EncoderModel(BaseTest.TestModel):
 
     @classmethod
     def setUpClass(cls):
-        if os.path.exists(cls.RBLN_LOCAL_DIR):
-            shutil.rmtree(cls.RBLN_LOCAL_DIR)
+        if os.path.exists(cls.get_rbln_local_dir()):
+            shutil.rmtree(cls.get_rbln_local_dir())
 
         t5_encoder_model = T5EncoderModel.from_pretrained(cls.HF_MODEL_ID, return_dict=False, **cls.HF_CONFIG_KWARGS)
         cls.model = cls.RBLN_CLASS.from_model(
             model=t5_encoder_model,
-            model_save_dir=cls.RBLN_LOCAL_DIR,
+            model_save_dir=cls.get_rbln_local_dir(),
             rbln_device=-1,
             **cls.RBLN_CLASS_KWARGS,
         )
