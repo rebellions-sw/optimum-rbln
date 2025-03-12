@@ -24,8 +24,11 @@ ALL_IMPORTABLE_CLASSES.update(LOADABLE_CLASSES["optimum.rbln"])
 
 _import_structure = {
     "pipelines": [
+        "RBLNKandinskyV22CombinedPipeline",
+        "RBLNKandinskyV22Img2ImgCombinedPipeline",
         "RBLNKandinskyV22InpaintCombinedPipeline",
         "RBLNKandinskyV22InpaintPipeline",
+        "RBLNKandinskyV22Img2ImgPipeline",
         "RBLNKandinskyV22PriorPipeline",
         "RBLNKandinskyV22Pipeline",
         "RBLNStableDiffusionPipeline",
@@ -67,6 +70,9 @@ if TYPE_CHECKING:
         RBLNVQModel,
     )
     from .pipelines import (
+        RBLNKandinskyV22CombinedPipeline,
+        RBLNKandinskyV22Img2ImgCombinedPipeline,
+        RBLNKandinskyV22Img2ImgPipeline,
         RBLNKandinskyV22InpaintCombinedPipeline,
         RBLNKandinskyV22InpaintPipeline,
         RBLNKandinskyV22Pipeline,
