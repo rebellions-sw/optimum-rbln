@@ -166,7 +166,7 @@ class Seq2SeqDecoderWrapper(nn.Module):
         cache_position: torch.Tensor,
         cross_kv_cache: torch.Tensor,
         *self_kv_cache: torch.Tensor,
-    ) -> Tuple[torch.FloatTensor, Tuple[torch.FloatTensor]]:
+    ) -> torch.FloatTensor:
         self_past_key_values = ()
         cross_past_key_values = ()
         for i in range(0, self.num_layers * 2, 2):
@@ -174,7 +174,7 @@ class Seq2SeqDecoderWrapper(nn.Module):
             cross_past_key_values = cross_past_key_values + ((cross_kv_cache[i], cross_kv_cache[i + 1]),)
 
         # decode
-        lm_logits, self_present_key_values = self.conditional_generation(
+        lm_logits = self.conditional_generation(
             input_ids=input_ids,
             attention_mask=attention_mask,
             encoder_attention_mask=encoder_attention_mask,
@@ -183,9 +183,7 @@ class Seq2SeqDecoderWrapper(nn.Module):
             cache_position=cache_position,
         )
 
-        outputs = (lm_logits,) + self_present_key_values
-
-        return outputs
+        return lm_logits
 
 
 class Seq2SeqForConditionalGeneration(nn.Module):
@@ -222,20 +220,20 @@ class Seq2SeqForConditionalGeneration(nn.Module):
 
     def forward(
         self,
-        input_ids,
-        attention_mask,
-        encoder_attention_mask,
-        self_past_key_values,
-        cross_past_key_values,
-        cache_position,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        encoder_attention_mask: torch.Tensor,
+        self_past_key_values: Tuple[Tuple[torch.Tensor]],
+        cross_past_key_values: Tuple[Tuple[torch.Tensor]],
+        cache_position: torch.Tensor,
     ):
-        hidden_states, self_present_key_values = self.decoder(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            encoder_attention_mask=encoder_attention_mask,
-            self_past_key_values=self_past_key_values,
-            cross_past_key_values=cross_past_key_values,
-            cache_position=cache_position,
+        hidden_states = self.decoder(
+            input_ids,
+            attention_mask,
+            encoder_attention_mask,
+            self_past_key_values,
+            cross_past_key_values,
+            cache_position,
         )
 
         if self.has_rescaling and self.config.tie_word_embeddings:
@@ -243,7 +241,7 @@ class Seq2SeqForConditionalGeneration(nn.Module):
 
         lm_logits = self.lm_head(hidden_states)
 
-        return lm_logits, self_present_key_values
+        return lm_logits
 
 
 class Seq2SeqDecoder(torch.nn.Module):
@@ -303,11 +301,10 @@ class Seq2SeqDecoder(torch.nn.Module):
             hidden_states = self.apply_position_embedding(hidden_states, cache_position)
 
         # iterate decoder_layer
-        self_present_key_values = ()
         for decoder_layer, self_past_key_value, cross_past_key_value in zip(
             self.layers, self_past_key_values, cross_past_key_values
         ):
-            hidden_states, self_present_key_value = decoder_layer(
+            hidden_states = decoder_layer(
                 hidden_states,
                 attention_mask=attention_mask,
                 encoder_attention_mask=encoder_attention_mask,
@@ -315,12 +312,11 @@ class Seq2SeqDecoder(torch.nn.Module):
                 cross_past_key_value=cross_past_key_value,
                 cache_position=cache_position,
             )
-            self_present_key_values += self_present_key_value
 
         if self.final_layer_norm is not None:
             hidden_states = self.final_layer_norm(hidden_states)
 
-        return hidden_states, self_present_key_values
+        return hidden_states
 
 
 class Seq2SeqDecoderLayer(torch.nn.Module):
@@ -373,13 +369,13 @@ class Seq2SeqDecoderLayer(torch.nn.Module):
         self_past_key_value: Tuple[torch.Tensor],
         cross_past_key_value: Tuple[torch.Tensor],
         cache_position: torch.Tensor,
-    ) -> Tuple[torch.Tensor, Tuple[torch.Tensor]]:
+    ) -> torch.Tensor:
         dummy_encoder_hidden_states = torch.zeros(1, encoder_attention_mask.shape[-1])
 
         # Self Attention Block
         residual = hidden_states
         hidden_states = self.pre_self_attn_layer_norm(hidden_states)
-        hidden_states, self_attn_past_key_value = self.self_attn(
+        hidden_states = self.self_attn(
             hidden_states=hidden_states,
             past_key_value=self_past_key_value,
             attention_mask=attention_mask,
@@ -403,7 +399,7 @@ class Seq2SeqDecoderLayer(torch.nn.Module):
         # Feed-Forward Block
         hidden_states = self.ff_layer(hidden_states)
 
-        return hidden_states, self_attn_past_key_value
+        return hidden_states
 
 
 class Seq2SeqSelfAttention(nn.Module):
@@ -442,7 +438,7 @@ class Seq2SeqSelfAttention(nn.Module):
         past_key_value: Tuple[torch.Tensor],
         attention_mask: torch.Tensor,
         cache_position: torch.Tensor,
-    ) -> Tuple[torch.Tensor, Tuple[torch.Tensor]]:
+    ) -> torch.Tensor:
         bsz, tgt_len, _ = hidden_states.size()
 
         query_states, key_states, value_states = self.projection(hidden_states=hidden_states)
@@ -450,7 +446,7 @@ class Seq2SeqSelfAttention(nn.Module):
         key_states = self._shape(key_states, -1, bsz)
         value_states = self._shape(value_states, -1, bsz)
 
-        attn_output, key_states, value_states = self.attn_decode(
+        attn_output = self.attn_decode(
             query_states,
             key_states,
             value_states,
@@ -467,6 +463,5 @@ class Seq2SeqSelfAttention(nn.Module):
         attn_output = attn_output.reshape(bsz, -1, self.num_heads * self.head_dim)
 
         attn_output = self.out_proj(attn_output)
-        present_key_value = (key_states, value_states)
 
-        return attn_output, present_key_value
+        return attn_output
