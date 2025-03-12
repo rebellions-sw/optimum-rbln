@@ -1031,9 +1031,9 @@ class FlashAttentionOp(AttentionOp):
                     past_value_state.unsqueeze(2),
                     seq_position,
                     scale,
-                    self.kvcache_partition_size,
                     block_tables,
                     kvcache_block_size,
+                    self.kvcache_partition_size,
                 )
             else:
                 attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_flash_causal_attn_decode(
@@ -1044,9 +1044,9 @@ class FlashAttentionOp(AttentionOp):
                     past_value_state.unsqueeze(2),
                     seq_position,
                     scale,
-                    self.kvcache_partition_size,
                     block_tables,
                     kvcache_block_size,
+                    self.kvcache_partition_size,
                 )
         else:
             if self.use_attention_mask:
@@ -1059,9 +1059,9 @@ class FlashAttentionOp(AttentionOp):
                     past_value_state.unsqueeze(2),
                     seq_position,
                     scale,
-                    self.kvcache_partition_size,
                     block_tables,
                     kvcache_block_size,
+                    self.kvcache_partition_size,
                 )
             else:
                 attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_flash_causal_attn_prefill(
@@ -1072,9 +1072,9 @@ class FlashAttentionOp(AttentionOp):
                     past_value_state.unsqueeze(2),
                     seq_position,
                     scale,
-                    self.kvcache_partition_size,
                     block_tables,
                     kvcache_block_size,
+                    self.kvcache_partition_size,
                 )
 
         # reshape for removing repeat_kv
