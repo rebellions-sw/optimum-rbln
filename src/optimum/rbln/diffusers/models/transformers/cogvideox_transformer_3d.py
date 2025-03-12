@@ -51,17 +51,23 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
 
     @classmethod
     def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
-        # sample_size = rbln_config.get("sample_size", pipe.default_sample_size)
-        # img_width = rbln_config.get("img_width")
-        # img_height = rbln_config.get("img_height")
+        sample_size = rbln_config.get("sample_size", None)
+        vae_scale_factor_spatial = (
+            2 ** (len(pipe.vae.config.block_out_channels) - 1) if hasattr(pipe, "vae") and pipe.vae is not None else 8
+        )
+        vae_scale_factor_temporal = (
+            pipe.vae.config.temporal_compression_ratio if hasattr(pipe, "vae") and pipe.vae is not None else 4
+        )
 
-        # if (img_height is None) ^ (img_width is None):
-        #     raise RuntimeError
+        img_width = rbln_config.get("img_width", None)
+        img_height = rbln_config.get("img_height", None)
+        
+        if (img_height is None) ^ (img_width is None):
+            sample_size = pipe.transformer.config.sample_height, pipe.transformer.config.sample_width
 
-        # elif img_height and img_width:
-        #     sample_size = img_height // pipe.vae_scale_factor, img_width // pipe.vae_scale_factor
+        elif img_height and img_width:
+            sample_size = img_height // vae_scale_factor_spatial, img_width // vae_scale_factor_spatial
 
-        # max_sequence_length = pipe.transfomer.max_text_seq_length
         batch_size = rbln_config.get("batch_size")
         if not batch_size:
             do_classifier_free_guidance = rbln_config.get("guidance_scale", 5.0) > 1.0
@@ -76,9 +82,8 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
 
         return {
             "batch_size": batch_size,
-            # "max_sequence_length": max_sequence_length,
-            # "sample_size": sample_size,
-            # "vae_scale_factor": pipe.vae_scale_factor,
+            "sample_size": sample_size,
+            "vae_scale_factor_temporal": vae_scale_factor_temporal,
         }
 
     @classmethod
@@ -89,45 +94,32 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
         rbln_kwargs: Dict[str, Any] = {},
     ) -> RBLNConfig:
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
-
-        # sample_size = rbln_kwargs.get("sample_size", None)
-        # vae_scale_factor = rbln_kwargs.get("vae_scale_factor", None)
-
-        # if isinstance(sample_size, int):
-        #     sample_size = (sample_size, sample_size)
+        sample_size = rbln_kwargs.get("sample_size")
+        
+        if sample_size is None:
+            # NOTE(si): From diffusers >= v0.32.0, pipe.transformer.config.sample_height and pipe.transformer.config.sample_width is used explicitly.
+            sample_size = model_config.sample_height, model_config.sample_width
+            
+        vae_scale_factor_temporal = rbln_kwargs.get("vae_scale_factor_temporal", None)
+        num_frames = rbln_kwargs.get("num_frames")
+        
+        if num_frames is None :
+            # NOTE: it is only for cogvideoX 1.0. cogvideoX1.5 is set to 81
+            num_frames = 49 
 
         rbln_max_seqeunce_length = rbln_kwargs.get("max_sequence_length")
         if rbln_max_seqeunce_length is None:
             rbln_max_sequence_length = model_config.max_text_seq_length
-        # if rbln_max_seqeunce_length is None:
-        #     raise ValueError("rbln_max_seqeunce_length should be specified.")
-
-        # # prepare_latents function
-        # height = 2 * (int(sample_size[0]) // vae_scale_factor)
-        # width = 2 * (int(sample_size[1]) // vae_scale_factor)
-        # latent_shape = (height // 2) * (width // 2)
-        # num_channels_latents = model_config.in_channels // 4
-
-
-        # hidden_states.shape
-        # batch_size, , out_channels, sample_height, sample_width
-        # torch.Size([2, 13, 16, 60, 90])
-        # encoder_hidden_states.shape
-        # batch_size, max_text_seq_length, text_embed_dim
-        # torch.Size([2, 226, 4096])
-        # timestep.shape
-        # torch.Size([2]), tensor([999, 999])
 
         input_info = [
             (
                 "hidden_states",
                 [
                     rbln_batch_size,
-                    #FIXME: for temporal, need generalize
-                    13,
+                    (num_frames - 1) // vae_scale_factor_temporal + 1,
                     model_config.out_channels,
-                    model_config.sample_height,
-                    model_config.sample_width
+                    sample_size[0],
+                    sample_size[1],
                 ],
                 "float32",
             ),
@@ -167,5 +159,19 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
         attention_kwargs: Optional[Dict[str, Any]] = None,
         return_dict: bool = True,
     ):
-        output = super().forward(hidden_states, encoder_hidden_states, timestep)
-        return Transformer2DModelOutput(sample=output)
+        sample_batch_size = hidden_states.size()[0]
+        compiled_batch_size = self.compiled_batch_size
+        if sample_batch_size != compiled_batch_size and (
+            sample_batch_size * 2 == compiled_batch_size or sample_batch_size == compiled_batch_size * 2
+        ):
+            raise ValueError(
+                f"Mismatch between Transformers' runtime batch size ({sample_batch_size}) and compiled batch size ({compiled_batch_size}). "
+                "This may be caused by the 'guidance scale' parameter, which doubles the runtime batch size in Stable Diffusion. "
+                "Adjust the batch size during compilation or modify the 'guidance scale' to match the compiled batch size.\n\n"
+                "For details, see: https://docs.rbln.ai/software/optimum/model_api.html#stable-diffusion"
+            )
+        sample = super().forward(hidden_states, encoder_hidden_states, timestep)
+        
+        if not return_dict:
+            return (sample,)
+        return Transformer2DModelOutput(sample=sample)
