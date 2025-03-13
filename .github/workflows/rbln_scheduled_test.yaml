@@ -38,11 +38,7 @@ jobs:
     with:
       ref: main
       rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
-    secrets:
-      REBEL_PYPI_USERNAME: ${{ secrets.REBEL_PYPI_USERNAME }}
-      REBEL_PYPI_PASSWORD: ${{ secrets.REBEL_PYPI_PASSWORD }}
-      HF_USER_ID: ${{ secrets.HF_USER_ID }}
-      HF_AUTH_TOKEN: ${{ secrets.HF_AUTH_TOKEN }}
+    secrets: inherit
 
   optimum-rbln-inference-test:
     needs: check-compiler
@@ -51,8 +47,4 @@ jobs:
     with:
       ref: main
       rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
-    secrets:
-      REBEL_PYPI_USERNAME: ${{ secrets.REBEL_PYPI_USERNAME }}
-      REBEL_PYPI_PASSWORD: ${{ secrets.REBEL_PYPI_PASSWORD }}
-      HF_USER_ID: ${{ secrets.HF_USER_ID }}
-      HF_AUTH_TOKEN: ${{ secrets.HF_AUTH_TOKEN }} 
+    secrets: inherit
