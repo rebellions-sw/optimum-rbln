@@ -25,7 +25,7 @@ from transformers.modeling_outputs import (
 )
 from transformers.utils import logging
 
-from ....ops import register_rbln_custom_cache_update
+from ....ops import register_rbln_custom_cache_update, register_rbln_custom_attention_add_softmax
 
 
 logger = logging.get_logger(__name__)
@@ -34,6 +34,7 @@ logger = logging.get_logger(__name__)
 class WhisperWrapper:
     def __init__(self, model, rbln_token_timestamps):
         register_rbln_custom_cache_update()
+        register_rbln_custom_attention_add_softmax()
         self.encoder = WhisperEncoderWrapper(model)
         self.decoder = WhisperDecoderWrapper(model, output_attentions=rbln_token_timestamps)
 
@@ -258,19 +259,8 @@ class WhisperAttention(nn.Module):
 
 
 class WhisperSelfAttention(WhisperAttention):
-    def rbln_cache_update(
-        self,
-        past_key_value: torch.Tensor,
-        key_states: torch.Tensor,
-        value_states: torch.Tensor,
-        cache_position: torch.Tensor,
-    ):
-        s_idx = torch.tensor(cache_position, dtype=torch.int16)
-        axis = torch.tensor(2, dtype=torch.int16)
-
-        key_states = torch.ops.rbln_custom_ops.rbln_cache_update(past_key_value[0], key_states, s_idx, axis)
-        value_states = torch.ops.rbln_custom_ops.rbln_cache_update(past_key_value[1], value_states, s_idx, axis)
-        return key_states, value_states
+    def _shape(self, tensor: torch.Tensor, seq_len: int, bsz: int) -> torch.Tensor:
+        return tensor.view(bsz, seq_len, 1, self.num_heads, self.head_dim).transpose(1, 3)
 
     def forward(
         self,
@@ -285,22 +275,27 @@ class WhisperSelfAttention(WhisperAttention):
 
         key_states = self._shape(self.k_proj(hidden_states), -1, bsz)
         value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
-        key_states, value_states = self.rbln_cache_update(past_key_value, key_states, value_states, cache_position)
 
-        attn_weights = torch.matmul(query_states, key_states.transpose(2, 3))
-        attn_weights = attn_weights + attention_mask
-        attn_weights = nn.functional.softmax(attn_weights, dim=-1)
+        attn_output, key_states, value_states = torch.ops.rbln_custom_ops.attn_decode_add_softmax(
+            query_states,
+            key_states,
+            value_states,
+            attention_mask.unsqueeze(2),
+            past_key_value[0].view(bsz, self.num_heads, 1, -1, self.head_dim),
+            past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
+            cache_position.expand(bsz, 1),
+            torch.tensor(1.0, dtype=torch.float32),  # scale
+        )
 
-        attn_output = torch.matmul(attn_weights, value_states)
         attn_output = attn_output.view(bsz, self.num_heads, tgt_len, self.head_dim)
         attn_output = attn_output.transpose(1, 2)
         attn_output = attn_output.reshape(bsz, tgt_len, self.embed_dim)
         attn_output = self.out_proj(attn_output)
 
-        return attn_output, attn_weights, (key_states, value_states)
+        return attn_output, None, (key_states, value_states)
 
 
-class WhisperCrossAttention(WhisperSelfAttention):
+class WhisperCrossAttention(WhisperAttention):
     def forward(
         self,
         hidden_states: torch.Tensor,
