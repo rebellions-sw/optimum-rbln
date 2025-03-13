@@ -29,10 +29,7 @@ jobs:
     uses: ./.github/workflows/rbln_check_compiler.yaml
     with:
       compiler_version: ${{ needs.load-version.outputs.compiler_version }}
-    secrets:
-      REBEL_PYPI_USERNAME: ${{ secrets.REBEL_PYPI_USERNAME }}
-      REBEL_PYPI_PASSWORD: ${{ secrets.REBEL_PYPI_PASSWORD }}
-      CHECK_DEPLOY: ${{ secrets.CHECK_DEPLOY }}
+    secrets: inherit
 
   optimum-rbln-pytest:
     needs: [load-version, check-compiler]
