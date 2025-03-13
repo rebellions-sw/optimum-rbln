@@ -81,7 +81,7 @@ class RBLNT5EncoderModel(RBLNModel):
     @classmethod
     def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
         batch_size = rbln_config.get("batch_size", 1)
-        if "cogvideo" in pipe.name_or_path.lower():
+        if "cogvideo" in pipe.__class__.__name__.lower():
             max_sequence_length = pipe.transformer.max_text_seq_length
         else:
             max_sequence_length = rbln_config.get("max_sequence_length", 256)
