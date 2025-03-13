@@ -1,9 +1,9 @@
 import os
+from io import BytesIO
 
 import fire
-import torch
 import requests
-from io import BytesIO
+import torch
 from PIL import Image
 
 from optimum.rbln import RBLNKandinskyV22Img2ImgCombinedPipeline
