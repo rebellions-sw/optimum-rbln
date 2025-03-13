@@ -14,8 +14,8 @@
 
 from .attn import (
     register_rbln_custom_attention_add_softmax,
-    register_rbln_custom_causal_masked_attention,
-    register_rbln_custom_masked_attention,
+    register_rbln_custom_causal_paged_attention,
+    register_rbln_custom_paged_attention,
 )
-from .flash_attn import register_rbln_custom_flash_causal_masked_attention, register_rbln_custom_flash_masked_attention
+from .flash_attn import register_rbln_custom_paged_flash_attention, register_rbln_custom_paged_flash_causal_attention
 from .kv_cache_update import register_rbln_custom_cache_update

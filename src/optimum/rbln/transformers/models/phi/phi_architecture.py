@@ -36,7 +36,9 @@ class PhiWrapper(DecoderOnlyWrapper):
         new_layers = []
         for layer in causal_lm.model.layers:
             if self.attn_impl == "eager":
-                new_self_attn = PhiAttention(layer.self_attn, self.use_attention_mask)
+                new_self_attn = PhiAttention(
+                    layer.self_attn, self.use_attention_mask, kvcache_block_size=self.kvcache_block_size
+                )
             elif self.attn_impl == "flash_attn":
                 raise NotImplementedError(f"flash attn for {self.__class__} is not implemented yet.")
             else:
