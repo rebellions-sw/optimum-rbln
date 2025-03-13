@@ -1,7 +1,6 @@
 import os
 
 import fire
-import numpy as np
 import torch
 
 from optimum.rbln import RBLNKandinskyV22Pipeline, RBLNKandinskyV22PriorPipeline

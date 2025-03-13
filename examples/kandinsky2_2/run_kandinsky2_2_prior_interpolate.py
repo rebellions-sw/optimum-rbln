@@ -1,7 +1,6 @@
 import os
 
 import fire
-import numpy as np
 import torch
 from diffusers.utils import load_image
 
@@ -58,7 +57,7 @@ def main(
         generator=generator,
     )
     image = out.images[0]
-    image.save(f"starry_cat.png")
+    image.save("starry_cat.png")
 
 
 if __name__ == "__main__":

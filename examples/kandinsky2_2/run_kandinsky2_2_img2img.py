@@ -1,7 +1,6 @@
 import os
 
 import fire
-import numpy as np
 import torch
 from diffusers.utils import load_image
 
