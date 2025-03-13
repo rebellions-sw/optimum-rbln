@@ -97,50 +97,6 @@ def remove_file_from_diff(diff_content, file_to_remove):
     return "\n".join(result)
 
 
-def skip_bot(pr):
-    global force_review
-    """
-    Review if
-    1. last commit messages starts with "[autoreview]"
-    2. last comment contains "/autoreview"
-    """
-
-    # Check commit message
-    commits = list(pr.get_commits())
-    if len(commits) == 0:
-        return True
-
-    last_commit = commits[-1]
-    try:
-        commit_message = last_commit.raw_data["commit"]["message"]
-    except KeyError:
-        commit_message = ""
-
-    if commit_message.startswith("[autoreview]"):
-        return False
-
-    # Check the last comment
-    comments = list(pr.get_issue_comments())
-    if len(comments) == 0:
-        return True
-
-    last = comments[-1]
-    if last.user.login.find("github-actions") != -1:
-        return True
-
-    if last.body.find("/autoreview") == -1:
-        return True
-
-    if last.reactions["heart"] > 0:
-        return True
-
-    if last.body.find("force") != -1:
-        force_review = True
-
-    last.create_reaction("heart")
-    return False
-
-
 def main():
     github_token = os.getenv("GITHUB_TOKEN")
     pr_number = os.getenv("PR_NUMBER")
@@ -154,13 +110,6 @@ def main():
     g = Github(github_token)
     repo = g.get_repo(os.getenv("GITHUB_REPOSITORY"))
     pr = repo.get_pull(int(pr_number))
-
-    if skip_bot(pr):
-        print(
-            "To invoke review, Write '/autoreview' and re-run github actions,"
-            " or start the commit message with '[autoreview]'. "
-        )
-        sys.exit(0)
 
     # Get PR diff
     diff = get_pr_diff()
