@@ -15,7 +15,6 @@
 import inspect
 from typing import TYPE_CHECKING, Optional, Union
 
-import torch
 from transformers import PretrainedConfig
 
 from ....modeling import RBLNModel
@@ -58,7 +57,7 @@ class RBLNXLMRobertaModel(RBLNModel):
         if max_position_embeddings is not None and rbln_max_seq_len > max_position_embeddings:
             raise ValueError("`rbln_enc_max_seq_len` should be less or equal than max_position_embeddings!")
 
-        signature_params = inspect.signature(cls.hf_class.forward).parameters.keys()
+        signature_params = inspect.signature(cls.get_hf_class().forward).parameters.keys()
 
         if rbln_model_input_names is None:
             for tokenizer in preprocessors:
@@ -99,15 +98,3 @@ class RBLNXLMRobertaModel(RBLNModel):
         )
         rbln_config.model_cfg.update({"max_seq_len": rbln_max_seq_len})
         return rbln_config
-
-    def forward(
-        self,
-        input_ids: "torch.Tensor",
-        attention_mask: "torch.Tensor",
-        token_type_ids: "torch.Tensor" = None,
-        **kwargs,
-    ):
-        if token_type_ids is None:
-            token_type_ids = torch.zeros_like(input=input_ids, dtype=torch.int64)
-        output = super().forward(input_ids, attention_mask, token_type_ids)
-        return output

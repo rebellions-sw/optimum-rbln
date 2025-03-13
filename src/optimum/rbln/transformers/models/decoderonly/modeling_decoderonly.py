@@ -50,11 +50,14 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         phase: str,
         batch_size: int,
         dec_attn_mask: torch.Tensor,
+        use_attention_mask: bool,
         **kwargs: Any,
     ) -> None:
         super().__init__(runtime, **kwargs)
         self.phase = phase
         self.batch_size = batch_size
+
+        self.use_attention_mask = use_attention_mask
 
         # shared tensor between prefill and decode phase
         self.dec_attn_mask = dec_attn_mask
@@ -110,7 +113,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         if batch_size != cache_position.shape[0]:
             raise RuntimeError(f"Cache position size mismatch: got {cache_position.shape[0]}, expected {batch_size}.")
 
-        if attention_mask is None:
+        if self.use_attention_mask and attention_mask is None:
             for b_idx in range(batch_size):
                 decoding_step = cache_position[b_idx].item()
                 if not (0 <= decoding_step < self.dec_attn_mask.shape[-1]):
@@ -119,10 +122,12 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     )
                 self.dec_attn_mask[b_idx, :, :, decoding_step] = 1
 
+            attention_mask = self.dec_attn_mask
+
         logits = super().forward(
             inputs,
-            self.dec_attn_mask if attention_mask is None else attention_mask,
             cache_position,
+            attention_mask if self.use_attention_mask else None,
         )
 
         return logits
@@ -156,7 +161,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             )
 
         # Initialize attention mask for chunked processing
-        chunked_attention_mask = torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
+        if self.use_attention_mask:
+            chunked_attention_mask = torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
 
         # Buffer for storing output logits
         out_buffers = [
@@ -195,28 +201,41 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             input_chunk = inputs[:, step : step + self.prefill_chunk_size]
             cache_pos_chunk = cache_position[:, step : step + self.prefill_chunk_size]
 
-            # Update attention mask to ensure proper causal behavior
-            if step >= self.prefill_chunk_size:
-                chunked_attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
-            chunked_attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
+            if self.use_attention_mask:
+                # Update attention mask to ensure proper causal behavior
+                if step >= self.prefill_chunk_size:
+                    chunked_attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
+                chunked_attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
 
             # Define batch position and query position
             batch_position = torch.tensor(batch_idx, dtype=torch.int16)
             query_position = torch.tensor((query_length - 1) % self.prefill_chunk_size, dtype=torch.int16)
 
+            if self.use_attention_mask:
+                args = (
+                    input_chunk,
+                    cache_pos_chunk,
+                    chunked_attention_mask,
+                    batch_position,
+                    query_position,
+                )
+            else:
+                args = (
+                    input_chunk,
+                    cache_pos_chunk,
+                    batch_position,
+                    query_position,
+                )
             # Forward pass for the current chunk
             logits = super().forward(
-                input_chunk,
-                chunked_attention_mask,
-                cache_pos_chunk,
-                batch_position,
-                query_position,
+                *args,
                 out=out_buffers,
             )
 
-        # Update decoder attention mask with processed KV-cache length from prefill phase
-        self.dec_attn_mask[batch_idx].fill_(0)
-        self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
+        if self.use_attention_mask:
+            # Update decoder attention mask with processed KV-cache length from prefill phase
+            self.dec_attn_mask[batch_idx].fill_(0)
+            self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
 
         return logits
 
@@ -256,6 +275,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         self.batch_size = self.rbln_config.model_cfg["batch_size"]
         self.max_seq_len = self.rbln_config.model_cfg["max_seq_len"]
         self.prefill_chunk_size = self.rbln_config.model_cfg["prefill_chunk_size"]
+        self.use_attention_mask = self.rbln_config.model_cfg["use_attention_mask"]
 
         main_input_name = self.main_input_name
         if self.rbln_config.model_cfg["use_inputs_embeds"]:
@@ -282,6 +302,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             vocab_size=self.config.vocab_size,
             max_seq_len=self.max_seq_len,
             prefill_chunk_size=self.prefill_chunk_size,
+            use_attention_mask=self.use_attention_mask,
         )
         self.decoder = RBLNRuntimeModel(
             runtime=self.model[1],
@@ -290,6 +311,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             phase="decode",
             batch_size=self.batch_size,
             dec_attn_mask=dec_attn_mask,
+            use_attention_mask=self.use_attention_mask,
         )
 
     @classmethod
@@ -363,7 +385,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         def redirect(func):
             return lambda *pargs, **kwargs: func(self, *pargs, **kwargs)
 
-        val = getattr(self.hf_class, __name, None) or getattr(PreTrainedModel, __name)
+        val = getattr(self.get_hf_class(), __name, None) or getattr(PreTrainedModel, __name)
         if isinstance(val, Callable) and "self" in set(inspect.signature(val).parameters):
             return redirect(val)
         return val
@@ -388,6 +410,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         wrapper_cfg["attn_impl"] = rbln_config.model_cfg.get("attn_impl")
         wrapper_cfg["kvcache_partition_len"] = rbln_config.model_cfg.get("kvcache_partition_len")
         wrapper_cfg["use_rotary_emb"] = cls._use_rotary_emb
+        wrapper_cfg["use_attention_mask"] = rbln_config.model_cfg.get("use_attention_mask")
 
         return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
 
@@ -448,10 +471,17 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_max_seq_len = rbln_kwargs.get("max_seq_len", None)
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
         rbln_use_inputs_embeds = rbln_kwargs.get("use_inputs_embeds", None)
+        rbln_use_attention_mask = rbln_kwargs.get("use_attention_mask", None)
         rbln_attn_impl = rbln_kwargs.get("attn_impl", None)
         rbln_kvcache_partition_len = rbln_kwargs.get("kvcache_partition_len", None)
         rbln_quantization = QuantizationManager.validate_quantization_config(rbln_kwargs.get("quantization", None))
         rbln_prefill_chunk_size = rbln_kwargs.get("prefill_chunk_size", None)
+
+        if rbln_use_attention_mask is None:
+            rbln_use_attention_mask = False
+            rbln_npu = rbln_kwargs.get("npu", None) or rebel.get_npu_name()
+            if rbln_npu == "RBLN-CA02":
+                rbln_use_attention_mask = True
 
         if rbln_prefill_chunk_size is None:
             rbln_prefill_chunk_size = 128
@@ -495,13 +525,20 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
             input_info = [
                 main_input,
-                ("attention_mask", [batch_size, 1, query_length, rbln_max_seq_len], "float32"),
                 (
                     "cache_position",
                     [batch_size, query_length],
                     "int32",
                 ),
             ]
+
+            if rbln_use_attention_mask:
+                input_info.extend(
+                    [
+                        ("attention_mask", [batch_size, 1, query_length, rbln_max_seq_len], "float32"),
+                    ]
+                )
+
             if query_length > 1:
                 input_info.extend(
                     [
@@ -555,6 +592,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 "max_seq_len": rbln_max_seq_len,
                 "batch_size": rbln_batch_size,
                 "prefill_chunk_size": rbln_prefill_chunk_size,
+                "use_attention_mask": rbln_use_attention_mask,
                 "use_inputs_embeds": rbln_use_inputs_embeds,
                 "kvcache_partition_len": rbln_kvcache_partition_len,
                 "attn_impl": rbln_attn_impl,

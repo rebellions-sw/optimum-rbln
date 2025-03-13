@@ -39,21 +39,20 @@ class LLMTest:
         PROMPT = "Who are you?"
 
         @classmethod
-        @property
-        def tokenizer(cls):
+        def get_tokenizer(cls):
             if cls._tokenizer is None:
                 cls._tokenizer = AutoTokenizer.from_pretrained(cls.HF_MODEL_ID)
             return cls._tokenizer
 
         def get_inputs(self):
-            inputs = self.tokenizer(self.PROMPT, return_tensors="pt")
+            inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt")
             inputs["max_new_tokens"] = 20
             inputs["do_sample"] = False
             return inputs
 
         def postprocess(self, inputs, output):
             input_len = inputs["input_ids"].shape[-1]
-            generated_text = self.tokenizer.decode(
+            generated_text = self.get_tokenizer().decode(
                 output[0][input_len:], skip_special_tokens=True, clean_up_tokenization_spaces=True
             )
             return generated_text
@@ -74,8 +73,8 @@ class TestLlamaForCausalLM(LLMTest.TestLLM):
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
 
     def get_inputs(self):
-        self.tokenizer.pad_token = self.tokenizer.eos_token
-        inputs = self.tokenizer(self.PROMPT, return_tensors="pt")
+        self.get_tokenizer().pad_token = self.get_tokenizer().eos_token
+        inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt")
         return inputs
 
 
@@ -88,8 +87,8 @@ class TestLlamaForCausalLM_Flash(LLMTest.TestLLM):
     RBLN_CLASS_KWARGS = {"rbln_config": {"attn_impl": "flash_attn", "kvcache_partition_len": 4096}}
 
     def get_inputs(self):
-        self.tokenizer.pad_token = self.tokenizer.eos_token
-        inputs = self.tokenizer(self.PROMPT, return_tensors="pt")
+        self.get_tokenizer().pad_token = self.get_tokenizer().eos_token
+        inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt")
         return inputs
 
 
@@ -133,7 +132,7 @@ class TestT5Model(LLMTest.TestLLM):
     HF_CONFIG_KWARGS = {"num_layers": 1}
 
     def get_inputs(self):
-        inputs = self.tokenizer(
+        inputs = self.get_tokenizer()(
             self.PROMPT, padding="max_length", max_length=512, truncation=True, return_tensors="pt"
         )
         inputs["max_new_tokens"] = 20
@@ -142,7 +141,9 @@ class TestT5Model(LLMTest.TestLLM):
         return inputs
 
     def postprocess(self, inputs, output):
-        generated_text = self.tokenizer.decode(output[0], skip_special_tokens=True, clean_up_tokenization_spaces=True)
+        generated_text = self.get_tokenizer().decode(
+            output[0], skip_special_tokens=True, clean_up_tokenization_spaces=True
+        )
         return generated_text
 
 
@@ -164,7 +165,7 @@ class TestBartModel(LLMTest.TestLLM):
     TEST_LEVEL = TestLevel.ESSENTIAL
 
     def get_inputs(self):
-        inputs = self.tokenizer(
+        inputs = self.get_tokenizer()(
             self.PROMPT, padding="max_length", max_length=512, truncation=True, return_tensors="pt"
         )
         inputs["max_new_tokens"] = 20
@@ -173,7 +174,9 @@ class TestBartModel(LLMTest.TestLLM):
         return inputs
 
     def postprocess(self, inputs, output):
-        generated_text = self.tokenizer.decode(output[0], skip_special_tokens=True, clean_up_tokenization_spaces=True)
+        generated_text = self.get_tokenizer().decode(
+            output[0], skip_special_tokens=True, clean_up_tokenization_spaces=True
+        )
         return generated_text
 
     def test_automap(self):
@@ -207,7 +210,7 @@ class TestBartModel(LLMTest.TestLLM):
         with self.subTest():
             with pytest.raises(ValueError):
                 _ = RBLNAutoModelForCausalLM.from_pretrained(
-                    self.RBLN_LOCAL_DIR,
+                    self.get_rbln_local_dir(),
                     export=False,
                     rbln_create_runtimes=False,
                     **self.HF_CONFIG_KWARGS,
