@@ -142,6 +142,41 @@ class T5LayerSelfAttention(Seq2SeqSelfAttention):
         value_states = self.v_proj(hidden_states)
         return query_states, key_states, value_states
 
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        past_key_value: Tuple[torch.Tensor],
+        attention_mask: torch.Tensor,
+        cache_position: torch.Tensor,
+    ) -> Tuple[torch.Tensor, Tuple[torch.Tensor]]:
+        bsz, tgt_len, _ = hidden_states.size()
+
+        query_states, key_states, value_states = self.projection(hidden_states=hidden_states)
+        query_states = self._shape(query_states, tgt_len, bsz)
+        key_states = self._shape(key_states, -1, bsz)
+        value_states = self._shape(value_states, -1, bsz)
+
+        attn_output, key_states, value_states, _ = self.attn_decode(
+            query_states,
+            key_states,
+            value_states,
+            attention_mask.unsqueeze(
+                2
+            ),  # Unsqueeze group axis since CustomKernel expects it for group query attention
+            past_key_value[0].view(bsz, self.num_heads, 1, -1, self.head_dim),
+            past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
+            cache_position,
+            torch.tensor(1.0, dtype=torch.float32),  # scale
+        )
+
+        attn_output = attn_output.view(bsz, self.num_heads, -1, self.head_dim).transpose(1, 2)
+        attn_output = attn_output.reshape(bsz, -1, self.num_heads * self.head_dim)
+
+        attn_output = self.out_proj(attn_output)
+        present_key_value = (key_states, value_states)
+
+        return attn_output, present_key_value
+
 
 class T5CrossAttention(nn.Module):
     def __init__(self, attn):

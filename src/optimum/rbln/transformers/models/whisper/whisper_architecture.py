@@ -276,7 +276,7 @@ class WhisperSelfAttention(WhisperAttention):
         key_states = self._shape(self.k_proj(hidden_states), -1, bsz)
         value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
 
-        attn_output, key_states, value_states = torch.ops.rbln_custom_ops.attn_decode_add_softmax(
+        attn_output, key_states, value_states, attn_weights = torch.ops.rbln_custom_ops.attn_decode_add_softmax(
             query_states,
             key_states,
             value_states,
@@ -292,7 +292,7 @@ class WhisperSelfAttention(WhisperAttention):
         attn_output = attn_output.reshape(bsz, tgt_len, self.embed_dim)
         attn_output = self.out_proj(attn_output)
 
-        return attn_output, None, (key_states, value_states)
+        return attn_output, attn_weights.squeeze(2), (key_states, value_states)
 
 
 class WhisperCrossAttention(WhisperAttention):
