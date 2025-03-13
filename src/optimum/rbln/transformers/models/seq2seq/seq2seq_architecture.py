@@ -106,8 +106,6 @@ class Seq2SeqEncoderWrapper(nn.Module):
             cross_kv.append(past_k)
             cross_kv.append(past_v)
 
-        cross_kv = torch.stack(cross_kv, dim=0)
-
         # 3. update the cross_attention's past_key_value direct to the device-dram for optimization.
         batch_axis = torch.tensor(0, dtype=torch.int16)
         cross_key_values = list(cross_key_values)
