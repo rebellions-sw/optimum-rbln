@@ -78,14 +78,16 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
                     "To ensure consistent behavior, consider removing the guidance scale or "
                     "adjusting the batch size configuration as needed."
                 )
-                
-        rbln_config.update({
-            "batch_size": batch_size,
-            "sample_size": sample_size,
-            "num_frames": num_frames,
-            "vae_scale_factor_temporal": pipe.vae_scale_factor_temporal,
-        })
-        
+
+        rbln_config.update(
+            {
+                "batch_size": batch_size,
+                "sample_size": sample_size,
+                "num_frames": num_frames,
+                "vae_scale_factor_temporal": pipe.vae_scale_factor_temporal,
+            }
+        )
+
         return rbln_config
 
     @classmethod

@@ -116,12 +116,16 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
         num_frames = rbln_config.get("num_frames")
         if num_frames is None:
             num_frames = pipe.transformer.sample_frames
-        
-        rbln_config.update({"num_frames": num_frames,
-                            "sample_size": cls.get_vae_sample_size(pipe, rbln_config),
-                            "vae_scale_factor_spatial": pipe.vae_scale_factor_spatial,
-                            "vae_scale_factor_temporal": pipe.vae_scale_factor_temporal})
-        return rbln_config 
+
+        rbln_config.update(
+            {
+                "num_frames": num_frames,
+                "sample_size": cls.get_vae_sample_size(pipe, rbln_config),
+                "vae_scale_factor_spatial": pipe.vae_scale_factor_spatial,
+                "vae_scale_factor_temporal": pipe.vae_scale_factor_temporal,
+            }
+        )
+        return rbln_config
 
     @classmethod
     def _get_rbln_config(
@@ -134,7 +138,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
         sample_size = rbln_kwargs.get("sample_size")
         is_img2vid = rbln_kwargs.get("is_img2vid")
         num_frames = rbln_kwargs.get("num_frames")
-        
+
         if rbln_batch_size is None:
             rbln_batch_size = 1
 
@@ -148,14 +152,26 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
             vae_enc_input_info = [
                 (
                     "x",
-                    [rbln_batch_size, model_config.in_channels, (num_frames - 1) // vae_scale_factor_temporal + 1, enc_shape[0], enc_shape[1]],
+                    [
+                        rbln_batch_size,
+                        model_config.in_channels,
+                        (num_frames - 1) // vae_scale_factor_temporal + 1,
+                        enc_shape[0],
+                        enc_shape[1],
+                    ],
                     "float32",
                 )
             ]
             vae_dec_input_info = [
                 (
                     "z",
-                    [rbln_batch_size, model_config.latent_channels, (num_frames - 1) // vae_scale_factor_temporal + 1, dec_shape[0], dec_shape[1]],
+                    [
+                        rbln_batch_size,
+                        model_config.latent_channels,
+                        (num_frames - 1) // vae_scale_factor_temporal + 1,
+                        dec_shape[0],
+                        dec_shape[1],
+                    ],
                     "float32",
                 )
             ]
@@ -170,7 +186,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
                 rbln_kwargs=rbln_kwargs,
             )
             return rbln_config
-        
+
         compile_cfgs = RBLNCompileConfig(
             input_info=[
                 (
