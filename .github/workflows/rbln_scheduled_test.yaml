@@ -4,6 +4,9 @@ on:
   schedule:
     # Run every day at 2am (17:00 UTC, 2:00am KST)
     - cron: '0 17 * * *'
+  pull_request:
+    branches:
+      - main
 
 env:
   HF_USER_ID: ${{ secrets.HF_USER_ID }}
@@ -38,6 +41,7 @@ jobs:
     with:
       ref: main
       rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
+      test_level: "full"
     secrets: inherit
 
   optimum-rbln-inference-test:
