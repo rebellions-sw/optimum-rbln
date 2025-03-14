@@ -14,13 +14,6 @@ on:
       compiler_version:
         description: "The compiler version used"
         value: ${{ jobs.check-rebel-compiler-version.outputs.compiler_version }}
-    secrets:
-      REBEL_PYPI_USERNAME:
-        required: true
-      REBEL_PYPI_PASSWORD:
-        required: true
-      CHECK_DEPLOY:
-        required: true
 
 jobs:
   check-rebel-compiler-version:
