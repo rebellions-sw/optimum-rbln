@@ -36,7 +36,7 @@ def main(
     mask = np.zeros((768, 768), dtype=np.float32)
     mask[:250, 250:-250] = 1
 
-    image = pipe(prompt, image=init_image, mask_image=mask, generator=gnerator).images[0]
+    image = pipe(prompt, image=init_image, mask_image=mask, generator=generator).images[0]
     image.save(f"{prompt}.png")
 
 
