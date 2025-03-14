@@ -20,3 +20,6 @@ from ...modeling_diffusers import RBLNDiffusionMixin
 class RBLNKandinskyV22Img2ImgPipeline(RBLNDiffusionMixin, KandinskyV22Img2ImgPipeline):
     original_class = KandinskyV22Img2ImgPipeline
     _submodules = ["unet", "movq"]
+
+    def get_compiled_image_size(self):
+        return self.movq.image_size
