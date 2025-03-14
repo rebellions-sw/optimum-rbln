@@ -1,10 +1,12 @@
 import json
+import os
 import unittest
 import warnings
 
 import pytest
 import torch
-from transformers import AutoConfig, AutoTokenizer
+from PIL import Image
+from transformers import AutoConfig, AutoProcessor, AutoTokenizer
 
 from optimum.rbln import (
     RBLNAutoModel,
@@ -220,35 +222,23 @@ class TestBartModel(LLMTest.TestLLM):
 class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
     RBLN_CLASS = RBLNLlavaNextForConditionalGeneration
-    TEST_LEVEL = TestLevel.FULL
+    TEST_LEVEL = TestLevel.DEFAULT
     HF_MODEL_ID = "llava-hf/llava-v1.6-mistral-7b-hf"  # No tiny model yet.
-    LLAVA_PIXEL_VALUES = torch.randn(1, 5, 3, 336, 336, generator=torch.manual_seed(42))
-    LLAVA_IMAGE_SIZES = torch.tensor([[900, 900]], dtype=torch.int64)
-    GENERATION_KWARGS = {
-        "input_ids": torch.randint(
-            low=0,
-            high=50,
-            size=(1, 512),
-            generator=torch.manual_seed(42),
-            dtype=torch.int64,
-        ),
-        "attention_mask": torch.randint(
-            low=0, high=2, size=(1, 512), generator=torch.manual_seed(42), dtype=torch.int64
-        ),
-        "pixel_values": LLAVA_PIXEL_VALUES,
-        "image_sizes": LLAVA_IMAGE_SIZES,
-        "max_new_tokens": 10,
-    }
+    PROMPT = "[INST] <image>\nWhat’s shown in this image? [/INST]"
     RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True}}}
-    EXPECTED_OUTPUT = "ẩ kennisSoft biologieussyózdsi fraulent data"
+    EXPECTED_OUTPUT = "aille kennisSoft /******/ Brunershot childhoodhoodRx̧̧̧̧̧̧̧̧̧̧"
+
+    @classmethod
+    def get_tokenizer(cls):
+        if cls._tokenizer is None:
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
+        return cls._tokenizer
 
     # override
     @classmethod
     def setUpClass(cls):
         config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
 
-        # To test image input, input_id should contain special image token.
-        cls.GENERATION_KWARGS["input_ids"][0, 44] = config.image_token_index
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 1
         kwargs = {"text_config": text_config}
@@ -256,7 +246,13 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
         return super().setUpClass()
 
     def get_inputs(self):
-        return self.GENERATION_KWARGS
+        tokenizer = self.get_tokenizer()
+        img_path = f"{os.path.dirname(__file__)}/../assets/rbln_logo.png"
+        image = Image.open(img_path)
+        inputs = tokenizer(images=[image], text=[self.PROMPT], return_tensors="pt", padding=True)
+        inputs["max_new_tokens"] = 20
+        inputs["do_sample"] = False
+        return inputs
 
 
 class TestDisallowedLlama_1(DisallowedTestBase.DisallowedTest):
