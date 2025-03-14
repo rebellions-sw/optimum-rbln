@@ -22,6 +22,8 @@ def main(
         pipe = RBLNKandinskyV22Pipeline.from_pretrained(
             model_id=inpaint_model_id,
             export=True,
+            rbln_img_height=768,
+            rbln_img_width=768,
         )
         pipe.save_pretrained(os.path.basename(inpaint_model_id))
     else:
@@ -42,6 +44,8 @@ def main(
     out = pipe(
         image_embeds=image_emb,
         negative_image_embeds=zero_image_emb,
+        height=768,
+        width=768,
         num_inference_steps=50,
         generator=generator,
     )

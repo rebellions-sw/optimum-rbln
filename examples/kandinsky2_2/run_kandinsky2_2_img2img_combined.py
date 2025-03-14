@@ -1,10 +1,8 @@
 import os
-from io import BytesIO
 
 import fire
-import requests
 import torch
-from PIL import Image
+from diffusers.utils import load_image
 
 from optimum.rbln import RBLNKandinskyV22Img2ImgCombinedPipeline
 
@@ -12,25 +10,17 @@ from optimum.rbln import RBLNKandinskyV22Img2ImgCombinedPipeline
 def main(
     model_id: str = "kandinsky-community/kandinsky-2-2-decoder",
     from_diffusers: bool = False,
-    prompt: str = "A fantasy landscape, Cinematic lighting",
-    negative_prompt: str = "low quality, bad quality",
-    img_width: int = 1024,
-    img_height: int = 512,
+    prompt: str = "A red cartoon frog, 4k",
 ):
+    img_url = "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/kandinsky/frog.png"
+    init_image = load_image(img_url)
+
     if from_diffusers:
         pipe = RBLNKandinskyV22Img2ImgCombinedPipeline.from_pretrained(
             model_id=model_id,
             export=True,
-            rbln_img_height=img_height,
-            rbln_img_width=img_width,
-            rbln_config={
-                "prior_text_encoder": {
-                    "batch_size": 2,
-                },
-                "prior_prior": {
-                    "batch_size": 4,
-                },
-            },
+            rbln_img_height=768,
+            rbln_img_width=768,
         )
         pipe.save_pretrained(os.path.basename(model_id))
     else:
@@ -39,13 +29,9 @@ def main(
             export=False
         )
 
-    url = "https://raw.githubusercontent.com/CompVis/stable-diffusion/main/assets/stable-samples/img2img/sketch-mountains-input.jpg"
+    generator = torch.manual_seed(42)
 
-    response = requests.get(url)
-    init_image = Image.open(BytesIO(response.content)).convert("RGB")
-    init_image.thumbnail((img_width, img_height))
-
-    image = pipe(prompt=prompt, image=init_image, negative_prompt=negative_prompt, height=img_height, width=img_width, num_inference_steps=25, generator=torch.manual_seed(42)).images[0]
+    image = pipe(prompt=prompt, image=init_image, height=768, width=768, num_inference_steps=100, strength=0.2, generator=generator).images[0]
     image.save(f"{prompt}.png")
 
 

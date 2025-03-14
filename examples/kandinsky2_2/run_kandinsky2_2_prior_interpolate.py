@@ -31,6 +31,8 @@ def main(
         pipe = RBLNKandinskyV22Pipeline.from_pretrained(
             model_id=inpaint_model_id,
             export=True,
+            rbln_img_height=768,
+            rbln_img_width=768,
         )
         pipe.save_pretrained(os.path.basename(inpaint_model_id))
     else:
