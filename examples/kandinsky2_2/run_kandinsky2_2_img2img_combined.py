@@ -23,6 +23,14 @@ def main(
             export=True,
             rbln_img_height=img_height,
             rbln_img_width=img_width,
+            rbln_config={
+                "prior_text_encoder": {
+                    "batch_size": 2,
+                },
+                "prior_prior": {
+                    "batch_size": 4,
+                },
+            },
         )
         pipe.save_pretrained(os.path.basename(model_id))
     else:
@@ -37,7 +45,7 @@ def main(
     init_image = Image.open(BytesIO(response.content)).convert("RGB")
     init_image.thumbnail((img_width, img_height))
 
-    image = pipe(prompt, image=init_image, height=img_height, width=img_width, num_inference_steps=25, generator=torch.manual_seed(42)).images[0]
+    image = pipe(prompt=prompt, image=init_image, negative_prompt=negative_prompt, height=img_height, width=img_width, num_inference_steps=25, generator=torch.manual_seed(42)).images[0]
     image.save(f"{prompt}.png")
 
 
