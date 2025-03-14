@@ -22,3 +22,4 @@
 # from Rebellions Inc.
 
 from .pipeline_cogvideox import RBLNCogVideoXPipeline
+from .pipeline_cogvideox_image2video import RBLNCogVideoXImageToVideoPipeline

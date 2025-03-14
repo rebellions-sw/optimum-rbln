@@ -144,10 +144,10 @@ class _VAECogVideoXEncoder(torch.nn.Module):
     def _encode(self, x: torch.Tensor) -> torch.Tensor:
         batch_size, num_channels, num_frames, height, width = x.shape
 
-        if self.use_tiling and (width > self.tile_sample_min_width or height > self.tile_sample_min_height):
-            return self.tiled_encode(x)
+        if self.cog_video_x.use_tiling and (width > self.cog_video_x.tile_sample_min_width or height > self.cog_video_x.tile_sample_min_height):
+            return self.cog_video_x.tiled_encode(x)
 
-        frame_batch_size = self.num_sample_frames_batch_size
+        frame_batch_size = self.cog_video_x.num_sample_frames_batch_size
         # Note: We expect the number of frames to be either `1` or `frame_batch_size * k` or `frame_batch_size * k + 1` for some k.
         # As the extra single frame is handled inside the loop, it is not required to round up here.
         num_batches = max(num_frames // frame_batch_size, 1)
@@ -159,9 +159,9 @@ class _VAECogVideoXEncoder(torch.nn.Module):
             start_frame = frame_batch_size * i + (0 if i == 0 else remaining_frames)
             end_frame = frame_batch_size * (i + 1) + remaining_frames
             x_intermediate = x[:, :, start_frame:end_frame]
-            x_intermediate, conv_cache = self.encoder(x_intermediate, conv_cache=conv_cache)
-            if self.quant_conv is not None:
-                x_intermediate = self.quant_conv(x_intermediate)
+            x_intermediate, conv_cache = self.cog_video_x.encoder(x_intermediate, conv_cache=conv_cache)
+            if self.cog_video_x.quant_conv is not None:
+                x_intermediate = self.cog_video_x.quant_conv(x_intermediate)
             enc.append(x_intermediate)
 
         enc = torch.cat(enc, dim=2)
@@ -169,8 +169,8 @@ class _VAECogVideoXEncoder(torch.nn.Module):
         return enc
 
     def encode(self, x: torch.Tensor, return_dict: bool = True):
-        if self.use_slicing and x.shape[0] > 1:
-            encoded_slices = [self._encode(x_slice) for x_slice in x.split(1)]
+        if self.cog_video_x.use_slicing and x.shape[0] > 1:
+            encoded_slices = [self._encoder(x_slice) for x_slice in x.split(1)]
             h = torch.cat(encoded_slices)
         else:
             h = self._encode(x)

@@ -99,6 +99,7 @@ _import_structure = {
         "RBLNStableDiffusion3InpaintPipeline",
         "RBLNStableDiffusion3Pipeline",
         "RBLNCogVideoXPipeline",
+        "RBLNCogVideoXImageToVideoPipeline",
         "RBLNAutoencoderKLCogVideoX",
         "RBLNCogVideoXTransformer3DModel",
         "RBLNDiffusionMixin",

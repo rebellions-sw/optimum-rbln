@@ -34,14 +34,14 @@ pipe = RBLNCogVideoXPipeline.from_pretrained(
     export=True,
 )
 pipe.save_pretrained(os.path.basename(model_id))
-
+num_frames = 2
 video = pipe(
     prompt=prompt,
     num_videos_per_prompt=1,
     num_inference_steps=50,
-    num_frames=49,
+    num_frames=num_frames,
     guidance_scale=6,
     generator=torch.manual_seed(42),
 ).frames[0]
 
-export_to_video(video, "output.mp4", fps=8)
+export_to_video(video, f"output_{num_frames}.mp4", fps=8)

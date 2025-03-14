@@ -42,6 +42,7 @@ _import_structure = {
         "RBLNStableDiffusion3Img2ImgPipeline",
         "RBLNStableDiffusion3InpaintPipeline",
         "RBLNCogVideoXPipeline",
+        "RBLNCogVideoXImageToVideoPipeline"
     ],
     "models": [
         "RBLNAutoencoderKL",
@@ -72,6 +73,7 @@ if TYPE_CHECKING:
     )
     from .pipelines import (
         RBLNCogVideoXPipeline,
+        RBLNCogVideoXImageToVideoPipeline,
         RBLNKandinskyV22InpaintCombinedPipeline,
         RBLNKandinskyV22InpaintPipeline,
         RBLNKandinskyV22PriorPipeline,

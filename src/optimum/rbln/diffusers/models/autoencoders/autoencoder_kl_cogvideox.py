@@ -136,7 +136,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
     ) -> RBLNConfig:
         rbln_batch_size = rbln_kwargs.get("batch_size")
         sample_size = rbln_kwargs.get("sample_size")
-        is_img2vid = rbln_kwargs.get("is_img2vid")
+        is_img2vid = rbln_kwargs.get("img2vid_pipeline")
         num_frames = rbln_kwargs.get("num_frames")
 
         if rbln_batch_size is None:
@@ -155,7 +155,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
                     [
                         rbln_batch_size,
                         model_config.in_channels,
-                        (num_frames - 1) // vae_scale_factor_temporal + 1,
+                        1,
                         enc_shape[0],
                         enc_shape[1],
                     ],
