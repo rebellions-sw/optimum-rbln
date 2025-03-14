@@ -27,6 +27,8 @@ def main(
         pipe = RBLNKandinskyV22InpaintPipeline.from_pretrained(
             model_id=inpaint_model_id,
             export=True,
+            rbln_img_width=768,
+            rbln_img_height=768,
         )
         pipe.save_pretrained(os.path.basename(inpaint_model_id))
     else:
@@ -42,8 +44,10 @@ def main(
     generator = torch.manual_seed(42)
     image_emb, zero_image_emb = prior_pipe(prompt, generator=generator, return_dict=False)
 
-    mask = np.zeros((512, 512), dtype=np.float32)
-    mask[:170, 170:-170] = 1
+    # Mask out the desired area to inpaint
+    # In this example, we will draw a hat on the cat's head
+    mask = np.zeros((768, 768), dtype=np.float32)
+    mask[:250, 250:-250] = 1
 
     out = pipe(
         image=init_image,

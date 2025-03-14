@@ -9,12 +9,14 @@ from optimum.rbln import RBLNKandinskyV22CombinedPipeline
 def main(
     model_id: str = "kandinsky-community/kandinsky-2-2-decoder",
     from_diffusers: bool = False,
-    prompt: str = "A lion in galaxies, spirals, nebulae, stars, smoke, iridescent, intricate detail, octane render, 8k",
+    prompt: str = "red cat, 4k photo",
 ):
     if from_diffusers:
         pipe = RBLNKandinskyV22CombinedPipeline.from_pretrained(
             model_id=model_id,
             export=True,
+            rbln_img_height=768,
+            rbln_img_width=768,
         )
         pipe.save_pretrained(os.path.basename(model_id))
     else:
@@ -23,7 +25,8 @@ def main(
             export=False
         )
 
-    image = pipe(prompt, num_inference_steps=25, generator=torch.manual_seed(42)).images[0]
+    generator = torch.manual_seed(42)
+    image = pipe(prompt, height=768, width=768, num_inference_steps=50, generator=generator).images[0]
     image.save(f"{prompt}.png")
 
 
