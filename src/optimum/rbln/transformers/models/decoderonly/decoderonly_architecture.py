@@ -914,7 +914,7 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
         if cos is not None and sin is not None:
             query_states, key_states = self.apply_rotary_pos_embed(query_states, key_states, cos, sin)
 
-        attn_output, key_state, value_state = self.attention(
+        attn_output = self.attention(
             query_states,
             key_states,
             value_states,
@@ -925,11 +925,8 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
             seq_position=seq_positions,
             scale=self.scale,
         )
-        key_states = key_state
-        value_states = value_state
 
         attn_outputs = self.o_proj(attn_output)
-
         return attn_outputs
 
 
