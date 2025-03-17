@@ -222,7 +222,7 @@ class TestBartModel(LLMTest.TestLLM):
 class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
     RBLN_CLASS = RBLNLlavaNextForConditionalGeneration
-    TEST_LEVEL = TestLevel.DEFAULT
+    TEST_LEVEL = TestLevel.FULL
     HF_MODEL_ID = "llava-hf/llava-v1.6-mistral-7b-hf"  # No tiny model yet.
     PROMPT = "[INST] <image>\nWhat’s shown in this image? [/INST]"
     RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True}}}
