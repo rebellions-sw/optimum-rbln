@@ -83,10 +83,10 @@ class PhiLayer(DecoderOnlyLayer):
         hidden_states: torch.Tensor,
         attention_mask: torch.Tensor,
         seq_positions: torch.LongTensor,
-        batch_position: torch.Tensor,
         past_key_values: Tuple[Tuple[torch.Tensor]],
         cos: Optional[torch.Tensor] = None,
         sin: Optional[torch.Tensor] = None,
+        block_tables: Optional[torch.Tensor] = None,
     ):
         residual = hidden_states
 
@@ -96,10 +96,10 @@ class PhiLayer(DecoderOnlyLayer):
             hidden_states=hidden_states,
             attention_mask=attention_mask,
             seq_positions=seq_positions,
-            batch_position=batch_position,
             past_key_values=past_key_values,
             cos=cos,
             sin=sin,
+            block_tables=block_tables,
         )
 
         feed_forward_hidden_states = self._original_mod.mlp(hidden_states)
