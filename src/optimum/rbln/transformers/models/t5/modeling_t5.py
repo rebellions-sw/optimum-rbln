@@ -352,7 +352,7 @@ class RBLNT5ForConditionalGeneration(RBLNModelForSeq2SeqLM):
                 ],
                 "float32",
             ),
-            ("batch_position", [], "int16"),
+            ("batch_position", [1], "int16"),
         ]
 
         dec_input_info = [

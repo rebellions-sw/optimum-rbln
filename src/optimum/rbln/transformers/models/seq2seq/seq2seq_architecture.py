@@ -91,7 +91,7 @@ class Seq2SeqEncoderWrapper(nn.Module):
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
         cross_key_values: torch.Tensor,
-        block_tables: torch.Tensor,
+        b_idx: torch.Tensor,
     ) -> Tuple[torch.Tensor]:
         # 1. get encoder last_hidden_states
         encoder_outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
@@ -115,7 +115,7 @@ class Seq2SeqEncoderWrapper(nn.Module):
         # 3. update the cross_attention's past_key_value direct to the device-dram for optimization.
         batch_axis = torch.tensor(1, dtype=torch.int16)
         cross_key_values = torch.ops.rbln_custom_ops.rbln_cache_update(
-            cross_key_values, cross_kv, block_tables.item(), batch_axis
+            cross_key_values, cross_kv, b_idx[0], batch_axis
         )
 
         return cross_key_values

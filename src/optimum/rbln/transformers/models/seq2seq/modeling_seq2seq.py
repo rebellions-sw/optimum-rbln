@@ -431,9 +431,9 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
         encoder_kwargs["output_attentions"] = False
 
         for b in range(batch_size):
-            block_tables = torch.tensor([b], dtype=torch.int16)
+            b_idx = torch.tensor([b], dtype=torch.int16)
             encoder_kwargs["input_ids"] = inputs_tensor[b].unsqueeze(0)
             encoder_kwargs["attention_mask"] = model_kwargs["attention_mask"][b].unsqueeze(0).to(torch.float32)
-            model_kwargs["encoder_outputs"] = encoder(**encoder_kwargs, block_tables=block_tables)
+            model_kwargs["encoder_outputs"] = encoder(**encoder_kwargs, b_idx=b_idx)
 
         return model_kwargs
