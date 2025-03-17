@@ -267,8 +267,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     chunked_attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
                 chunked_attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
 
-            # Define batch position and query position
-            # batch_position = torch.tensor(batch_idx, dtype=torch.int16) if block_tables is None else None
+            # Define query position
             query_position = torch.tensor((query_length - 1) % self.prefill_chunk_size, dtype=torch.int16)
 
             # Forward pass for the current chunk
