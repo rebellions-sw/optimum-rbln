@@ -20,8 +20,8 @@ from torch import nn
 from transformers import PretrainedConfig, PreTrainedModel
 
 from ....ops import (
-    register_rbln_custom_paged_causal_attention,
     register_rbln_custom_paged_attention,
+    register_rbln_custom_paged_causal_attention,
     register_rbln_custom_paged_flash_attention,
     register_rbln_custom_paged_flash_causal_attention,
 )
