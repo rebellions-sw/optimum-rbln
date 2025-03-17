@@ -56,6 +56,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         kvcache_block_size: int,
         kvcache_num_blocks: int,
         use_attention_mask: bool,
+        attn_impl: str,
         **kwargs: Any,
     ) -> None:
         super().__init__(runtime, **kwargs)
@@ -72,6 +73,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
         self.kvcache_block_size = kvcache_block_size
         self.empty_block = kvcache_num_blocks - 1
+        self.attn_impl = attn_impl
 
         if self.phase == "prefill":
             vocab_size = kwargs.pop("vocab_size")
@@ -83,7 +85,30 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             )
 
     def get_block_tables(self, cache_position: torch.Tensor, batch_idx: int = None):
+        """
+        Manages and returns the KV cache block tables.
+        Updates the block tables based on the given cache_position, allocating new blocks or reusing existing ones as needed.
+        
+        Args:
+            cache_position (torch.Tensor): Tensor containing cache position information, indicating positions within the cache for each batch item.
+            batch_idx (int, optional): Specific batch index, used when phase is 'prefill'.
+        
+        Returns:
+            torch.Tensor: Updated block tables.
+        """
+        
         def update_block(batch_idx, block_idx):
+            """
+            Helper function to update the block table for a given batch index and block index.
+            If the block is empty (empty_block), allocates a block from the free_block_pool.
+            
+            Args:
+                batch_idx (int): Batch index.
+                block_idx (int): Block index.
+            
+            Raises:
+                RuntimeError: Raised if no available blocks are found in the free_block_pool.
+            """
             if self.block_tables[batch_idx][block_idx] == self.empty_block:
                 if self.free_block_pool:
                     block = self.free_block_pool.popleft()
@@ -91,29 +116,39 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 else:
                     raise RuntimeError("Not available blocks")
 
-        if self.phase == "prefill":
-            # reset block_tables and refill free_block_pool
-            prev_blocks = self.block_tables[batch_idx][self.block_tables[batch_idx] != self.empty_block].tolist()
-            self.block_tables[batch_idx].fill_(self.empty_block)
-            self.free_block_pool.extend(prev_blocks)
-
-            s, e = cache_position[0][0].item(), cache_position[0][-1].item()
-            for position in range(s, e + 1, self.kvcache_block_size):
-                block_idx = position // self.kvcache_block_size
-                if batch_idx >= len(self.block_tables) or block_idx >= len(self.block_tables[batch_idx]):
-                    raise IndexError(f"Invalid index: batch_idx={batch_idx}, block_idx={block_idx}")
-                update_block(batch_idx, block_idx)
-
-            return self.block_tables[batch_idx]
-
-        # Decoder
+        if self.attn_impl == "eager":
+            if self.phase == "prefill":
+                return self.block_tables[batch_idx]
+            else:
+                return self.block_tables
+        # Case for 'flash_attn' attention implementation
         else:
-            for b_idx in range(self.batch_size):
-                position = cache_position[b_idx][0].item()
-                block_idx = position // self.kvcache_block_size
-                update_block(b_idx, block_idx)
+            if self.phase == "prefill":
+                # Track previously used blocks and return them to the free_block_pool and
+                # reset the current batch's block table to empty blocks
+                prev_blocks = self.block_tables[batch_idx][self.block_tables[batch_idx] != self.empty_block].tolist()
+                self.free_block_pool.extend(prev_blocks)
+                self.block_tables[batch_idx].fill_(self.empty_block)
 
-            return self.block_tables
+                # Get the start (s) and end (e) positions from cache_position and
+                # iterate over the cache positions to allocate necessary blocks
+                s, e = cache_position[0][0].item(), cache_position[0][-1].item()
+                for position in range(s, e + 1, self.kvcache_block_size):
+                    block_idx = position // self.kvcache_block_size
+                    if batch_idx >= len(self.block_tables) or block_idx >= len(self.block_tables[batch_idx]):
+                        raise IndexError(f"Invalid index: batch_idx={batch_idx}, block_idx={block_idx}")
+                    update_block(batch_idx, block_idx)
+
+                return self.block_tables[batch_idx]
+
+            # Case for 'decoder' phase, iterate over the cache positions to allocate necessary blocks
+            else:
+                for b_idx in range(self.batch_size):
+                    position = cache_position[b_idx][0].item()
+                    block_idx = position // self.kvcache_block_size
+                    update_block(b_idx, block_idx)
+
+                return self.block_tables
 
     def forward(
         self,
@@ -327,7 +362,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         # FIXME get kvcache_num_blocks from compiled results.
         self.kvcache_num_blocks = self.rbln_config.model_cfg["kvcache_num_blocks"]
         self.use_attention_mask = self.rbln_config.model_cfg["use_attention_mask"]
+        attn_impl = self.rbln_config.model_cfg["attn_impl"]
         main_input_name = self.main_input_name
+        
         if self.rbln_config.model_cfg["use_inputs_embeds"]:
             main_input_name = "inputs_embeds"
             artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
@@ -341,11 +378,16 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         else:
             self.embed_tokens = None
 
+        # Initialize shared resources to be used across Runtime instances (prefill and decode phases)
         dec_attn_mask = torch.zeros(self.batch_size, 1, 1, self.max_seq_len, dtype=torch.float32)
-        block_tables = torch.zeros(
-            self.batch_size, self.max_seq_len // self.kvcache_block_size, dtype=torch.int16
-        ).fill_(self.kvcache_num_blocks - 1)
-        free_block_pool = deque(x for x in range(self.kvcache_num_blocks - 1))
+        if attn_impl == 'eager':
+            block_tables = torch.arange(0,self.batch_size, dytpe=torch.int16).reshape(self.batch_size, 1)
+            free_block_pool = None
+        else:
+            block_tables = torch.zeros(
+                self.batch_size, self.max_seq_len // self.kvcache_block_size, dtype=torch.int16
+            ).fill_(self.kvcache_num_blocks - 1)
+            free_block_pool = deque(x for x in range(self.kvcache_num_blocks - 1))
 
         self.prefill_decoder = RBLNRuntimeModel(
             runtime=self.model[0],
@@ -362,6 +404,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             prefill_chunk_size=self.prefill_chunk_size,
             max_seq_len=self.max_seq_len,
             use_attention_mask=self.use_attention_mask,
+            attn_impl=attn_impl,
         )
         self.decoder = RBLNRuntimeModel(
             runtime=self.model[1],
@@ -375,6 +418,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             kvcache_block_size=self.kvcache_block_size,
             kvcache_num_blocks=self.kvcache_num_blocks,
             use_attention_mask=self.use_attention_mask,
+            attn_impl=attn_impl,
         )
 
     @classmethod
