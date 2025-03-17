@@ -35,16 +35,16 @@ logger = logging.get_logger(__name__)
 
 
 class BartWrapper:
-    def __init__(self, model: nn.Module, enc_max_seq_len: int):
+    def __init__(self, model: nn.Module, enc_max_seq_len: int, use_attention_mask: bool):
         self.encoder = Seq2SeqEncoderWrapper(model, enc_max_seq_len)
-        self.decoder = BartDecoderWrapper(model)
+        self.decoder = BartDecoderWrapper(model, use_attention_mask=use_attention_mask)
 
 
 class BartDecoderWrapper(Seq2SeqDecoderWrapper):
     def convert_to_rbln_conditional_generation(self, model: nn.Module):
         new_layers = []
         for layer in model.get_decoder().layers:
-            self_attn = BartSelfAttention(layer.self_attn)
+            self_attn = BartSelfAttention(layer.self_attn, use_attention_mask=self.use_attention_mask)
             new_layers.append(BartDecoderLayer(layer, self_attn))
 
         decoder_model = BartDecoder(model.get_decoder(), new_layers)
@@ -69,7 +69,8 @@ class BartDecoder(Seq2SeqDecoder):
         self.embed_scale = getattr(self._original_mod, "embed_scale", None)
 
     def prepare_attn_mask(self, attention_mask, encoder_attention_mask, **kwargs):
-        attention_mask = attention_mask[:, None, None, :]
+        if attention_mask is not None:
+            attention_mask = attention_mask[:, None, None, :]
         encoder_attention_mask = _prepare_4d_attention_mask(encoder_attention_mask, torch.float32, tgt_len=1)
 
         return attention_mask, encoder_attention_mask
@@ -134,7 +135,7 @@ class BartDecoderLayer(Seq2SeqDecoderLayer):
 
 
 class BartSelfAttention(Seq2SeqSelfAttention):
-    def __post_init__(self):
+    def __post_init__(self, use_attention_mask: bool = True):
         self.q_proj = self._original_mod.q_proj
         self.k_proj = self._original_mod.k_proj
         self.v_proj = self._original_mod.v_proj
@@ -142,7 +143,10 @@ class BartSelfAttention(Seq2SeqSelfAttention):
         self.num_heads = self._original_mod.num_heads
         self.head_dim = self._original_mod.embed_dim // self._original_mod.num_heads
         self.scaling = self.head_dim**-0.5
-        self.attn_decode = torch.ops.rbln_custom_ops.masked_attn_decode
+        if use_attention_mask:
+            self.attn_decode = torch.ops.rbln_custom_ops.paged_attn_decode
+        else:
+            self.attn_decode = torch.ops.rbln_custom_ops.paged_causal_attn_decode
 
     def projection(self, hidden_states) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         query_states = self.q_proj(hidden_states) * self.scaling

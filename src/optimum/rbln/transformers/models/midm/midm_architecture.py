@@ -60,7 +60,9 @@ class MidmLMHeadModelWrapper(DecoderOnlyWrapper):
             raise NotImplementedError(f"flash attention ({self.attn_impl}) is not implemented for {self.__class__}")
         new_layers = []
         for layer in causal_lm.transformer.h:
-            new_self_attn = MidmAttention(layer.attn, self.use_attention_mask)
+            new_self_attn = MidmAttention(
+                layer.attn, self.use_attention_mask, kvcache_block_size=self.kvcache_block_size
+            )
             new_layer = MidmLayer(layer, new_self_attn)
             new_layers.append(new_layer)
         new_model = MidmModel(causal_lm.transformer, new_layers, max_seq_len=max_seq_len)
