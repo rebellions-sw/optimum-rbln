@@ -57,6 +57,7 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         self.batch_size = batch_size
         self.dec_max_seq_len = dec_max_seq_len
         self.use_attention_mask = use_attention_mask
+        self.default_block_tables = torch.arange(0, self.batch_size, dtype=torch.int16).view(self.batch_size, 1)
 
     def forward(
         self,
@@ -86,7 +87,7 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
                 decoder_attention_mask[b_idx, : decoding_step + 1] = 1
 
         if block_tables is None:
-            block_tables = torch.arange(0, self.batch_size, dtype=torch.int16).view(self.batch_size, 1)
+            block_tables = self.default_block_tables
 
         lm_logits = super().forward(
             decoder_input_ids,
