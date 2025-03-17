@@ -658,7 +658,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             query_length=1,
             use_inputs_embeds=rbln_use_inputs_embeds,
             hidden_size=hidden_size,
-            attn_impl=rbln_attn_impl,
         )
 
         prefill_compile_config = RBLNCompileConfig(compiled_model_name="prefill", input_info=prefill_input_info)
