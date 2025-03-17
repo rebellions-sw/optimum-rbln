@@ -71,7 +71,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         self.free_block_pool = free_block_pool
 
         self.kvcache_block_size = kvcache_block_size
-        self.empty_block = kvcache_num_blocks
+        self.empty_block = kvcache_num_blocks - 1
 
         if self.phase == "prefill":
             vocab_size = kwargs.pop("vocab_size")
@@ -344,8 +344,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         dec_attn_mask = torch.zeros(self.batch_size, 1, 1, self.max_seq_len, dtype=torch.float32)
         block_tables = torch.zeros(
             self.batch_size, self.max_seq_len // self.kvcache_block_size, dtype=torch.int16
-        ).fill_(self.kvcache_num_blocks)
-        free_block_pool = deque(x for x in range(self.kvcache_num_blocks))
+        ).fill_(self.kvcache_num_blocks - 1)
+        free_block_pool = deque(x for x in range(self.kvcache_num_blocks - 1))
 
         self.prefill_decoder = RBLNRuntimeModel(
             runtime=self.model[0],
