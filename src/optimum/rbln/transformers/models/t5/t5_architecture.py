@@ -18,7 +18,7 @@ import torch
 from torch import nn
 from transformers.utils import logging
 
-from ....ops import register_rbln_custom_attention_add_softmax
+from ....ops import register_rbln_custom_add_softmax_attention
 from ..seq2seq.seq2seq_architecture import (
     Seq2SeqDecoder,
     Seq2SeqDecoderLayer,
@@ -55,7 +55,7 @@ class T5EncoderWrapper(Seq2SeqEncoderWrapper):
 
 class T5DecoderWrapper(Seq2SeqDecoderWrapper):
     def __post_init__(self, model, dec_max_seq_len: int = None):
-        register_rbln_custom_attention_add_softmax()
+        register_rbln_custom_add_softmax_attention()
         self.num_layers = self.config.num_layers
         self.conditional_generation = self.convert_to_rbln_conditional_generation(model, dec_max_seq_len)
 
