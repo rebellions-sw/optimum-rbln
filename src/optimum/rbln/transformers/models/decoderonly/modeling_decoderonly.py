@@ -88,24 +88,24 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         """
         Manages and returns the KV cache block tables.
         Updates the block tables based on the given cache_position, allocating new blocks or reusing existing ones as needed.
-        
+
         Args:
             cache_position (torch.Tensor): Tensor containing cache position information, indicating positions within the cache for each batch item.
             batch_idx (int, optional): Specific batch index, used when phase is 'prefill'.
-        
+
         Returns:
             torch.Tensor: Updated block tables.
         """
-        
+
         def update_block(batch_idx, block_idx):
             """
             Helper function to update the block table for a given batch index and block index.
             If the block is empty (empty_block), allocates a block from the free_block_pool.
-            
+
             Args:
                 batch_idx (int): Batch index.
                 block_idx (int): Block index.
-            
+
             Raises:
                 RuntimeError: Raised if no available blocks are found in the free_block_pool.
             """
@@ -364,7 +364,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         self.use_attention_mask = self.rbln_config.model_cfg["use_attention_mask"]
         attn_impl = self.rbln_config.model_cfg["attn_impl"]
         main_input_name = self.main_input_name
-        
+
         if self.rbln_config.model_cfg["use_inputs_embeds"]:
             main_input_name = "inputs_embeds"
             artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
@@ -380,8 +380,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
         # Initialize shared resources to be used across Runtime instances (prefill and decode phases)
         dec_attn_mask = torch.zeros(self.batch_size, 1, 1, self.max_seq_len, dtype=torch.float32)
-        if attn_impl == 'eager':
-            block_tables = torch.arange(0,self.batch_size, dytpe=torch.int16).reshape(self.batch_size, 1)
+        if attn_impl == "eager":
+            block_tables = torch.arange(0, self.batch_size, dytpe=torch.int16).reshape(self.batch_size, 1)
             free_block_pool = None
         else:
             block_tables = torch.zeros(
