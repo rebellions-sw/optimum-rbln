@@ -82,7 +82,7 @@ def validate_attention_method(
             " or consider switching `rbln_attn_impl` to 'flash_attn' for larger sequence lengths."
         )
 
-    if rbln_attn_impl in ["flash_attn"]:
+    if rbln_attn_impl == "flash_attn":
         if rbln_max_seq_len // rbln_kvcache_partition_len < 2 or rbln_max_seq_len % rbln_kvcache_partition_len != 0:
             raise ValueError(
                 f"`rbln_max_seq_len` ({rbln_max_seq_len}) must be a multiple of `rbln_kvcache_partition_len` ({rbln_kvcache_partition_len}) "
