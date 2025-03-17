@@ -41,9 +41,6 @@ MAX_FLASH_ATTN_PARTITION_LENGTH = 32_768
 def validate_attention_method(
     rbln_attn_impl: str, rbln_kvcache_partition_len: int, rbln_kvcache_block_size: int, rbln_max_seq_len: int
 ) -> Tuple[str, int]:
-    # TODO: error message if rbln_kvcache_block_size is not provided
-    # TODO: error message if rbln_kvcache_block_size !=  rbln_max_seq_len if Eager
-    # TODO: error message if rbln_kvcache_block_size !=  rbln_kvcache_partition_len if Flash
     if rbln_kvcache_partition_len is not None:
         if rbln_attn_impl == "eager":
             raise ValueError(
