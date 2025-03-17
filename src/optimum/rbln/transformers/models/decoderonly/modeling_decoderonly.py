@@ -652,7 +652,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             query_length=rbln_prefill_chunk_size,
             use_inputs_embeds=rbln_use_inputs_embeds,
             hidden_size=hidden_size,
-            attn_impl=rbln_attn_impl,
         )
         dec_input_info = get_input_info(
             batch_size=rbln_batch_size,
