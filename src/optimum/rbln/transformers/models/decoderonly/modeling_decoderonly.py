@@ -593,7 +593,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             query_length,
             use_inputs_embeds,
             hidden_size,
-            attn_impl,
         ):
             if use_inputs_embeds:
                 main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
