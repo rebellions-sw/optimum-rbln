@@ -28,7 +28,7 @@ else:
 def register_rbln_custom_paged_flash_attention():
     torch.library.define(
         "rbln_custom_ops::paged_flash_attn_decode",
-        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor f, int e, int g) -> Tensor[]",
+        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f, int g) -> Tensor[]",
     )
 
     @torch.library.impl("rbln_custom_ops::paged_flash_attn_decode", "cpu")
@@ -49,7 +49,7 @@ def register_rbln_custom_paged_flash_attention():
 
     torch.library.define(
         "rbln_custom_ops::paged_flash_attn_prefill",
-        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor f, int e, int g) -> Tensor[]",
+        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f, int g) -> Tensor[]",
     )
 
     @torch.library.impl("rbln_custom_ops::flash_attn_prefill", "cpu")
@@ -65,7 +65,7 @@ def register_rbln_custom_paged_flash_attention():
 def register_rbln_custom_paged_flash_causal_attention():
     torch.library.define(
         "rbln_custom_ops::paged_flash_causal_attn_decode",
-        "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d, Tensor f, int e, int g) -> Tensor[]",
+        "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f, int g) -> Tensor[]",
     )
 
     @torch.library.impl("rbln_custom_ops::paged_flash_causal_attn_decode", "cpu")
@@ -86,7 +86,7 @@ def register_rbln_custom_paged_flash_causal_attention():
 
     torch.library.define(
         "rbln_custom_ops::paged_flash_causal_attn_prefill",
-        "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d, Tensor f, int e, int g) -> Tensor[]",
+        "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f, int g) -> Tensor[]",
     )
 
     @torch.library.impl("rbln_custom_ops::paged_flash_causal_attn_prefill", "cpu")

@@ -64,6 +64,7 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         attention_mask: Optional[torch.FloatTensor] = None,
         decoder_attention_mask: Optional[torch.BoolTensor] = None,
         cache_position: Optional[torch.Tensor] = None,
+        block_tables: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
         batch_size = decoder_input_ids.shape[0]
@@ -84,7 +85,8 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
                     )
                 decoder_attention_mask[b_idx, : decoding_step + 1] = 1
 
-        block_tables = torch.arange(0, self.batch_size, dtype=torch.int16).view(self.batch_size, 1)
+        if block_tables is None:
+            block_tables = torch.arange(0, self.batch_size, dtype=torch.int16).view(self.batch_size, 1)
 
         lm_logits = super().forward(
             decoder_input_ids,

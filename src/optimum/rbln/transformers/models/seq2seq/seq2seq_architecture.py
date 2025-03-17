@@ -20,7 +20,7 @@ from transformers.utils import logging
 
 from ....ops import (
     register_rbln_custom_cache_update,
-    register_rbln_custom_causal_paged_attention,
+    register_rbln_custom_paged_causal_attention,
     register_rbln_custom_paged_attention,
 )
 
@@ -151,7 +151,7 @@ class Seq2SeqDecoderWrapper(nn.Module):
         if self.use_attention_mask:
             register_rbln_custom_paged_attention()
         else:
-            register_rbln_custom_causal_paged_attention()
+            register_rbln_custom_paged_causal_attention()
 
         self.num_layers = self.config.decoder_layers
         self.conditional_generation = self.convert_to_rbln_conditional_generation(model)

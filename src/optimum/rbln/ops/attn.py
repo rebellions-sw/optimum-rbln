@@ -118,13 +118,13 @@ def register_rbln_custom_paged_attention():
 
 
 @lru_cache
-def register_rbln_custom_causal_paged_attention():
+def register_rbln_custom_paged_causal_attention():
     torch.library.define(
-        "rbln_custom_ops::causal_paged_attn_decode",
+        "rbln_custom_ops::paged_causal_attn_decode",
         "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f) -> Tensor[]",
     )
 
-    @torch.library.impl("rbln_custom_ops::causal_paged_attn_decode", "cpu")
+    @torch.library.impl("rbln_custom_ops::paged_causal_attn_decode", "cpu")
     def attn_decode_cpu(q, k, v, kcache, vcache, seq, scale, block_table, block_size):
         """Defines the computation pattern for fused attention with KV cache updates.
 
@@ -160,7 +160,7 @@ def register_rbln_custom_causal_paged_attention():
             torch.empty(*vcache.shape, device=vcache.device),
         )
 
-    @register_fake("rbln_custom_ops::causal_paged_attn_decode")
+    @register_fake("rbln_custom_ops::paged_causal_attn_decode")
     def attn_decode_abstract(q, k, v, kcache, vcache, seq, scale, block_table, block_size):
         return (
             q,
@@ -169,11 +169,11 @@ def register_rbln_custom_causal_paged_attention():
         )
 
     torch.library.define(
-        "rbln_custom_ops::causal_paged_attn_prefill",
+        "rbln_custom_ops::paged_causal_attn_prefill",
         "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f) -> Tensor[]",
     )
 
-    @torch.library.impl("rbln_custom_ops::causal_paged_attn_prefill", "cpu")
+    @torch.library.impl("rbln_custom_ops::paged_causal_attn_prefill", "cpu")
     def attn_prefill_cpu(q, k, v, kcache, vcache, seq, scale, block_table, block_size):
         """Defines the computation pattern for prefill phase attention with KV cache updates.
 
@@ -204,20 +204,20 @@ def register_rbln_custom_causal_paged_attention():
         """
         return q, kcache, vcache
 
-    @register_fake("rbln_custom_ops::causal_paged_attn_prefill")
+    @register_fake("rbln_custom_ops::paged_causal_attn_prefill")
     def attn_prefill_abstract(q, k, v, kcache, vcache, seq, scale, block_table, block_size):
         return q, kcache, vcache
 
 
 @lru_cache
-def register_rbln_custom_attention_add_softmax():
+def register_rbln_custom_add_softmax_attention():
     torch.library.define(
-        "rbln_custom_ops::attn_decode_add_softmax",
+        "rbln_custom_ops::add_softmax_attn_decode",
         "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d) -> Tensor[]",
     )
 
-    @torch.library.impl("rbln_custom_ops::attn_decode_add_softmax", "cpu")
-    def attn_decode_add_softmax_cpu(q, k, v, mask, kcache, vcache, seq, scale):
+    @torch.library.impl("rbln_custom_ops::add_softmax_attn_decode", "cpu")
+    def add_softmax_attn_decode_cpu(q, k, v, mask, kcache, vcache, seq, scale):
         """Defines the computation pattern for fused attention with KV cache updates.
 
         IMPORTANT: This op serves as a pattern definition for the RBLN compiler to generate
@@ -251,57 +251,10 @@ def register_rbln_custom_attention_add_softmax():
             torch.empty(*vcache.shape, device=vcache.device),
         )
 
-    @register_fake("rbln_custom_ops::attn_decode_add_softmax")
-    def attn_decode_add_softmax_abstract(q, k, v, m, kcache, vcache, seq, partition):
+    @register_fake("rbln_custom_ops::add_softmax_attn_decode")
+    def add_softmax_attn_decode_abstract(q, k, v, m, kcache, vcache, seq, partition):
         return (
             q,
             torch.empty(*kcache.shape, device=kcache.device),
             torch.empty(*vcache.shape, device=vcache.device),
-        )
-
-    torch.library.define(
-        "rbln_custom_ops::attn_prefill_add_softmax",
-        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e) -> Tensor[]",
-    )
-
-    @torch.library.impl("rbln_custom_ops::attn_prefill_add_softmax", "cpu")
-    def attn_prefill_add_softmax_cpu(q, k, v, mask, kcache, vcache, batch, seq, scale):
-        """Defines the computation pattern for prefill phase attention with KV cache updates.
-
-        IMPORTANT: This op serves as a pattern definition for the RBLN compiler to generate
-        a single optimized NPU operation. It is NOT meant for CPU execution.
-
-        Key differences from decode pattern:
-        - Handles prefill phase with multiple input tokens
-        - Takes explicit batch index for continuous batching
-
-        Expected tensor shapes:
-        - q: [batch=1, n_heads, n_groups, seq_len, head_dim] - Query states for multiple tokens
-        - k: [batch=1, n_heads, 1, seq_len, head_dim] - Key states for current input
-        - v: [batch=1, n_heads, 1, seq_len, head_dim] - Value states for current input
-        - mask: [batch=1, 1, 1, seq_len, max_seq_len] - Attention mask
-        - kcache: [batch_size, n_heads, 1, max_seq_len, head_dim] - Key cache
-        - vcache: [batch_size, n_heads, 1, max_seq_len, head_dim] - Value cache
-        - batch: [1] - Batch index for cache access
-        - seq: [1] - Starting sequence position
-        - scale: [] - Attention scale factor
-
-        Returns:
-            Tuple[Tensor, Tensor, Tensor]:
-            - attn_output: [batch=1, n_heads, seq_len, 1, head_dim] - Attention output
-            - empty_kcache: Same shape as input kcache - Placeholder for compiler
-            - empty_vcache: Same shape as input vcache - Placeholder for compiler
-        """
-        return (
-            q,
-            torch.empty(1, *kcache.shape[1:], device=kcache.device),
-            torch.empty(1, *vcache.shape[1:], device=vcache.device),
-        )
-
-    @register_fake("rbln_custom_ops::attn_prefill_add_softmax")
-    def attn_prefill_add_softmax_abstract(q, k, v, m, kcache, vcache, batch, seq, partition):
-        return (
-            q,
-            torch.empty(1, *kcache.shape[1:], device=kcache.device),
-            torch.empty(1, *vcache.shape[1:], device=vcache.device),
         )
