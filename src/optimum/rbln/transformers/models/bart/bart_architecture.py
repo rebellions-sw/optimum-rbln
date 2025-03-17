@@ -146,7 +146,7 @@ class BartSelfAttention(Seq2SeqSelfAttention):
         if use_attention_mask:
             self.attn_decode = torch.ops.rbln_custom_ops.paged_attn_decode
         else:
-            self.attn_decode = torch.ops.rbln_custom_ops.causal_paged_attn_decode
+            self.attn_decode = torch.ops.rbln_custom_ops.paged_causal_attn_decode
 
     def projection(self, hidden_states) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         query_states = self.q_proj(hidden_states) * self.scaling

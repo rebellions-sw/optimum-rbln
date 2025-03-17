@@ -796,7 +796,7 @@ class AttentionOp(nn.Module):
                     block_size,
                 )
             else:
-                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.causal_paged_attn_prefill(
+                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_causal_attn_prefill(
                     query_state,
                     key_state,
                     value_state,
