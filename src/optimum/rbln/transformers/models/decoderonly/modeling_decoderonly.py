@@ -526,6 +526,37 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         return compile_model(quantize_config=quantize_config)
 
     @classmethod
+    def _check_compiled_models(
+        cls, compiled_models: Dict[str, rebel.RBLNCompiledModel], rbln_config: RBLNConfig, config: PretrainedConfig
+    ):
+        # check compiled model can create runtimes.
+        # this logic currently only works in LLM
+        # fail when LLM model using paged attention can't guarantee max sequence length
+        prefill_cm = compiled_models["prefill"]
+        compiled_cache_size = sum(prefill_cm.get_alloc_per_node_by_key()["PortRecur"])
+
+        # Copied from _get_rbln_config
+        num_attention_heads = getattr(config, "n_head", None) or getattr(config, "num_attention_heads")
+        num_key_value_heads = getattr(config, "num_key_value_heads", None) or num_attention_heads
+        num_hidden_layers = getattr(config, "n_layer", None) or getattr(config, "num_hidden_layers")
+        head_dim = getattr(config, "head_dim", None) or config.hidden_size // num_attention_heads
+
+        # required memory size for kvcache block
+        memory_per_block = rbln_config.model_cfg["kvcache_block_size"] * num_key_value_heads * head_dim
+        memory_per_block *= num_hidden_layers * 2  # layers (k, v)
+        memory_per_block *= 2  # 2 bytes per float16
+        num_blocks_per_batch = rbln_config.model_cfg["max_seq_len"] // rbln_config.model_cfg["kvcache_block_size"]
+
+        if compiled_cache_size < num_blocks_per_batch * memory_per_block:
+            raise ValueError(
+                f"The compiled cache size ({compiled_cache_size}) is less than the required DRAM size ({num_blocks_per_batch * memory_per_block})."
+            )
+
+        # TODO(jongho): make rbln_config as an class instance instead of a dict
+        actual_block_size = compiled_cache_size // memory_per_block
+        rbln_config.model_cfg["kvcache_block_size"] = actual_block_size
+
+    @classmethod
     def _get_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
