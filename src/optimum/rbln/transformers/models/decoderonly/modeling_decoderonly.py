@@ -381,7 +381,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         # Initialize shared resources to be used across Runtime instances (prefill and decode phases)
         dec_attn_mask = torch.zeros(self.batch_size, 1, 1, self.max_seq_len, dtype=torch.float32)
         if attn_impl == "eager":
-            block_tables = torch.arange(0, self.batch_size, dytpe=torch.int16).reshape(self.batch_size, 1)
+            block_tables = torch.arange(0, self.batch_size, dtype=torch.int16).reshape(self.batch_size, 1)
             free_block_pool = None
         else:
             block_tables = torch.zeros(
