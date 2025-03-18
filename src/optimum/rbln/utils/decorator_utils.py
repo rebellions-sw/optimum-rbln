@@ -38,6 +38,10 @@ def remove_compile_time_kwargs(func):
     def wrapper(self, *args, **kwargs):
         check_params = {"height", "width"}
         params = inspect.signature(self.original_class.__call__).parameters
+        param_names = list(params.keys())[1:]
+        args_dict = dict(zip(param_names, args))
+        args = ()
+        kwargs = {**args_dict, **kwargs}
 
         # If height and width exist in the base pipeline's __call__ method arguments
         # Otherwise, if there is no height or width of kwargs, it is filled based on the compiled size.
