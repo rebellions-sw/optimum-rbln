@@ -18,7 +18,7 @@ import torch
 from torch import nn
 from transformers.utils import logging
 
-from ....ops import register_rbln_custom_attention_add_softmax
+from ....ops import register_rbln_custom_add_softmax_attention
 from ..seq2seq.seq2seq_architecture import (
     Seq2SeqDecoder,
     Seq2SeqDecoderLayer,
@@ -55,7 +55,7 @@ class T5EncoderWrapper(Seq2SeqEncoderWrapper):
 
 class T5DecoderWrapper(Seq2SeqDecoderWrapper):
     def __post_init__(self, model, dec_max_seq_len: int = None):
-        register_rbln_custom_attention_add_softmax()
+        register_rbln_custom_add_softmax_attention()
         self.num_layers = self.config.num_layers
         self.conditional_generation = self.convert_to_rbln_conditional_generation(model, dec_max_seq_len)
 
@@ -70,6 +70,36 @@ class T5DecoderWrapper(Seq2SeqDecoderWrapper):
         new_model = T5ForConditionalGeneration(model, decoder_model)
 
         return new_model
+
+    def forward(
+        self,
+        input_ids,
+        attention_mask,
+        encoder_attention_mask,
+        cache_position,
+        cross_kv_cache,
+        *self_kv_cache,
+    ) -> Tuple[torch.FloatTensor, Tuple[torch.FloatTensor]]:
+        self_past_key_values = ()
+        cross_past_key_values = ()
+
+        for i in range(0, self.num_layers * 2, 2):
+            self_past_key_values = self_past_key_values + ((self_kv_cache[i], self_kv_cache[i + 1]),)
+            cross_past_key_values = cross_past_key_values + ((cross_kv_cache[i], cross_kv_cache[i + 1]),)
+
+        # decode
+        lm_logits, self_present_key_values = self.conditional_generation(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            encoder_attention_mask=encoder_attention_mask,
+            self_past_key_values=self_past_key_values,
+            cross_past_key_values=cross_past_key_values,
+            cache_position=cache_position,
+        )
+
+        outputs = (lm_logits,) + self_present_key_values
+
+        return outputs
 
 
 class T5ForConditionalGeneration(Seq2SeqForConditionalGeneration):
@@ -134,13 +164,49 @@ class T5LayerSelfAttention(Seq2SeqSelfAttention):
         self.out_proj = self._original_mod.o
         self.num_heads = self._original_mod.n_heads
         self.head_dim = self._original_mod.key_value_proj_dim
-        self.attn_decode = torch.ops.rbln_custom_ops.attn_decode_add_softmax
+        self.attn_decode = torch.ops.rbln_custom_ops.add_softmax_attn_decode
 
     def projection(self, hidden_states) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         query_states = self.q_proj(hidden_states)
         key_states = self.k_proj(hidden_states)
         value_states = self.v_proj(hidden_states)
         return query_states, key_states, value_states
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        past_key_value: Tuple[torch.Tensor],
+        attention_mask: torch.Tensor,
+        cache_position: torch.Tensor,
+        **kwargs,
+    ) -> Tuple[torch.Tensor, Tuple[torch.Tensor]]:
+        bsz, tgt_len, _ = hidden_states.size()
+
+        query_states, key_states, value_states = self.projection(hidden_states=hidden_states)
+        query_states = self._shape(query_states, tgt_len, bsz)
+        key_states = self._shape(key_states, -1, bsz)
+        value_states = self._shape(value_states, -1, bsz)
+
+        attn_output, key_states, value_states = self.attn_decode(
+            query_states,
+            key_states,
+            value_states,
+            attention_mask.unsqueeze(
+                2
+            ),  # Unsqueeze group axis since CustomKernel expects it for group query attention
+            past_key_value[0].view(bsz, self.num_heads, 1, -1, self.head_dim),
+            past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
+            cache_position,
+            torch.tensor(1.0, dtype=torch.float32),  # scale
+        )
+
+        attn_output = attn_output.view(bsz, self.num_heads, -1, self.head_dim).transpose(1, 2)
+        attn_output = attn_output.reshape(bsz, -1, self.num_heads * self.head_dim)
+
+        attn_output = self.out_proj(attn_output)
+        present_key_value = (key_states, value_states)
+
+        return attn_output, present_key_value
 
 
 class T5CrossAttention(nn.Module):
