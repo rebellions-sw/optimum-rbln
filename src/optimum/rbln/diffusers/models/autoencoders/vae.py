@@ -137,16 +137,18 @@ class RBLNRuntimeVAECogVideoXDecoder(RBLNPytorchRuntime):
 
 
 class _VAECogVideoXEncoder(torch.nn.Module):
-    def __init__(self, cog_video_x: AutoencoderKLCogVideoX):
+    def __init__(self, cog_video_x: AutoencoderKLCogVideoX, hide_dead_op=False):
         super().__init__()
-        self.cog_video_x = cog_video_x
+        self.cog_video_x = self._hide_dead_op(cog_video_x) if hide_dead_op else cog_video_x
         
-        # for n, m in self.cog_video_x.named_modules():
-        #     from diffusers.models.autoencoders.autoencoder_kl_cogvideox import CogVideoXDownBlock3D
-        #     from ...models.downsampling import RBLNCogVideoXDownsample3D
-        #     if isinstance(m, CogVideoXDownBlock3D) and m.downsamplers is not None :
-        #         m.downsamplers = RBLNCogVideoXDownsample3D(m.downsamplers)
-
+    def _hide_dead_op(self, model):
+        for m in model.modules():
+            from diffusers.models.autoencoders.autoencoder_kl_cogvideox import CogVideoXDownBlock3D
+            from ...models.downsampling import RBLNCogVideoXDownsample3D
+            if isinstance(m, CogVideoXDownBlock3D) and m.downsamplers is not None :
+                m.downsamplers[0] = RBLNCogVideoXDownsample3D(m.downsamplers[0])
+        return model
+                
     def _encode(self, x: torch.Tensor) -> torch.Tensor:
         batch_size, num_channels, num_frames, height, width = x.shape
 

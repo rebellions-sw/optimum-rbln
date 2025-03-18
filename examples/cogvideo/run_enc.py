@@ -35,21 +35,24 @@ vae_enc_input_info = [
 ]
 
 class wrapper(torch.nn.Module):
-    def __init__(self, model):
+    def __init__(self, model, hide_op=False):
         super().__init__()
-        self.model = model
-        for n, m in self.model.named_modules():
+        self.model = self._hide_dead_op(model) if hide_op else model
+
+    def _hide_dead_op(self, model):
+        for m in model.modules():
             from diffusers.models.autoencoders.autoencoder_kl_cogvideox import CogVideoXDownBlock3D
             from optimum.rbln.diffusers.models.downsampling import RBLNCogVideoXDownsample3D
             if isinstance(m, CogVideoXDownBlock3D) and m.downsamplers is not None :
                 m.downsamplers[0] = RBLNCogVideoXDownsample3D(m.downsamplers[0])
-
+        return model
+    
     def forward(self, x):
         h = self.model._encode(x)
         return h
     
 import rebel
-compiled_model = rebel.compile_from_torch(wrapper(model), vae_enc_input_info)
+compiled_model = rebel.compile_from_torch(wrapper(model, hide_op=True), vae_enc_input_info)
 compiled_model.save("vae_enc.rbln")
 
 print("compile done")
@@ -59,11 +62,12 @@ module = rebel.Runtime("vae_enc.rbln", tensor_type="pt")
 input = torch.randn(vae_enc_input_info[0][1])
 output = module(input)
 
+model_pt = wrapper(model).eval()
 with torch.no_grad():
-    output_pt = wrapper(model)(input)
+    output_pt = model_pt(input)
 
 from scipy import stats
 
 correlation, p_value = stats.pearsonr(output.numpy().flatten(), output_pt.numpy().flatten())
 print(correlation)
-# output-output_pt
+output-output_pt
