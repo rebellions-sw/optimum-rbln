@@ -85,6 +85,7 @@ def remove_compile_time_kwargs(func):
                 else:
                     kwargs["cross_attention_kwargs"].pop("scale")
 
+        self.validate_model_runtime_consistency(*args, **kwargs)
         return func(self, *args, **kwargs)
 
     return wrapper
