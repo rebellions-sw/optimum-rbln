@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import inspect
+
 from diffusers import KandinskyV22PriorPipeline
 
 from ...modeling_diffusers import RBLNDiffusionMixin
@@ -35,12 +36,17 @@ class RBLNKandinskyV22PriorPipeline(RBLNDiffusionMixin, KandinskyV22PriorPipelin
         elif self.prior.compiled_batch_size == self.text_encoder.compiled_batch_size * 2:
             do_classifier_free_guidance = True
         else:
-            raise ValueError("The batch size of `prior` must be either equal to or twice the batch size of `text_encoder`.")
+            raise ValueError(
+                "The batch size of `prior` must be either equal to or twice the batch size of `text_encoder`."
+            )
 
         if negative_prompt is not None:
             if self.text_encoder.compiled_batch_size != batch_size * 2:
-                raise ValueError("If `negative_prompt` is provided, the compiled batch size of `text_encoder` should be double compared to batch size")
+                raise ValueError(
+                    "If `negative_prompt` is provided, the compiled batch size of `text_encoder` should be double compared to batch size"
+                )
 
-        if not ((guidance_scale <= 1.) ^ do_classifier_free_guidance):
-            raise ValueError("`guidance_scale` is not competible with compiled batch sizes of `text_encoder` and `prior`.")
-
+        if not ((guidance_scale <= 1.0) ^ do_classifier_free_guidance):
+            raise ValueError(
+                "`guidance_scale` is not competible with compiled batch sizes of `text_encoder` and `prior`."
+            )

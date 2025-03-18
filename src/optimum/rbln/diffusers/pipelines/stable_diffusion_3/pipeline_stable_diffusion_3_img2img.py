@@ -27,7 +27,11 @@ class RBLNStableDiffusion3Img2ImgPipeline(RBLNDiffusionMixin, StableDiffusion3Im
         elif self.vae.compiled_batch_size * 2 == self.transformer.compiled_batch_size:
             do_classifier_free_guidance = True
         else:
-            raise ValueError("The batch size of `transformer` must be either equal to or twice the batch size of `vae`.")
+            raise ValueError(
+                "The batch size of `transformer` must be either equal to or twice the batch size of `vae`."
+            )
         guidance_scale = kwargs.get("guidance_scale", 5.0)
-        if not ((guidance_scale <= 1.) ^ do_classifier_free_guidance):
-            raise ValueError("`guidance_scale` is not competible with compiled batch sizes of `transformer` and `vae`.")
+        if not ((guidance_scale <= 1.0) ^ do_classifier_free_guidance):
+            raise ValueError(
+                "`guidance_scale` is not competible with compiled batch sizes of `transformer` and `vae`."
+            )
