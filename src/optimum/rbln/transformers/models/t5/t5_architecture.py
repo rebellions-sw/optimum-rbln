@@ -18,7 +18,7 @@ import torch
 from torch import nn
 from transformers.utils import logging
 
-from ....ops import register_rbln_custom_attention_add_softmax
+from ....ops import register_rbln_custom_add_softmax_attention
 from ..seq2seq.seq2seq_architecture import (
     Seq2SeqDecoder,
     Seq2SeqDecoderLayer,
@@ -55,7 +55,7 @@ class T5EncoderWrapper(Seq2SeqEncoderWrapper):
 
 class T5DecoderWrapper(Seq2SeqDecoderWrapper):
     def __post_init__(self, model, dec_max_seq_len: int = None):
-        register_rbln_custom_attention_add_softmax()
+        register_rbln_custom_add_softmax_attention()
         self.num_layers = self.config.num_layers
         self.conditional_generation = self.convert_to_rbln_conditional_generation(model, dec_max_seq_len)
 
@@ -70,6 +70,36 @@ class T5DecoderWrapper(Seq2SeqDecoderWrapper):
         new_model = T5ForConditionalGeneration(model, decoder_model)
 
         return new_model
+
+    def forward(
+        self,
+        input_ids,
+        attention_mask,
+        encoder_attention_mask,
+        cache_position,
+        cross_kv_cache,
+        *self_kv_cache,
+    ) -> Tuple[torch.FloatTensor, Tuple[torch.FloatTensor]]:
+        self_past_key_values = ()
+        cross_past_key_values = ()
+
+        for i in range(0, self.num_layers * 2, 2):
+            self_past_key_values = self_past_key_values + ((self_kv_cache[i], self_kv_cache[i + 1]),)
+            cross_past_key_values = cross_past_key_values + ((cross_kv_cache[i], cross_kv_cache[i + 1]),)
+
+        # decode
+        lm_logits, self_present_key_values = self.conditional_generation(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            encoder_attention_mask=encoder_attention_mask,
+            self_past_key_values=self_past_key_values,
+            cross_past_key_values=cross_past_key_values,
+            cache_position=cache_position,
+        )
+
+        outputs = (lm_logits,) + self_present_key_values
+
+        return outputs
 
 
 class T5ForConditionalGeneration(Seq2SeqForConditionalGeneration):
@@ -134,7 +164,7 @@ class T5LayerSelfAttention(Seq2SeqSelfAttention):
         self.out_proj = self._original_mod.o
         self.num_heads = self._original_mod.n_heads
         self.head_dim = self._original_mod.key_value_proj_dim
-        self.attn_decode = torch.ops.rbln_custom_ops.attn_decode_add_softmax
+        self.attn_decode = torch.ops.rbln_custom_ops.add_softmax_attn_decode
 
     def projection(self, hidden_states) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         query_states = self.q_proj(hidden_states)
@@ -148,6 +178,7 @@ class T5LayerSelfAttention(Seq2SeqSelfAttention):
         past_key_value: Tuple[torch.Tensor],
         attention_mask: torch.Tensor,
         cache_position: torch.Tensor,
+        **kwargs,
     ) -> Tuple[torch.Tensor, Tuple[torch.Tensor]]:
         bsz, tgt_len, _ = hidden_states.size()
 

@@ -50,11 +50,14 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         runtime: rebel.Runtime,
         batch_size: int,
         dec_max_seq_len: int,
+        use_attention_mask: Optional[bool] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(runtime, **kwargs)
         self.batch_size = batch_size
         self.dec_max_seq_len = dec_max_seq_len
+        self.use_attention_mask = use_attention_mask
+        self.default_block_tables = torch.arange(0, self.batch_size, dtype=torch.int16).view(self.batch_size, 1)
 
     def forward(
         self,
@@ -62,6 +65,7 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         attention_mask: Optional[torch.FloatTensor] = None,
         decoder_attention_mask: Optional[torch.BoolTensor] = None,
         cache_position: Optional[torch.Tensor] = None,
+        block_tables: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
         batch_size = decoder_input_ids.shape[0]
@@ -73,19 +77,24 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         if batch_size != cache_position.shape[0]:
             raise RuntimeError(f"Cache position size mismatch: got {cache_position.shape[0]}, expected {batch_size}.")
 
-        for b_idx in range(self.batch_size):
-            decoding_step = cache_position[b_idx].item()
-            if not (0 <= decoding_step < self.dec_max_seq_len):
-                raise ValueError(
-                    f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
-                )
-            decoder_attention_mask[b_idx, : decoding_step + 1] = 1
+        if self.use_attention_mask:
+            for b_idx in range(self.batch_size):
+                decoding_step = cache_position[b_idx].item()
+                if not (0 <= decoding_step < self.dec_max_seq_len):
+                    raise ValueError(
+                        f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
+                    )
+                decoder_attention_mask[b_idx, : decoding_step + 1] = 1
+
+        if block_tables is None:
+            block_tables = self.default_block_tables
 
         lm_logits = super().forward(
             decoder_input_ids,
-            decoder_attention_mask,
+            decoder_attention_mask if self.use_attention_mask else None,
             attention_mask,
             cache_position,
+            block_tables,
         )
 
         return Seq2SeqLMOutput(logits=lm_logits)
@@ -110,12 +119,18 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
     def __post_init__(self, **kwargs):
         batch_size = self.rbln_config.model_cfg["batch_size"]
         dec_max_seq_len = self.rbln_config.model_cfg["dec_max_seq_len"]
+        self.use_attention_mask = self.rbln_config.model_cfg.get("use_attention_mask", None)
+
         self.encoder = RBLNRuntimeEncoder(
             runtime=self.model[0],
             main_input_name="input_ids",
         )
         self.decoder = RBLNRuntimeDecoder(
-            runtime=self.model[1], main_input_name="input_ids", batch_size=batch_size, dec_max_seq_len=dec_max_seq_len
+            runtime=self.model[1],
+            main_input_name="input_ids",
+            batch_size=batch_size,
+            dec_max_seq_len=dec_max_seq_len,
+            use_attention_mask=self.use_attention_mask,
         )
 
     @classmethod
@@ -171,6 +186,13 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
         rbln_dec_max_seq_len = rbln_kwargs.get("dec_max_seq_len", None)
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
         rbln_batch_size = 1 if rbln_batch_size is None else rbln_batch_size
+        rbln_use_attention_mask = rbln_kwargs.get("use_attention_mask", None)
+
+        if rbln_use_attention_mask is None:
+            rbln_use_attention_mask = False
+            rbln_npu = rbln_kwargs.get("npu", None) or rebel.get_npu_name()
+            if rbln_npu == "RBLN-CA02":
+                rbln_use_attention_mask = True
 
         n_layer = getattr(model_config, "decoder_layers", None) or getattr(model_config, "num_layers")
         n_head = getattr(model_config, "decoder_attention_heads", None) or getattr(model_config, "num_heads")
@@ -232,17 +254,21 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
                 ],
                 "float32",
             ),
-            ("batch_position", [], "int16"),
+            ("block_tables", [1], "int16"),
         ]
 
         dec_input_info = [
             ("input_ids", [rbln_batch_size, 1], "int64"),
-            ("attention_mask", [rbln_batch_size, rbln_dec_max_seq_len], "float32"),
             ("encoder_attention_mask", [rbln_batch_size, rbln_enc_max_seq_len], "float32"),
             (
                 "cache_position",
                 [rbln_batch_size, 1],
                 "int32",
+            ),
+            (
+                "block_tables",
+                [rbln_batch_size, 1],
+                "int16",
             ),
         ]
         dec_input_info.extend(
@@ -275,6 +301,10 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
                 for i in range(n_layer * 2)
             ]
         )
+
+        if rbln_use_attention_mask:
+            dec_input_info.insert(1, ("attention_mask", [rbln_batch_size, rbln_dec_max_seq_len], "float32"))
+
         enc_compile_config = RBLNCompileConfig(compiled_model_name="encoder", input_info=enc_input_info)
         dec_compile_config = RBLNCompileConfig(compiled_model_name="decoder", input_info=dec_input_info)
 
@@ -290,6 +320,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
                 "dec_max_seq_len": rbln_dec_max_seq_len,
                 "batch_size": rbln_batch_size,
                 "pad_token_id": rbln_pad_token_id,
+                "use_attention_mask": rbln_use_attention_mask,
             }
         )
 
@@ -400,9 +431,9 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
         encoder_kwargs["output_attentions"] = False
 
         for b in range(batch_size):
-            batch_position = torch.tensor(b, dtype=torch.int16)
+            block_tables = torch.tensor([b], dtype=torch.int16)
             encoder_kwargs["input_ids"] = inputs_tensor[b].unsqueeze(0)
             encoder_kwargs["attention_mask"] = model_kwargs["attention_mask"][b].unsqueeze(0).to(torch.float32)
-            model_kwargs["encoder_outputs"] = encoder(**encoder_kwargs, batch_position=batch_position)
+            model_kwargs["encoder_outputs"] = encoder(**encoder_kwargs, block_tables=block_tables)
 
         return model_kwargs
