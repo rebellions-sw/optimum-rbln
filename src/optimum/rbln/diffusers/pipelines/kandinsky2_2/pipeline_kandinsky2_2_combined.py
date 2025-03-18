@@ -86,6 +86,9 @@ class RBLNKandinskyV22CombinedPipeline(RBLNDiffusionMixin, KandinskyV22CombinedP
     def get_compiled_image_size(self):
         return self.movq.image_size
 
+    def validate_model_runtime_consistency(self, *args, **kwargs):
+        pass
+
 
 class RBLNKandinskyV22Img2ImgCombinedPipeline(RBLNDiffusionMixin, KandinskyV22Img2ImgCombinedPipeline):
     original_class = KandinskyV22Img2ImgCombinedPipeline
@@ -137,6 +140,9 @@ class RBLNKandinskyV22Img2ImgCombinedPipeline(RBLNDiffusionMixin, KandinskyV22Im
     def get_compiled_image_size(self):
         return self.movq.image_size
 
+    def validate_model_runtime_consistency(self, *args, **kwargs):
+        pass
+
 
 class RBLNKandinskyV22InpaintCombinedPipeline(RBLNDiffusionMixin, KandinskyV22InpaintCombinedPipeline):
     original_class = KandinskyV22InpaintCombinedPipeline
@@ -187,3 +193,6 @@ class RBLNKandinskyV22InpaintCombinedPipeline(RBLNDiffusionMixin, KandinskyV22In
 
     def get_compiled_image_size(self):
         return self.movq.image_size
+
+    def validate_model_runtime_consistency(self, *args, **kwargs):
+        pass

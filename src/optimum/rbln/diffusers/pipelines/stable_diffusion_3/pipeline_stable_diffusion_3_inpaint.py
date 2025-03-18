@@ -20,3 +20,14 @@ from ...modeling_diffusers import RBLNDiffusionMixin
 class RBLNStableDiffusion3InpaintPipeline(RBLNDiffusionMixin, StableDiffusion3InpaintPipeline):
     original_class = StableDiffusion3InpaintPipeline
     _submodules = ["transformer", "text_encoder_3", "text_encoder", "text_encoder_2", "vae"]
+
+    def validate_model_runtime_consistency(self, *args, **kwargs):
+        if self.vae.compiled_batch_size == self.transformer.compiled_batch_size:
+            do_classifier_free_guidance = False
+        elif self.vae.compiled_batch_size * 2 == self.transformer.compiled_batch_size:
+            do_classifier_free_guidance = True
+        else:
+            raise ValueError("The batch size of `transformer` must be either equal to or twice the batch size of `vae`.")
+        guidance_scale = kwargs.get("guidance_scale", 5.0)
+        if not ((guidance_scale <= 1.) ^ do_classifier_free_guidance):
+            raise ValueError("`guidance_scale` is not competible with compiled batch sizes of `transformer` and `vae`.")
