@@ -70,4 +70,3 @@ from scipy import stats
 
 correlation, p_value = stats.pearsonr(output.numpy().flatten(), output_pt.numpy().flatten())
 print(correlation)
-output-output_pt
