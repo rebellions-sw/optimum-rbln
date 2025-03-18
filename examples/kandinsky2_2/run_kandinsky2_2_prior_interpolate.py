@@ -13,12 +13,10 @@ def main(
     from_diffusers: bool = False,
 ):
     img1 = load_image(
-        "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main"
-        "/kandinsky/cat.png"
+        "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/kandinsky/cat.png"
     )
     img2 = load_image(
-        "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main"
-        "/kandinsky/starry_night.jpeg"
+        "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/kandinsky/starry_night.jpeg"
     )
 
     if from_diffusers:

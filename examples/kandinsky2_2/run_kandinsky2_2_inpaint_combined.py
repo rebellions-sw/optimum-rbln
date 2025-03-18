@@ -26,8 +26,7 @@ def main(
         pipe.save_pretrained(os.path.basename(model_id))
     else:
         pipe = RBLNKandinskyV22InpaintCombinedPipeline.from_pretrained(
-            model_id=os.path.basename(model_id),
-            export=False
+            model_id=os.path.basename(model_id), export=False
         )
 
     generator = torch.manual_seed(42)

@@ -25,13 +25,20 @@ def main(
         pipe.save_pretrained(os.path.basename(model_id))
     else:
         pipe = RBLNKandinskyV22Img2ImgCombinedPipeline.from_pretrained(
-            model_id=os.path.basename(model_id),
-            export=False
+            model_id=os.path.basename(model_id), export=False
         )
 
     generator = torch.manual_seed(42)
 
-    image = pipe(prompt=prompt, image=init_image, height=768, width=768, num_inference_steps=100, strength=0.2, generator=generator).images[0]
+    image = pipe(
+        prompt=prompt,
+        image=init_image,
+        height=768,
+        width=768,
+        num_inference_steps=100,
+        strength=0.2,
+        generator=generator,
+    ).images[0]
     image.save(f"{prompt}.png")
 
 
