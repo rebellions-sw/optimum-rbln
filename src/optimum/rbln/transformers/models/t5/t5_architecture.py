@@ -88,7 +88,7 @@ class T5DecoderWrapper(Seq2SeqDecoderWrapper):
             cross_past_key_values = cross_past_key_values + ((cross_kv_cache[i], cross_kv_cache[i + 1]),)
 
         # decode
-        lm_logits, self_present_key_values = self.conditional_generation(
+        lm_logits  = self.conditional_generation(
             input_ids=input_ids,
             attention_mask=attention_mask,
             encoder_attention_mask=encoder_attention_mask,
@@ -97,9 +97,7 @@ class T5DecoderWrapper(Seq2SeqDecoderWrapper):
             cache_position=cache_position,
         )
 
-        outputs = (lm_logits,) + self_present_key_values
-
-        return outputs
+        return lm_logits 
 
 
 class T5ForConditionalGeneration(Seq2SeqForConditionalGeneration):
@@ -187,7 +185,7 @@ class T5LayerSelfAttention(Seq2SeqSelfAttention):
         key_states = self._shape(key_states, -1, bsz)
         value_states = self._shape(value_states, -1, bsz)
 
-        attn_output, key_states, value_states = self.attn_decode(
+        attn_output = self.attn_decode(
             query_states,
             key_states,
             value_states,
@@ -204,9 +202,7 @@ class T5LayerSelfAttention(Seq2SeqSelfAttention):
         attn_output = attn_output.reshape(bsz, -1, self.num_heads * self.head_dim)
 
         attn_output = self.out_proj(attn_output)
-        present_key_value = (key_states, value_states)
-
-        return attn_output, present_key_value
+        return attn_output
 
 
 class T5CrossAttention(nn.Module):
