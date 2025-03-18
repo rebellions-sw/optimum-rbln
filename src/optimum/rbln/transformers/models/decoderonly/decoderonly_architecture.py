@@ -480,7 +480,7 @@ class DecoderOnlyModel(nn.Module):
                 hidden_states=hidden_states,
                 attention_mask=attention_mask,
                 seq_positions=seq_positions,
-                past_key_values=present_key_values,
+                past_key_values=past_key_values,
                 cos=cos,
                 sin=sin,
                 block_tables=block_tables,
