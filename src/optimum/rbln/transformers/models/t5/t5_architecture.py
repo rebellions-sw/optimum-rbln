@@ -88,7 +88,7 @@ class T5DecoderWrapper(Seq2SeqDecoderWrapper):
             cross_past_key_values = cross_past_key_values + ((cross_kv_cache[i], cross_kv_cache[i + 1]),)
 
         # decode
-        lm_logits  = self.conditional_generation(
+        lm_logits = self.conditional_generation(
             input_ids=input_ids,
             attention_mask=attention_mask,
             encoder_attention_mask=encoder_attention_mask,
@@ -97,7 +97,7 @@ class T5DecoderWrapper(Seq2SeqDecoderWrapper):
             cache_position=cache_position,
         )
 
-        return lm_logits 
+        return lm_logits
 
 
 class T5ForConditionalGeneration(Seq2SeqForConditionalGeneration):
