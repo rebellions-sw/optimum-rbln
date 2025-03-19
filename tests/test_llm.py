@@ -1,10 +1,12 @@
 import json
+import os
 import unittest
 import warnings
 
 import pytest
 import torch
-from transformers import AutoConfig, AutoTokenizer
+from PIL import Image
+from transformers import AutoConfig, AutoProcessor, AutoTokenizer
 
 from optimum.rbln import (
     RBLNAutoModel,
@@ -39,21 +41,20 @@ class LLMTest:
         PROMPT = "Who are you?"
 
         @classmethod
-        @property
-        def tokenizer(cls):
+        def get_tokenizer(cls):
             if cls._tokenizer is None:
                 cls._tokenizer = AutoTokenizer.from_pretrained(cls.HF_MODEL_ID)
             return cls._tokenizer
 
         def get_inputs(self):
-            inputs = self.tokenizer(self.PROMPT, return_tensors="pt")
+            inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt")
             inputs["max_new_tokens"] = 20
             inputs["do_sample"] = False
             return inputs
 
         def postprocess(self, inputs, output):
             input_len = inputs["input_ids"].shape[-1]
-            generated_text = self.tokenizer.decode(
+            generated_text = self.get_tokenizer().decode(
                 output[0][input_len:], skip_special_tokens=True, clean_up_tokenization_spaces=True
             )
             return generated_text
@@ -74,8 +75,8 @@ class TestLlamaForCausalLM(LLMTest.TestLLM):
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
 
     def get_inputs(self):
-        self.tokenizer.pad_token = self.tokenizer.eos_token
-        inputs = self.tokenizer(self.PROMPT, return_tensors="pt")
+        self.get_tokenizer().pad_token = self.get_tokenizer().eos_token
+        inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt")
         return inputs
 
 
@@ -88,8 +89,8 @@ class TestLlamaForCausalLM_Flash(LLMTest.TestLLM):
     RBLN_CLASS_KWARGS = {"rbln_config": {"attn_impl": "flash_attn", "kvcache_partition_len": 4096}}
 
     def get_inputs(self):
-        self.tokenizer.pad_token = self.tokenizer.eos_token
-        inputs = self.tokenizer(self.PROMPT, return_tensors="pt")
+        self.get_tokenizer().pad_token = self.get_tokenizer().eos_token
+        inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt")
         return inputs
 
 
@@ -133,7 +134,7 @@ class TestT5Model(LLMTest.TestLLM):
     HF_CONFIG_KWARGS = {"num_layers": 1}
 
     def get_inputs(self):
-        inputs = self.tokenizer(
+        inputs = self.get_tokenizer()(
             self.PROMPT, padding="max_length", max_length=512, truncation=True, return_tensors="pt"
         )
         inputs["max_new_tokens"] = 20
@@ -142,7 +143,9 @@ class TestT5Model(LLMTest.TestLLM):
         return inputs
 
     def postprocess(self, inputs, output):
-        generated_text = self.tokenizer.decode(output[0], skip_special_tokens=True, clean_up_tokenization_spaces=True)
+        generated_text = self.get_tokenizer().decode(
+            output[0], skip_special_tokens=True, clean_up_tokenization_spaces=True
+        )
         return generated_text
 
 
@@ -164,7 +167,7 @@ class TestBartModel(LLMTest.TestLLM):
     TEST_LEVEL = TestLevel.ESSENTIAL
 
     def get_inputs(self):
-        inputs = self.tokenizer(
+        inputs = self.get_tokenizer()(
             self.PROMPT, padding="max_length", max_length=512, truncation=True, return_tensors="pt"
         )
         inputs["max_new_tokens"] = 20
@@ -173,7 +176,9 @@ class TestBartModel(LLMTest.TestLLM):
         return inputs
 
     def postprocess(self, inputs, output):
-        generated_text = self.tokenizer.decode(output[0], skip_special_tokens=True, clean_up_tokenization_spaces=True)
+        generated_text = self.get_tokenizer().decode(
+            output[0], skip_special_tokens=True, clean_up_tokenization_spaces=True
+        )
         return generated_text
 
     def test_automap(self):
@@ -207,7 +212,7 @@ class TestBartModel(LLMTest.TestLLM):
         with self.subTest():
             with pytest.raises(ValueError):
                 _ = RBLNAutoModelForCausalLM.from_pretrained(
-                    self.RBLN_LOCAL_DIR,
+                    self.get_rbln_local_dir(),
                     export=False,
                     rbln_create_runtimes=False,
                     **self.HF_CONFIG_KWARGS,
@@ -219,33 +224,21 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
     RBLN_CLASS = RBLNLlavaNextForConditionalGeneration
     TEST_LEVEL = TestLevel.FULL
     HF_MODEL_ID = "llava-hf/llava-v1.6-mistral-7b-hf"  # No tiny model yet.
-    LLAVA_PIXEL_VALUES = torch.randn(1, 5, 3, 336, 336, generator=torch.manual_seed(42))
-    LLAVA_IMAGE_SIZES = torch.tensor([[900, 900]], dtype=torch.int64)
-    GENERATION_KWARGS = {
-        "input_ids": torch.randint(
-            low=0,
-            high=50,
-            size=(1, 512),
-            generator=torch.manual_seed(42),
-            dtype=torch.int64,
-        ),
-        "attention_mask": torch.randint(
-            low=0, high=2, size=(1, 512), generator=torch.manual_seed(42), dtype=torch.int64
-        ),
-        "pixel_values": LLAVA_PIXEL_VALUES,
-        "image_sizes": LLAVA_IMAGE_SIZES,
-        "max_new_tokens": 10,
-    }
+    PROMPT = "[INST] <image>\nWhat’s shown in this image? [/INST]"
     RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True}}}
-    EXPECTED_OUTPUT = "ẩ kennisSoft biologieussyózdsi fraulent data"
+    EXPECTED_OUTPUT = "aille kennisSoft /******/ Brunershot childhoodhoodRx̧̧̧̧̧̧̧̧̧̧"
+
+    @classmethod
+    def get_tokenizer(cls):
+        if cls._tokenizer is None:
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
+        return cls._tokenizer
 
     # override
     @classmethod
     def setUpClass(cls):
         config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
 
-        # To test image input, input_id should contain special image token.
-        cls.GENERATION_KWARGS["input_ids"][0, 44] = config.image_token_index
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 1
         kwargs = {"text_config": text_config}
@@ -253,7 +246,13 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
         return super().setUpClass()
 
     def get_inputs(self):
-        return self.GENERATION_KWARGS
+        tokenizer = self.get_tokenizer()
+        img_path = f"{os.path.dirname(__file__)}/../assets/rbln_logo.png"
+        image = Image.open(img_path)
+        inputs = tokenizer(images=[image], text=[self.PROMPT], return_tensors="pt", padding=True)
+        inputs["max_new_tokens"] = 20
+        inputs["do_sample"] = False
+        return inputs
 
 
 class TestDisallowedLlama_1(DisallowedTestBase.DisallowedTest):

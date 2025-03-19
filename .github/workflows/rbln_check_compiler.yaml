@@ -1,0 +1,61 @@
+name: Check Rebel Compiler Version
+
+on:
+  workflow_call:
+    inputs:
+      compiler_version:
+        description: "Rebel compiler version to check"
+        required: true
+        type: string
+    outputs:
+      is_deploy_version:
+        description: "Whether the compiler is a deploy version"
+        value: ${{ jobs.check-rebel-compiler-version.outputs.is_deploy_version }}
+      compiler_version:
+        description: "The compiler version used"
+        value: ${{ jobs.check-rebel-compiler-version.outputs.compiler_version }}
+
+jobs:
+  check-rebel-compiler-version:
+    runs-on: rebel-k8s-runner
+    outputs:
+      is_deploy_version: ${{ steps.check_prod.outputs.IS_PROD }}
+      compiler_version: ${{ steps.install_compiler.outputs.COMPILER_VERSION }}
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install rebel-compiler
+        id: install_compiler
+        env:
+          REBEL_PYPI_ENDPOINT: ${{ vars.REBEL_PYPI_INTERNAL_ENDPOINT }}
+          REBEL_PYPI_USERNAME: ${{ secrets.REBEL_PYPI_USERNAME }}
+          REBEL_PYPI_PASSWORD: ${{ secrets.REBEL_PYPI_PASSWORD }}
+        run: |
+          set -e
+          PYPI_URL=$(echo $REBEL_PYPI_ENDPOINT | sed "s/\/\//\0$REBEL_PYPI_USERNAME:$REBEL_PYPI_PASSWORD@/")
+          pip3 install --extra-index-url $PYPI_URL rebel-compiler==${{ inputs.compiler_version }}
+          echo "COMPILER_VERSION=${{ inputs.compiler_version }}" >> $GITHUB_OUTPUT
+
+      - name: Run script to check ENV
+        id: check_env
+        run: |
+          echo "Running check for rebel-compiler version"
+          ENV_VALUE=$(python3 -c '${{ secrets.CHECK_DEPLOY }}')
+          echo $ENV_VALUE
+          echo "ENV_VALUE=$ENV_VALUE" >> $GITHUB_ENV
+
+      - name: Verify ENV is PROD
+        id: check_prod
+        run: |
+          if [ "$ENV_VALUE" = "PROD" ]; then
+            echo "IS_PROD=true" >> $GITHUB_OUTPUT
+            echo "version check pass(✅)!!"
+          else
+            echo "IS_PROD=false" >> $GITHUB_OUTPUT
+            echo "version check fail(❌)!!" 
+            echo "rebel-compiler must be prod version"
+            exit 1
+          fi 
