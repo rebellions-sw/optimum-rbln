@@ -214,7 +214,7 @@ class WhisperDecoderLayer(nn.Module):
         # Self Attention Block
         residual = hidden_states
         hidden_states = self.self_attn_layer_norm(hidden_states)
-        hidden_states, _, self_present_key_value = self.self_attn(
+        hidden_states, self_present_key_value = self.self_attn(
             hidden_states=hidden_states,
             past_key_value=self_past_key_value,
             attention_mask=attention_mask,
@@ -225,7 +225,7 @@ class WhisperDecoderLayer(nn.Module):
         # Cross-Attention Block
         residual = hidden_states
         hidden_states = self.encoder_attn_layer_norm(hidden_states)
-        hidden_states, cross_attn_weights, cross_present_key_value = self.encoder_attn(
+        hidden_states, cross_attn_weights = self.encoder_attn(
             hidden_states=hidden_states,
             past_key_value=cross_past_key_value,
         )
@@ -292,7 +292,7 @@ class WhisperSelfAttention(WhisperAttention):
         attn_output = attn_output.reshape(bsz, tgt_len, self.embed_dim)
         attn_output = self.out_proj(attn_output)
 
-        return attn_output, None, (key_states, value_states)
+        return attn_output, (key_states, value_states)
 
 
 class WhisperCrossAttention(WhisperAttention):
@@ -317,4 +317,4 @@ class WhisperCrossAttention(WhisperAttention):
         attn_output = attn_output.reshape(batch_size, query_len, self.embed_dim)
         attn_output = self.out_proj(attn_output)
 
-        return attn_output, attn_weights, (key_states, value_states)
+        return attn_output, attn_weights
