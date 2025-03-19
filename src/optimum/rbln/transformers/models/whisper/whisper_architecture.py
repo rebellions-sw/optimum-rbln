@@ -25,7 +25,7 @@ from transformers.modeling_outputs import (
 )
 from transformers.utils import logging
 
-from ....ops import register_rbln_custom_cache_update, register_rbln_custom_attention_add_softmax
+from ....ops import register_rbln_custom_cache_update, register_rbln_custom_add_softmax_attention
 
 
 logger = logging.get_logger(__name__)
@@ -34,7 +34,7 @@ logger = logging.get_logger(__name__)
 class WhisperWrapper:
     def __init__(self, model, rbln_token_timestamps):
         register_rbln_custom_cache_update()
-        register_rbln_custom_attention_add_softmax()
+        register_rbln_custom_add_softmax_attention()
         self.encoder = WhisperEncoderWrapper(model)
         self.decoder = WhisperDecoderWrapper(model, output_attentions=rbln_token_timestamps)
 
@@ -276,7 +276,7 @@ class WhisperSelfAttention(WhisperAttention):
         key_states = self._shape(self.k_proj(hidden_states), -1, bsz)
         value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
 
-        attn_output, key_states, value_states, attn_weights = torch.ops.rbln_custom_ops.attn_decode_add_softmax(
+        attn_output, key_states, value_states = torch.ops.rbln_custom_ops.add_softmax_attn_decode(
             query_states,
             key_states,
             value_states,
@@ -292,7 +292,7 @@ class WhisperSelfAttention(WhisperAttention):
         attn_output = attn_output.reshape(bsz, tgt_len, self.embed_dim)
         attn_output = self.out_proj(attn_output)
 
-        return attn_output, attn_weights.squeeze(2), (key_states, value_states)
+        return attn_output, None, (key_states, value_states)
 
 
 class WhisperCrossAttention(WhisperAttention):

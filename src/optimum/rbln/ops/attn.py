@@ -249,7 +249,6 @@ def register_rbln_custom_add_softmax_attention():
             q,
             torch.empty(*kcache.shape, device=kcache.device),
             torch.empty(*vcache.shape, device=vcache.device),
-            torch.empty(*mask.shape, device=mask.device),
         )
 
     @register_fake("rbln_custom_ops::add_softmax_attn_decode")
