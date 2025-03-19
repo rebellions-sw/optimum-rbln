@@ -261,11 +261,17 @@ class RBLNDiffusionMixin:
         for connected_pipe_name, connected_pipe_cls in cls._connected_classes.items():
             connected_pipe_config = prepared_config.pop(connected_pipe_name)
             prefix = cls._prefix.get(connected_pipe_name, "")
-            connected_pipe_global_config = {k: v for k, v in connected_pipe_config.items() if k not in connected_pipe_cls._submodules}
+            connected_pipe_global_config = {
+                k: v for k, v in connected_pipe_config.items() if k not in connected_pipe_cls._submodules
+            }
             for submodule_name in connected_pipe_cls._submodules:
                 flattened_config[prefix + submodule_name] = connected_pipe_config[submodule_name]
                 flattened_config[prefix + submodule_name].update(
-                    {k: v for k, v in connected_pipe_global_config.items() if k not in flattened_config[prefix + submodule_name]}
+                    {
+                        k: v
+                        for k, v in connected_pipe_global_config.items()
+                        if k not in flattened_config[prefix + submodule_name]
+                    }
                 )
         flattened_config.update(pipe_global_config)
         return flattened_config
