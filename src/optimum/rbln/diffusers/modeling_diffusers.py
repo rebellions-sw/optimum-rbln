@@ -237,10 +237,10 @@ class RBLNDiffusionMixin:
             connected_pipe_config = prepared_config.pop(connected_pipe_name)
             prefix = cls._prefix.get(connected_pipe_name, "")
             guidance_scale = rbln_config.pop(f"{prefix}guidance_scale", None)
+            if "guidance_scale" not in connected_pipe_config and guidance_scale is not None:
+                connected_pipe_config["guidance_scale"] = guidance_scale
             for submodule_name in connected_pipe_cls._submodules:
                 submodule_config = rbln_config.pop(prefix + submodule_name, {})
-                if "guidance_scale" not in submodule_config and guidance_scale is not None:
-                    submodule_config["guidance_scale"] = guidance_scale
                 if submodule_name not in connected_pipe_config:
                     connected_pipe_config[submodule_name] = {}
                 connected_pipe_config[submodule_name].update(
@@ -261,8 +261,12 @@ class RBLNDiffusionMixin:
         for connected_pipe_name, connected_pipe_cls in cls._connected_classes.items():
             connected_pipe_config = prepared_config.pop(connected_pipe_name)
             prefix = cls._prefix.get(connected_pipe_name, "")
+            connected_pipe_global_config = {k: v for k, v in connected_pipe_config.items() if k not in connected_pipe_cls._submodules}
             for submodule_name in connected_pipe_cls._submodules:
                 flattened_config[prefix + submodule_name] = connected_pipe_config[submodule_name]
+                flattened_config[prefix + submodule_name].update(
+                    {k: v for k, v in connected_pipe_global_config.items() if k not in flattened_config[prefix + submodule_name]}
+                )
         flattened_config.update(pipe_global_config)
         return flattened_config
 
