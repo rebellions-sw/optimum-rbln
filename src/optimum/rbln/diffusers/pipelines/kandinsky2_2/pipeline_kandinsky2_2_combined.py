@@ -87,6 +87,7 @@ class RBLNKandinskyV22CombinedPipeline(RBLNDiffusionMixin, KandinskyV22CombinedP
         return self.movq.image_size
 
     def validate_model_runtime_consistency(self, *args, **kwargs):
+        # Consistency checks are handled by the individual connected pipelines (prior_pipe and decoder_pipe).
         pass
 
 
@@ -141,6 +142,7 @@ class RBLNKandinskyV22Img2ImgCombinedPipeline(RBLNDiffusionMixin, KandinskyV22Im
         return self.movq.image_size
 
     def validate_model_runtime_consistency(self, *args, **kwargs):
+        # Consistency checks are handled by the individual connected pipelines (prior_pipe and decoder_pipe).
         pass
 
 
@@ -195,4 +197,5 @@ class RBLNKandinskyV22InpaintCombinedPipeline(RBLNDiffusionMixin, KandinskyV22In
         return self.movq.image_size
 
     def validate_model_runtime_consistency(self, *args, **kwargs):
+        # Consistency checks are handled by the individual connected pipelines (prior_pipe and decoder_pipe).
         pass

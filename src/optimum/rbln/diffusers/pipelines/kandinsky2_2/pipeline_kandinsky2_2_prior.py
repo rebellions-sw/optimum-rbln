@@ -37,16 +37,24 @@ class RBLNKandinskyV22PriorPipeline(RBLNDiffusionMixin, KandinskyV22PriorPipelin
             do_classifier_free_guidance = True
         else:
             raise ValueError(
+                "Inconsistent batch sizes between `prior` and `text_encoder`. "
+                f"`prior` batch size: {self.prior.compiled_batch_size}, "
+                f"`text_encoder` batch size: {self.text_encoder.compiled_batch_size}. "
                 "The batch size of `prior` must be either equal to or twice the batch size of `text_encoder`."
             )
 
         if negative_prompt is not None:
             if self.text_encoder.compiled_batch_size != batch_size * 2:
                 raise ValueError(
-                    "If `negative_prompt` is provided, the compiled batch size of `text_encoder` should be double compared to batch size"
+                    "If `negative_prompt` is provided, the compiled batch size of `text_encoder` should be double compared to batch size. "
+                    f"batch size: {batch_size}, "
+                    f"`text_encoder` batch size: {self.text_encoder.compiled_batch_size}. "
                 )
 
         if not ((guidance_scale <= 1.0) ^ do_classifier_free_guidance):
             raise ValueError(
-                "`guidance_scale` is not competible with compiled batch sizes of `text_encoder` and `prior`."
+                f"`guidance_scale` ({guidance_scale}) is incompetible with the compiled batch sizes of `prior` and `text_encoder`. "
+                f"Those models are compiled assuming that classifier-free guidance is {'enabled' if do_classifier_free_guidance else 'disabled'}. "
+                "Please ensure `guidance_scale` is > 1.0 when classifier-free guidance is enabled, and <= 1.0 otherwise. "
+                "If you are using a combined pipeline, please check `prior_guidance_scale` instead of `guidance_scale`."
             )

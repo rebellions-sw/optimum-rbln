@@ -28,10 +28,15 @@ class RBLNStableDiffusion3Pipeline(RBLNDiffusionMixin, StableDiffusion3Pipeline)
             do_classifier_free_guidance = True
         else:
             raise ValueError(
+                "Inconsistent batch sizes between `transformer` and `vae`. "
+                f"`transformer` batch size: {self.transformer.compiled_batch_size}, "
+                f"`vae` batch size: {self.vae.compiled_batch_size}. "
                 "The batch size of `transformer` must be either equal to or twice the batch size of `vae`."
             )
         guidance_scale = kwargs.get("guidance_scale", 5.0)
         if not ((guidance_scale <= 1.0) ^ do_classifier_free_guidance):
             raise ValueError(
-                "`guidance_scale` is not competible with compiled batch sizes of `transformer` and `vae`."
+                f"`guidance_scale` ({guidance_scale}) is incompetible with the compiled batch sizes of `transformer` and `vae`. "
+                f"Those models are compiled assuming that classifier-free guidance is {'enabled' if do_classifier_free_guidance else 'disabled'}. "
+                "Please ensure `guidance_scale` is > 1.0 when classifier-free guidance is enabled, and <= 1.0 otherwise."
             )
