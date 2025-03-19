@@ -77,9 +77,11 @@ class WhisperEncoderWrapper(torch.nn.Module):
         # 3. update cross_attention's past_key_value to the device-dram for optimization.
         bidx = torch.tensor(0, dtype=torch.int16)
         axis = torch.tensor(1, dtype=torch.int16)
-        cross_key_values = torch.ops.rbln_custom_ops.rbln_cache_update(cross_key_values, cross_kv, bidx, axis)
+        cross_key_values, enc_output = torch.ops.rbln_custom_ops.rbln_cache_update(
+            cross_key_values, cross_kv, bidx, axis
+        )
 
-        return cross_key_values
+        return enc_output
 
 
 class WhisperDecoderWrapper(torch.nn.Module):
@@ -268,8 +270,8 @@ class WhisperSelfAttention(WhisperAttention):
         s_idx = torch.tensor(cache_position, dtype=torch.int16)
         axis = torch.tensor(2, dtype=torch.int16)
 
-        key_states = torch.ops.rbln_custom_ops.rbln_cache_update(past_key_value[0], key_states, s_idx, axis)
-        value_states = torch.ops.rbln_custom_ops.rbln_cache_update(past_key_value[1], value_states, s_idx, axis)
+        key_states, _ = torch.ops.rbln_custom_ops.rbln_cache_update(past_key_value[0], key_states, s_idx, axis)
+        value_states, _ = torch.ops.rbln_custom_ops.rbln_cache_update(past_key_value[1], value_states, s_idx, axis)
         return key_states, value_states
 
     def forward(
