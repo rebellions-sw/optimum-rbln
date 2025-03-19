@@ -48,7 +48,7 @@ def register_rbln_custom_cache_update():
         updated_cache = cache.slice_scatter(state, dim=axis, start=s, end=e)
 
         # 'rbln_cache_update' is an in-place operation that isn't tracked in JIT trace, so a dummy output was added to the return value.
-        return updated_cache,  torch.empty([256])
+        return updated_cache, torch.empty([256])
 
     # Register a "fake" implementation of the "rbln_cache_update" operation.
     # This serves as an abstract definition for the RBLN compiler to recognize the operation and generate an optimized implementation.
