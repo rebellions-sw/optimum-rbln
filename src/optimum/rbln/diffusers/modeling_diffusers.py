@@ -440,26 +440,6 @@ class RBLNDiffusionMixin:
             compiled_image_size = None
         return compiled_image_size
 
-    def validate_model_runtime_consistency(self, *args, **kwargs):
-        if self.vae.compiled_batch_size == self.unet.compiled_batch_size:
-            do_classifier_free_guidance = False
-        elif self.vae.compiled_batch_size * 2 == self.unet.compiled_batch_size:
-            do_classifier_free_guidance = True
-        else:
-            raise ValueError(
-                "Inconsistent batch sizes between `unet` and `vae`. "
-                f"`unet` batch size: {self.unet.compiled_batch_size}, "
-                f"`vae` batch size: {self.vae.compiled_batch_size}. "
-                "The batch size of `unet` must be either equal to or twice the batch size of `vae`."
-            )
-        guidance_scale = kwargs.get("guidance_scale", 5.0)
-        if not ((guidance_scale <= 1.0) ^ do_classifier_free_guidance):
-            raise ValueError(
-                f"`guidance_scale` ({guidance_scale}) is incompetible with the compiled batch sizes of `unet` and `vae`. "
-                f"Those models are compiled assuming that classifier-free guidance is {'enabled' if do_classifier_free_guidance else 'disabled'}. "
-                "Please ensure `guidance_scale` is > 1.0 when classifier-free guidance is enabled, and <= 1.0 otherwise."
-            )
-
     def handle_additional_kwargs(self, **kwargs):
         """
         Function to handle additional compile-time parameters during inference.

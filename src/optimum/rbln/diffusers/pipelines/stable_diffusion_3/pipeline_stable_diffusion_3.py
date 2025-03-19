@@ -20,23 +20,3 @@ from ...modeling_diffusers import RBLNDiffusionMixin
 class RBLNStableDiffusion3Pipeline(RBLNDiffusionMixin, StableDiffusion3Pipeline):
     original_class = StableDiffusion3Pipeline
     _submodules = ["transformer", "text_encoder_3", "text_encoder", "text_encoder_2", "vae"]
-
-    def validate_model_runtime_consistency(self, *args, **kwargs):
-        if self.vae.compiled_batch_size == self.transformer.compiled_batch_size:
-            do_classifier_free_guidance = False
-        elif self.vae.compiled_batch_size * 2 == self.transformer.compiled_batch_size:
-            do_classifier_free_guidance = True
-        else:
-            raise ValueError(
-                "Inconsistent batch sizes between `transformer` and `vae`. "
-                f"`transformer` batch size: {self.transformer.compiled_batch_size}, "
-                f"`vae` batch size: {self.vae.compiled_batch_size}. "
-                "The batch size of `transformer` must be either equal to or twice the batch size of `vae`."
-            )
-        guidance_scale = kwargs.get("guidance_scale", 5.0)
-        if not ((guidance_scale <= 1.0) ^ do_classifier_free_guidance):
-            raise ValueError(
-                f"`guidance_scale` ({guidance_scale}) is incompetible with the compiled batch sizes of `transformer` and `vae`. "
-                f"Those models are compiled assuming that classifier-free guidance is {'enabled' if do_classifier_free_guidance else 'disabled'}. "
-                "Please ensure `guidance_scale` is > 1.0 when classifier-free guidance is enabled, and <= 1.0 otherwise."
-            )
