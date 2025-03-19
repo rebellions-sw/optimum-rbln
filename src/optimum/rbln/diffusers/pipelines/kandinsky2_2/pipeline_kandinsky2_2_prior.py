@@ -46,7 +46,14 @@ class RBLNKandinskyV22PriorPipeline(RBLNDiffusionMixin, KandinskyV22PriorPipelin
         if negative_prompt is not None:
             if self.text_encoder.compiled_batch_size != batch_size * 2:
                 raise ValueError(
-                    "If `negative_prompt` is provided, the compiled batch size of `text_encoder` should be double compared to batch size. "
+                    "If `negative_prompt` is provided, the compiled batch size of `text_encoder` should be double compared to the batch size. "
+                    f"batch size: {batch_size}, "
+                    f"`text_encoder` batch size: {self.text_encoder.compiled_batch_size}. "
+                )
+        else:
+            if self.text_encoder.compiled_batch_size != batch_size:
+                raise ValueError(
+                    "If `negative_prompt` is not provided, the compiled batch size of `text_encoder` should be the same as the batch size. "
                     f"batch size: {batch_size}, "
                     f"`text_encoder` batch size: {self.text_encoder.compiled_batch_size}. "
                 )
