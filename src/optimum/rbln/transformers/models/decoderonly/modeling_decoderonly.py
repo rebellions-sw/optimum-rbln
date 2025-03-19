@@ -117,7 +117,9 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             """
             Replaces all occurrences of `self.empty_block` in `block_tables` with a dummy block from `self.free_block_pool`.
             """
-            if self.free_block_pool:
+            if not torch.any(block_tables == self.empty_block):
+                return block_tables.clone()
+            elif self.free_block_pool:
                 _free_block = self.free_block_pool[0]
                 return torch.where(block_tables == self.empty_block, _free_block, block_tables)
             else:
