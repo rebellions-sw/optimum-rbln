@@ -97,10 +97,10 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         """
 
         NO_BLOCKS_ERROR = (
-            "No available blocks for allocation."
-            "The generate() API does not have enough memory blocks to complete this inference task."
-            "The failure seems to be due to the need for Paged Attention, which is implemented in [`vllm-rbln`](https://docs.rbln.ai/software/model_serving/vllm_support/vllm-rbln.html)"
-            "Using `vllm-rbln` should resolve the issue without any problems."
+            "No memory blocks are available for allocation."
+            "The generate() API cannot complete this inference task because Paged Attention is not fully supported by optimum-rbln."
+            "This is supported by vllm-rbln (see: https://docs.rbln.ai/software/model_serving/vllm_support/vllm-rbln.html)."
+            "Using vllm-rbln should fix this issue and enhance inference performance."
         )
 
         def update_block(batch_idx: int, block_idx: int):
