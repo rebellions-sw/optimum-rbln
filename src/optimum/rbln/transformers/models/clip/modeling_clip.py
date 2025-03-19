@@ -98,7 +98,9 @@ class RBLNCLIPTextModel(RBLNModel):
 
 
 class RBLNCLIPTextModelWithProjection(RBLNCLIPTextModel):
-    pass
+    @property
+    def compiled_batch_size(self):
+        return self.rbln_config.compile_cfgs[0].input_info[0][1][0]
 
 
 class _VisionEncoder(torch.nn.Module):
@@ -186,6 +188,10 @@ class RBLNCLIPVisionModel(RBLNModel):
 
 
 class RBLNCLIPVisionModelWithProjection(RBLNCLIPVisionModel):
+    @property
+    def compiled_batch_size(self):
+        return self.rbln_config.compile_cfgs[0].input_info[0][1][0]
+
     def forward(
         self,
         pixel_values: Optional[torch.FloatTensor] = None,

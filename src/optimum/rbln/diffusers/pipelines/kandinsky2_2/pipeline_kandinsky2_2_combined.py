@@ -187,3 +187,7 @@ class RBLNKandinskyV22InpaintCombinedPipeline(RBLNDiffusionMixin, KandinskyV22In
 
     def get_compiled_image_size(self):
         return self.movq.image_size
+
+    def validate_model_runtime_consistency(self, *args, **kwargs):
+        # Consistency checks are handled by the individual connected pipelines (prior_pipe and decoder_pipe).
+        pass

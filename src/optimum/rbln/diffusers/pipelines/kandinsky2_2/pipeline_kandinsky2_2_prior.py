@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import inspect
+
 from diffusers import KandinskyV22PriorPipeline
 
 from ...modeling_diffusers import RBLNDiffusionMixin
@@ -20,3 +22,46 @@ from ...modeling_diffusers import RBLNDiffusionMixin
 class RBLNKandinskyV22PriorPipeline(RBLNDiffusionMixin, KandinskyV22PriorPipeline):
     original_class = KandinskyV22PriorPipeline
     _submodules = ["text_encoder", "image_encoder", "prior"]
+
+    def validate_model_runtime_consistency(self, *args, **kwargs):
+        param_names = list(inspect.signature(self.original_class.__call__).parameters.keys())[1:]
+        args_dict = dict(zip(param_names, args))
+        merged = {**args_dict, **kwargs}
+        prompt = merged.get("prompt")
+        negative_prompt = merged.get("negative_prompt", None)
+        guidance_scale = merged.get("guidance_scale", 5.0)
+        batch_size = len(prompt) if isinstance(prompt, list) else 1
+        if self.prior.compiled_batch_size == self.text_encoder.compiled_batch_size:
+            do_classifier_free_guidance = False
+        elif self.prior.compiled_batch_size == self.text_encoder.compiled_batch_size * 2:
+            do_classifier_free_guidance = True
+        else:
+            raise ValueError(
+                "Inconsistent batch sizes between `prior` and `text_encoder`. "
+                f"`prior` batch size: {self.prior.compiled_batch_size}, "
+                f"`text_encoder` batch size: {self.text_encoder.compiled_batch_size}. "
+                "The batch size of `prior` must be either equal to or twice the batch size of `text_encoder`."
+            )
+
+        if negative_prompt is not None:
+            if self.text_encoder.compiled_batch_size != batch_size * 2:
+                raise ValueError(
+                    "If `negative_prompt` is provided, the compiled batch size of `text_encoder` should be double compared to the batch size. "
+                    f"batch size: {batch_size}, "
+                    f"`text_encoder` batch size: {self.text_encoder.compiled_batch_size}. "
+                )
+        else:
+            if self.text_encoder.compiled_batch_size != batch_size:
+                raise ValueError(
+                    "If `negative_prompt` is not provided, the compiled batch size of `text_encoder` should be the same as the batch size. "
+                    f"batch size: {batch_size}, "
+                    f"`text_encoder` batch size: {self.text_encoder.compiled_batch_size}. "
+                )
+
+        if not ((guidance_scale <= 1.0) ^ do_classifier_free_guidance):
+            raise ValueError(
+                f"`guidance_scale` ({guidance_scale}) is incompetible with the compiled batch sizes of `prior` and `text_encoder`. "
+                f"Those models are compiled assuming that classifier-free guidance is {'enabled' if do_classifier_free_guidance else 'disabled'}. "
+                "Please ensure `guidance_scale` is > 1.0 when classifier-free guidance is enabled, and <= 1.0 otherwise. "
+                "If you are using a combined pipeline, please check `prior_guidance_scale` instead of `guidance_scale`."
+            )
