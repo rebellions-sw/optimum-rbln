@@ -25,7 +25,7 @@ from transformers.modeling_outputs import (
 )
 from transformers.utils import logging
 
-from ....ops import register_rbln_custom_cache_update, register_rbln_custom_add_softmax_attention
+from ....ops import register_rbln_custom_add_softmax_attention, register_rbln_custom_cache_update
 
 
 logger = logging.get_logger(__name__)

@@ -187,7 +187,7 @@ class T5LayerSelfAttention(Seq2SeqSelfAttention):
         key_states = self._shape(key_states, -1, bsz)
         value_states = self._shape(value_states, -1, bsz)
 
-        attn_output, key_states, value_states, _ = self.attn_decode(
+        attn_output, key_states, value_states = self.attn_decode(
             query_states,
             key_states,
             value_states,
