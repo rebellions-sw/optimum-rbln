@@ -685,27 +685,28 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             else:
                 rbln_kvcache_block_size = rbln_kvcache_partition_len
 
-        max_num_blocks, nbytes_per_block = cls.get_maximum_num_blocks(
-            config=model_config,
-            tensor_parallel_size=rbln_kwargs.get("tensor_parallel_size", 1),
-            kvcache_block_size=rbln_kvcache_block_size,
-            nbits_per_param=16 if rbln_quantization is None else 4,  # TODO(jongho): FIX Ad-hoc
-            n_model_params=rbln_kwargs["n_model_params"],
-        )
-        model_num_blocks = (rbln_max_seq_len // rbln_kvcache_block_size) * rbln_batch_size
-        rbln_kvcache_num_blocks = min(model_num_blocks, max_num_blocks)
-
-        required_blocks = rbln_max_seq_len // rbln_kvcache_block_size + 1
-        if rbln_kvcache_num_blocks < required_blocks:
-            rbln_kvcache_num_blocks = required_blocks
-
-        logger.info(f"[KVCache] Compiling with num_blocks: {rbln_kvcache_num_blocks}")
-
-        if rbln_kvcache_num_blocks < rbln_batch_size:
-            raise RuntimeError(
-                f"Batch size ({rbln_batch_size}) exceeds available KV cache blocks ({rbln_kvcache_num_blocks}). "
-                "Ensure the number of blocks is at least equal to the batch size."
+        rbln_kvcache_num_blocks = (rbln_max_seq_len // rbln_kvcache_block_size) * rbln_batch_size
+        if rbln_attn_impl == "flash_attn":
+            max_num_blocks, _ = cls.get_maximum_num_blocks(
+                config=model_config,
+                tensor_parallel_size=rbln_kwargs.get("tensor_parallel_size", 1),
+                kvcache_block_size=rbln_kvcache_block_size,
+                nbits_per_param=16 if rbln_quantization is None else 4,  # TODO(jongho): FIX Ad-hoc
+                n_model_params=rbln_kwargs["n_model_params"],
             )
+            rbln_kvcache_num_blocks = min(rbln_kvcache_num_blocks, max_num_blocks)
+
+            required_blocks = rbln_max_seq_len // rbln_kvcache_block_size + 1
+            if rbln_kvcache_num_blocks < required_blocks:
+                rbln_kvcache_num_blocks = required_blocks
+
+            logger.info(f"[KVCache] Compiling with num_blocks: {rbln_kvcache_num_blocks}")
+
+            if rbln_kvcache_num_blocks < rbln_batch_size:
+                raise RuntimeError(
+                    f"Batch size ({rbln_batch_size}) exceeds available KV cache blocks ({rbln_kvcache_num_blocks}). "
+                    "Ensure the number of blocks is at least equal to the batch size."
+                )
 
         num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
         num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
@@ -805,9 +806,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 "kvcache_block_size": rbln_kvcache_block_size,
                 "attn_impl": rbln_attn_impl,
                 "kvcache_num_blocks": rbln_kvcache_num_blocks,
-                "model_num_blocks": model_num_blocks,
-                "max_num_blocks": max_num_blocks,
-                "nbytes_per_block": nbytes_per_block,
             }
         )
 

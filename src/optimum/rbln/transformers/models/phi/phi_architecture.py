@@ -73,6 +73,7 @@ class PhiAttention(DecoderOnlyAttention):
     def apply_rotary_pos_embed(self, query_states, key_states, cos, sin):
         return apply_rotary_pos_emb_partial(query_states, key_states, cos, sin, ndim=self.rotary_ndims)
 
+from transformers import PhiForCausalLM
 
 class PhiLayer(DecoderOnlyLayer):
     def get_post_attention_layernorm(self):
@@ -92,7 +93,7 @@ class PhiLayer(DecoderOnlyLayer):
 
         hidden_states = self.get_pre_attention_layernorm()(hidden_states)
 
-        attn_outputs = self.self_attn(
+        attn_output = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
             seq_positions=seq_positions,
@@ -104,7 +105,7 @@ class PhiLayer(DecoderOnlyLayer):
 
         feed_forward_hidden_states = self._original_mod.mlp(hidden_states)
 
-        hidden_states = attn_outputs + feed_forward_hidden_states + residual
+        hidden_states = attn_output + feed_forward_hidden_states + residual
 
         return hidden_states
 
