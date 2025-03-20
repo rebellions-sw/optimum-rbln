@@ -694,16 +694,17 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         )
         model_num_blocks = (rbln_max_seq_len // rbln_kvcache_block_size) * rbln_batch_size
         rbln_kvcache_num_blocks = min(model_num_blocks, max_num_blocks)
+        rbln_kvcache_num_blocks = max(rbln_max_seq_len // rbln_kvcache_block_size, rbln_kvcache_num_blocks)
         
         logger.info(f"[KVCache] Ideal num_blocks: {model_num_blocks}, Estimated num_blocks: {max_num_blocks}")
         logger.info(f"[KVCache] Final chosen num_blocks: {rbln_kvcache_num_blocks}")
         
-        required_blocks = rbln_max_seq_len // rbln_kvcache_block_size
-        if rbln_kvcache_num_blocks < required_blocks:
-            raise RuntimeError(
-                f"Insufficient KV cache blocks: {rbln_kvcache_num_blocks} available, but at least {required_blocks} required "
-                f"for max sequence length {rbln_max_seq_len} (block size: {rbln_kvcache_block_size})."
-            )
+        # required_blocks = rbln_max_seq_len // rbln_kvcache_block_size
+        # if rbln_kvcache_num_blocks < required_blocks:
+        #     raise RuntimeError(
+        #         f"Insufficient KV cache blocks: {rbln_kvcache_num_blocks} available, but at least {required_blocks} required "
+        #         f"for max sequence length {rbln_max_seq_len} (block size: {rbln_kvcache_block_size})."
+        #     )
 
         if rbln_kvcache_num_blocks < rbln_batch_size:
             raise RuntimeError(
