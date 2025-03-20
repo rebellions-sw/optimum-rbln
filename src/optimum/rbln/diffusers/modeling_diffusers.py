@@ -230,11 +230,8 @@ class RBLNDiffusionMixin:
         rbln_config,
     ) -> Dict[str, Any]:
         prepared_config = {}
-        for connected_pipe_name in cls._connected_classes.keys():
-            prepared_config[connected_pipe_name] = rbln_config.pop(connected_pipe_name, {})
-
         for connected_pipe_name, connected_pipe_cls in cls._connected_classes.items():
-            connected_pipe_config = prepared_config.pop(connected_pipe_name)
+            connected_pipe_config = rbln_config.pop(connected_pipe_name, {})
             prefix = cls._prefix.get(connected_pipe_name, "")
             guidance_scale = rbln_config.pop(f"{prefix}guidance_scale", None)
             if "guidance_scale" not in connected_pipe_config and guidance_scale is not None:
