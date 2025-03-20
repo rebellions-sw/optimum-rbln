@@ -694,6 +694,19 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         )
         model_num_blocks = (rbln_max_seq_len // rbln_kvcache_block_size) * rbln_batch_size
         rbln_kvcache_num_blocks = min(model_num_blocks, max_num_blocks)
+        
+        required_blocks = rbln_max_seq_len // rbln_kvcache_block_size
+        if rbln_kvcache_num_blocks < required_blocks:
+            raise RuntimeError(
+                f"Insufficient KV cache blocks: {rbln_kvcache_num_blocks} available, but at least {required_blocks} required "
+                f"for max sequence length {rbln_max_seq_len} (block size: {rbln_kvcache_block_size})."
+            )
+
+        if rbln_kvcache_num_blocks < rbln_batch_size:
+            raise RuntimeError(
+                f"Batch size ({rbln_batch_size}) exceeds available KV cache blocks ({rbln_kvcache_num_blocks}). "
+                "Ensure the number of blocks is at least equal to the batch size."
+            )
 
         num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
         num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
