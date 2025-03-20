@@ -92,7 +92,7 @@ class PhiLayer(DecoderOnlyLayer):
 
         hidden_states = self.get_pre_attention_layernorm()(hidden_states)
 
-        attn_outputs, present_key_values = self.self_attn(
+        attn_outputs = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
             seq_positions=seq_positions,
@@ -106,7 +106,7 @@ class PhiLayer(DecoderOnlyLayer):
 
         hidden_states = attn_outputs + feed_forward_hidden_states + residual
 
-        return hidden_states, present_key_values
+        return hidden_states
 
 
 class PhiModel(DecoderOnlyModel):
