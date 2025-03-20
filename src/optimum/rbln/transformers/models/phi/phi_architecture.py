@@ -73,7 +73,6 @@ class PhiAttention(DecoderOnlyAttention):
     def apply_rotary_pos_embed(self, query_states, key_states, cos, sin):
         return apply_rotary_pos_emb_partial(query_states, key_states, cos, sin, ndim=self.rotary_ndims)
 
-from transformers import PhiForCausalLM
 
 class PhiLayer(DecoderOnlyLayer):
     def get_post_attention_layernorm(self):
