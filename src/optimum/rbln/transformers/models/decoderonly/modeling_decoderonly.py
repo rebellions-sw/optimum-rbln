@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import inspect
+import math
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
@@ -566,6 +567,72 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         return compile_model(quantize_config=quantize_config)
 
     @classmethod
+    def get_maximum_num_blocks(
+        cls,
+        config: PretrainedConfig,
+        tensor_parallel_size: int,
+        kvcache_block_size: int,
+        nbits_per_param: int,
+        n_model_params: int,
+    ) -> int:
+        num_attention_heads = getattr(config, "n_head", None) or getattr(config, "num_attention_heads")
+        num_layers = getattr(config, "n_layer", None) or getattr(config, "num_hidden_layers")
+        head_dim = getattr(config, "head_dim", None) or config.hidden_size // num_attention_heads
+        vocab_size = config.vocab_size
+        hidden_size = getattr(config, "n_embd", None) or getattr(config, "hidden_size")
+        num_key_value_heads = getattr(config, "num_key_value_heads", None) or num_attention_heads
+
+        TARGET_DRAM_LIMIT = int(tensor_parallel_size * 15.7 * 2**30)  # 16GB # TODO(jongho): 더 정확한 값
+
+        def align(x: int, nbytes: int) -> int:
+            return int(math.ceil(x / nbytes) * nbytes)
+
+        def align_2MB(x: int) -> int:
+            return align(x, 2 * 1024 * 1024)
+
+        def get_kernel_size() -> int:
+            # TODO: Implement
+            lm_heads_params = align(vocab_size, 64) * hidden_size
+            lm_heads_nbytes = (
+                align_2MB(lm_heads_params * nbits_per_param // 8 / tensor_parallel_size) * tensor_parallel_size
+            )
+
+            params = n_model_params - lm_heads_params
+            layer_nbytes = (
+                align_2MB(params * nbits_per_param // 8 / num_layers / tensor_parallel_size)
+                * num_layers
+                * tensor_parallel_size
+            )
+
+            return layer_nbytes + lm_heads_nbytes
+
+        available_dram = TARGET_DRAM_LIMIT - get_kernel_size()
+
+        buffer = 2**30  # 1GB
+        if tensor_parallel_size <= 2:
+            buffer /= 4
+
+        available_dram -= buffer
+
+        def get_nbytes_per_block() -> int:
+            return (
+                align_2MB(
+                    kvcache_block_size
+                    * head_dim
+                    * math.ceil(num_key_value_heads / tensor_parallel_size)  # Shard
+                    * 2  # (fp16)
+                )
+                * num_layers
+                * 2  # (k, v)
+                * tensor_parallel_size
+            )
+
+        nbytes_per_block = get_nbytes_per_block()
+        n_blocks = available_dram // nbytes_per_block
+
+        return n_blocks, nbytes_per_block
+
+    @classmethod
     def _get_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
@@ -618,8 +685,27 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             else:
                 rbln_kvcache_block_size = rbln_kvcache_partition_len
 
-        # FIXME temporal num_blocks
-        rbln_kvcache_num_blocks = (rbln_max_seq_len // rbln_kvcache_block_size) * rbln_batch_size
+        max_num_blocks, nbytes_per_block = cls.get_maximum_num_blocks(
+            config=model_config,
+            tensor_parallel_size=rbln_kwargs.get("tensor_parallel_size", 1),
+            kvcache_block_size=rbln_kvcache_block_size,
+            nbits_per_param=16 if rbln_quantization is None else 4,  # TODO(jongho): FIX Ad-hoc
+            n_model_params=rbln_kwargs["n_model_params"],
+        )
+        model_num_blocks = (rbln_max_seq_len // rbln_kvcache_block_size) * rbln_batch_size
+        rbln_kvcache_num_blocks = min(model_num_blocks, max_num_blocks)
+
+        required_blocks = rbln_max_seq_len // rbln_kvcache_block_size + 1
+        if rbln_kvcache_num_blocks < required_blocks:
+            rbln_kvcache_num_blocks = required_blocks
+
+        logger.info(f"[KVCache] Compiling with num_blocks: {rbln_kvcache_num_blocks}")
+
+        if rbln_kvcache_num_blocks < rbln_batch_size:
+            raise RuntimeError(
+                f"Batch size ({rbln_batch_size}) exceeds available KV cache blocks ({rbln_kvcache_num_blocks}). "
+                "Ensure the number of blocks is at least equal to the batch size."
+            )
 
         num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
         num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
@@ -719,6 +805,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 "kvcache_block_size": rbln_kvcache_block_size,
                 "attn_impl": rbln_attn_impl,
                 "kvcache_num_blocks": rbln_kvcache_num_blocks,
+                "model_num_blocks": model_num_blocks,
+                "max_num_blocks": max_num_blocks,
+                "nbytes_per_block": nbytes_per_block,
             }
         )
 
