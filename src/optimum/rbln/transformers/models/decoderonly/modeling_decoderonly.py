@@ -694,15 +694,16 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         )
         model_num_blocks = (rbln_max_seq_len // rbln_kvcache_block_size) * rbln_batch_size
         rbln_kvcache_num_blocks = min(model_num_blocks, max_num_blocks)
-        
-        logger.info(f"[KVCache] Ideal num_blocks: {model_num_blocks}, Estimated num_blocks: {max_num_blocks}")        
+
+        logger.info(f"[KVCache] Ideal num_blocks: {model_num_blocks}, Estimated num_blocks: {max_num_blocks}")
         required_blocks = rbln_max_seq_len // rbln_kvcache_block_size
         if rbln_kvcache_num_blocks < required_blocks:
             rbln_kvcache_num_blocks = required_blocks
-            logger.warning(f"Insufficient KV cache blocks: {rbln_kvcache_num_blocks} available, but at least {required_blocks} required. "
+            logger.warning(
+                f"Insufficient KV cache blocks: {rbln_kvcache_num_blocks} available, but at least {required_blocks} required. "
                 f"Updating KV cache blocks to {required_blocks}."
             )
-            
+
         logger.info(f"[KVCache] Compiling with num_blocks: {rbln_kvcache_num_blocks}")
 
         if rbln_kvcache_num_blocks < rbln_batch_size:
