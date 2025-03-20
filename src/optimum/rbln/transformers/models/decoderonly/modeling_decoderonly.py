@@ -696,7 +696,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_kvcache_num_blocks = min(model_num_blocks, max_num_blocks)
 
         logger.info(f"[KVCache] Ideal num_blocks: {model_num_blocks}, Estimated num_blocks: {max_num_blocks}")
-        required_blocks = rbln_max_seq_len // rbln_kvcache_block_size
+        required_blocks = rbln_max_seq_len // rbln_kvcache_block_size + 1
         if rbln_kvcache_num_blocks < required_blocks:
             rbln_kvcache_num_blocks = required_blocks
             logger.warning(
