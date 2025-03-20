@@ -119,7 +119,7 @@ class WhisperDecoderWrapper(torch.nn.Module):
             cross_past_key_values = cross_past_key_values + ((cross_kv_cache[i], cross_kv_cache[i + 1]),)
 
         # Decode
-        sequence_output, self_present_key_values, cross_attentions = self.decoder(
+        sequence_output, cross_attentions = self.decoder(
             input_ids=decoder_input_ids,
             attention_mask=decoder_attention_mask,
             cache_position=cache_position,
@@ -128,9 +128,7 @@ class WhisperDecoderWrapper(torch.nn.Module):
         )
 
         lm_logits = self.proj_out(sequence_output)
-
         outputs = (lm_logits,)
-        outputs += self_present_key_values
 
         if self.output_attentions:
             # deocder's cross attention is used for token_timestamps
@@ -168,26 +166,23 @@ class WhisperDecoder(nn.Module):
         # prepare casual_attn_mask
         attention_mask = _prepare_4d_causal_attention_mask(attention_mask, input_shape, inputs_embeds, cache_position)
 
-        self_present_key_values = ()
         cross_attentions = ()
         # iterate decoder_layer
         for self_past_key_value, cross_past_key_value, decoder_layer in zip(
             self_past_key_values, cross_past_key_values, self.layers
         ):
-            layer_outputs = decoder_layer(
+            hidden_states, cross_attn_weights = decoder_layer(
                 hidden_states,
                 attention_mask=attention_mask,
                 self_past_key_value=self_past_key_value,
                 cross_past_key_value=cross_past_key_value,
                 cache_position=cache_position,
             )
-            hidden_states = layer_outputs[0]
-            self_present_key_values += layer_outputs[1]
-            cross_attentions += (layer_outputs[2],)
+            cross_attentions += (cross_attn_weights,)
 
         hidden_states = self.layer_norm(hidden_states)
 
-        return hidden_states, self_present_key_values, cross_attentions
+        return hidden_states, cross_attentions
 
 
 class WhisperDecoderLayer(nn.Module):
@@ -214,7 +209,7 @@ class WhisperDecoderLayer(nn.Module):
         # Self Attention Block
         residual = hidden_states
         hidden_states = self.self_attn_layer_norm(hidden_states)
-        hidden_states, self_present_key_value = self.self_attn(
+        hidden_states = self.self_attn(
             hidden_states=hidden_states,
             past_key_value=self_past_key_value,
             attention_mask=attention_mask,
@@ -238,7 +233,7 @@ class WhisperDecoderLayer(nn.Module):
         hidden_states = self.fc2(hidden_states)
         hidden_states = residual + hidden_states
 
-        return hidden_states, self_present_key_value, cross_attn_weights
+        return hidden_states, cross_attn_weights
 
 
 class WhisperAttention(nn.Module):
@@ -276,7 +271,7 @@ class WhisperSelfAttention(WhisperAttention):
         key_states = self._shape(self.k_proj(hidden_states), -1, bsz)
         value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
 
-        attn_output, key_states, value_states = torch.ops.rbln_custom_ops.add_softmax_attn_decode(
+        attn_output = torch.ops.rbln_custom_ops.add_softmax_attn_decode(
             query_states,
             key_states,
             value_states,
@@ -292,7 +287,7 @@ class WhisperSelfAttention(WhisperAttention):
         attn_output = attn_output.reshape(bsz, tgt_len, self.embed_dim)
         attn_output = self.out_proj(attn_output)
 
-        return attn_output, (key_states, value_states)
+        return attn_output
 
 
 class WhisperCrossAttention(WhisperAttention):
