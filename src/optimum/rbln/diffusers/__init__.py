@@ -24,6 +24,7 @@ ALL_IMPORTABLE_CLASSES.update(LOADABLE_CLASSES["optimum.rbln"])
 
 _import_structure = {
     "pipelines": [
+        "RBLNFluxPipeline",
         "RBLNKandinskyV22InpaintCombinedPipeline",
         "RBLNKandinskyV22InpaintPipeline",
         "RBLNKandinskyV22PriorPipeline",
@@ -44,6 +45,7 @@ _import_structure = {
     ],
     "models": [
         "RBLNAutoencoderKL",
+        "RBLNFluxTransformer2DModel",
         "RBLNUNet2DConditionModel",
         "RBLNControlNetModel",
         "RBLNSD3Transformer2DModel",
@@ -60,12 +62,14 @@ if TYPE_CHECKING:
     from .models import (
         RBLNAutoencoderKL,
         RBLNControlNetModel,
+        RBLNFluxTransformer2DModel,
         RBLNPriorTransformer,
         RBLNSD3Transformer2DModel,
         RBLNUNet2DConditionModel,
         RBLNVQModel,
     )
     from .pipelines import (
+        RBLNFluxPipeline,
         RBLNKandinskyV22InpaintCombinedPipeline,
         RBLNKandinskyV22InpaintPipeline,
         RBLNKandinskyV22PriorPipeline,

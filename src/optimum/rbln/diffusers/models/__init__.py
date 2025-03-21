@@ -27,6 +27,7 @@ _import_structure = {
     ],
     "controlnet": ["RBLNControlNetModel"],
     "transformers": [
+        "RBLNFluxTransformer2DModel",
         "RBLNPriorTransformer",
         "RBLNSD3Transformer2DModel",
     ],
@@ -39,6 +40,7 @@ if TYPE_CHECKING:
     )
     from .controlnet import RBLNControlNetModel
     from .transformers import (
+        RBLNFluxTransformer2DModel,
         RBLNPriorTransformer,
         RBLNSD3Transformer2DModel,
     )

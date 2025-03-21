@@ -88,17 +88,35 @@ class RBLNCLIPTextModel(RBLNModel):
         )
         return rbln_config
 
-    def forward(self, input_ids: "torch.Tensor", **kwargs):
-        text_output = super().forward(input_ids)
-        return CLIPTextModelOutput(
-            text_embeds=text_output[0],
-            last_hidden_state=text_output[1],
-            hidden_states=text_output[2:],
+    def forward(
+        self,
+        input_ids: Optional[torch.FloatTensor] = None,
+        **kwargs,
+    ) -> Union[Tuple, BaseModelOutputWithPooling]:
+        output = super().forward(input_ids)
+        return BaseModelOutputWithPooling(
+            last_hidden_state=output[0],
+            pooler_output=output[1],
+            hidden_states=output[2:],
         )
 
 
 class RBLNCLIPTextModelWithProjection(RBLNCLIPTextModel):
-    pass
+    def forward(
+        self,
+        input_ids: Optional[torch.FloatTensor] = None,
+        **kwargs,
+    ) -> Union[Tuple, CLIPTextModelOutput]:
+        output = super().forward(input_ids)
+        text_embeds = output[0]
+        last_hidden_state = output[1]
+        hidden_states = output[2:]
+
+        return CLIPTextModelOutput(
+            text_embeds=text_embeds,
+            last_hidden_state=last_hidden_state,
+            hidden_states=hidden_states,
+        )
 
 
 class _VisionEncoder(torch.nn.Module):
