@@ -283,15 +283,6 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         )
 
     @classmethod
-    def _check_compiled_models(
-        cls, compiled_models: Dict[str, rebel.RBLNCompiledModel], rbln_config: RBLNConfig, config: "PretrainedConfig"
-    ):
-        # check compiled model can create runtimes.
-        # this logic currently only works in LLM
-        # fail when LLM model using Paged Attention can't guarantee max sequence length
-        pass
-
-    @classmethod
     def _from_compiled_models(
         cls,
         rbln_compiled_models: Dict[str, rebel.RBLNCompiledModel],
@@ -304,8 +295,6 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     ):
         if isinstance(model_save_dir, str):
             model_save_dir = Path(model_save_dir)
-
-        cls._check_compiled_models(compiled_models=rbln_compiled_models, rbln_config=rbln_config, config=config)
 
         # FIXME:: Should we convert it?
         compiled_model_names = [cfg.compiled_model_name for cfg in rbln_config.compile_cfgs]
