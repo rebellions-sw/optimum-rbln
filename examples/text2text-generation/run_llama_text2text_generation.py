@@ -1,3 +1,6 @@
+# run_llama_text2text_generation.py --from_transformers --model_id neuralmagic/Meta-Llama-3-8B-Instruct-FP8-KV --n_layer 1 --kvcache_quantize
+# run_llama_text2text_generation.py --from_transformers --model_id neuralmagic/Meta-Llama-3-8B-Instruct-FP8 --n_layer 1
+
 import os
 import typing
 
@@ -11,8 +14,10 @@ def main(
     model_id: str = "meta-llama/Llama-2-7b-chat-hf",
     batch_size: int = 1,
     from_transformers: bool = False,
-    max_seq_len: typing.Optional[int] = None,
     tensor_parallel_size: typing.Optional[int] = 4,
+    host_run: bool = False,
+    n_layer: int = None,
+    kvcache_quantize: bool = False,
 ):
     # Example input sentences for the model
     sentences = [
@@ -20,15 +25,41 @@ def main(
         [{"role": "user", "content": "What is Artificial intelligence?"}],
     ]
 
-    if from_transformers:
-        # Compile the RBLN-optimized Llama model (if export=True)
+    # from transformers import AutoConfig, AutoModelForCausalLM
+
+    # # quantization_config가 있으면 hf에서 인식하려고 해서 실패함
+    # cfg = AutoConfig.from_pretrained(model_id)
+    # if hasattr(cfg, "quantization_config"):
+    #     del cfg.quantization_config
+
+    # # 아래는 model weight 없을때 다운받는용 (지금 safetensor load가 directory 기반으로만 동작하기때문)
+    # xx = AutoModelForCausalLM.from_pretrained(model_id, config=cfg)
+    # return
+    hf_kwargs = {} if n_layer is None else {"num_hidden_layers": n_layer}
+
+    if host_run:
+        model = RBLNLlamaForCausalLM.get_quantized_model(
+            model_id=model_id,
+            **hf_kwargs,
+            rbln_quantization={
+                "format": "rbln",
+                "precision": "fp8_exp",
+                "kvcache": "fp8" if kvcache_quantize else "fp16",
+            },
+        )
+    elif from_transformers:
         model = RBLNLlamaForCausalLM.from_pretrained(
             model_id=model_id,
             export=True,
+            **hf_kwargs,
             # The following arguments are specific to RBLN compilation
             rbln_batch_size=batch_size,
-            rbln_max_seq_len=max_seq_len,
             rbln_tensor_parallel_size=tensor_parallel_size,
+            rbln_quantization={
+                "format": "rbln",
+                "precision": "fp8_exp",
+                "kvcache": "fp8" if kvcache_quantize else "fp16",
+            },
         )
         model.save_pretrained(os.path.basename(model_id))
     else:
@@ -48,7 +79,7 @@ def main(
     output_sequence = model.generate(
         **inputs,
         do_sample=False,
-        max_new_tokens=64,
+        max_new_tokens=16,
     )
 
     # Decode and print the model's responses
