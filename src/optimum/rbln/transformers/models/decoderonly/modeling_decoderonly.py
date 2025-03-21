@@ -575,6 +575,12 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         nbits_per_param: int,
         n_model_params: int,
     ) -> int:
+        def align(x: int, nbytes: int) -> int:
+            return int(math.ceil(x / nbytes) * nbytes)
+
+        def align_2MB(x: int) -> int:
+            return align(x, 2 * 1024 * 1024)
+
         num_attention_heads = getattr(config, "n_head", None) or getattr(config, "num_attention_heads")
         num_layers = getattr(config, "n_layer", None) or getattr(config, "num_hidden_layers")
         head_dim = getattr(config, "head_dim", None) or config.hidden_size // num_attention_heads
@@ -582,52 +588,45 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         hidden_size = getattr(config, "n_embd", None) or getattr(config, "hidden_size")
         num_key_value_heads = getattr(config, "num_key_value_heads", None) or num_attention_heads
 
-        TARGET_DRAM_LIMIT = int(tensor_parallel_size * 15.7 * 2**30)  # 16GB # TODO(jongho): 더 정확한 값
+        # TODO(jongho): Update if target npu is REBEL.
+        ATOM_DRAM_NBYTES = 16 * 2**30
+        ATOM_SYS_DRAM_NBYTES = 288 * 2**20
+        available_dram = tensor_parallel_size * (ATOM_DRAM_NBYTES - ATOM_SYS_DRAM_NBYTES)
 
-        def align(x: int, nbytes: int) -> int:
-            return int(math.ceil(x / nbytes) * nbytes)
+        # Get estimated kernel size (approximated)
+        lm_heads_params = align(vocab_size, 64) * hidden_size
+        lm_heads_nbytes = (
+            align_2MB(lm_heads_params * nbits_per_param // 8 / tensor_parallel_size) * tensor_parallel_size
+        )
+        params = n_model_params - lm_heads_params
+        layer_nbytes = (
+            align_2MB(params * nbits_per_param // 8 / num_layers / tensor_parallel_size)
+            * num_layers
+            * tensor_parallel_size
+        )
+        kernel_size = layer_nbytes + lm_heads_nbytes
 
-        def align_2MB(x: int) -> int:
-            return align(x, 2 * 1024 * 1024)
+        available_dram -= kernel_size
 
-        def get_kernel_size() -> int:
-            # TODO: Implement
-            lm_heads_params = align(vocab_size, 64) * hidden_size
-            lm_heads_nbytes = (
-                align_2MB(lm_heads_params * nbits_per_param // 8 / tensor_parallel_size) * tensor_parallel_size
-            )
-
-            params = n_model_params - lm_heads_params
-            layer_nbytes = (
-                align_2MB(params * nbits_per_param // 8 / num_layers / tensor_parallel_size)
-                * num_layers
-                * tensor_parallel_size
-            )
-
-            return layer_nbytes + lm_heads_nbytes
-
-        available_dram = TARGET_DRAM_LIMIT - get_kernel_size()
-
-        buffer = 2**30  # 1GB
-        if tensor_parallel_size <= 2:
+        # TODO: Accurate buffer estimation
+        buffer = 2**30  # 1GB Buffer
+        if tensor_parallel_size <= 4:
             buffer /= 4
 
         available_dram -= buffer
 
-        def get_nbytes_per_block() -> int:
-            return (
-                align_2MB(
-                    kvcache_block_size
-                    * head_dim
-                    * math.ceil(num_key_value_heads / tensor_parallel_size)  # Shard
-                    * 2  # (fp16)
-                )
-                * num_layers
-                * 2  # (k, v)
-                * tensor_parallel_size
+        # Estimate nbytes per a single kvcache block
+        nbytes_per_block = (
+            align_2MB(
+                kvcache_block_size
+                * head_dim
+                * math.ceil(num_key_value_heads / tensor_parallel_size)  # Shard
+                * 2  # (fp16)
             )
-
-        nbytes_per_block = get_nbytes_per_block()
+            * num_layers
+            * 2  # (k, v)
+            * tensor_parallel_size
+        )
         n_blocks = available_dram // nbytes_per_block
 
         return n_blocks, nbytes_per_block
