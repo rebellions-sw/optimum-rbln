@@ -79,6 +79,10 @@ class RBLNDiffusionMixin:
         return "Inpaint" in cls.__name__
 
     @classmethod
+    def is_img2vid_pipeline(cls):
+        return "StableVideoDiffusion" in cls.__name__
+
+    @classmethod
     def get_submodule_rbln_config(
         cls, model: torch.nn.Module, submodule_name: str, rbln_config: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -100,6 +104,7 @@ class RBLNDiffusionMixin:
                 {
                     "img2img_pipeline": cls.is_img2img_pipeline(),
                     "inpaint_pipeline": cls.is_inpaint_pipeline(),
+                    "img2vid_pipeline": cls.is_img2vid_pipeline(),
                 }
             )
             submodule_config = submodule_cls.update_rbln_config_using_pipe(model, submodule_config)
@@ -448,11 +453,6 @@ class RBLNDiffusionMixin:
 
         Example:
             ```python
-            if hasattr(self, "movq"):
-                compiled_image_size = self.movq.image_size
-                kwargs["height"] = compiled_image_size[0]
-                kwargs["width"] = compiled_image_size[1]
-
             compiled_num_frames = self.unet.rbln_config.model_cfg.get("num_frames", None)
             if compiled_num_frames is not None:
                 kwargs["num_frames"] = self.unet.rbln_config.model_cfg.get("num_frames")
