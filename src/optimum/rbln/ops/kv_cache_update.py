@@ -45,10 +45,10 @@ def register_rbln_custom_cache_update():
 
         # Update the specified portion of the cache tensor with the state tensor, using `slice_scatter`.
         # This operation modifies the cache tensor in-place directly on the device, avoiding any unnecessary transfers between host and device.
-        updated_cache = cache.slice_scatter(state, dim=axis, start=s, end=e)
+        cache.slice_scatter(state, dim=axis, start=s, end=e)
 
-        # Return the updated cache tensor.
-        return updated_cache
+        # 'rbln_cache_update' is an in-place operation that isn't tracked in JIT trace, so a dummy output was added to the return value.
+        return torch.empty([256])
 
     # Register a "fake" implementation of the "rbln_cache_update" operation.
     # This serves as an abstract definition for the RBLN compiler to recognize the operation and generate an optimized implementation.
@@ -57,4 +57,4 @@ def register_rbln_custom_cache_update():
         # Return a tensor with the same shape as the input cache tensor.
         # This is a placeholder for the abstract implementation and does not perform any actual computation.
         # Like the actual implementation, the abstraction assumes in-place device-side updates.
-        return torch.empty_like(cache)
+        return torch.empty([256])
