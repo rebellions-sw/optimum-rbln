@@ -28,33 +28,13 @@ else:
 def register_rbln_custom_cache_update():
     # Define the RBLN custom operation "rbln_cache_update" which updates a cache tensor with a given state tensor.
     # This operation is designed to perform in-place updates directly on the device without needing to transfer the cache back to the host.
-    # The `position` parameter specifies the start index for the update along the specified axis, allowing flexible updates to any part of the cache tensor.
     torch.library.define("rbln_custom_ops::rbln_cache_update", "(Tensor x, Tensor y, Tensor z, Tensor w) -> Tensor")
 
-    # Implementation of the "rbln_cache_update" operation for the CPU.
     @torch.library.impl("rbln_custom_ops::rbln_cache_update", "cpu")
     def rbln_cache_update_cpu(cache, state, position, axis):
-        assert position.dim() == 0
-        assert axis.dim() == 0
-
-        # Calculate the start (s) and end (e) indices for the update based on the position and the shape of the state tensor along the specified axis.
-        s = position  # Start index for the update, specified by the position.
-        e = (
-            position + state.shape[axis]
-        )  # End index is determined by adding the size of the state along the given axis.
-
-        # Update the specified portion of the cache tensor with the state tensor, using `slice_scatter`.
-        # This operation modifies the cache tensor in-place directly on the device, avoiding any unnecessary transfers between host and device.
-        cache.slice_scatter(state, dim=axis, start=s, end=e)
-
         # 'rbln_cache_update' is an in-place operation that isn't tracked in JIT trace, so a dummy output was added to the return value.
         return torch.empty([256])
 
-    # Register a "fake" implementation of the "rbln_cache_update" operation.
-    # This serves as an abstract definition for the RBLN compiler to recognize the operation and generate an optimized implementation.
     @register_fake("rbln_custom_ops::rbln_cache_update")
     def rbln_cache_update_abstract(cache, state, position, axis):
-        # Return a tensor with the same shape as the input cache tensor.
-        # This is a placeholder for the abstract implementation and does not perform any actual computation.
-        # Like the actual implementation, the abstraction assumes in-place device-side updates.
         return torch.empty([256])
