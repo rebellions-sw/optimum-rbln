@@ -281,7 +281,7 @@ class DecoderOnlyWrapper(nn.Module):
             _past_key_values.append(past_key_value)
         past_key_values = _past_key_values
 
-        logit, present_key_values = self.causal_lm(
+        logit = self.causal_lm(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
@@ -292,15 +292,7 @@ class DecoderOnlyWrapper(nn.Module):
             block_tables=block_tables,
         )
 
-        # ((key, value)) * n_layer -> [key, value] * n_layer
-        _present_key_values = ()
-        for i in range(self.num_hidden_layers):
-            key_states = present_key_values[i][0]
-            value_states = present_key_values[i][1]
-            _present_key_values = _present_key_values + (key_states, value_states)
-        present_key_values = _present_key_values
-
-        return logit, present_key_values
+        return logit
 
 
 class DecoderOnlyForCausalLM(nn.Module):
@@ -353,7 +345,7 @@ class DecoderOnlyForCausalLM(nn.Module):
         block_tables: Optional[torch.Tensor] = None,
     ):
         # outputs
-        hidden_states, present_key_values = self.model(
+        hidden_states = self.model(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
@@ -367,8 +359,7 @@ class DecoderOnlyForCausalLM(nn.Module):
             hidden_states = hidden_states[:, query_position.to(torch.int).unsqueeze(0)]
 
         logits = self._original_mod.lm_head(hidden_states)
-        output = (logits, present_key_values)
-        return output
+        return logits
 
 
 class DecoderOnlyModel(nn.Module):
@@ -484,20 +475,19 @@ class DecoderOnlyModel(nn.Module):
         else:
             seq_positions = cache_position[:, :1]
 
-        present_key_values = past_key_values
         for layer in self.layers:
-            hidden_states, present_key_values = layer(
+            hidden_states = layer(
                 hidden_states=hidden_states,
                 attention_mask=attention_mask,
                 seq_positions=seq_positions,
-                past_key_values=present_key_values,
+                past_key_values=past_key_values,
                 cos=cos,
                 sin=sin,
                 block_tables=block_tables,
             )
 
         hidden_states = self.get_last_layernorm()(hidden_states)
-        return hidden_states, present_key_values
+        return hidden_states
 
 
 class DecoderOnlyLayer(nn.Module):
@@ -559,7 +549,7 @@ class DecoderOnlyLayer(nn.Module):
         residual = hidden_states
         hidden_states = self.get_pre_attention_layernorm()(hidden_states)
 
-        hidden_states, present_key_values = self.self_attn(
+        hidden_states = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
             seq_positions=seq_positions,
@@ -576,7 +566,7 @@ class DecoderOnlyLayer(nn.Module):
         hidden_states = self._original_mod.mlp(hidden_states)
         hidden_states = residual + hidden_states
 
-        return hidden_states, present_key_values
+        return hidden_states
 
 
 class DecoderOnlyAttention(nn.Module):
@@ -678,7 +668,7 @@ class DecoderOnlyAttention(nn.Module):
         if batch_size > 1 and self.phase == "prefill":
             raise NotImplementedError(f"batch size should be 1 if prefill phase, but got {batch_size}.")
 
-        attn_output, key_state, value_state = self.attention(
+        attn_output = self.attention(
             query_states,
             key_states,
             value_states,
@@ -690,12 +680,9 @@ class DecoderOnlyAttention(nn.Module):
             block_tables=block_tables,
             block_size=self.kvcache_block_size,
         )
-        key_states = key_state
-        value_states = value_state
 
         attn_outputs = self.o_proj(attn_output)
-        past_key_values[self.layer_idx] = key_states, value_states
-        return attn_outputs, past_key_values
+        return attn_outputs
 
 
 class AttentionOp(nn.Module):
@@ -733,7 +720,7 @@ class AttentionOp(nn.Module):
             scale: Scale applied to attn weights
 
         Returns:
-            Tuple of (attention_output, key_state, value_state)
+            Tensor: attention_output: [batch, num_heads, seq_len, head_dim]
         """
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
         key_state = key_state.unsqueeze(2)  # 1, 32, 1, 128, 128
@@ -756,7 +743,7 @@ class AttentionOp(nn.Module):
 
         if self.phase == "decode":
             if self.use_attention_mask:
-                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_attn_decode(
+                attn_output = torch.ops.rbln_custom_ops.paged_attn_decode(
                     query_state,
                     key_state,
                     value_state,
@@ -769,7 +756,7 @@ class AttentionOp(nn.Module):
                     block_size,
                 )
             else:
-                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_causal_attn_decode(
+                attn_output = torch.ops.rbln_custom_ops.paged_causal_attn_decode(
                     query_state,
                     key_state,
                     value_state,
@@ -783,7 +770,7 @@ class AttentionOp(nn.Module):
 
         else:
             if self.use_attention_mask:
-                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_attn_prefill(
+                attn_output = torch.ops.rbln_custom_ops.paged_attn_prefill(
                     query_state,
                     key_state,
                     value_state,
@@ -796,7 +783,7 @@ class AttentionOp(nn.Module):
                     block_size,
                 )
             else:
-                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_causal_attn_prefill(
+                attn_output = torch.ops.rbln_custom_ops.paged_causal_attn_prefill(
                     query_state,
                     key_state,
                     value_state,
@@ -812,7 +799,7 @@ class AttentionOp(nn.Module):
         attn_output = attn_output.transpose(1, 2).contiguous()
         attn_output = attn_output.reshape(batch_size, -1, self.num_heads * self.head_dim)
 
-        return attn_output, key_state.squeeze(2), value_state.squeeze(2)
+        return attn_output
 
 
 def slice_and_unsqueeze_cos_sin(cos, sin, cache_position, unsqueeze_dim=1):
@@ -947,7 +934,7 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
         if cos is not None and sin is not None:
             query_states, key_states = self.apply_rotary_pos_embed(query_states, key_states, cos, sin)
 
-        attn_output, key_state, value_state = self.attention(
+        attn_output = self.attention(
             query_states,
             key_states,
             value_states,
@@ -959,13 +946,9 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
             block_tables=block_tables,
             kvcache_block_size=self.kvcache_block_size,
         )
-        key_states = key_state
-        value_states = value_state
 
         attn_outputs = self.o_proj(attn_output)
-        past_key_values[self.layer_idx] = key_states, value_states
-
-        return attn_outputs, past_key_values
+        return attn_outputs
 
 
 class FlashAttentionOp(AttentionOp):
@@ -1019,7 +1002,7 @@ class FlashAttentionOp(AttentionOp):
 
         if self.phase == "decode":
             if self.use_attention_mask:
-                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_flash_attn_decode(
+                attn_output = torch.ops.rbln_custom_ops.paged_flash_attn_decode(
                     query_state,
                     key_state,
                     value_state,
@@ -1033,7 +1016,7 @@ class FlashAttentionOp(AttentionOp):
                     self.kvcache_partition_size,
                 )
             else:
-                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_flash_causal_attn_decode(
+                attn_output = torch.ops.rbln_custom_ops.paged_flash_causal_attn_decode(
                     query_state,
                     key_state,
                     value_state,
@@ -1047,7 +1030,7 @@ class FlashAttentionOp(AttentionOp):
                 )
         else:
             if self.use_attention_mask:
-                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_flash_attn_prefill(
+                attn_output = torch.ops.rbln_custom_ops.paged_flash_attn_prefill(
                     query_state,
                     key_state,
                     value_state,
@@ -1061,7 +1044,7 @@ class FlashAttentionOp(AttentionOp):
                     self.kvcache_partition_size,
                 )
             else:
-                attn_output, key_state, value_state = torch.ops.rbln_custom_ops.paged_flash_causal_attn_prefill(
+                attn_output = torch.ops.rbln_custom_ops.paged_flash_causal_attn_prefill(
                     query_state,
                     key_state,
                     value_state,
@@ -1079,4 +1062,4 @@ class FlashAttentionOp(AttentionOp):
         attn_output = attn_output.transpose(1, 2).contiguous()
         attn_output = attn_output.reshape(batch_size, -1, self.num_heads * self.head_dim)
 
-        return attn_output, key_state, value_state
+        return attn_output

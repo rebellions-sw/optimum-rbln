@@ -28,7 +28,7 @@ else:
 def register_rbln_custom_paged_attention():
     torch.library.define(
         "rbln_custom_ops::paged_attn_decode",
-        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f) -> Tensor[]",
+        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f) -> Tensor",
     )
 
     @torch.library.impl("rbln_custom_ops::paged_attn_decode", "cpu")
@@ -57,28 +57,17 @@ def register_rbln_custom_paged_attention():
         - block_size: [] - Number of tokens per block
 
         Returns:
-            Tuple[Tensor, Tensor, Tensor]:
-            - attn_output: [batch=1, n_heads, n_groups, 1, head_dim] - Attention output
-            - kcache: Same shape as input kcache, batch=1 - Placeholder for compiler
-            - vcache: Same shape as input vcache, batch=1 - Placeholder for compiler
+            Tensor: attn_output: [batch=1, n_heads, n_groups, 1, head_dim] - Attention output
         """
-        return (
-            q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
-        )
+        return q
 
     @register_fake("rbln_custom_ops::paged_attn_decode")
     def attn_decode_abstract(q, k, v, m, kcache, vcache, seq, scale, block_table, block_size):
-        return (
-            q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
-        )
+        return q
 
     torch.library.define(
         "rbln_custom_ops::paged_attn_prefill",
-        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f) -> Tensor[]",
+        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f) -> Tensor",
     )
 
     @torch.library.impl("rbln_custom_ops::paged_attn_prefill", "cpu")
@@ -105,23 +94,20 @@ def register_rbln_custom_paged_attention():
         - block_size: [] - Number of tokens per block
 
         Returns:
-            Tuple[Tensor, Tensor, Tensor]:
-            - attn_output: [batch=1, n_heads, n_groups, seq_len, head_dim] - Attention output
-            - empty_kcache: Same shape as input kcache - Placeholder for compiler
-            - empty_vcache: Same shape as input vcache - Placeholder for compiler
+            Tensor: attn_output: [batch=1, n_heads, n_groups, seq_len, head_dim] - Attention output
         """
-        return q, kcache, vcache
+        return q
 
     @register_fake("rbln_custom_ops::paged_attn_prefill")
     def attn_prefill_abstract(q, k, v, m, kcache, vcache, seq, scale, block_table, block_size):
-        return q, kcache, vcache
+        return q
 
 
 @lru_cache
 def register_rbln_custom_paged_causal_attention():
     torch.library.define(
         "rbln_custom_ops::paged_causal_attn_decode",
-        "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f) -> Tensor[]",
+        "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f) -> Tensor",
     )
 
     @torch.library.impl("rbln_custom_ops::paged_causal_attn_decode", "cpu")
@@ -149,28 +135,17 @@ def register_rbln_custom_paged_causal_attention():
         - block_size: [] - Number of tokens per block
 
         Returns:
-            Tuple[Tensor, Tensor, Tensor]:
-            - attn_output: [batch=1, n_heads, n_groups, 1, head_dim] - Attention output
-            - kcache: Same shape as input kcache, batch=1 - Placeholder for compiler
-            - vcache: Same shape as input vcache, batch=1 - Placeholder for compiler
+            Tensor: attn_output: [batch=1, n_heads, n_groups, 1, head_dim] - Attention output
         """
-        return (
-            q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
-        )
+        return q
 
     @register_fake("rbln_custom_ops::paged_causal_attn_decode")
     def attn_decode_abstract(q, k, v, kcache, vcache, seq, scale, block_table, block_size):
-        return (
-            q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
-        )
+        return q
 
     torch.library.define(
         "rbln_custom_ops::paged_causal_attn_prefill",
-        "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f) -> Tensor[]",
+        "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f) -> Tensor",
     )
 
     @torch.library.impl("rbln_custom_ops::paged_causal_attn_prefill", "cpu")
@@ -197,23 +172,20 @@ def register_rbln_custom_paged_causal_attention():
         - block_size: [] - Number of tokens per block
 
         Returns:
-            Tuple[Tensor, Tensor, Tensor]:
-            - attn_output: [batch=1, n_heads, n_groups, seq_len, head_dim] - Attention output
-            - empty_kcache: Same shape as input kcache - Placeholder for compiler
-            - empty_vcache: Same shape as input vcache - Placeholder for compiler
+            Tensor: attn_output: [batch=1, n_heads, n_groups, seq_len, head_dim] - Attention output
         """
-        return q, kcache, vcache
+        return q
 
     @register_fake("rbln_custom_ops::paged_causal_attn_prefill")
     def attn_prefill_abstract(q, k, v, kcache, vcache, seq, scale, block_table, block_size):
-        return q, kcache, vcache
+        return q
 
 
 @lru_cache
 def register_rbln_custom_add_softmax_attention():
     torch.library.define(
         "rbln_custom_ops::add_softmax_attn_decode",
-        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d) -> Tensor[]",
+        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d) -> Tensor",
     )
 
     @torch.library.impl("rbln_custom_ops::add_softmax_attn_decode", "cpu")
@@ -240,21 +212,10 @@ def register_rbln_custom_add_softmax_attention():
         - scale: [] - Attention scale factor
 
         Returns:
-            Tuple[Tensor, Tensor, Tensor]:
-            - attn_output: [batch=1, n_heads, 1, 1, head_dim] - Attention output
-            - kcache: Same shape as input kcache, batch=1 - Placeholder for compiler
-            - vcache: Same shape as input vcache, batch=1 - Placeholder for compiler
+            Tensor: attn_output: [batch=1, n_heads, 1, 1, head_dim] - Attention output
         """
-        return (
-            q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
-        )
+        return q
 
     @register_fake("rbln_custom_ops::add_softmax_attn_decode")
     def add_softmax_attn_decode_abstract(q, k, v, m, kcache, vcache, seq, partition):
-        return (
-            q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
-        )
+        return q

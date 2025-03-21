@@ -295,6 +295,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     ):
         if isinstance(model_save_dir, str):
             model_save_dir = Path(model_save_dir)
+
         # FIXME:: Should we convert it?
         compiled_model_names = [cfg.compiled_model_name for cfg in rbln_config.compile_cfgs]
         rbln_compiled_models = [rbln_compiled_models[cm_name] for cm_name in compiled_model_names]

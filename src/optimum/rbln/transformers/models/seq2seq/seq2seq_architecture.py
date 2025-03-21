@@ -114,11 +114,9 @@ class Seq2SeqEncoderWrapper(nn.Module):
 
         # 3. update the cross_attention's past_key_value direct to the device-dram for optimization.
         batch_axis = torch.tensor(1, dtype=torch.int16)
-        cross_key_values = torch.ops.rbln_custom_ops.rbln_cache_update(
-            cross_key_values, cross_kv, b_idx[0], batch_axis
-        )
+        enc_out = torch.ops.rbln_custom_ops.rbln_cache_update(cross_key_values, cross_kv, b_idx[0], batch_axis)
 
-        return cross_key_values
+        return enc_out
 
 
 class Seq2SeqDecoderWrapper(nn.Module):
@@ -193,7 +191,7 @@ class Seq2SeqDecoderWrapper(nn.Module):
             cross_past_key_values = cross_past_key_values + ((cross_kv_cache[i], cross_kv_cache[i + 1]),)
 
         # decode
-        lm_logits, self_present_key_values = self.conditional_generation(
+        lm_logits = self.conditional_generation(
             input_ids=input_ids,
             attention_mask=attention_mask,
             encoder_attention_mask=encoder_attention_mask,
@@ -203,9 +201,7 @@ class Seq2SeqDecoderWrapper(nn.Module):
             block_tables=block_tables,
         )
 
-        outputs = (lm_logits,) + self_present_key_values
-
-        return outputs
+        return lm_logits
 
 
 class Seq2SeqForConditionalGeneration(nn.Module):
@@ -250,7 +246,7 @@ class Seq2SeqForConditionalGeneration(nn.Module):
         cache_position,
         block_tables: Optional[torch.Tensor] = None,
     ):
-        hidden_states, self_present_key_values = self.decoder(
+        hidden_states = self.decoder(
             input_ids=input_ids,
             attention_mask=attention_mask,
             encoder_attention_mask=encoder_attention_mask,
@@ -265,7 +261,7 @@ class Seq2SeqForConditionalGeneration(nn.Module):
 
         lm_logits = self.lm_head(hidden_states)
 
-        return lm_logits, self_present_key_values
+        return lm_logits
 
 
 class Seq2SeqDecoder(torch.nn.Module):
@@ -326,11 +322,10 @@ class Seq2SeqDecoder(torch.nn.Module):
             hidden_states = self.apply_position_embedding(hidden_states, cache_position)
 
         # iterate decoder_layer
-        self_present_key_values = ()
         for decoder_layer, self_past_key_value, cross_past_key_value in zip(
             self.layers, self_past_key_values, cross_past_key_values
         ):
-            hidden_states, self_present_key_value = decoder_layer(
+            hidden_states = decoder_layer(
                 hidden_states,
                 attention_mask=attention_mask,
                 encoder_attention_mask=encoder_attention_mask,
@@ -339,12 +334,11 @@ class Seq2SeqDecoder(torch.nn.Module):
                 cache_position=cache_position,
                 block_tables=block_tables,
             )
-            self_present_key_values += self_present_key_value
 
         if self.final_layer_norm is not None:
             hidden_states = self.final_layer_norm(hidden_states)
 
-        return hidden_states, self_present_key_values
+        return hidden_states
 
 
 class Seq2SeqDecoderLayer(torch.nn.Module):
@@ -404,7 +398,7 @@ class Seq2SeqDecoderLayer(torch.nn.Module):
         # Self Attention Block
         residual = hidden_states
         hidden_states = self.pre_self_attn_layer_norm(hidden_states)
-        hidden_states, self_attn_past_key_value = self.self_attn(
+        hidden_states = self.self_attn(
             hidden_states=hidden_states,
             past_key_value=self_past_key_value,
             attention_mask=attention_mask,
@@ -429,7 +423,7 @@ class Seq2SeqDecoderLayer(torch.nn.Module):
         # Feed-Forward Block
         hidden_states = self.ff_layer(hidden_states)
 
-        return hidden_states, self_attn_past_key_value
+        return hidden_states
 
 
 class Seq2SeqSelfAttention(nn.Module):
@@ -492,12 +486,11 @@ class Seq2SeqSelfAttention(nn.Module):
         if attention_mask is not None:
             args.insert(3, attention_mask.unsqueeze(2))
 
-        attn_output, key_states, value_states = self.attn_decode(*args)
+        attn_output = self.attn_decode(*args)
 
         attn_output = attn_output.view(bsz, self.num_heads, -1, self.head_dim).transpose(1, 2)
         attn_output = attn_output.reshape(bsz, -1, self.num_heads * self.head_dim)
 
         attn_output = self.out_proj(attn_output)
-        present_key_value = (key_states, value_states)
 
-        return attn_output, present_key_value
+        return attn_output
