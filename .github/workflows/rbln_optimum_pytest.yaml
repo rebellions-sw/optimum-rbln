@@ -59,17 +59,20 @@ jobs:
       - name: Run pytest (transformers)
         env:
           OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
+        if: "!contains(github.event.head_commit.message, '[skip-transformers]')"
         run: |
           uv run --no-sync pytest tests/test_transformers.py
 
       - name: Run pytest (diffusers)
         env:
           OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
+        if: "!contains(github.event.head_commit.message, '[skip-diffusers]')"
         run: |
           uv run --no-sync pytest tests/test_diffusers.py
 
       - name: Run pytest (llm)
         env:
           OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
+        if: "!contains(github.event.head_commit.message, '[skip-llm]')"
         run: |
           uv run --no-sync pytest tests/test_llm.py      
