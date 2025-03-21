@@ -295,6 +295,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     ):
         if isinstance(model_save_dir, str):
             model_save_dir = Path(model_save_dir)
+
         # FIXME:: Should we convert it?
         compiled_model_names = [cfg.compiled_model_name for cfg in rbln_config.compile_cfgs]
         rbln_compiled_models = [rbln_compiled_models[cm_name] for cm_name in compiled_model_names]
@@ -389,8 +390,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         return rbln_config
 
     @classmethod
-    @property
-    def hf_class(cls):
+    def get_hf_class(cls):
         """
         Lazily loads and caches the corresponding Hugging Face model class.
         Removes 'RBLN' prefix from the class name to get the original class name
@@ -416,7 +416,20 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         return self.forward(*args, **kwargs)
 
     def __repr__(self):
-        return repr(self.model) + repr(self.rbln_submodules)
+        has_submodules = len(self.rbln_submodules) > 0
+        repr_str: str = f"<{self.__class__.__name__}>\n"
+        repr_str += f"- Total {len(self.model)} Runtimes"
+        repr_str += f" and {len(self.rbln_submodules)} Submodules\n" if has_submodules else "\n"
+        repr_str += "[Runtimes]\n"
+        repr_str += "\n".join([repr(model) for model in self.model])
+        repr_str += "\n"
+
+        if has_submodules > 0:
+            for i, submodule in enumerate(self.rbln_submodules):
+                repr_str += f"[Submodules {i} : {self._rbln_submodules[i]['name']}]\n"
+                repr_str += repr(submodule) + "\n"
+
+        return repr_str
 
     def __post_init__(self, **kwargs):
         pass

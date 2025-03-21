@@ -134,6 +134,9 @@ class RBLNModel(RBLNBaseModel):
         for preprocessor in preprocessors:
             preprocessor.save_pretrained(save_dir_path / subfolder)
 
+        # ad-hoc
+        rbln_kwargs["n_model_params"] = sum(p.numel() for p in model.parameters())
+
         # Get compilation arguments (e.g. input_info)
         rbln_config: RBLNConfig = cls.get_rbln_config(
             preprocessors=preprocessors, model_config=config, rbln_kwargs=rbln_kwargs
@@ -196,7 +199,7 @@ class RBLNModel(RBLNBaseModel):
         **kwargs,
     ) -> "PreTrainedModel":
         kwargs = cls.update_kwargs(kwargs)
-        return cls.hf_class.from_pretrained(
+        return cls.get_hf_class().from_pretrained(
             model_id,
             subfolder=subfolder,
             revision=revision,

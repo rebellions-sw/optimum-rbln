@@ -36,21 +36,28 @@ logger = logging.get_logger(__name__)
 class ExaoneForCausalLMWrapper(DecoderOnlyWrapper):
     """A wrapper class for the Exaone model with a language modeling head."""
 
-    def convert_to_rbln_causal_lm(self, causal_lm: "ExaoneForCausalLM"):
+    def convert_to_rbln_causal_lm(self, causal_lm: "ExaoneForCausalLM", max_seq_len: int):
         new_layers = []
         for layer in causal_lm.transformer.h:
             if self.attn_impl == "eager":
-                new_self_attn = ExaoneAttention(layer.attn.attention)
+                new_self_attn = ExaoneAttention(
+                    layer.attn.attention, self.use_attention_mask, kvcache_block_size=self.kvcache_block_size
+                )
             elif self.attn_impl == "flash_attn":
                 new_self_attn = ExaoneFlashAttention(
-                    layer.attn.attention, kvcache_partition_len=self.kvcache_partition_len
+                    layer.attn.attention,
+                    kvcache_partition_len=self.kvcache_partition_len,
+                    use_attention_mask=self.use_attention_mask,
+                    kvcache_block_size=self.kvcache_block_size,
                 )
             else:
                 raise NotImplementedError(f"Unknwon attn : {self.attn_impl}")
 
             new_layer = ExaoneLayer(layer, new_self_attn)
             new_layers.append(new_layer)
-        new_model = ExaoneModel(causal_lm.transformer, new_layers, partition_len=self.kvcache_partition_len)
+        new_model = ExaoneModel(
+            causal_lm.transformer, new_layers, partition_len=self.kvcache_partition_len, max_seq_len=max_seq_len
+        )
         new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm
 

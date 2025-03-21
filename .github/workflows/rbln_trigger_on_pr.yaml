@@ -9,52 +9,49 @@ env:
   REBEL_PYPI_ENDPOINT: ${{ vars.REBEL_PYPI_INTERNAL_ENDPOINT }}
   REBEL_PYPI_USERNAME: ${{ secrets.REBEL_PYPI_USERNAME }}
   REBEL_PYPI_PASSWORD: ${{ secrets.REBEL_PYPI_PASSWORD }}
-  REBEL_COMPILER_VERSION: 0.7.2.dev151+g19f099fd
 
 jobs:
-  check-rebel-compiler-version:
+  check-skip-ci:
     runs-on: rebel-k8s-runner
     outputs:
-      is_deploy_version: ${{ steps.check_prod.outputs.IS_PROD }}
-      compiler_version: ${{ steps.install_compiler.outputs.COMPILER_VERSION }}
+      should_skip: ${{ contains(github.event.pull_request.head.commit.message, '[skip ci]') }}
     steps:
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
-
-      - name: Install rebel-compiler
-        id: install_compiler
+      - name: Check if [skip ci] is in commit message
         run: |
-          PYPI_URL=$(echo ${{ env.REBEL_PYPI_ENDPOINT }} | sed "s/\/\//\0${{ env.REBEL_PYPI_USERNAME}}:${{ env.REBEL_PYPI_PASSWORD}}@/")
-          pip3 install --extra-index-url $PYPI_URL rebel-compiler==$REBEL_COMPILER_VERSION
-          echo "COMPILER_VERSION=$REBEL_COMPILER_VERSION" >> $GITHUB_OUTPUT
-
-      - name: Run script to check ENV
-        id: check_env
-        run: |
-          echo "Running check for rebel-compiler version"
-          ENV_VALUE=$(python3 -c '${{ secrets.CHECK_DEPLOY }}')
-          echo $ENV_VALUE
-          echo "ENV_VALUE=$ENV_VALUE" >> $GITHUB_ENV
-
-      - name: Verify ENV is PROD
-        id: check_prod
-        run: |
-          if [ "$ENV_VALUE" = "PROD" ]; then
-            echo "IS_PROD=true" >> $GITHUB_OUTPUT
-            echo "version check pass(✅)!!"
+          if ${{ contains(github.event.pull_request.head.commit.message, '[skip ci]') }}; then
+            echo "Found [skip ci] in commit message, skipping CI"
           else
-            echo "IS_PROD=false" >> $GITHUB_OUTPUT
-            echo "version check fail(❌)!!" 
-            echo "rebel-compiler must be prod version"
-            exit 1
+            echo "No [skip ci] found, continuing with CI"
           fi
+
+  load-version:
+    runs-on: rebel-k8s-runner
+    needs: check-skip-ci
+    if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' }}
+    outputs:
+      compiler_version: ${{ steps.get_version.outputs.compiler_version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Get compiler version
+        id: get_version
+        run: |
+          VERSION=$(grep rebel_compiler_version .github/version.yaml | cut -d ':' -f2 | tr -d ' ')
+          echo "compiler_version=$VERSION" >> $GITHUB_OUTPUT
+
+  check-compiler:
+    needs: [check-skip-ci, load-version]
+    if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' }}
+    uses: ./.github/workflows/rbln_check_compiler.yaml
+    with:
+      compiler_version: ${{ needs.load-version.outputs.compiler_version }}
+    secrets: inherit
 
   check-team-member:
     runs-on: rebel-k8s-runner
-    needs: check-rebel-compiler-version
-    if: ${{ needs.check-rebel-compiler-version.outputs.is_deploy_version == 'true' }}
+    needs: [check-skip-ci, check-compiler]
+    if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' && needs.check-compiler.outputs.is_deploy_version == 'true' }}
     outputs:
       is_team_member: ${{ steps.check_member.outputs.IS_TEAM_MEMBER }}
     steps:
@@ -78,19 +75,20 @@ jobs:
           fi
 
   optimum-rbln-pytest:
-    needs: [check-rebel-compiler-version, check-team-member]
-    if: ${{ needs.check-team-member.outputs.is_team_member == 'true' }}
+    needs: [check-skip-ci, check-compiler, check-team-member]
+    if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' && needs.check-team-member.outputs.is_team_member == 'true' }}
     uses: ./.github/workflows/rbln_optimum_pytest.yaml
     with:
       ref: ${{ github.event.pull_request.head.sha }}
-      rebel_compiler_version: ${{ needs.check-rebel-compiler-version.outputs.compiler_version }}
+      rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
+      test_level: "default"
     secrets: inherit
 
   optimum-rbln-inference-test:
-    needs: [check-rebel-compiler-version, check-team-member]
-    if: ${{ needs.check-team-member.outputs.is_team_member == 'true' }}
+    needs: [check-skip-ci, check-compiler, check-team-member]
+    if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' && needs.check-team-member.outputs.is_team_member == 'true' }}
     uses: ./.github/workflows/rbln_optimum_inference_test.yaml
     with:
       ref: ${{ github.event.pull_request.head.sha }}
-      rebel_compiler_version: ${{ needs.check-rebel-compiler-version.outputs.compiler_version }}
+      rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
     secrets: inherit
