@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import inspect
+import math
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,7 +55,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         block_tables: torch.Tensor,
         free_block_pool: Deque,
         kvcache_block_size: int,
-        kvcache_num_blocks: int,
         use_attention_mask: bool,
         attn_impl: str,
         **kwargs: Any,
@@ -72,7 +72,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         self.free_block_pool = free_block_pool
 
         self.kvcache_block_size = kvcache_block_size
-        self.empty_block = kvcache_num_blocks - 1
+        self.empty_block = -1
         self.attn_impl = attn_impl
 
         if self.phase == "prefill":
@@ -97,58 +97,61 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             torch.Tensor: Updated block tables.
         """
 
-        def update_block(batch_idx, block_idx):
+        NO_BLOCKS_ERROR = (
+            "No memory blocks are available for allocation."
+            "The generate() API cannot complete this inference task because Paged Attention is not fully supported by optimum-rbln."
+            "This is supported by vllm-rbln (see: https://docs.rbln.ai/software/model_serving/vllm_support/vllm-rbln.html)."
+            "Using vllm-rbln should fix this issue and enhance inference performance."
+        )
+
+        def update_block(batch_idx: int, block_idx: int):
             """
-            Helper function to update the block table for a given batch index and block index.
             If the block is empty (empty_block), allocates a block from the free_block_pool.
-
-            Args:
-                batch_idx (int): Batch index.
-                block_idx (int): Block index.
-
-            Raises:
-                RuntimeError: Raised if no available blocks are found in the free_block_pool.
             """
             if self.block_tables[batch_idx][block_idx] == self.empty_block:
                 if self.free_block_pool:
                     block = self.free_block_pool.popleft()
                     self.block_tables[batch_idx][block_idx] = block
                 else:
-                    raise RuntimeError("Not available blocks")
+                    raise RuntimeError(NO_BLOCKS_ERROR)
 
-        if self.attn_impl == "eager":
-            if self.phase == "prefill":
-                return self.block_tables[batch_idx]
+        def replace_empty_block(block_tables: torch.Tensor):
+            """
+            Replaces all occurrences of `self.empty_block` in `block_tables` with a dummy block from `self.free_block_pool`.
+            """
+            if not torch.any(block_tables == self.empty_block):
+                return block_tables.clone()
+            elif self.free_block_pool:
+                _free_block = self.free_block_pool[0]
+                return torch.where(block_tables == self.empty_block, _free_block, block_tables)
             else:
-                return self.block_tables
-        # Case for 'flash_attn' attention implementation
+                raise RuntimeError(NO_BLOCKS_ERROR)
+
+        if self.phase == "prefill":
+            # Track previously used blocks and return them to the free_block_pool and
+            # reset the current batch's block table to empty blocks
+            prev_blocks = self.block_tables[batch_idx][self.block_tables[batch_idx] != self.empty_block].tolist()
+            self.free_block_pool.extend(prev_blocks)
+            self.block_tables[batch_idx].fill_(self.empty_block)
+
+            # Get the start (s) and end (e) positions from cache_position and
+            # iterate over the cache positions to allocate necessary blocks
+            s, e = cache_position[0][0].item(), cache_position[0][-1].item()
+            for position in range(s, e + 1, self.kvcache_block_size):
+                block_idx = position // self.kvcache_block_size
+                if batch_idx >= len(self.block_tables) or block_idx >= len(self.block_tables[batch_idx]):
+                    raise IndexError(f"Invalid index: batch_idx={batch_idx}, block_idx={block_idx}")
+                update_block(batch_idx, block_idx)
+
+            return replace_empty_block(self.block_tables[batch_idx])
+        # Case for 'decoder' phase, iterate over the cache positions to allocate necessary blocks
         else:
-            if self.phase == "prefill":
-                # Track previously used blocks and return them to the free_block_pool and
-                # reset the current batch's block table to empty blocks
-                prev_blocks = self.block_tables[batch_idx][self.block_tables[batch_idx] != self.empty_block].tolist()
-                self.free_block_pool.extend(prev_blocks)
-                self.block_tables[batch_idx].fill_(self.empty_block)
+            for b_idx in range(self.batch_size):
+                position = cache_position[b_idx][0].item()
+                block_idx = position // self.kvcache_block_size
+                update_block(b_idx, block_idx)
 
-                # Get the start (s) and end (e) positions from cache_position and
-                # iterate over the cache positions to allocate necessary blocks
-                s, e = cache_position[0][0].item(), cache_position[0][-1].item()
-                for position in range(s, e + 1, self.kvcache_block_size):
-                    block_idx = position // self.kvcache_block_size
-                    if batch_idx >= len(self.block_tables) or block_idx >= len(self.block_tables[batch_idx]):
-                        raise IndexError(f"Invalid index: batch_idx={batch_idx}, block_idx={block_idx}")
-                    update_block(batch_idx, block_idx)
-
-                return self.block_tables[batch_idx]
-
-            # Case for 'decoder' phase, iterate over the cache positions to allocate necessary blocks
-            else:
-                for b_idx in range(self.batch_size):
-                    position = cache_position[b_idx][0].item()
-                    block_idx = position // self.kvcache_block_size
-                    update_block(b_idx, block_idx)
-
-                return self.block_tables
+            return replace_empty_block(self.block_tables)
 
     def forward(
         self,
@@ -380,14 +383,10 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
         # Initialize shared resources to be used across Runtime instances (prefill and decode phases)
         dec_attn_mask = torch.zeros(self.batch_size, 1, 1, self.max_seq_len, dtype=torch.float32)
-        if attn_impl == "eager":
-            block_tables = torch.arange(0, self.batch_size, dtype=torch.int16).reshape(self.batch_size, 1)
-            free_block_pool = None
-        else:
-            block_tables = torch.zeros(
-                self.batch_size, self.max_seq_len // self.kvcache_block_size, dtype=torch.int16
-            ).fill_(self.kvcache_num_blocks - 1)
-            free_block_pool = deque(x for x in range(self.kvcache_num_blocks - 1))
+        block_tables = torch.zeros(
+            self.batch_size, self.max_seq_len // self.kvcache_block_size, dtype=torch.int16
+        ).fill_(-1)
+        free_block_pool = deque(x for x in range(self.kvcache_num_blocks))
 
         self.prefill_decoder = RBLNRuntimeModel(
             runtime=self.model[0],
@@ -399,7 +398,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             block_tables=block_tables,
             free_block_pool=free_block_pool,
             kvcache_block_size=self.kvcache_block_size,
-            kvcache_num_blocks=self.kvcache_num_blocks,
             vocab_size=self.config.vocab_size,
             prefill_chunk_size=self.prefill_chunk_size,
             max_seq_len=self.max_seq_len,
@@ -416,7 +414,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             block_tables=block_tables,
             free_block_pool=free_block_pool,
             kvcache_block_size=self.kvcache_block_size,
-            kvcache_num_blocks=self.kvcache_num_blocks,
             use_attention_mask=self.use_attention_mask,
             attn_impl=attn_impl,
         )
@@ -570,6 +567,71 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         return compile_model(quantize_config=quantize_config)
 
     @classmethod
+    def get_maximum_num_blocks(
+        cls,
+        config: PretrainedConfig,
+        tensor_parallel_size: int,
+        kvcache_block_size: int,
+        nbits_per_param: int,
+        n_model_params: int,
+    ) -> int:
+        def align(x: int, nbytes: int) -> int:
+            return int(math.ceil(x / nbytes) * nbytes)
+
+        def align_2MB(x: int) -> int:
+            return align(x, 2 * 1024 * 1024)
+
+        num_attention_heads = getattr(config, "n_head", None) or getattr(config, "num_attention_heads")
+        num_layers = getattr(config, "n_layer", None) or getattr(config, "num_hidden_layers")
+        head_dim = getattr(config, "head_dim", None) or config.hidden_size // num_attention_heads
+        vocab_size = config.vocab_size
+        hidden_size = getattr(config, "n_embd", None) or getattr(config, "hidden_size")
+        num_key_value_heads = getattr(config, "num_key_value_heads", None) or num_attention_heads
+
+        # TODO(jongho): Update if target npu is REBEL.
+        ATOM_DRAM_NBYTES = 16 * 2**30
+        ATOM_SYS_DRAM_NBYTES = 288 * 2**20
+        available_dram = tensor_parallel_size * (ATOM_DRAM_NBYTES - ATOM_SYS_DRAM_NBYTES)
+
+        # Get estimated kernel size (approximated)
+        lm_heads_params = align(vocab_size, 64) * hidden_size
+        lm_heads_nbytes = (
+            align_2MB(lm_heads_params * nbits_per_param // 8 / tensor_parallel_size) * tensor_parallel_size
+        )
+        params = n_model_params - lm_heads_params
+        layer_nbytes = (
+            align_2MB(params * nbits_per_param // 8 / num_layers / tensor_parallel_size)
+            * num_layers
+            * tensor_parallel_size
+        )
+        kernel_size = layer_nbytes + lm_heads_nbytes
+
+        available_dram -= kernel_size
+
+        # TODO: Accurate buffer estimation
+        buffer = 2**30  # 1GB Buffer
+        if tensor_parallel_size <= 4:
+            buffer /= 4
+
+        available_dram -= buffer
+
+        # Estimate nbytes per a single kvcache block
+        nbytes_per_block = (
+            align_2MB(
+                kvcache_block_size
+                * head_dim
+                * math.ceil(num_key_value_heads / tensor_parallel_size)  # Shard
+                * 2  # (fp16)
+            )
+            * num_layers
+            * 2  # (k, v)
+            * tensor_parallel_size
+        )
+        n_blocks = available_dram // nbytes_per_block
+
+        return n_blocks, nbytes_per_block
+
+    @classmethod
     def _get_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
@@ -622,8 +684,28 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             else:
                 rbln_kvcache_block_size = rbln_kvcache_partition_len
 
-        # FIXME temporal num_blocks
         rbln_kvcache_num_blocks = (rbln_max_seq_len // rbln_kvcache_block_size) * rbln_batch_size
+        if rbln_attn_impl == "flash_attn":
+            max_num_blocks, _ = cls.get_maximum_num_blocks(
+                config=model_config,
+                tensor_parallel_size=rbln_kwargs.get("tensor_parallel_size", 1),
+                kvcache_block_size=rbln_kvcache_block_size,
+                nbits_per_param=16 if rbln_quantization is None else 4,  # TODO(jongho): FIX Ad-hoc
+                n_model_params=rbln_kwargs["n_model_params"],
+            )
+            rbln_kvcache_num_blocks = min(rbln_kvcache_num_blocks, max_num_blocks)
+
+            required_blocks = rbln_max_seq_len // rbln_kvcache_block_size + 1
+            if rbln_kvcache_num_blocks < required_blocks:
+                rbln_kvcache_num_blocks = required_blocks
+
+            logger.info(f"[KVCache] Compiling with num_blocks: {rbln_kvcache_num_blocks}")
+
+            if rbln_kvcache_num_blocks < rbln_batch_size:
+                raise RuntimeError(
+                    f"Batch size ({rbln_batch_size}) exceeds available KV cache blocks ({rbln_kvcache_num_blocks}). "
+                    "Ensure the number of blocks is at least equal to the batch size."
+                )
 
         num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
         num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
