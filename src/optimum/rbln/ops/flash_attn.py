@@ -80,3 +80,40 @@ def register_rbln_custom_paged_flash_causal_attention():
     @register_fake("rbln_custom_ops::paged_flash_causal_attn_prefill")
     def flash_attn_prefill_abstract(q, k, v, kcache, vcache, seq, scale, block_table, block_size, partition):
         return q
+
+
+@lru_cache
+def register_rbln_custom_paged_flash_attention_kv_fp8():
+    torch.library.define(
+        "rbln_custom_ops::paged_flash_attn_decode_kv_fp8",
+        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f, int g, Tensor h, Tensor i) -> Tensor",
+    )
+
+    @torch.library.impl("rbln_custom_ops::paged_flash_attn_decode_kv_fp8", "cpu")
+    def paged_flash_attn_decode_kv_fp8_cpu(
+        q, k, v, mask, kcache, vcache, seq, scale, block_table, block_size, partition, k_scale, v_scale
+    ):
+        return q
+
+    @register_fake("rbln_custom_ops::paged_flash_attn_decode_kv_fp8")
+    def paged_flash_attn_decode_kv_fp8_abstract(
+        q, k, v, m, kcache, vcache, seq, scale, block_table, block_size, partition, k_scale, v_scale
+    ):
+        return q
+
+    torch.library.define(
+        "rbln_custom_ops::paged_flash_attn_prefill_kv_fp8",
+        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f, int g, Tensor h, Tensor i) -> Tensor",
+    )
+
+    @torch.library.impl("rbln_custom_ops::paged_flash_attn_prefill_kv_fp8", "cpu")
+    def paged_flash_attn_prefill_kv_fp8_cpu(
+        q, k, v, mask, kcache, vcache, seq, scale, block_table, block_size, partition, k_scale, v_scale
+    ):
+        return q
+
+    @register_fake("rbln_custom_ops::paged_flash_attn_prefill_kv_fp8")
+    def paged_flash_attn_prefill_kv_fp8_abstract(
+        q, k, v, m, kcache, vcache, seq, scale, block_table, block_size, partition, k_scale, v_scale
+    ):
+        return q

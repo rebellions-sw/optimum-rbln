@@ -30,7 +30,7 @@ from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
-from ...utils.rbln_quantization import QuantizationManager
+from ...utils.rbln_quantization import QuantizationManager, prepare_model_for_quantization
 from .decoderonly_architecture import (
     DecoderOnlyWrapper,
     validate_attention_method,
@@ -450,10 +450,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         subfolder: str = "",
         local_files_only: bool = False,
         trust_remote_code: bool = False,
+        rbln_quantization: Optional[Dict[str, str]] = {},
         **kwargs,
     ):
-        from ...utils.rbln_quantization import prepare_model_for_quantization
-
         kwargs = cls.update_kwargs(kwargs)
 
         if config is None:
@@ -470,7 +469,18 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         with no_init_weights():
             model = AutoModelForCausalLM.from_config(config)
 
-        prepare_model_for_quantization(model, model_id, kwargs.get("num_hidden_layers"))
+        # Pass additional parameters for HuggingFace Hub access
+        model = prepare_model_for_quantization(
+            model,
+            model_id,
+            kwargs.get("num_hidden_layers"),
+            use_auth_token=use_auth_token,
+            revision=revision,
+            cache_dir=cache_dir,
+            force_download=force_download,
+            local_files_only=local_files_only,
+            rbln_quantization=rbln_quantization,
+        )
 
         return model
 
@@ -501,7 +511,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_kwargs = kwargs.get("rbln_kwargs", {})
         rbln_quantization = rbln_kwargs.get("quantization", None)
         if rbln_quantization is not None and rbln_quantization["format"] == "rbln":
-            model = cls.get_quantized_model(*args, **kwargs)
+            model = cls.get_quantized_model(*args, **kwargs, rbln_quantization=rbln_quantization)
         else:
             model = super().get_pytorch_model(*args, **kwargs)
 
@@ -648,10 +658,21 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_quantization = QuantizationManager.validate_quantization_config(rbln_kwargs.get("quantization", None))
         rbln_prefill_chunk_size = rbln_kwargs.get("prefill_chunk_size", None)
 
+        # FIXME: experimental code
+        rbln_kvcache_dtype = None
+        if rbln_quantization is not None:
+            rbln_kvcache_dtype = rbln_quantization.get("kvcache")
+        if rbln_kvcache_dtype is None:
+            rbln_kvcache_dtype = "fp16"
+
         if rbln_use_attention_mask is None:
             rbln_use_attention_mask = False
+
             rbln_npu = rbln_kwargs.get("npu", None) or rebel.get_npu_name()
             if rbln_npu == "RBLN-CA02":
+                rbln_use_attention_mask = True
+
+            if rbln_kvcache_dtype != "fp16":
                 rbln_use_attention_mask = True
 
         if rbln_prefill_chunk_size is None:
@@ -764,7 +785,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                             rbln_kvcache_block_size,
                             head_dim,
                         ],
-                        "float32",
+                        "float32" if rbln_kvcache_dtype == "fp16" else "float8_e4m3fn",
                     )
                     for i in range(num_hidden_layers * 2)
                 ]
@@ -805,6 +826,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 "kvcache_block_size": rbln_kvcache_block_size,
                 "attn_impl": rbln_attn_impl,
                 "kvcache_num_blocks": rbln_kvcache_num_blocks,
+                "kvcache_dtype": rbln_kvcache_dtype,
             }
         )
 

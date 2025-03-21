@@ -219,3 +219,40 @@ def register_rbln_custom_add_softmax_attention():
     @register_fake("rbln_custom_ops::add_softmax_attn_decode")
     def add_softmax_attn_decode_abstract(q, k, v, m, kcache, vcache, seq, partition):
         return q
+
+
+@lru_cache
+def register_rbln_custom_paged_attention_kv_fp8():
+    torch.library.define(
+        "rbln_custom_ops::paged_attn_decode_kv_fp8",
+        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f, Tensor g, Tensor h) -> Tensor",
+    )
+
+    @torch.library.impl("rbln_custom_ops::paged_attn_decode_kv_fp8", "cpu")
+    def paged_attn_decode_kv_fp8_cpu(
+        q, k, v, mask, kcache, vcache, seq, scale, block_table, block_size, k_scale, v_scale
+    ):
+        return q
+
+    @register_fake("rbln_custom_ops::paged_attn_decode_kv_fp8")
+    def paged_attn_decode_kv_fp8_abstract(
+        q, k, v, m, kcache, vcache, seq, scale, block_table, block_size, k_scale, v_scale
+    ):
+        return q
+
+    torch.library.define(
+        "rbln_custom_ops::paged_attn_prefill_kv_fp8",
+        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f, Tensor g, Tensor h) -> Tensor",
+    )
+
+    @torch.library.impl("rbln_custom_ops::paged_attn_prefill_kv_fp8", "cpu")
+    def paged_attn_prefill_kv_fp8_cpu(
+        q, k, v, mask, kcache, vcache, seq, scale, block_table, block_size, k_scale, v_scale
+    ):
+        return q
+
+    @register_fake("rbln_custom_ops::paged_attn_prefill_kv_fp8")
+    def paged_attn_prefill_kv_fp8_abstract(
+        q, k, v, m, kcache, vcache, seq, scale, block_table, block_size, k_scale, v_scale
+    ):
+        return q
