@@ -39,7 +39,7 @@ from .pipeline_kandinsky2_2_prior import RBLNKandinskyV22PriorPipeline
 class RBLNKandinskyV22CombinedPipeline(RBLNDiffusionMixin, KandinskyV22CombinedPipeline):
     original_class = KandinskyV22CombinedPipeline
     _connected_classes = {"prior_pipe": RBLNKandinskyV22PriorPipeline, "decoder_pipe": RBLNKandinskyV22Pipeline}
-    _submodules = ["prior_pipe", "decoder_pipe"]
+    _submodules = ["prior_image_encoder", "prior_text_encoder", "prior_prior", "unet", "movq"]
     _prefix = {"prior_pipe": "prior_"}
 
     def __init__(
@@ -90,7 +90,7 @@ class RBLNKandinskyV22CombinedPipeline(RBLNDiffusionMixin, KandinskyV22CombinedP
 class RBLNKandinskyV22Img2ImgCombinedPipeline(RBLNDiffusionMixin, KandinskyV22Img2ImgCombinedPipeline):
     original_class = KandinskyV22Img2ImgCombinedPipeline
     _connected_classes = {"prior_pipe": RBLNKandinskyV22PriorPipeline, "decoder_pipe": RBLNKandinskyV22Img2ImgPipeline}
-    _submodules = ["prior_pipe", "decoder_pipe"]
+    _submodules = ["prior_image_encoder", "prior_text_encoder", "prior_prior", "unet", "movq"]
     _prefix = {"prior_pipe": "prior_"}
 
     def __init__(
