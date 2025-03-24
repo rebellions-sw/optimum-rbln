@@ -90,10 +90,8 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
                     )
                 decoder_attention_mask[b_idx, : decoding_step + 1] = 1
 
-        if self.support_paged_causal_attn and block_tables is None:
+        if block_tables is None:
             block_tables = self.default_block_tables
-        else:
-            block_tables = None
 
         lm_logits = super().forward(
             decoder_input_ids,
@@ -328,11 +326,9 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
                 "dec_max_seq_len": rbln_dec_max_seq_len,
                 "batch_size": rbln_batch_size,
                 "pad_token_id": rbln_pad_token_id,
+                "use_attention_mask": rbln_use_attention_mask,
             }
         )
-
-        if cls.support_paged_causal_attn:
-            rbln_config.model_cfg.update({"use_attention_mask": rbln_use_attention_mask})
 
         return rbln_config
 
