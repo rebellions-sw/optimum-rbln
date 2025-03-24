@@ -126,8 +126,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
     def __post_init__(self, **kwargs):
         batch_size = self.rbln_config.model_cfg["batch_size"]
         dec_max_seq_len = self.rbln_config.model_cfg["dec_max_seq_len"]
-        if self.support_paged_causal_attn:
-            self.use_attention_mask = self.rbln_config.model_cfg.get("use_attention_mask", None)
+        self.use_attention_mask = self.rbln_config.model_cfg.get("use_attention_mask", None)
 
         self.encoder = RBLNRuntimeEncoder(
             runtime=self.model[0],
