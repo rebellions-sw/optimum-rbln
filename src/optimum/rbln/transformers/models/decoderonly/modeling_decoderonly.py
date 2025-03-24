@@ -669,10 +669,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             rbln_use_attention_mask = False
 
             rbln_npu = rbln_kwargs.get("npu", None) or rebel.get_npu_name()
-            if rbln_npu == "RBLN-CA02":
-                rbln_use_attention_mask = True
-
-            if rbln_kvcache_dtype != "fp16":
+            if rbln_npu == "RBLN-CA02" or rbln_npu.startswith("RBLN-CR"):
+                # TODO(jongho): remove once REBEL supports masked causal attention
                 rbln_use_attention_mask = True
 
         if rbln_prefill_chunk_size is None:
