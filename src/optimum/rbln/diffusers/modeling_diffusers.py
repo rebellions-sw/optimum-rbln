@@ -23,7 +23,6 @@ from ..modeling import RBLNModel
 from ..modeling_config import RUNTIME_KEYWORDS, ContextRblnConfig, use_rbln_config
 from ..utils.decorator_utils import remove_compile_time_kwargs
 from ..utils.logging import get_logger
-from . import pipelines
 
 
 logger = get_logger(__name__)
@@ -67,6 +66,7 @@ class RBLNDiffusionMixin:
           as keys in rbln_config
     """
 
+    _connected_classes = {}
     _submodules = []
     _prefix = {}
 
@@ -103,37 +103,6 @@ class RBLNDiffusionMixin:
                 }
             )
             submodule_config = submodule_cls.update_rbln_config_using_pipe(model, submodule_config)
-        elif hasattr(pipelines, submodule_class_name):
-            submodule_config = rbln_config.get(submodule_name, {})
-            submodule_config = copy.deepcopy(submodule_config)
-
-            submodule_cls: RBLNModel = getattr(importlib.import_module("optimum.rbln"), f"{submodule_class_name}")
-            prefix = cls._prefix.get(submodule_name, "")
-            connected_submodules = cls._connected_classes.get(submodule_name)._submodules
-            pipe_global_config = {k: v for k, v in submodule_config.items() if k not in connected_submodules}
-            submodule_config = {k: v for k, v in submodule_config.items() if k in connected_submodules}
-            for key in submodule_config.keys():
-                submodule_config[key].update(pipe_global_config)
-
-            for connected_submodule_name in connected_submodules:
-                connected_submodule_config = rbln_config.pop(prefix + connected_submodule_name, {})
-                if connected_submodule_name in submodule_config:
-                    submodule_config[connected_submodule_name].update(connected_submodule_config)
-                else:
-                    submodule_config[connected_submodule_name] = connected_submodule_config
-
-            pipe_global_config = {
-                k: v for k, v in rbln_config.items() if k != submodule_class_name and not isinstance(v, dict)
-            }
-
-            for connected_submodule_name in connected_submodules:
-                for k, v in pipe_global_config.items():
-                    if "guidance_scale" in k:
-                        if prefix + "guidance_scale" == k:
-                            submodule_config[connected_submodule_name]["guidance_scale"] = v
-                    else:
-                        submodule_config[connected_submodule_name][k] = v
-            rbln_config[submodule_name] = submodule_config
         else:
             raise ValueError(f"submodule {submodule_name} isn't supported")
         return submodule_config
@@ -199,25 +168,8 @@ class RBLNDiffusionMixin:
         else:
             # raise error if any of submodules are torch module.
             model_index_config = cls.load_config(pretrained_model_name_or_path=model_id)
-            if cls._load_connected_pipes:
-                submodules = []
-                for submodule in cls._submodules:
-                    submodule_config = rbln_config.pop(submodule, {})
-                    prefix = cls._prefix.get(submodule, "")
-                    connected_submodules = cls._connected_classes.get(submodule)._submodules
-                    for connected_submodule_name in connected_submodules:
-                        connected_submodule_config = submodule_config.pop(connected_submodule_name, {})
-                        if connected_submodule_config:
-                            rbln_config[prefix + connected_submodule_name] = connected_submodule_config
-                        submodules.append(prefix + connected_submodule_name)
-                pipe_global_config = {k: v for k, v in rbln_config.items() if k not in submodules}
-                for submodule in submodules:
-                    if submodule in rbln_config:
-                        rbln_config[submodule].update(pipe_global_config)
-            else:
-                submodules = cls._submodules
-
-            for submodule_name in submodules:
+            rbln_config = cls._flatten_rbln_config(rbln_config)
+            for submodule_name in cls._submodules:
                 if isinstance(kwargs.get(submodule_name), torch.nn.Module):
                     raise AssertionError(
                         f"{submodule_name} is not compiled torch module. If you want to compile, set `export=True`."
@@ -266,8 +218,88 @@ class RBLNDiffusionMixin:
             lora_scales=lora_scales,
         )
 
-        compiled_submodules = cls._compile_submodules(model, passed_submodules, model_save_dir, rbln_config)
+        if cls._load_connected_pipes:
+            compiled_submodules = cls._compile_pipelines(model, passed_submodules, model_save_dir, rbln_config)
+        else:
+            compiled_submodules = cls._compile_submodules(model, passed_submodules, model_save_dir, rbln_config)
         return cls._construct_pipe(model, compiled_submodules, model_save_dir, rbln_config)
+
+    @classmethod
+    def _prepare_rbln_config(
+        cls,
+        rbln_config,
+    ) -> Dict[str, Any]:
+        prepared_config = {}
+        for connected_pipe_name, connected_pipe_cls in cls._connected_classes.items():
+            connected_pipe_config = rbln_config.pop(connected_pipe_name, {})
+            prefix = cls._prefix.get(connected_pipe_name, "")
+            guidance_scale = rbln_config.pop(f"{prefix}guidance_scale", None)
+            if "guidance_scale" not in connected_pipe_config and guidance_scale is not None:
+                connected_pipe_config["guidance_scale"] = guidance_scale
+            for submodule_name in connected_pipe_cls._submodules:
+                submodule_config = rbln_config.pop(prefix + submodule_name, {})
+                if submodule_name not in connected_pipe_config:
+                    connected_pipe_config[submodule_name] = {}
+                connected_pipe_config[submodule_name].update(
+                    {k: v for k, v in submodule_config.items() if k not in connected_pipe_config[submodule_name]}
+                )
+            prepared_config[connected_pipe_name] = connected_pipe_config
+        prepared_config.update(rbln_config)
+        return prepared_config
+
+    @classmethod
+    def _flatten_rbln_config(
+        cls,
+        rbln_config,
+    ) -> Dict[str, Any]:
+        prepared_config = cls._prepare_rbln_config(rbln_config)
+        flattened_config = {}
+        pipe_global_config = {k: v for k, v in prepared_config.items() if k not in cls._connected_classes.keys()}
+        for connected_pipe_name, connected_pipe_cls in cls._connected_classes.items():
+            connected_pipe_config = prepared_config.pop(connected_pipe_name)
+            prefix = cls._prefix.get(connected_pipe_name, "")
+            connected_pipe_global_config = {
+                k: v for k, v in connected_pipe_config.items() if k not in connected_pipe_cls._submodules
+            }
+            for submodule_name in connected_pipe_cls._submodules:
+                flattened_config[prefix + submodule_name] = connected_pipe_config[submodule_name]
+                flattened_config[prefix + submodule_name].update(
+                    {
+                        k: v
+                        for k, v in connected_pipe_global_config.items()
+                        if k not in flattened_config[prefix + submodule_name]
+                    }
+                )
+        flattened_config.update(pipe_global_config)
+        return flattened_config
+
+    @classmethod
+    def _compile_pipelines(
+        cls,
+        model: torch.nn.Module,
+        passed_submodules: Dict[str, RBLNModel],
+        model_save_dir: Optional[PathLike],
+        rbln_config: Dict[str, Any],
+    ) -> Dict[str, RBLNModel]:
+        compiled_submodules = {}
+
+        rbln_config = cls._prepare_rbln_config(rbln_config)
+        pipe_global_config = {k: v for k, v in rbln_config.items() if k not in cls._connected_classes.keys()}
+        for connected_pipe_name, connected_pipe_cls in cls._connected_classes.items():
+            connected_pipe_submodules = {}
+            prefix = cls._prefix.get(connected_pipe_name, "")
+            for submodule_name in connected_pipe_cls._submodules:
+                connected_pipe_submodules[submodule_name] = passed_submodules.get(prefix + submodule_name, None)
+            connected_pipe = getattr(model, connected_pipe_name)
+            connected_pipe_config = {}
+            connected_pipe_config.update(pipe_global_config)
+            connected_pipe_config.update(rbln_config[connected_pipe_name])
+            connected_pipe_compiled_submodules = connected_pipe_cls._compile_submodules(
+                connected_pipe, connected_pipe_submodules, model_save_dir, connected_pipe_config, prefix
+            )
+            for submodule_name, compiled_submodule in connected_pipe_compiled_submodules.items():
+                compiled_submodules[prefix + submodule_name] = compiled_submodule
+        return compiled_submodules
 
     @classmethod
     def _compile_submodules(
@@ -307,41 +339,6 @@ class RBLNDiffusionMixin:
                     model_save_dir=model_save_dir,
                     rbln_config=submodule_rbln_config,
                 )
-            elif hasattr(pipelines, submodule.__class__.__name__):
-                connected_pipe = submodule
-                connected_pipe_model_save_dir = model_save_dir
-                connected_pipe_rbln_config = submodule_rbln_config
-                connected_pipe_cls: RBLNDiffusionMixin = getattr(
-                    importlib.import_module("optimum.rbln"), connected_pipe.__class__.__name__
-                )
-                submodule_dict = {}
-                for name in connected_pipe.config.keys():
-                    if hasattr(connected_pipe, name):
-                        submodule_dict[name] = getattr(connected_pipe, name)
-                connected_pipe = connected_pipe_cls(**submodule_dict)
-                connected_pipe_submodules = {}
-                prefix = cls._prefix.get(submodule_name, "")
-                for name in connected_pipe_cls._submodules:
-                    if prefix + name in passed_submodules:
-                        connected_pipe_submodules[name] = passed_submodules.get(prefix + name)
-
-                connected_pipe_compiled_submodules = connected_pipe_cls._compile_submodules(
-                    model=connected_pipe,
-                    passed_submodules=connected_pipe_submodules,
-                    model_save_dir=model_save_dir,
-                    rbln_config=connected_pipe_rbln_config,
-                    prefix=prefix,
-                )
-                connected_pipe = connected_pipe_cls._construct_pipe(
-                    connected_pipe,
-                    connected_pipe_compiled_submodules,
-                    connected_pipe_model_save_dir,
-                    connected_pipe_rbln_config,
-                )
-
-                for name in connected_pipe_cls._submodules:
-                    compiled_submodules[prefix + name] = getattr(connected_pipe, name)
-                submodule = connected_pipe
             else:
                 raise ValueError(f"Unknown class of submodule({submodule_name}) : {submodule.__class__.__name__} ")
 
@@ -374,22 +371,15 @@ class RBLNDiffusionMixin:
     @classmethod
     def _construct_pipe(cls, model, submodules, model_save_dir, rbln_config):
         # Construct finalize pipe setup with compiled submodules and configurations
-        submodule_names = []
-        for submodule_name in cls._submodules:
-            submodule = getattr(model, submodule_name)
-            if hasattr(pipelines, submodule.__class__.__name__):
-                prefix = cls._prefix.get(submodule_name, "")
-                connected_pipe_submodules = submodules[submodule_name].__class__._submodules
-                connected_pipe_submodules = [prefix + name for name in connected_pipe_submodules]
-                submodule_names += connected_pipe_submodules
-                setattr(model, submodule_name, submodules[submodule_name])
-            else:
-                submodule_names.append(submodule_name)
-
         if model_save_dir is not None:
             # To skip saving original pytorch modules
-            for submodule_name in submodule_names:
+            for submodule_name in cls._submodules:
                 delattr(model, submodule_name)
+
+            if cls._load_connected_pipes:
+                for connected_pipe_name, connected_pipe_cls in cls._connected_classes.items():
+                    for submodule_name in connected_pipe_cls._submodules:
+                        delattr(getattr(model, connected_pipe_name), submodule_name)
 
             # Direct calling of `save_pretrained` causes config.unet = (None, None).
             # So config must be saved again, later.
@@ -398,10 +388,15 @@ class RBLNDiffusionMixin:
             # Causing warning messeages.
 
         update_dict = {}
-        for submodule_name in submodule_names:
+        for submodule_name in cls._submodules:
             # replace submodule
             setattr(model, submodule_name, submodules[submodule_name])
             update_dict[submodule_name] = ("optimum.rbln", submodules[submodule_name].__class__.__name__)
+        if cls._load_connected_pipes:
+            for connected_pipe_name, connected_pipe_cls in cls._connected_classes.items():
+                prefix = cls._prefix.get(connected_pipe_name, "")
+                for submodule_name in connected_pipe_cls._submodules:
+                    setattr(getattr(model, connected_pipe_name), submodule_name, submodules[prefix + submodule_name])
 
         # Update config to be able to load from model directory.
         #
@@ -420,16 +415,9 @@ class RBLNDiffusionMixin:
         if rbln_config.get("optimize_host_memory") is False:
             # Keep compiled_model objs to further analysis. -> TODO: remove soon...
             model.compiled_models = []
-            if model._load_connected_pipes:
-                for name in cls._submodules:
-                    connected_pipe = getattr(model, name)
-                    for submodule_name in connected_pipe.__class__._submodules:
-                        submodule = getattr(connected_pipe, submodule_name)
-                        model.compiled_models.extend(submodule.compiled_models)
-            else:
-                for name in cls._submodules:
-                    submodule = getattr(model, name)
-                    model.compiled_models.extend(submodule.compiled_models)
+            for name in cls._submodules:
+                submodule = getattr(model, name)
+                model.compiled_models.extend(submodule.compiled_models)
 
         return model
 
