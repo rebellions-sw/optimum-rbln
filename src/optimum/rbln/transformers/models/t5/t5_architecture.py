@@ -164,7 +164,7 @@ class T5LayerSelfAttention(Seq2SeqSelfAttention):
         self.out_proj = self._original_mod.o
         self.num_heads = self._original_mod.n_heads
         self.head_dim = self._original_mod.key_value_proj_dim
-        self.attn_decode = torch.ops.rbln_custom_ops.add_softmax_attn_decode
+        self.attn_decode = torch.ops.rbln_custom_ops.paged_add_softmax_attn_decode
 
     def projection(self, hidden_states) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         query_states = self.q_proj(hidden_states)

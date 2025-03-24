@@ -60,6 +60,16 @@ class RBLNRuntimeEncoder(RBLNPytorchRuntime):
 
 class RBLNRuntimeDecoder(RBLNPytorchRuntime):
     mandatory_members = ["main_input_name"]
+    
+    def __init__(
+        self,
+        runtime: rebel.Runtime,
+        batch_size: int,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(runtime, **kwargs)
+        self.batch_size = batch_size
+        self.default_block_tables = torch.arange(0, self.batch_size, dtype=torch.int16).view(self.batch_size, 1)
 
     def forward(
         self,
@@ -76,6 +86,7 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
             decoder_input_ids=decoder_input_ids,
             decoder_attention_mask=decoder_attention_mask,
             cache_position=cache_position,
+            block_tables=self.default_block_tables,
         )
 
         if isinstance(outputs, torch.Tensor):
@@ -237,6 +248,7 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
             ("decoder_input_ids", [rbln_batch_size, 1], "int64"),
             ("decoder_attention_mask", [rbln_batch_size, rbln_dec_max_seq_len], "int64"),
             ("cache_position", [], "int32"),
+            ("block_tables", [rbln_batch_size, 1], "int16"),
         ]
         dec_input_info.extend(
             [

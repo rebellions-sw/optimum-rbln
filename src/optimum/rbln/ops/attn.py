@@ -218,6 +218,6 @@ def register_rbln_custom_paged_add_softmax_attention():
         """
         return q
 
-    @register_fake("rbln_custom_ops::add_softmax_attn_decode")
+    @register_fake("rbln_custom_ops::paged_add_softmax_attn_decode")
     def paged_add_softmax_attn_decode_abstract(q, k, v, m, kcache, vcache, seq, partition, block_table, block_size):
         return q
