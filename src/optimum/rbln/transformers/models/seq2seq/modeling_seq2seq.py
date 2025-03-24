@@ -59,8 +59,7 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         self.dec_max_seq_len = dec_max_seq_len
         self.use_attention_mask = use_attention_mask
         self.support_paged_attn = support_paged_attn
-        if support_paged_attn:
-            self.default_block_tables = torch.arange(0, self.batch_size, dtype=torch.int16).view(self.batch_size, 1)
+        self.default_block_tables = torch.arange(0, self.batch_size, dtype=torch.int16).view(self.batch_size, 1)
 
     def forward(
         self,
@@ -89,10 +88,8 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
                     )
                 decoder_attention_mask[b_idx, : decoding_step + 1] = 1
 
-        if self.support_paged_attn and block_tables is None:
+        if block_tables is None:
             block_tables = self.default_block_tables
-        else:
-            block_tables = None
 
         lm_logits = super().forward(
             decoder_input_ids,
@@ -121,7 +118,6 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
     main_input_name = "input_ids"
     auto_model_class = AutoModelForSeq2SeqLM
     support_causal_attn = None
-    support_paged_attn = None
 
     def __post_init__(self, **kwargs):
         batch_size = self.rbln_config.model_cfg["batch_size"]
@@ -140,7 +136,6 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
             dec_max_seq_len=dec_max_seq_len,
             support_causal_attn=self.support_causal_attn,
             use_attention_mask=self.use_attention_mask if self.support_causal_attn else True,
-            support_paged_attn=self.support_paged_attn,
         )
 
     @classmethod

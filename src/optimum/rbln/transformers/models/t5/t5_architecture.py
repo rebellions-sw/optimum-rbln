@@ -77,6 +77,7 @@ class T5DecoderWrapper(Seq2SeqDecoderWrapper):
         attention_mask,
         encoder_attention_mask,
         cache_position,
+        block_tables,
         cross_kv_cache,
         *self_kv_cache,
     ) -> Tuple[torch.FloatTensor, Tuple[torch.FloatTensor]]:
@@ -95,6 +96,7 @@ class T5DecoderWrapper(Seq2SeqDecoderWrapper):
             self_past_key_values=self_past_key_values,
             cross_past_key_values=cross_past_key_values,
             cache_position=cache_position,
+            block_tables=block_tables,
         )
 
         return lm_logits
@@ -176,6 +178,7 @@ class T5LayerSelfAttention(Seq2SeqSelfAttention):
         past_key_value: Tuple[torch.Tensor],
         attention_mask: torch.Tensor,
         cache_position: torch.Tensor,
+        block_tables: torch.Tensor,
         **kwargs,
     ) -> Tuple[torch.Tensor, Tuple[torch.Tensor]]:
         bsz, tgt_len, _ = hidden_states.size()
@@ -185,6 +188,7 @@ class T5LayerSelfAttention(Seq2SeqSelfAttention):
         key_states = self._shape(key_states, -1, bsz)
         value_states = self._shape(value_states, -1, bsz)
 
+        block_size = past_key_value[0].shape[-2]
         attn_output = self.attn_decode(
             query_states,
             key_states,
@@ -196,6 +200,8 @@ class T5LayerSelfAttention(Seq2SeqSelfAttention):
             past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
             cache_position,
             torch.tensor(1.0, dtype=torch.float32),  # scale
+            block_tables,
+            block_size,
         )
 
         attn_output = attn_output.view(bsz, self.num_heads, -1, self.head_dim).transpose(1, 2)
