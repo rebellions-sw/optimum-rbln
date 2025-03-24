@@ -104,7 +104,6 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         self.config = config
         self.rbln_config = rbln_config
         self.compiled_models = rbln_compiled_models
-        print("test")
 
         # Registers the RBLN classes into the transformers AutoModel classes to avoid warnings when creating
         # a pipeline https://github.com/huggingface/transformers/blob/3d3204c025b6b5de013e07dd364208e28b4d9589/src/transformers/pipelines/base.py#L940
