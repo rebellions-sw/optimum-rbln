@@ -108,6 +108,9 @@ class RBLNBartModel(RBLNModel):
 
 
 class RBLNBartForConditionalGeneration(RBLNModelForSeq2SeqLM):
+    support_causal_attn = True
+    support_paged_attn = True
+
     @classmethod
     def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: "RBLNConfig"):
         enc_max_seq_len = (

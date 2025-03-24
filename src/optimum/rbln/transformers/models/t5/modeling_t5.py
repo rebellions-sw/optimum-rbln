@@ -13,9 +13,8 @@
 # limitations under the License.
 
 import inspect
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple, Union
 
-import rebel
 import torch
 from transformers import (
     AutoModelForTextEncoding,
@@ -23,7 +22,7 @@ from transformers import (
     T5EncoderModel,
     T5ForConditionalGeneration,
 )
-from transformers.modeling_outputs import BaseModelOutput, Seq2SeqLMOutput
+from transformers.modeling_outputs import BaseModelOutput
 
 from ....diffusers.modeling_diffusers import RBLNDiffusionMixin
 from ....modeling import RBLNModel
@@ -56,63 +55,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             inputs_embeds,
             **kwargs,
         )
-
-
-class RBLNRuntimeEncoder(RBLNPytorchRuntime):
-    mandatory_members = ["main_input_name"]
-
-    def forward(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
-        _ = super().forward(*args, **kwargs)
-        return BaseModelOutput(last_hidden_state=torch.tensor([1.0]))
-
-
-class RBLNRuntimeDecoder(RBLNPytorchRuntime):
-    mandatory_members = ["main_input_name"]
-
-    def __init__(
-        self,
-        runtime: rebel.Runtime,
-        batch_size: int,
-        dec_max_seq_len: int,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(runtime, **kwargs)
-        self.batch_size = batch_size
-        self.dec_max_seq_len = dec_max_seq_len
-
-    def forward(
-        self,
-        decoder_input_ids: Optional[torch.LongTensor] = None,
-        attention_mask: Optional[torch.FloatTensor] = None,
-        decoder_attention_mask: Optional[torch.BoolTensor] = None,
-        cache_position: Optional[torch.Tensor] = None,
-        **kwargs,
-    ) -> Tuple[torch.FloatTensor]:
-        batch_size = decoder_input_ids.shape[0]
-        if batch_size != self.batch_size:
-            raise RuntimeError(
-                f"Batch size mismatch: got {batch_size}, expected {self.batch_size} (compiled batch size)."
-            )
-
-        if batch_size != cache_position.shape[0]:
-            raise RuntimeError(f"Cache position size mismatch: got {cache_position.shape[0]}, expected {batch_size}.")
-
-        for b_idx in range(self.batch_size):
-            decoding_step = cache_position[b_idx].item()
-            if not (0 <= decoding_step < self.dec_max_seq_len):
-                raise ValueError(
-                    f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
-                )
-            decoder_attention_mask[b_idx, : decoding_step + 1] = 1
-
-        lm_logits = super().forward(
-            decoder_input_ids,
-            decoder_attention_mask,
-            attention_mask,
-            cache_position,
-        )
-
-        return Seq2SeqLMOutput(logits=lm_logits)
 
 
 class T5EncoderWrapper(torch.nn.Module):
@@ -247,20 +189,8 @@ class RBLNT5EncoderModel(RBLNModel):
 
 
 class RBLNT5ForConditionalGeneration(RBLNModelForSeq2SeqLM):
-    def __post_init__(self, **kwargs):
-        batch_size = self.rbln_config.model_cfg["batch_size"]
-        dec_max_seq_len = self.rbln_config.model_cfg["dec_max_seq_len"]
-
-        self.encoder = RBLNRuntimeEncoder(
-            runtime=self.model[0],
-            main_input_name="input_ids",
-        )
-        self.decoder = RBLNRuntimeDecoder(
-            runtime=self.model[1],
-            main_input_name="input_ids",
-            batch_size=batch_size,
-            dec_max_seq_len=dec_max_seq_len,
-        )
+    support_causal_attn = False
+    support_paged_attn = False
 
     @classmethod
     def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: "RBLNConfig"):
@@ -279,139 +209,3 @@ class RBLNT5ForConditionalGeneration(RBLNModelForSeq2SeqLM):
             return redirect(val)
 
         return val
-
-    @classmethod
-    def _get_rbln_config(
-        cls,
-        preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
-        model_config: "PretrainedConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
-        rbln_enc_max_seq_len = rbln_kwargs.get("enc_max_seq_len", None)
-        rbln_dec_max_seq_len = rbln_kwargs.get("dec_max_seq_len", None)
-        rbln_batch_size = rbln_kwargs.get("batch_size", None)
-        rbln_batch_size = 1 if rbln_batch_size is None else rbln_batch_size
-
-        n_layer = getattr(model_config, "decoder_layers", None) or getattr(model_config, "num_layers")
-        n_head = getattr(model_config, "decoder_attention_heads", None) or getattr(model_config, "num_heads")
-        d_kv = (
-            model_config.d_kv
-            if hasattr(model_config, "d_kv")
-            else model_config.d_model // model_config.encoder_attention_heads
-        )
-
-        max_position_embeddings = getattr(model_config, "n_positions", None) or getattr(
-            model_config, "max_position_embeddings", None
-        )
-
-        rbln_pad_token_id = getattr(model_config, "pad_token_id", None)
-        if rbln_pad_token_id is None:
-            rbln_pad_token_id = getattr(model_config, "bos_token_id", None)
-            if rbln_pad_token_id is None:
-                rbln_pad_token_id = getattr(model_config, "eos_token_id", None)
-                if rbln_pad_token_id is None:
-                    rbln_pad_token_id = -1
-
-        if rbln_enc_max_seq_len is None:
-            rbln_enc_max_seq_len = max_position_embeddings
-            if rbln_enc_max_seq_len is None:
-                for tokenizer in preprocessors:
-                    if hasattr(tokenizer, "model_max_length"):
-                        rbln_enc_max_seq_len = tokenizer.model_max_length
-                        break
-                if rbln_enc_max_seq_len is None:
-                    raise ValueError("`rbln_enc_max_seq_len` should be specified!")
-        if max_position_embeddings is not None and rbln_enc_max_seq_len > max_position_embeddings:
-            raise ValueError("`rbln_enc_max_seq_len` should be less or equal than max_position_embeddings!")
-
-        if rbln_dec_max_seq_len is None:
-            rbln_dec_max_seq_len = max_position_embeddings
-            if rbln_dec_max_seq_len is None:
-                for tokenizer in preprocessors:
-                    if hasattr(tokenizer, "model_max_length"):
-                        rbln_dec_max_seq_len = tokenizer.model_max_length
-                        break
-                if rbln_dec_max_seq_len is None:
-                    raise ValueError("`rbln_dec_max_seq_len` should be specified!")
-
-        if max_position_embeddings is not None and rbln_dec_max_seq_len > max_position_embeddings:
-            raise ValueError("`rbln_dec_max_seq_len` should be less or equal than max_position_embeddings!")
-
-        # model input info
-        enc_input_info = [
-            ("input_ids", [1, rbln_enc_max_seq_len], "int64"),
-            ("attention_mask", [1, rbln_enc_max_seq_len], "float32"),
-            (
-                "cross_key_value_states",
-                [
-                    n_layer * 2,
-                    rbln_batch_size,
-                    n_head,
-                    rbln_enc_max_seq_len,
-                    d_kv,
-                ],
-                "float32",
-            ),
-            ("block_tables", [1], "int16"),
-        ]
-
-        dec_input_info = [
-            ("input_ids", [rbln_batch_size, 1], "int64"),
-            ("attention_mask", [rbln_batch_size, rbln_dec_max_seq_len], "float32"),
-            ("encoder_attention_mask", [rbln_batch_size, rbln_enc_max_seq_len], "float32"),
-            (
-                "cache_position",
-                [rbln_batch_size, 1],
-                "int32",
-            ),
-        ]
-        dec_input_info.extend(
-            [
-                (
-                    "cross_key_value_states",
-                    [
-                        n_layer * 2,
-                        rbln_batch_size,
-                        n_head,
-                        rbln_enc_max_seq_len,
-                        d_kv,
-                    ],
-                    "float32",
-                )
-            ]
-        )
-        dec_input_info.extend(
-            [
-                (
-                    f"self_key_value_states_{i}",
-                    [
-                        rbln_batch_size,
-                        n_head,
-                        rbln_dec_max_seq_len,
-                        d_kv,
-                    ],
-                    "float32",
-                )
-                for i in range(n_layer * 2)
-            ]
-        )
-
-        enc_compile_config = RBLNCompileConfig(compiled_model_name="encoder", input_info=enc_input_info)
-        dec_compile_config = RBLNCompileConfig(compiled_model_name="decoder", input_info=dec_input_info)
-
-        rbln_config = RBLNConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[enc_compile_config, dec_compile_config],
-            rbln_kwargs=rbln_kwargs,
-        )
-
-        rbln_config.model_cfg.update(
-            {
-                "enc_max_seq_len": rbln_enc_max_seq_len,
-                "dec_max_seq_len": rbln_dec_max_seq_len,
-                "batch_size": rbln_batch_size,
-                "pad_token_id": rbln_pad_token_id,
-            }
-        )
-
-        return rbln_config
