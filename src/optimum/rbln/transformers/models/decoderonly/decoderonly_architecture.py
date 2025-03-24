@@ -97,7 +97,7 @@ def validate_attention_method(
                 f"supported value is {MIN_FLASH_ATTN_MAX_SEQ_LEN}. Please increase `rbln_max_seq_len` to meet "
                 "this requirement, or consider switching `rbln_attn_impl` to 'eager' for shorter lengths."
             )
-            
+
     if rbln_kvcache_block_size is not None:
         if rbln_attn_impl == "flash_attn" and rbln_kvcache_partition_len != rbln_kvcache_block_size:
             raise ValueError(
