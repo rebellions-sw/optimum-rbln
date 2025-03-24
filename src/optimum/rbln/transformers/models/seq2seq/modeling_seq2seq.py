@@ -308,8 +308,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
             ]
         )
 
-        if cls.support_causal_attn:
-            dec_input_info.insert(3, ("block_tables", [rbln_batch_size, 1], "int16"))
+        dec_input_info.insert(3, ("block_tables", [rbln_batch_size, 1], "int16"))
         if (not cls.support_causal_attn) or rbln_use_attention_mask:
             dec_input_info.insert(1, ("attention_mask", [rbln_batch_size, rbln_dec_max_seq_len], "float32"))
 

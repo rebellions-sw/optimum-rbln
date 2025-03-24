@@ -182,14 +182,14 @@ def register_rbln_custom_paged_causal_attention():
 
 
 @lru_cache
-def register_rbln_custom_add_softmax_attention():
+def register_rbln_custom_paged_add_softmax_attention():
     torch.library.define(
-        "rbln_custom_ops::add_softmax_attn_decode",
-        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d) -> Tensor",
+        "rbln_custom_ops::paged_add_softmax_attn_decode",
+        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f) -> Tensor",
     )
 
-    @torch.library.impl("rbln_custom_ops::add_softmax_attn_decode", "cpu")
-    def add_softmax_attn_decode_cpu(q, k, v, mask, kcache, vcache, seq, scale):
+    @torch.library.impl("rbln_custom_ops::paged_add_softmax_attn_decode", "cpu")
+    def paged_add_softmax_attn_decode_cpu(q, k, v, mask, kcache, vcache, seq, scale, block_table, block_size):
         """Defines the computation pattern for fused attention with KV cache updates.
 
         IMPORTANT: This op serves as a pattern definition for the RBLN compiler to generate
@@ -210,6 +210,8 @@ def register_rbln_custom_add_softmax_attention():
         - vcache: [batch_size, n_heads, 1, max_seq_len, head_dim] - Value cache
         - seq: [1] - Current sequence position
         - scale: [] - Attention scale factor
+        - block_table: [batch_size, max_seq_len // block_size] - Block indices for KV cache management
+        - block_size: [] - Number of tokens per block
 
         Returns:
             Tensor: attn_output: [batch=1, n_heads, 1, 1, head_dim] - Attention output
@@ -217,5 +219,5 @@ def register_rbln_custom_add_softmax_attention():
         return q
 
     @register_fake("rbln_custom_ops::add_softmax_attn_decode")
-    def add_softmax_attn_decode_abstract(q, k, v, m, kcache, vcache, seq, partition):
+    def paged_add_softmax_attn_decode_abstract(q, k, v, m, kcache, vcache, seq, partition, block_table, block_size):
         return q

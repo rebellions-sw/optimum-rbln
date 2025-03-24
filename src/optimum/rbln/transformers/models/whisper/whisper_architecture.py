@@ -25,7 +25,7 @@ from transformers.modeling_outputs import (
 )
 from transformers.utils import logging
 
-from ....ops import register_rbln_custom_add_softmax_attention, register_rbln_custom_cache_update
+from ....ops import register_rbln_custom_paged_add_softmax_attention, register_rbln_custom_cache_update
 
 
 logger = logging.get_logger(__name__)
@@ -34,7 +34,7 @@ logger = logging.get_logger(__name__)
 class WhisperWrapper:
     def __init__(self, model, rbln_token_timestamps):
         register_rbln_custom_cache_update()
-        register_rbln_custom_add_softmax_attention()
+        register_rbln_custom_paged_add_softmax_attention()
         self.encoder = WhisperEncoderWrapper(model)
         self.decoder = WhisperDecoderWrapper(model, output_attentions=rbln_token_timestamps)
 
