@@ -223,6 +223,37 @@ class TestKandinskyV22Model(BaseTest.TestModel):
         "rbln_img_height": 64,
     }
 
+    def test_complicate_config(self):
+        rbln_config = {
+            "prior_pipe": {
+                "text_encoder": {
+                    "batch_size": 2,
+                },
+            },
+            "prior_prior": {
+                "batch_size": 4,
+            },
+            "unet": {
+                "batch_size": 2,
+            },
+            "batch_size": 1,
+            "prior_guidance_scale": 5.0,
+            "guidance_scale": 3.0,
+        }
+        with self.subTest():
+            _ = self.RBLN_CLASS.from_pretrained(
+                model_id=self.HF_MODEL_ID,
+                export=True,
+                rbln_config=rbln_config,
+                **self.RBLN_CLASS_KWARGS,
+            )
+        with self.subTest():
+            self.assertEqual(_.prior_text_encoder.rbln_config.model_cfg["batch_size"], 2)
+            self.assertEqual(_.prior_prior.rbln_config.model_cfg["batch_size"], 4)
+            self.assertEqual(_.prior_prior.rbln_config.model_cfg["guidance_scale"], 5.0)
+            self.assertEqual(_.unet.rbln_config.model_cfg["batch_size"], 2)
+            self.assertEqual(_.unet.rbln_config.model_cfg["guidance_scale"], 3.0)
+
 
 if __name__ == "__main__":
     unittest.main()
