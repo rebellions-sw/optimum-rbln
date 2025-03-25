@@ -144,6 +144,8 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
 
         vae_scale_factor_spatial = rbln_kwargs["vae_scale_factor_spatial"]
         vae_scale_factor_temporal = rbln_kwargs["vae_scale_factor_temporal"]
+        # https://github.com/huggingface/diffusers/blob/89e4d6219805975bd7d253a267e1951badc9f1c0/src/diffusers/models/autoencoders/autoencoder_kl_cogvideox.py#L1099
+        num_latent_frames_batch_size = 2
 
         dec_shape = (sample_size[0] // vae_scale_factor_spatial, sample_size[1] // vae_scale_factor_spatial)
 
@@ -168,7 +170,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
                     [
                         rbln_batch_size,
                         model_config.latent_channels,
-                        (num_frames - 1) // vae_scale_factor_temporal + 1,
+                        num_latent_frames_batch_size,
                         dec_shape[0],
                         dec_shape[1],
                     ],
@@ -186,21 +188,22 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
                 rbln_kwargs=rbln_kwargs,
             )
             return rbln_config
-
-        compile_cfgs = RBLNCompileConfig(
-            input_info=[
+        
+        latent_shape = [rbln_batch_size,
+                        model_config.latent_channels,
+                        num_latent_frames_batch_size,
+                        dec_shape[0], dec_shape[1],
+                        ]
+        input_info=[
                 (
                     "z",
-                    [
-                        rbln_batch_size,
-                        model_config.latent_channels,
-                        (num_frames - 1) // vae_scale_factor_temporal + 1,
-                        dec_shape[0],
-                        dec_shape[1],
-                    ],
+                    latent_shape,
                     "float32",
                 )
             ]
+        
+        compile_cfgs = RBLNCompileConfig(
+            input_info=input_info,
         )
         rbln_config = RBLNConfig(
             rbln_cls=cls.__name__,

@@ -132,9 +132,53 @@ class RBLNRuntimeVAECogVideoXEncoder(RBLNPytorchRuntime):
 
 
 class RBLNRuntimeVAECogVideoXDecoder(RBLNPytorchRuntime):
-    def decode(self, z: torch.FloatTensor, **kwargs) -> Union[DecoderOutput, torch.Tensor]:
-        return (self.forward(z),)
+    # def decode(self, z: torch.FloatTensor, **kwargs) -> Union[DecoderOutput, torch.Tensor]:
+    #     return (self.forward(z),)
 
+    def _decode(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
+        batch_size, num_channels, num_frames, height, width = z.shape
+
+        if self.cog_video_x.use_tiling and (
+            width > self.cog_video_x.tile_latent_min_width or height > self.cog_video_x.tile_latent_min_height
+        ):
+            raise ValueError("Optimum-RBLN doesn't support tiled decoding aross H,W axis")
+
+        frame_batch_size = 2
+        num_batches = max(num_frames // frame_batch_size, 1)
+        conv_cache = None
+        dec = []
+        z_intermediate, conv_cache = self.forward(z[:,:,:2], conv_cache=conv_cache) # RBLN Runtime or CPU
+        dec.append(z_intermediate)
+
+        for i in range(1, num_batches):
+            remaining_frames = num_frames % frame_batch_size
+            start_frame = frame_batch_size * i + (0 if i == 0 else remaining_frames)
+            end_frame = frame_batch_size * (i + 1) + remaining_frames
+            z_intermediate = z[:, :, start_frame:end_frame]
+            # if self.cog_video_x.post_quant_conv is not None:
+            #     z_intermediate = self.cog_video_x.post_quant_conv(z_intermediate)
+            # import pdb; pdb.set_trace()
+            z_intermediate, conv_cache = self.forward(z_intermediate, conv_cache=conv_cache)
+            dec.append(z_intermediate)
+
+        dec = torch.cat(dec, dim=2)
+
+        if not return_dict:
+            return (dec,)
+
+        return DecoderOutput(sample=dec)
+
+    def decode(self, z: torch.Tensor, conv_cache = None, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
+        if self.cog_video_x.use_slicing and z.shape[0] > 1:
+            # batch split
+            decoded_slices = [self._decode(z_slice).sample for z_slice in z.split(1)]
+            decoded = torch.cat(decoded_slices)
+        else:
+            decoded = self._decode(z).sample
+
+        if not return_dict:
+            return (decoded,)
+        return DecoderOutput(sample=decoded)
 
 class _VAECogVideoXEncoder(torch.nn.Module):
     def __init__(self, cog_video_x: AutoencoderKLCogVideoX):
@@ -193,6 +237,7 @@ class _VAECogVideoXDecoder(torch.nn.Module):
         if self.cog_video_x.use_tiling and (
             width > self.cog_video_x.tile_latent_min_width or height > self.cog_video_x.tile_latent_min_height
         ):
+            raise ValueError("Optimum-RBLN doesn't support tiled decoding aross H,W axis")
             return self.cog_video_x.tiled_decode(z, return_dict=return_dict)
 
         frame_batch_size = self.cog_video_x.num_latent_frames_batch_size
@@ -218,7 +263,7 @@ class _VAECogVideoXDecoder(torch.nn.Module):
         return DecoderOutput(sample=dec)
 
     def decode(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
-        if self.cog_video_x.use_slicing and z.shape[0] > 1:
+        if self.cog_video_x.use_slicing and z.shape[0] > 1: # batch split
             decoded_slices = [self._decode(z_slice).sample for z_slice in z.split(1)]
             decoded = torch.cat(decoded_slices)
         else:
@@ -229,5 +274,9 @@ class _VAECogVideoXDecoder(torch.nn.Module):
         return DecoderOutput(sample=decoded)
 
     def forward(self, z: torch.Tensor):
-        cov_video_dec_out = self.decode(z, return_dict=False)
+        
+        # cov_video_dec_out = self.decode(z, return_dict=False)
+        
+        conv_cache = None
+        cov_video_dec_out = self.cog_video_x.decoder(z, conv_cache=conv_cache)
         return cov_video_dec_out
