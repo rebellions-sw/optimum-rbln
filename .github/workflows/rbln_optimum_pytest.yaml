@@ -82,7 +82,7 @@ jobs:
           OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
         run: |
           echo 
-          if ${{ !contains(${{ steps.get_commit_message.outputs.message }}, '[skip-transformers]') }}; then
+          if ${{ !contains( steps.get_commit_message.outputs.message , '[skip-transformers]') }}; then
             echo "Found [skip-transformers] in commit message, skipping CI"
           else
             uv run --no-sync pytest tests/test_transformers.py
