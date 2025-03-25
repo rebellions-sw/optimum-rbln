@@ -1,0 +1,51 @@
+name: Optimum-rbln / Scheduled Test
+
+on:
+  schedule:
+    # Run every day at 2am (17:00 UTC, 2:00am KST)
+    - cron: '0 17 * * *'
+
+env:
+  HF_USER_ID: ${{ secrets.HF_USER_ID }}
+  HF_AUTH_TOKEN: ${{ secrets.HF_AUTH_TOKEN }}
+
+jobs:
+  load-version:
+    runs-on: rebel-k8s-runner
+    outputs:
+      compiler_version: ${{ steps.get_version.outputs.compiler_version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Get compiler version
+        id: get_version
+        run: |
+          VERSION=$(grep rebel_compiler_version .github/version.yaml | cut -d ':' -f2 | tr -d ' ')
+          echo "compiler_version=$VERSION" >> $GITHUB_OUTPUT
+
+  check-compiler:
+    needs: load-version
+    uses: ./.github/workflows/rbln_check_compiler.yaml
+    with:
+      compiler_version: ${{ needs.load-version.outputs.compiler_version }}
+    secrets: inherit
+
+  optimum-rbln-pytest:
+    needs: [load-version, check-compiler]
+    if: ${{ needs.check-compiler.outputs.is_deploy_version == 'true' }}
+    uses: ./.github/workflows/rbln_optimum_pytest.yaml
+    with:
+      ref: main
+      rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
+      test_level: "full"
+    secrets: inherit
+
+  optimum-rbln-inference-test:
+    needs: check-compiler
+    if: ${{ needs.check-compiler.outputs.is_deploy_version == 'true' }}
+    uses: ./.github/workflows/rbln_optimum_inference_test.yaml
+    with:
+      ref: main
+      rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
+    secrets: inherit

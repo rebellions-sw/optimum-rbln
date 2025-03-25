@@ -192,6 +192,8 @@ class RBLNT5EncoderModel(RBLNModel):
 
 
 class RBLNT5ForConditionalGeneration(RBLNModelForSeq2SeqLM):
+    support_causal_paged_attn = False
+
     @classmethod
     def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: "RBLNConfig"):
         enc_max_seq_len = rbln_config.model_cfg["enc_max_seq_len"]

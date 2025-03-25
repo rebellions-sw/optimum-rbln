@@ -108,12 +108,16 @@ class RBLNBartModel(RBLNModel):
 
 
 class RBLNBartForConditionalGeneration(RBLNModelForSeq2SeqLM):
+    support_paged_causal_attn = True
+
     @classmethod
     def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: "RBLNConfig"):
         enc_max_seq_len = (
             rbln_config.model_cfg["enc_max_seq_len"] if "enc_max_seq_len" in rbln_config.model_cfg else 1024
         )
-        return BartWrapper(model, enc_max_seq_len=enc_max_seq_len)
+        use_attention_mask = rbln_config.model_cfg.get("use_attention_mask", False)
+
+        return BartWrapper(model, enc_max_seq_len=enc_max_seq_len, use_attention_mask=use_attention_mask)
 
     def __getattr__(self, __name: str) -> Any:
         def redirect(func):

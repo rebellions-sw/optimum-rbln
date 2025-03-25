@@ -37,7 +37,9 @@ class GPT2Wrapper(DecoderOnlyWrapper):
             raise NotImplementedError(f"flash attention ({self.attn_impl}) is not implemented for {self.__class__}")
         new_layers = []
         for layer in causal_lm.transformer.h:
-            new_self_attn = GPT2Attention(layer.attn, self.use_attention_mask)
+            new_self_attn = GPT2Attention(
+                layer.attn, self.use_attention_mask, kvcache_block_size=self.kvcache_block_size
+            )
             new_layer = GPT2Layer(layer, new_self_attn)
             new_layers.append(new_layer)
         new_model = GPT2Model(causal_lm.transformer, new_layers, max_seq_len=max_seq_len)
