@@ -18,7 +18,15 @@ from transformers.utils import _LazyModule
 
 
 _import_structure = {
-    "cache_utils": ["RebelDynamicCache"],
+    "configuration_alias": [
+        "RBLNASTForAudioClassificationConfig",
+        "RBLNDistilBertForQuestionAnsweringConfig",
+        "RBLNResNetForImageClassificationConfig",
+        "RBLNXLMRobertaForSequenceClassificationConfig",
+        "RBLNRobertaForSequenceClassificationConfig",
+        "RBLNRobertaForMaskedLMConfig",
+        "RBLNViTForImageClassificationConfig",
+    ],
     "models": [
         "RBLNAutoModel",
         "RBLNAutoModelForAudioClassification",
@@ -34,28 +42,32 @@ _import_structure = {
         "RBLNAutoModelForVision2Seq",
         "RBLNBartForConditionalGeneration",
         "RBLNBartModel",
-        "RBLNBertModel",
         "RBLNBertForMaskedLM",
         "RBLNBertForQuestionAnswering",
+        "RBLNBertModel",
         "RBLNCLIPTextModel",
+        "RBLNCLIPTextModelConfig",
         "RBLNCLIPTextModelWithProjection",
+        "RBLNCLIPTextModelWithProjectionConfig",
         "RBLNCLIPVisionModel",
+        "RBLNCLIPVisionModelConfig",
         "RBLNCLIPVisionModelWithProjection",
+        "RBLNCLIPVisionModelWithProjectionConfig",
         "RBLNDPTForDepthEstimation",
         "RBLNExaoneForCausalLM",
         "RBLNGemmaForCausalLM",
         "RBLNGPT2LMHeadModel",
-        "RBLNQwen2ForCausalLM",
-        "RBLNWav2Vec2ForCTC",
-        "RBLNWhisperForConditionalGeneration",
         "RBLNLlamaForCausalLM",
-        "RBLNPhiForCausalLM",
-        "RBLNT5EncoderModel",
-        "RBLNT5ForConditionalGeneration",
         "RBLNLlavaNextForConditionalGeneration",
         "RBLNMidmLMHeadModel",
-        "RBLNXLMRobertaModel",
         "RBLNMistralForCausalLM",
+        "RBLNPhiForCausalLM",
+        "RBLNQwen2ForCausalLM",
+        "RBLNT5EncoderModel",
+        "RBLNT5ForConditionalGeneration",
+        "RBLNWav2Vec2ForCTC",
+        "RBLNWhisperForConditionalGeneration",
+        "RBLNXLMRobertaModel",
     ],
     "modeling_alias": [
         "RBLNASTForAudioClassification",
@@ -69,7 +81,15 @@ _import_structure = {
 }
 
 if TYPE_CHECKING:
-    from .cache_utils import RebelDynamicCache
+    from .configuration_alias import (
+        RBLNASTForAudioClassificationConfig,
+        RBLNDistilBertForQuestionAnsweringConfig,
+        RBLNResNetForImageClassificationConfig,
+        RBLNRobertaForMaskedLMConfig,
+        RBLNRobertaForSequenceClassificationConfig,
+        RBLNViTForImageClassificationConfig,
+        RBLNXLMRobertaForSequenceClassificationConfig,
+    )
     from .modeling_alias import (
         RBLNASTForAudioClassification,
         RBLNDistilBertForQuestionAnswering,
@@ -98,9 +118,13 @@ if TYPE_CHECKING:
         RBLNBertForQuestionAnswering,
         RBLNBertModel,
         RBLNCLIPTextModel,
+        RBLNCLIPTextModelConfig,
         RBLNCLIPTextModelWithProjection,
+        RBLNCLIPTextModelWithProjectionConfig,
         RBLNCLIPVisionModel,
+        RBLNCLIPVisionModelConfig,
         RBLNCLIPVisionModelWithProjection,
+        RBLNCLIPVisionModelWithProjectionConfig,
         RBLNDPTForDepthEstimation,
         RBLNExaoneForCausalLM,
         RBLNGemmaForCausalLM,

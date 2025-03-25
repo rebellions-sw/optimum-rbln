@@ -24,9 +24,9 @@ from transformers import (
 )
 from transformers.modeling_outputs import BaseModelOutput
 
+from ....configuration_utils import RBLNCompileConfig, RBLNConfig
 from ....diffusers.modeling_diffusers import RBLNDiffusionMixin
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
 from ...models.seq2seq import RBLNModelForSeq2SeqLM
@@ -95,7 +95,7 @@ class RBLNT5EncoderModel(RBLNModel):
         return rbln_config
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
         model_config: Optional["PretrainedConfig"] = None,

@@ -36,9 +36,13 @@ _import_structure = {
     "bert": ["RBLNBertModel", "RBLNBertForQuestionAnswering", "RBLNBertForMaskedLM"],
     "clip": [
         "RBLNCLIPTextModel",
+        "RBLNCLIPTextModelConfig",
         "RBLNCLIPTextModelWithProjection",
+        "RBLNCLIPTextModelWithProjectionConfig",
         "RBLNCLIPVisionModel",
+        "RBLNCLIPVisionModelConfig",
         "RBLNCLIPVisionModelWithProjection",
+        "RBLNCLIPVisionModelWithProjectionConfig",
     ],
     "dpt": ["RBLNDPTForDepthEstimation"],
     "exaone": ["RBLNExaoneForCausalLM"],
@@ -75,9 +79,13 @@ if TYPE_CHECKING:
     from .bert import RBLNBertForMaskedLM, RBLNBertForQuestionAnswering, RBLNBertModel
     from .clip import (
         RBLNCLIPTextModel,
+        RBLNCLIPTextModelConfig,
         RBLNCLIPTextModelWithProjection,
+        RBLNCLIPTextModelWithProjectionConfig,
         RBLNCLIPVisionModel,
+        RBLNCLIPVisionModelConfig,
         RBLNCLIPVisionModelWithProjection,
+        RBLNCLIPVisionModelWithProjectionConfig,
     )
     from .dpt import RBLNDPTForDepthEstimation
     from .exaone import RBLNExaoneForCausalLM

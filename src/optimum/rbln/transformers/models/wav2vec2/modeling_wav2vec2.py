@@ -18,8 +18,8 @@ import torch
 from transformers import AutoModelForMaskedLM, PretrainedConfig, Wav2Vec2ForCTC
 from transformers.modeling_outputs import CausalLMOutput
 
+from ....configuration_utils import RBLNCompileConfig, RBLNConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 
 
@@ -64,7 +64,7 @@ class RBLNWav2Vec2ForCTC(RBLNModel):
         return _Wav2Vec2(model).eval()
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model_config: "PretrainedConfig",

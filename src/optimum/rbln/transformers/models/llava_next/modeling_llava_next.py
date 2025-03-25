@@ -26,8 +26,8 @@ from transformers import (
 )
 from transformers.modeling_outputs import BaseModelOutputWithPooling
 
+from ....configuration_utils import RBLNCompileConfig, RBLNConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyOutput
 
@@ -165,7 +165,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         return model.multi_modal_projector
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
         model_config: Optional["PretrainedConfig"] = None,

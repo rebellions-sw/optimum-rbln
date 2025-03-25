@@ -22,8 +22,8 @@ from rebel.compile_context import CompileContext
 from transformers import AutoModelForSeq2SeqLM, PretrainedConfig, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutput, Seq2SeqLMOutput
 
+from ....configuration_utils import RBLNCompileConfig, RBLNConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
 
@@ -182,7 +182,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
         return {"encoder": compiled_encoder, "decoder": compiled_decoder}
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model_config: "PretrainedConfig",

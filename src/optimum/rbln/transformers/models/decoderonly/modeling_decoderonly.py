@@ -26,8 +26,8 @@ from transformers import AutoConfig, AutoModelForCausalLM, PretrainedConfig, Pre
 from transformers.modeling_utils import no_init_weights
 from transformers.utils import ModelOutput
 
+from ....configuration_utils import RBLNCompileConfig, RBLNConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
 from ...utils.rbln_quantization import QuantizationManager
@@ -632,7 +632,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         return n_blocks, nbytes_per_block
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model_config: "PretrainedConfig",

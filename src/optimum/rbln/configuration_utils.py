@@ -1,0 +1,363 @@
+# Copyright 2025 Rebellions Inc. All rights reserved.
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import importlib
+import json
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
+
+import rebel
+import torch
+
+from .__version__ import __version__
+from .utils.logging import get_logger
+from .utils.runtime_utils import ContextRblnConfig
+
+
+logger = get_logger(__name__)
+
+
+DEFAULT_COMPILED_MODEL_NAME = "compiled_model"
+DEFAULT_MOD_NAME = "default"
+
+
+@dataclass
+class RBLNCompileConfig:
+    """
+    Configuration for RBLN compilation.
+
+    Attributes:
+        compiled_model_name (str): Name of the compiled model.
+        mod_name (str): Name of the RBLN module.
+        input_info (List[Tuple[str, Tuple[int], Optional[str]]]): Information about input tensors.
+        fusion (Optional[bool]): Whether to use fusion optimization.
+        npu (Optional[str]): NPU configuration.
+        tensor_parallel_size (Optional[int]): Size for tensor parallelism.
+    """
+
+    compiled_model_name: str = DEFAULT_COMPILED_MODEL_NAME
+    mod_name: str = DEFAULT_MOD_NAME
+    input_info: List[Tuple[str, Tuple[int], Optional[str]]] = None
+    fusion: Optional[bool] = None
+    npu: Optional[str] = None
+    tensor_parallel_size: Optional[int] = None
+
+    @staticmethod
+    def normalize_dtype(dtype):
+        """
+        Convert framework-specific dtype to string representation.
+        i.e. torch.float32 -> "float32"
+
+        Args:
+            dtype: The input dtype (can be string, torch dtype, or numpy dtype).
+
+        Returns:
+            str: The normalized string representation of the dtype.
+        """
+        if isinstance(dtype, str):
+            return dtype
+        else:
+            dtype: str = repr(dtype).split(".")[-1]
+            if dtype.endswith("'>"):  # numpy
+                dtype = dtype[:-2]
+            return dtype
+
+    def __post_init__(self):
+        self.input_info = [(i[0], i[1], RBLNCompileConfig.normalize_dtype(i[2]) or "float32") for i in self.input_info]
+
+    def update(self, kwargs: Dict[str, Any]):
+        self.compiled_model_name = kwargs.get("compiled_model_name", self.compiled_model_name)
+        self.mod_name = kwargs.get("mod_name", self.mod_name)
+        self.input_info = kwargs.get("input_info", self.input_info)
+        self.fusion = kwargs.get("fusion", self.fusion)
+        self.npu = kwargs.get("npu", self.npu)
+        self.tensor_parallel_size = kwargs.get("tensor_parallel_size", self.tensor_parallel_size)
+        return self
+
+    def get_dummy_inputs(
+        self, fill=0, static_tensors: Dict[str, torch.Tensor] = {}, meta_tensor_names: List[str] = []
+    ):
+        dummy = []
+        for name, shape, dtype in self.input_info:
+            if name in static_tensors:
+                tensor = static_tensors[name]
+                if shape != list(tensor.shape):
+                    raise RuntimeError(f"Different shape for dummy inputs. ({shape} != {list(tensor.shape)})")
+                if getattr(torch, dtype) != tensor.dtype:
+                    raise RuntimeError(f"Different dtype for dummy inputs ({dtype} != {tensor.dtype})")
+                dummy.append(tensor)
+            else:
+                if name in meta_tensor_names:
+                    device = "meta"
+                else:
+                    device = "cpu"
+
+                dummy.append(
+                    torch.fill(torch.empty(*shape, dtype=getattr(torch, dtype), device=torch.device(device)), fill)
+                    if len(shape) > 0
+                    else torch.tensor(fill, dtype=getattr(torch, dtype), device=torch.device(device))
+                )
+        return tuple(dummy)
+
+    def asdict(self):
+        return asdict(self)
+
+
+RUNTIME_KEYWORDS = ["create_runtimes", "optimize_host_memory", "device", "device_map", "activate_profiler"]
+
+
+def load_config(path: str) -> Tuple[Type["RBLNModelConfig"], Dict[str, Any]]:
+    path = Path(path)
+    if path.is_dir():
+        path = path / "rbln_config.json"
+
+    with open(path, "r") as jsonf:
+        config_file = json.load(jsonf)
+
+    if "_meta" in config_file:
+        is_legacy_rbln_config = True
+
+        if is_legacy_rbln_config:
+            raise RuntimeError(
+                f"`{path}` is an old version. Please recompile the model to get the latest config file."
+            )
+
+    cls_name = config_file["cls_name"]
+    cls = getattr(importlib.import_module("optimum.rbln"), cls_name)
+    return cls, config_file
+
+
+class RBLNAutoConfig:
+    def __new__(cls, **kwargs):
+        cls_name = kwargs.get("cls_name")
+        if cls_name is None:
+            raise ValueError("`cls_name` is required.")
+        cls = getattr(importlib.import_module("optimum.rbln"), cls_name)
+        return cls(**kwargs)
+
+    @staticmethod
+    def load(path: str, **kwargs) -> "RBLNModelConfig":
+        """
+        Load RBLNModelConfig from a path.
+        Class name is automatically inferred from the `rbln_config.json` file.
+
+        Args:
+            path (str): Path to the RBLNModelConfig.
+
+        Returns:
+            RBLNModelConfig: The loaded RBLNModelConfig.
+        """
+        cls, config_file = load_config(path)
+
+        rbln_keys = [key for key in kwargs.keys() if key.startswith("rbln_")]
+
+        rbln_runtime_kwargs = {key[5:]: kwargs.pop(key) for key in rbln_keys if key[5:] in RUNTIME_KEYWORDS}
+        rbln_kwargs = {key[5:]: kwargs.pop(key) for key in rbln_keys if key[5:] not in RUNTIME_KEYWORDS}
+
+        if len(rbln_kwargs) > 0:
+            raise ValueError(f"Cannot set the following arguments: {list(rbln_kwargs.keys())}")
+
+        config_file.update(rbln_runtime_kwargs)
+
+        return cls(**config_file)
+
+
+class RBLNModelConfig:
+    runtime_attributes = ["_create_runtimes", "_optimize_host_memory", "_device", "_device_map", "_activate_profiler"]
+    non_save_attributes = ["_frozen", "_runtime_options"]
+    submodules = {}
+
+    def __setattr__(self, key, value):
+        if key in self.submodules and not isinstance(value, RBLNModelConfig):
+            raise ValueError(f"`{key}` must be an instance of `RBLNModelConfig`.")
+
+        if key != "_attributes_map" and key not in self.runtime_attributes and key not in self.non_save_attributes:
+            self._attributes_map[key] = value
+
+        if hasattr(self, "_frozen") and self._frozen:
+            raise RuntimeError(
+                f"`{self.__class__.__name__}` is frozen. Cannot set attribute after setting compile_cfgs."
+            )
+
+        super().__setattr__(key, value)
+
+    def __init__(self, **kwargs):
+        self._attributes_map = {}
+        self._frozen = False
+
+        self.cls_name = kwargs.pop("cls_name", None)
+        if self.cls_name is None:
+            self.cls_name = self.__class__.__name__
+
+        self._runtime_options = {}
+        self._runtime_options["create_runtimes"] = kwargs.pop("create_runtimes", None)
+        self._runtime_options["optimize_host_memory"] = kwargs.pop("optimize_host_memory", None)
+        self._runtime_options["device"] = kwargs.pop("device", None)
+        self._runtime_options["device_map"] = kwargs.pop("device_map", None)
+        self._runtime_options["activate_profiler"] = kwargs.pop("activate_profiler", None)
+
+        self.optimum_rbln_version = kwargs.pop("optimum_rbln_version", None)
+        if self.optimum_rbln_version is None:
+            self.optimum_rbln_version = __version__
+
+        self._compile_cfgs: List[RBLNCompileConfig] = kwargs.pop("_compile_cfgs", [])
+
+        if not isinstance(self._compile_cfgs, list):
+            raise ValueError("`compile_cfgs` must be a list of `RBLNCompileConfig`.")
+        if len(self._compile_cfgs) > 0 and not isinstance(self._compile_cfgs[0], RBLNCompileConfig):
+            self.compile_cfgs = [RBLNCompileConfig(**cfg) for cfg in self._compile_cfgs]
+
+        if len(kwargs) > 0:
+            raise ValueError(f"Unexpected arguments: {kwargs.keys()}")
+
+    @property
+    def rbln_model_cls_name(self):
+        return self.cls_name[:-6]
+
+    def _prepare_for_serialization(self):
+        """
+        Prepare the attributes map for serialization by converting nested RBLNModelConfig
+        objects to their serializable form.
+        """
+        serializable_map = {}
+        for key, value in self._attributes_map.items():
+            if isinstance(value, RBLNModelConfig):
+                # Convert nested RBLNModelConfig to its serializable form
+                serializable_map[key] = value._prepare_for_serialization()
+            elif key == "_compile_cfgs":
+                serializable_map[key] = [cfg.asdict() for cfg in value]
+            else:
+                serializable_map[key] = value
+        return serializable_map
+
+    def __repr__(self):
+        repr_dict = self._prepare_for_serialization()
+        return json.dumps(repr_dict, indent=2)
+
+    @property
+    def compile_cfgs(self):
+        return self._compile_cfgs
+
+    @compile_cfgs.setter
+    def compile_cfgs(self, compile_cfgs: List[RBLNCompileConfig]):
+        raise RuntimeError("`compile_cfgs` cannot be set directly. Please use `set_compile_cfgs` instead.")
+
+    def set_compile_cfgs(self, compile_cfgs: List[RBLNCompileConfig]):
+        if not isinstance(compile_cfgs, list):
+            raise ValueError("`compile_cfgs` must be a list of `RBLNCompileConfig`.")
+        if len(compile_cfgs) == 0:
+            raise ValueError("`compile_cfgs` must contain at least one `RBLNCompileConfig`.")
+        if not isinstance(compile_cfgs[0], RBLNCompileConfig):
+            raise ValueError("`compile_cfgs` must contain only `RBLNCompileConfig`.")
+        self._compile_cfgs = compile_cfgs
+
+    def freeze(self):
+        if self._frozen:
+            raise RuntimeError("`RBLNModelConfig` is already frozen.")
+        self._frozen = True
+
+    def is_frozen(self):
+        return self._frozen
+
+    def save(self, path: str):
+        if not self._frozen:
+            raise RuntimeError("`RBLNModelConfig` is not frozen. Please call `set_compile_cfgs` first.")
+
+        # save as json file without runtime attributes
+        path = Path(path)
+        if path.is_dir():
+            path = path / "rbln_config.json"
+
+        with open(path, "w") as jsonf:
+            serializable_data = self._prepare_for_serialization()
+            json.dump(serializable_data, jsonf, indent=2)
+
+    @classmethod
+    def load(cls, path: str, **kwargs) -> "RBLNModelConfig":
+        cls_reserved, config_file = load_config(path)
+
+        if cls_reserved != cls:
+            logger.warning(f"Expected {cls.__name__}, but got {cls_reserved.__name__}.")
+
+        rbln_keys = [key for key in kwargs.keys() if key.startswith("rbln_")]
+        rbln_kwargs = {key[5:]: kwargs.pop(key) for key in rbln_keys}
+        config_file.update(rbln_kwargs)
+
+        return cls(**config_file)
+
+    @property
+    def create_runtimes(self):
+        context = ContextRblnConfig.get_current_context()["create_runtimes"]
+        if context is not None:
+            return context
+        elif self._runtime_options["create_runtimes"] is None:
+            return rebel.npu_is_available()
+        return self._runtime_options["create_runtimes"]
+
+    @create_runtimes.setter
+    def create_runtimes(self, create_runtimes: bool):
+        self._runtime_options["create_runtimes"] = create_runtimes
+
+    @property
+    def optimize_host_memory(self):
+        context = ContextRblnConfig.get_current_context()["optimize_host_memory"]
+        if context is not None:
+            return context
+        elif self._runtime_options["optimize_host_memory"] is None:
+            return True
+        return self._runtime_options["optimize_host_memory"]
+
+    @optimize_host_memory.setter
+    def optimize_host_memory(self, optimize_host_memory: bool):
+        self._runtime_options["optimize_host_memory"] = optimize_host_memory
+
+    @property
+    def device(self):
+        context = ContextRblnConfig.get_current_context()["device"]
+        if context is not None:
+            return context
+        return self._runtime_options["device"]
+
+    @device.setter
+    def device(self, device: Union[int, List[int]]):
+        self._runtime_options["device"] = device
+
+    @property
+    def device_map(self):
+        context = ContextRblnConfig.get_current_context()["device_map"]
+        if context:
+            return context
+        elif self._runtime_options["device_map"] is None:
+            rbln_device_map = {}
+            device_val = self.device
+            for cfg in self.compile_cfgs:
+                rbln_device_map[cfg.compiled_model_name] = device_val
+            return rbln_device_map
+        return self._runtime_options["device_map"]
+
+    @device_map.setter
+    def device_map(self, device_map: Dict[str, Union[int, List[int]]]):
+        self._runtime_options["device_map"] = device_map
+
+    @property
+    def activate_profiler(self):
+        context = ContextRblnConfig.get_current_context()["activate_profiler"]
+        if context is not None:
+            return context
+        return self._runtime_options["activate_profiler"]
+
+    @activate_profiler.setter
+    def activate_profiler(self, activate_profiler: bool):
+        self._runtime_options["activate_profiler"] = activate_profiler

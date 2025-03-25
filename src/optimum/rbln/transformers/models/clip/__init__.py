@@ -12,6 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .configuration_clip import (
+    RBLNCLIPTextModelConfig,
+    RBLNCLIPTextModelWithProjectionConfig,
+    RBLNCLIPVisionModelConfig,
+    RBLNCLIPVisionModelWithProjectionConfig,
+)
 from .modeling_clip import (
     RBLNCLIPTextModel,
     RBLNCLIPTextModelWithProjection,

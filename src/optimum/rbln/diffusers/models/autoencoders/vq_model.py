@@ -21,8 +21,8 @@ from diffusers.models.autoencoders.vae import DecoderOutput
 from diffusers.models.autoencoders.vq_model import VQEncoderOutput
 from transformers import PretrainedConfig
 
+from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNConfig
 from ....modeling import RBLNModel
-from ....modeling_config import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
 from .vae import RBLNRuntimeVQDecoder, RBLNRuntimeVQEncoder, _VQDecoder, _VQEncoder
@@ -84,7 +84,7 @@ class RBLNVQModel(RBLNModel):
         return rbln_config
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model_config: "PretrainedConfig",

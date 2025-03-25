@@ -19,8 +19,8 @@ import torch
 from diffusers import ControlNetModel
 from transformers import PretrainedConfig
 
+from ...configuration_utils import RBLNCompileConfig, RBLNConfig
 from ...modeling import RBLNModel
-from ...modeling_config import RBLNCompileConfig, RBLNConfig
 from ...utils.logging import get_logger
 from ..modeling_diffusers import RBLNDiffusionMixin
 
@@ -150,7 +150,7 @@ class RBLNControlNetModel(RBLNModel):
         return rbln_config
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model_config: "PretrainedConfig",
