@@ -62,12 +62,6 @@ jobs:
       - name: Setup Python
         run: uv python install 3.9
 
-      - name: Run Pytest
-        run: |
-          echo "Running tests with compiler version: ${{ inputs.rebel_compiler_version }}"
-          echo "Test level: ${{ inputs.test_level }}"
-          echo "Commit message: ${{ steps.get_commit_message.outputs.message }}"
-
       - name: Install optimum-rbln with tests group dependencies
         run: |
           uv sync --frozen --group tests --reinstall-package optimum-rbln
@@ -83,27 +77,27 @@ jobs:
         run: |
           echo 
           if ${{ !contains( steps.get_commit_message.outputs.message , '[skip-transformers]') }}; then
-            echo "Found [skip-transformers] in commit message, skipping CI"
-          else
             uv run --no-sync pytest tests/test_transformers.py
+          else
+            echo "Found [skip-transformers] in commit message, skipping CI"
           fi
 
-      # - name: Run pytest (diffusers)
-      #   env:
-      #     OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
-      #   run: |
-      #     if ${{ !contains(inputs.commit_message, '[skip-diffusers]') }}; then
-      #       echo "Found [skip-diffusers] in commit message, skipping CI"
-      #     else
-      #       uv run --no-sync pytest tests/test_diffusers.py
-      #     fi
+      - name: Run pytest (diffusers)
+        env:
+          OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
+        run: |
+          if ${{ !contains( steps.get_commit_message.outputs.message , '[skip-diffusers]') }}; then
+            uv run --no-sync pytest tests/test_diffusers.py
+          else
+            echo "Found [skip-diffusers] in commit message, skipping CI"
+          fi
 
-      # - name: Run pytest (llm)
-      #   env:
-      #     OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
-      #   run: |
-      #     if ${{ !contains(inputs.commit_message, '[skip-llms]') }}; then
-      #       echo "Found [skip-llms] in commit message, skipping CI"
-      #     else
-      #       uv run --no-sync pytest tests/test_llm.py
-      #     fi
+      - name: Run pytest (llm)
+        env:
+          OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
+        run: |
+          if ${{ !contains( steps.get_commit_message.outputs.message , '[skip-llms]') }}; then
+            uv run --no-sync pytest tests/test_llm.py
+          else
+            echo "Found [skip-llms] in commit message, skipping CI"
+          fi
