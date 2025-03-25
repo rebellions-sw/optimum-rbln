@@ -20,10 +20,6 @@ on:
         required: false
         type: string
         default: "default"
-      # commit_message:
-      #   description: "Commit message to check for skip tags"
-      #   required: false
-      #   type: string
 
 env:
   REBEL_PYPI_ENDPOINT: ${{ vars.REBEL_PYPI_INTERNAL_ENDPOINT }}
@@ -71,7 +67,7 @@ jobs:
         run: |
           echo "Running tests with compiler version: ${{ inputs.rebel_compiler_version }}"
           echo "Test level: ${{ inputs.test_level }}"
-          echo "Commit message: $FINAL_MESSAGE"
+          echo "Commit message: $COMMIT_MESSAGE"
 
       # - name: Install optimum-rbln with tests group dependencies
       #   run: |
@@ -88,7 +84,7 @@ jobs:
       #   run: |
       #     echo 
       #     if ${{ !contains(inputs.commit_message, '[skip-transformers]') }}; then
-      #       echo "Found [skip transformers] in commit message, skipping CI"
+      #       echo "Found [skip-transformers] in commit message, skipping CI"
       #     else
       #       uv run --no-sync pytest tests/test_transformers.py
       #     fi
@@ -98,7 +94,7 @@ jobs:
       #     OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
       #   run: |
       #     if ${{ !contains(inputs.commit_message, '[skip-diffusers]') }}; then
-      #       echo "Found [skip diffusers] in commit message, skipping CI"
+      #       echo "Found [skip-diffusers] in commit message, skipping CI"
       #     else
       #       uv run --no-sync pytest tests/test_diffusers.py
       #     fi
@@ -108,7 +104,7 @@ jobs:
       #     OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
       #   run: |
       #     if ${{ !contains(inputs.commit_message, '[skip-llms]') }}; then
-      #       echo "Found [skip llms] in commit message, skipping CI"
+      #       echo "Found [skip-llms] in commit message, skipping CI"
       #     else
       #       uv run --no-sync pytest tests/test_llm.py
       #     fi
