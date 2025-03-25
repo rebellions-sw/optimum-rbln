@@ -68,25 +68,25 @@ jobs:
           echo "Test level: ${{ inputs.test_level }}"
           echo "Commit message: ${{ steps.get_commit_message.outputs.message }}"
 
-      # - name: Install optimum-rbln with tests group dependencies
-      #   run: |
-      #     uv sync --frozen --group tests --reinstall-package optimum-rbln
+      - name: Install optimum-rbln with tests group dependencies
+        run: |
+          uv sync --frozen --group tests --reinstall-package optimum-rbln
 
-      # - name: Install rebel-compiler
-      #   run: |
-      #     PYPI_URL=$(echo ${{ env.REBEL_PYPI_ENDPOINT }} | sed "s/\/\//\0${{ env.REBEL_PYPI_USERNAME}}:${{ env.REBEL_PYPI_PASSWORD}}@/")
-      #     uv pip install --extra-index-url $PYPI_URL rebel-compiler==${{ inputs.rebel_compiler_version }}
+      - name: Install rebel-compiler
+        run: |
+          PYPI_URL=$(echo ${{ env.REBEL_PYPI_ENDPOINT }} | sed "s/\/\//\0${{ env.REBEL_PYPI_USERNAME}}:${{ env.REBEL_PYPI_PASSWORD}}@/")
+          uv pip install --extra-index-url $PYPI_URL rebel-compiler==${{ inputs.rebel_compiler_version }}
       
-      # - name: Run pytest (transformers)
-      #   env:
-      #     OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
-      #   run: |
-      #     echo 
-      #     if ${{ !contains(inputs.commit_message, '[skip-transformers]') }}; then
-      #       echo "Found [skip-transformers] in commit message, skipping CI"
-      #     else
-      #       uv run --no-sync pytest tests/test_transformers.py
-      #     fi
+      - name: Run pytest (transformers)
+        env:
+          OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
+        run: |
+          echo 
+          if ${{ !contains(${{ steps.get_commit_message.outputs.message }}, '[skip-transformers]') }}; then
+            echo "Found [skip-transformers] in commit message, skipping CI"
+          else
+            uv run --no-sync pytest tests/test_transformers.py
+          fi
 
       # - name: Run pytest (diffusers)
       #   env:
