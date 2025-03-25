@@ -44,14 +44,6 @@ jobs:
         run: |
           COMMIT_MESSAGE=$(git log -1 --pretty=%B)
           echo "message=$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
-      
-      - name: Set commit message
-        id: set_commit_message
-        run: |
-          FINAL_MESSAGE="${{ inputs.commit_message }}"
-          if [ -z "$FINAL_MESSAGE" ]; then
-            FINAL_MESSAGE="${{ steps.get_commit_message.outputs.message }}"
-          fi
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v3
