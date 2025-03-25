@@ -82,17 +82,6 @@ jobs:
       ref: ${{ github.event.pull_request.head.sha }}
       rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
       test_level: "default"
-      commit_message: ${{ steps.get_commit_message.outputs.message }}  # 수정
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-      - name: Get commit message
-        id: get_commit_message
-        run: |
-          COMMIT_MESSAGE=$(git log -1 --pretty=%B)
-          echo "message=$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
     secrets: inherit
 
   # optimum-rbln-inference-test:

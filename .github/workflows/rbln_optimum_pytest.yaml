@@ -20,10 +20,10 @@ on:
         required: false
         type: string
         default: "default"
-      commit_message:
-        description: "Commit message to check for skip tags"
-        required: false
-        type: string
+      # commit_message:
+      #   description: "Commit message to check for skip tags"
+      #   required: false
+      #   type: string
 
 env:
   REBEL_PYPI_ENDPOINT: ${{ vars.REBEL_PYPI_INTERNAL_ENDPOINT }}
@@ -42,6 +42,22 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      - name: Get commit message if not provided
+        id: get_commit_message
+        if: ${{ inputs.commit_message == '' }}
+        run: |
+          COMMIT_MESSAGE=$(git log -1 --pretty=%B)
+          echo "message=$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
+      
+      - name: Set commit message
+        id: set_commit_message
+        run: |
+          FINAL_MESSAGE="${{ inputs.commit_message }}"
+          if [ -z "$FINAL_MESSAGE" ]; then
+            FINAL_MESSAGE="${{ steps.get_commit_message.outputs.message }}"
+          fi
+          echo "Using commit message: $FINAL_MESSAGE"
+
       - name: Setup uv
         uses: astral-sh/setup-uv@v3
         with:
@@ -50,6 +66,12 @@ jobs:
 
       - name: Setup Python
         run: uv python install 3.9
+
+      - name: Run Pytest
+        run: |
+          echo "Running tests with compiler version: ${{ inputs.rebel_compiler_version }}"
+          echo "Test level: ${{ inputs.test_level }}"
+          echo "Commit message: $FINAL_MESSAGE"
 
       # - name: Install optimum-rbln with tests group dependencies
       #   run: |
