@@ -52,7 +52,6 @@ jobs:
           if [ -z "$FINAL_MESSAGE" ]; then
             FINAL_MESSAGE="${{ steps.get_commit_message.outputs.message }}"
           fi
-          echo "Using commit message: $FINAL_MESSAGE"
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v3
@@ -67,7 +66,7 @@ jobs:
         run: |
           echo "Running tests with compiler version: ${{ inputs.rebel_compiler_version }}"
           echo "Test level: ${{ inputs.test_level }}"
-          echo "Commit message: $COMMIT_MESSAGE"
+          echo "Commit message: ${{ steps.get_commit_message.outputs.message }}"
 
       # - name: Install optimum-rbln with tests group dependencies
       #   run: |
