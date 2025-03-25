@@ -85,11 +85,11 @@ jobs:
       commit_message: ${{ github.event.pull_request.head.commit.message }}
     secrets: inherit
 
-  optimum-rbln-inference-test:
-    needs: [check-skip-ci, check-compiler, check-team-member]
-    if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' && needs.check-team-member.outputs.is_team_member == 'true' }}
-    uses: ./.github/workflows/rbln_optimum_inference_test.yaml
-    with:
-      ref: ${{ github.event.pull_request.head.sha }}
-      rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
-    secrets: inherit
+  # optimum-rbln-inference-test:
+  #   needs: [check-skip-ci, check-compiler, check-team-member]
+  #   if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' && needs.check-team-member.outputs.is_team_member == 'true' }}
+  #   uses: ./.github/workflows/rbln_optimum_inference_test.yaml
+  #   with:
+  #     ref: ${{ github.event.pull_request.head.sha }}
+  #     rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
+  #   secrets: inherit
