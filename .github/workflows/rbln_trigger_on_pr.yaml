@@ -15,7 +15,6 @@ jobs:
     runs-on: rebel-k8s-runner
     outputs:
       should_skip: ${{ contains(github.event.pull_request.head.commit.message, '[skip ci]') }}
-      commit_message: ${{ github.event.pull_request.head.commit.message }}
     steps:
       - name: Check if [skip ci] is in commit message
         run: |
@@ -83,7 +82,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.sha }}
       rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
       test_level: "default"
-      commit_message: ${{ needs.check-skip-ci.outputs.commit_message }}
+      commit_message: ${{ github.event.pull_request.head.commit.message }}
     secrets: inherit
 
   optimum-rbln-inference-test:
