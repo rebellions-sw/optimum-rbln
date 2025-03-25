@@ -70,16 +70,24 @@ jobs:
             uv run --no-sync pytest tests/test_transformers.py
           fi
 
-      # - name: Run pytest (diffusers)
-      #   env:
-      #     OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
-      #   if: ${{ !contains(inputs.commit_message, '[skip-diffusers]') }}
-      #   run: |
-      #     uv run --no-sync pytest tests/test_diffusers.py
+      - name: Run pytest (diffusers)
+        env:
+          OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
+        if: ${{ !contains(inputs.commit_message, '[skip-diffusers]') }}
+        run: |
+          if ${{ !contains(inputs.commit_message, '[skip-transformers]') }}; then
+            echo "Found [skip transformers] in commit message, skipping CI"
+          else
+            uv run --no-sync pytest tests/test_diffusers.py
+          fi
 
-      # - name: Run pytest (llm)
-      #   env:
-      #     OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
-      #   if: ${{ !contains(inputs.commit_message, '[skip-llms]') }}
-      #   run: |
-      #     uv run --no-sync pytest tests/test_llm.py      
+      - name: Run pytest (llm)
+        env:
+          OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
+        if: ${{ !contains(inputs.commit_message, '[skip-llms]') }}
+        run: |
+          if ${{ !contains(inputs.commit_message, '[skip-transformers]') }}; then
+            echo "Found [skip transformers] in commit message, skipping CI"
+          else
+            uv run --no-sync pytest tests/test_llm.py
+          fi
