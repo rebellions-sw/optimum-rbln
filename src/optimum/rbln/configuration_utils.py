@@ -176,7 +176,7 @@ class RBLNAutoConfig:
 
 class RBLNModelConfig:
     runtime_attributes = ["_create_runtimes", "_optimize_host_memory", "_device", "_device_map", "_activate_profiler"]
-    non_save_attributes = ["_frozen", "_runtime_options"]
+    non_save_attributes = ["_frozen", "_runtime_options", "npu", "tensor_parallel_size"]
     submodules = {}
 
     def __setattr__(self, key, value):
@@ -193,31 +193,48 @@ class RBLNModelConfig:
 
         super().__setattr__(key, value)
 
-    def __init__(self, **kwargs):
+    def __init__(
+        self,
+        cls_name: Optional[str] = None,
+        create_runtimes: Optional[bool] = None,
+        optimize_host_memory: Optional[bool] = None,
+        device: Optional[Union[int, List[int]]] = None,
+        device_map: Optional[Dict[str, Union[int, List[int]]]] = None,
+        activate_profiler: Optional[bool] = None,
+        npu: Optional[str] = None,
+        tensor_parallel_size: Optional[int] = None,
+        optimum_rbln_version: Optional[str] = None,
+        _compile_cfgs: List[RBLNCompileConfig] = [],
+        **kwargs,
+    ):
         self._attributes_map = {}
         self._frozen = False
 
-        self.cls_name = kwargs.pop("cls_name", None)
+        self.cls_name = cls_name
         if self.cls_name is None:
             self.cls_name = self.__class__.__name__
 
         self._runtime_options = {}
-        self._runtime_options["create_runtimes"] = kwargs.pop("create_runtimes", None)
-        self._runtime_options["optimize_host_memory"] = kwargs.pop("optimize_host_memory", None)
-        self._runtime_options["device"] = kwargs.pop("device", None)
-        self._runtime_options["device_map"] = kwargs.pop("device_map", None)
-        self._runtime_options["activate_profiler"] = kwargs.pop("activate_profiler", None)
+        self._runtime_options["create_runtimes"] = create_runtimes
+        self._runtime_options["optimize_host_memory"] = optimize_host_memory
+        self._runtime_options["device"] = device
+        self._runtime_options["device_map"] = device_map
+        self._runtime_options["activate_profiler"] = activate_profiler
 
-        self.optimum_rbln_version = kwargs.pop("optimum_rbln_version", None)
+        # Automatically pass npu, tensor_parallel_size to compile_cfgs
+        self.npu = npu
+        self.tensor_parallel_size = tensor_parallel_size
+
+        self.optimum_rbln_version = optimum_rbln_version
         if self.optimum_rbln_version is None:
             self.optimum_rbln_version = __version__
 
-        self._compile_cfgs: List[RBLNCompileConfig] = kwargs.pop("_compile_cfgs", [])
+        self._compile_cfgs: List[RBLNCompileConfig] = _compile_cfgs
 
         if not isinstance(self._compile_cfgs, list):
             raise ValueError("`compile_cfgs` must be a list of `RBLNCompileConfig`.")
         if len(self._compile_cfgs) > 0 and not isinstance(self._compile_cfgs[0], RBLNCompileConfig):
-            self.compile_cfgs = [RBLNCompileConfig(**cfg) for cfg in self._compile_cfgs]
+            self.set_compile_cfgs([RBLNCompileConfig(**cfg) for cfg in self._compile_cfgs])
 
         if len(kwargs) > 0:
             raise ValueError(f"Unexpected arguments: {kwargs.keys()}")
@@ -261,11 +278,23 @@ class RBLNModelConfig:
             raise ValueError("`compile_cfgs` must contain at least one `RBLNCompileConfig`.")
         if not isinstance(compile_cfgs[0], RBLNCompileConfig):
             raise ValueError("`compile_cfgs` must contain only `RBLNCompileConfig`.")
+
         self._compile_cfgs = compile_cfgs
+        for compile_cfg in self._compile_cfgs:
+            compile_cfg.npu = self.npu
+            compile_cfg.tensor_parallel_size = self.tensor_parallel_size
 
     def freeze(self):
         if self._frozen:
             raise RuntimeError("`RBLNModelConfig` is already frozen.")
+
+        if (
+            not isinstance(self._compile_cfgs, list)
+            or len(self._compile_cfgs) == 0
+            or not all(isinstance(cfg, RBLNCompileConfig) for cfg in self._compile_cfgs)
+        ):
+            raise RuntimeError("`compile_cfgs` must be set before freezing.")
+
         self._frozen = True
 
     def is_frozen(self):
