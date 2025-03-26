@@ -224,6 +224,12 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
             attention_mask = self.dec_attn_mask
 
+        if self.batch_size < block_tables.shape[0]:
+            block_tables = block_tables[: self.batch_size]
+
+        if self.batch_size < attention_mask.shape[0]:
+            attention_mask = attention_mask[: self.batch_size]
+
         logits = super().forward(
             inputs,
             cache_position,
@@ -973,11 +979,18 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             logits = torch.cat(logits, dim=0)
         # Decoder
         else:
-            logits = self.decoder(
-                input_ids=input_ids,
-                inputs_embeds=inputs_embeds,
-                cache_position=cache_position,
-            )
+            if input_ids.shape[0] == 1:
+                logits = self.decoder_batch1(
+                    input_ids=input_ids,
+                    inputs_embeds=inputs_embeds,
+                    cache_position=cache_position,
+                )
+            else:
+                logits = self.decoder(
+                    input_ids=input_ids,
+                    inputs_embeds=inputs_embeds,
+                    cache_position=cache_position,
+                )
 
         return RBLNDecoderOnlyOutput(
             logits=logits,
