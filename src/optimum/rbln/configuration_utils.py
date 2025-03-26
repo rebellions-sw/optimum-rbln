@@ -175,15 +175,24 @@ class RBLNAutoConfig:
 
 
 class RBLNModelConfig:
-    runtime_attributes = ["_create_runtimes", "_optimize_host_memory", "_device", "_device_map", "_activate_profiler"]
-    non_save_attributes = ["_frozen", "_runtime_options", "npu", "tensor_parallel_size"]
+    non_save_attributes = [
+        "_frozen",
+        "_runtime_options",
+        "npu",
+        "tensor_parallel_size",
+        "create_runtimes",
+        "optimize_host_memory",
+        "device",
+        "device_map",
+        "activate_profiler",
+    ]
     submodules = {}
 
     def __setattr__(self, key, value):
         if key in self.submodules and not isinstance(value, RBLNModelConfig):
             raise ValueError(f"`{key}` must be an instance of `RBLNModelConfig`.")
 
-        if key != "_attributes_map" and key not in self.runtime_attributes and key not in self.non_save_attributes:
+        if key != "_attributes_map" and key not in self.non_save_attributes:
             self._attributes_map[key] = value
 
         if hasattr(self, "_frozen") and self._frozen:
