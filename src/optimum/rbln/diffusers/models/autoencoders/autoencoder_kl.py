@@ -20,7 +20,7 @@ from diffusers import AutoencoderKL
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
 from transformers import PretrainedConfig
 
-from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNConfig
+from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
@@ -29,20 +29,19 @@ from .vae import RBLNRuntimeVAEDecoder, RBLNRuntimeVAEEncoder, _VAEDecoder, _VAE
 
 if TYPE_CHECKING:
     import torch
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig, PreTrainedModel
 
 logger = get_logger(__name__)
 
 
 class RBLNAutoencoderKL(RBLNModel):
     auto_model_class = AutoencoderKL
-    config_name = "config.json"
     hf_library_name = "diffusers"
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
 
-        if self.rbln_config.model_cfg.get("img2img_pipeline") or self.rbln_config.model_cfg.get("inpaint_pipeline"):
+        if self.rbln_config.img2img_pipeline or self.rbln_config.inpaint_pipeline:
             self.encoder = RBLNRuntimeVAEEncoder(runtime=self.model[0], main_input_name="x")
             self.decoder = RBLNRuntimeVAEDecoder(runtime=self.model[1], main_input_name="z")
         else:
@@ -51,7 +50,7 @@ class RBLNAutoencoderKL(RBLNModel):
         self.image_size = self.rbln_config.model_cfg["sample_size"]
 
     @classmethod
-    def get_compiled_model(cls, model, rbln_config: RBLNConfig):
+    def get_compiled_model(cls, model, rbln_config: RBLNModelConfig):
         def compile_img2img():
             encoder_model = _VAEEncoder(model)
             decoder_model = _VAEDecoder(model)
@@ -115,54 +114,53 @@ class RBLNAutoencoderKL(RBLNModel):
         return sample_size
 
     @classmethod
-    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
-        rbln_config.update({"sample_size": cls.get_vae_sample_size(pipe, rbln_config)})
+    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: RBLNModelConfig) -> RBLNModelConfig:
+        rbln_config.sample_size = cls.get_vae_sample_size(pipe, rbln_config)
         return rbln_config
 
     @classmethod
     def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
+        model: "PreTrainedModel",
         model_config: "PretrainedConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
-        rbln_batch_size = rbln_kwargs.get("batch_size")
-        sample_size = rbln_kwargs.get("sample_size")
-        is_img2img = rbln_kwargs.get("img2img_pipeline")
-        is_inpaint = rbln_kwargs.get("inpaint_pipeline")
+        rbln_config: RBLNModelConfig,
+    ) -> RBLNModelConfig:
+        if rbln_config.sample_size is None:
+            rbln_config.sample_size = model_config.sample_size
 
-        if rbln_batch_size is None:
-            rbln_batch_size = 1
+        if isinstance(rbln_config.sample_size, int):
+            rbln_config.sample_size = (rbln_config.sample_size, rbln_config.sample_size)
 
-        if sample_size is None:
-            sample_size = model_config.sample_size
+        if rbln_config.vae_scale_factor is None:
+            if hasattr(model_config, "block_out_channels"):
+                rbln_config.vae_scale_factor = 2 ** (len(model_config.block_out_channels) - 1)
+            else:
+                # vae image processor default value 8 (int)
+                rbln_config.vae_scale_factor = 8
 
-        if isinstance(sample_size, int):
-            sample_size = (sample_size, sample_size)
-
-        rbln_kwargs["sample_size"] = sample_size
-
-        if hasattr(model_config, "block_out_channels"):
-            vae_scale_factor = 2 ** (len(model_config.block_out_channels) - 1)
-        else:
-            # vae image processor default value 8 (int)
-            vae_scale_factor = 8
-
-        dec_shape = (sample_size[0] // vae_scale_factor, sample_size[1] // vae_scale_factor)
-        enc_shape = (sample_size[0], sample_size[1])
-
-        if is_img2img or is_inpaint:
+        if rbln_config.img2img_pipeline or rbln_config.inpaint_pipeline:
             vae_enc_input_info = [
                 (
                     "x",
-                    [rbln_batch_size, model_config.in_channels, enc_shape[0], enc_shape[1]],
+                    [
+                        rbln_config.batch_size,
+                        model_config.in_channels,
+                        rbln_config.encoder_input_shape[0],
+                        rbln_config.encoder_input_shape[1],
+                    ],
                     "float32",
                 )
             ]
             vae_dec_input_info = [
                 (
                     "z",
-                    [rbln_batch_size, model_config.latent_channels, dec_shape[0], dec_shape[1]],
+                    [
+                        rbln_config.batch_size,
+                        model_config.latent_channels,
+                        rbln_config.decoder_input_shape[0],
+                        rbln_config.decoder_input_shape[1],
+                    ],
                     "float32",
                 )
             ]
@@ -171,27 +169,24 @@ class RBLNAutoencoderKL(RBLNModel):
             dec_rbln_compile_config = RBLNCompileConfig(compiled_model_name="decoder", input_info=vae_dec_input_info)
 
             compile_cfgs = [enc_rbln_compile_config, dec_rbln_compile_config]
-            rbln_config = RBLNConfig(
-                rbln_cls=cls.__name__,
-                compile_cfgs=compile_cfgs,
-                rbln_kwargs=rbln_kwargs,
-            )
+            rbln_config.set_compile_cfgs(compile_cfgs)
             return rbln_config
 
         vae_config = RBLNCompileConfig(
             input_info=[
                 (
                     "z",
-                    [rbln_batch_size, model_config.latent_channels, dec_shape[0], dec_shape[1]],
+                    [
+                        rbln_config.batch_size,
+                        model_config.latent_channels,
+                        rbln_config.decoder_input_shape[0],
+                        rbln_config.decoder_input_shape[1],
+                    ],
                     "float32",
                 )
             ]
         )
-        rbln_config = RBLNConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[vae_config],
-            rbln_kwargs=rbln_kwargs,
-        )
+        rbln_config.set_compile_cfgs([vae_config])
         return rbln_config
 
     @classmethod
