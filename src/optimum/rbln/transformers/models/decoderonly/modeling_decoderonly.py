@@ -417,6 +417,19 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             use_attention_mask=self.use_attention_mask,
             attn_impl=attn_impl,
         )
+        self.decoder_batch1 = RBLNRuntimeModel(
+            runtime=self.model[2],
+            main_input_name=main_input_name,
+            embed_tokens=self.embed_tokens,
+            phase="decode",
+            batch_size=1,
+            dec_attn_mask=dec_attn_mask,
+            block_tables=block_tables,
+            free_block_pool=free_block_pool,
+            kvcache_block_size=self.kvcache_block_size,
+            use_attention_mask=self.use_attention_mask,
+            attn_impl=attn_impl,
+        )
 
     @classmethod
     def save_torch_artifacts(
@@ -527,6 +540,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_compile_configs = rbln_config.compile_cfgs
         prefill_compile_config = rbln_compile_configs[0]
         dec_compile_config = rbln_compile_configs[1]
+        dec_compile_config_batch1 = rbln_compile_configs[2]
 
         context = CompileContext(use_weight_sharing=True)
 
@@ -542,6 +556,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 context.mark_static_address(tensor)
 
         dec_example_inputs = dec_compile_config.get_dummy_inputs(fill=0, static_tensors=static_tensors)
+        dec_example_inputs_batch1 = dec_compile_config_batch1.get_dummy_inputs(fill=0, static_tensors=static_tensors)
 
         quantize_config = rbln_config.model_cfg.get("quantization", None)
 
@@ -562,7 +577,20 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 example_inputs=dec_example_inputs,
                 compile_context=context,
             )
-            return {"prefill": compiled_prefill, "decoder": compiled_decoder}
+
+            wrapped_model.phase = "decode"
+            compiled_decoder_batch1 = RBLNModel.compile(
+                wrapped_model,
+                dec_compile_config_batch1,
+                example_inputs=dec_example_inputs_batch1,
+                compile_context=context,
+            )
+
+            return {
+                "prefill": compiled_prefill,
+                "decoder": compiled_decoder,
+                "decoder_batch1": compiled_decoder_batch1,
+            }
 
         return compile_model(quantize_config=quantize_config)
 
@@ -684,6 +712,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             else:
                 rbln_kvcache_block_size = rbln_kvcache_partition_len
 
+        if rbln_batch_size <= 1:
+            raise ValueError("This is PoC Branch. Batch size must be greater than 1.")
+
         rbln_kvcache_num_blocks = (rbln_max_seq_len // rbln_kvcache_block_size) * rbln_batch_size
         if rbln_attn_impl == "flash_attn":
             max_num_blocks, _ = cls.get_maximum_num_blocks(
@@ -784,13 +815,22 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             use_inputs_embeds=rbln_use_inputs_embeds,
             hidden_size=hidden_size,
         )
+        dec_input_info_batch1 = get_input_info(
+            batch_size=1,
+            query_length=1,
+            use_inputs_embeds=rbln_use_inputs_embeds,
+            hidden_size=hidden_size,
+        )
 
         prefill_compile_config = RBLNCompileConfig(compiled_model_name="prefill", input_info=prefill_input_info)
         dec_compile_config = RBLNCompileConfig(compiled_model_name="decoder", input_info=dec_input_info)
+        dec_compile_config_batch1 = RBLNCompileConfig(
+            compiled_model_name="decoder_batch1", input_info=dec_input_info_batch1
+        )
 
         rbln_config = RBLNConfig(
             rbln_cls=cls.__name__,
-            compile_cfgs=[prefill_compile_config, dec_compile_config],
+            compile_cfgs=[prefill_compile_config, dec_compile_config, dec_compile_config_batch1],
             rbln_kwargs=rbln_kwargs,
         )
 
@@ -820,8 +860,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         rbln_device_map: Dict[str, int],
         activate_profiler: Optional[bool] = None,
     ) -> List[rebel.Runtime]:
-        if any(model_name not in rbln_device_map for model_name in ["prefill", "decoder"]):
-            cls._raise_missing_compiled_file_error(["prefill", "decoder"])
+        if any(model_name not in rbln_device_map for model_name in ["prefill", "decoder", "decoder_batch1"]):
+            cls._raise_missing_compiled_file_error(["prefill", "decoder", "decoder_batch1"])
 
         return [
             compiled_models[0].create_runtime(
@@ -829,6 +869,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             ),
             compiled_models[1].create_runtime(
                 tensor_type="pt", device=rbln_device_map["decoder"], activate_profiler=activate_profiler
+            ),
+            compiled_models[2].create_runtime(
+                tensor_type="pt", device=rbln_device_map["decoder_batch1"], activate_profiler=activate_profiler
             ),
         ]
 
