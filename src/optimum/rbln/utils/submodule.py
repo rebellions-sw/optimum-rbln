@@ -14,7 +14,7 @@
 
 import importlib
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List, Type
 
 from ..configuration_utils import RBLNAutoConfig, RBLNModelConfig
 
@@ -48,8 +48,13 @@ class SubModulesMixin:
             submodule_name = submodule["name"]
             torch_submodule: "PreTrainedModel" = getattr(model, submodule["name"])
             cls_name = torch_submodule.__class__.__name__
-            submodule_cls: "RBLNBaseModel" = getattr(importlib.import_module("optimum.rbln"), f"RBLN{cls_name}")
-            submodule_rbln_config = getattr(rbln_config, submodule_name)
+            submodule_cls: Type["RBLNBaseModel"] = getattr(importlib.import_module("optimum.rbln"), f"RBLN{cls_name}")
+            submodule_rbln_config = getattr(rbln_config, submodule_name) or {}
+
+            if isinstance(submodule_rbln_config, dict):
+                submodule_rbln_config_class = submodule_cls.get_rbln_config_class()
+                submodule_rbln_config = submodule_rbln_config_class(**submodule_rbln_config)
+                setattr(rbln_config, submodule_name, submodule_rbln_config)
 
             rbln_submodule = submodule_cls.from_model(
                 model=torch_submodule,
@@ -70,7 +75,7 @@ class SubModulesMixin:
             submodule_name = submodule["name"]
 
             # Get cls name for call the constructor of the rbln class
-            submodule_rbln_config = RBLNAutoConfig.load(Path(model_save_dir) / submodule_name)
+            submodule_rbln_config = getattr(rbln_config, submodule_name)
 
             # RBLNModelConfig -> RBLNModel
             submodule_cls: "RBLNBaseModel" = getattr(

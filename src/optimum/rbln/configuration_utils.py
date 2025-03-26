@@ -164,7 +164,11 @@ class RBLNAutoConfig:
         rbln_keys = [key for key in kwargs.keys() if key.startswith("rbln_")]
 
         rbln_runtime_kwargs = {key[5:]: kwargs.pop(key) for key in rbln_keys if key[5:] in RUNTIME_KEYWORDS}
-        rbln_kwargs = {key[5:]: kwargs.pop(key) for key in rbln_keys if key[5:] not in RUNTIME_KEYWORDS}
+        rbln_kwargs = {
+            key[5:]: kwargs.pop(key)
+            for key in rbln_keys
+            if key[5:] not in RUNTIME_KEYWORDS and key[5:] not in cls.submodules
+        }
 
         if len(rbln_kwargs) > 0:
             raise ValueError(f"Cannot set the following arguments: {list(rbln_kwargs.keys())}")
@@ -186,12 +190,9 @@ class RBLNModelConfig:
         "device_map",
         "activate_profiler",
     ]
-    submodules = {}
+    submodules: List[str] = []
 
     def __setattr__(self, key, value):
-        if key in self.submodules and not isinstance(value, RBLNModelConfig):
-            raise ValueError(f"`{key}` must be an instance of `RBLNModelConfig`.")
-
         if key != "_attributes_map" and key not in self.non_save_attributes:
             self._attributes_map[key] = value
 
@@ -199,6 +200,11 @@ class RBLNModelConfig:
             raise RuntimeError(
                 f"`{self.__class__.__name__}` is frozen. Cannot set attribute after setting compile_cfgs."
             )
+
+        # If the submodule is a dict, Instantiate the submodule config class
+        if key in self.submodules and isinstance(value, dict) and (cls_name := value.get("cls_name")):
+            rbln_config_cls = getattr(importlib.import_module("optimum.rbln"), cls_name)
+            value = rbln_config_cls(**value)
 
         super().__setattr__(key, value)
 
@@ -295,7 +301,7 @@ class RBLNModelConfig:
 
     def freeze(self):
         if self._frozen:
-            raise RuntimeError("`RBLNModelConfig` is already frozen.")
+            raise RuntimeError(f"`{self.__class__.__name__}` is already frozen.")
 
         if (
             not isinstance(self._compile_cfgs, list)
@@ -303,6 +309,14 @@ class RBLNModelConfig:
             or not all(isinstance(cfg, RBLNCompileConfig) for cfg in self._compile_cfgs)
         ):
             raise RuntimeError("`compile_cfgs` must be set before freezing.")
+
+        for submodule_name in self.submodules:
+            submodule_config = getattr(self, submodule_name, None)
+            if not isinstance(submodule_config, RBLNModelConfig):
+                raise ValueError(f"`{submodule_name}` must be an instance of `RBLNModelConfig` before freezing.")
+
+            if not submodule_config.is_frozen():
+                raise ValueError(f"`{submodule_name}` config must be frozen before freezing super config.")
 
         self._frozen = True
 

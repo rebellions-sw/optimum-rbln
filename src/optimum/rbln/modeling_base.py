@@ -188,7 +188,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     def _from_pretrained(
         cls,
         model_id: Union[str, Path],
-        config: "PretrainedConfig" = None,
+        config: Optional["PretrainedConfig"] = None,
         use_auth_token: Optional[Union[bool, str]] = None,
         revision: Optional[str] = None,
         force_download: bool = False,
@@ -221,14 +221,19 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             if not isinstance(rbln_config, RBLNModelConfig):
                 rbln_config = RBLNAutoConfig.load(model_path_subfolder, **kwargs)
 
-            rbln_config.freeze()
-
             if rbln_config.rbln_model_cls_name != cls.__name__:
                 raise NameError(
                     f"Cannot load the model. The model was originally compiled using "
                     f"{rbln_config.rbln_model_cls_name}, but you are trying to load it with {cls.__name__}."
                     "Please use the same model class that was used during compilation."
                 )
+
+            if len(cls._rbln_submodules) > 0:
+                rbln_submodules = cls._load_submodules(model_save_dir=model_id, rbln_config=rbln_config, **kwargs)
+            else:
+                rbln_submodules = []
+
+            rbln_config.freeze()
 
             if config is None:
                 if cls.hf_library_name == "transformers":
@@ -261,11 +266,6 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
                     config = PretrainedConfig(**config)
 
             rbln_compiled_models = cls._load_compiled_models(model_path_subfolder)
-
-            if len(cls._rbln_submodules) > 0:
-                rbln_submodules = cls._load_submodules(model_save_dir=model_id, rbln_config=rbln_config, **kwargs)
-            else:
-                rbln_submodules = []
 
             if subfolder != "":
                 model_save_dir = Path(model_path_subfolder).absolute().parent

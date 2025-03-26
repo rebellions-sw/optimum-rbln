@@ -133,6 +133,17 @@ class RBLNModel(RBLNBaseModel):
         for preprocessor in preprocessors:
             preprocessor.save_pretrained(save_dir_path / subfolder)
 
+        # Load submodules
+        if len(cls._rbln_submodules) > 0:
+            rbln_submodules = cls._load_submodules(
+                model=model,
+                model_save_dir=save_dir,
+                rbln_config=rbln_config,
+                **kwargs,
+            )
+        else:
+            rbln_submodules = []
+
         # Get compilation arguments (e.g. input_info)
         rbln_config: RBLNModelConfig = cls.update_rbln_config(
             preprocessors=preprocessors, model=model, model_config=config, rbln_config=rbln_config
@@ -154,17 +165,6 @@ class RBLNModel(RBLNBaseModel):
 
         # Save torch artifacts (e.g. embedding matrix if needed.)
         cls.save_torch_artifacts(model, save_dir_path=save_dir_path, subfolder=subfolder, rbln_config=rbln_config)
-
-        # Load submodules
-        if len(cls._rbln_submodules) > 0:
-            rbln_submodules = cls._load_submodules(
-                model=model,
-                model_save_dir=save_dir,
-                rbln_config=rbln_config,
-                **kwargs,
-            )
-        else:
-            rbln_submodules = []
 
         # Instantiate
         return cls._from_pretrained(

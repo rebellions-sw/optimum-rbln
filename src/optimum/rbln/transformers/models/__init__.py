@@ -53,9 +53,9 @@ _import_structure = {
     "gemma": ["RBLNGemmaForCausalLM"],
     "gpt2": ["RBLNGPT2LMHeadModel"],
     "llama": ["RBLNLlamaForCausalLM", "RBLNLlamaForCausalLMConfig"],
-    "llava_next": ["RBLNLlavaNextForConditionalGeneration"],
+    "llava_next": ["RBLNLlavaNextForConditionalGeneration", "RBLNLlavaNextForConditionalGenerationConfig"],
     "midm": ["RBLNMidmLMHeadModel"],
-    "mistral": ["RBLNMistralForCausalLM"],
+    "mistral": ["RBLNMistralForCausalLM", "RBLNMistralForCausalLMConfig"],
     "phi": ["RBLNPhiForCausalLM"],
     "qwen2": ["RBLNQwen2ForCausalLM"],
     "t5": ["RBLNT5EncoderModel", "RBLNT5ForConditionalGeneration"],
@@ -100,9 +100,9 @@ if TYPE_CHECKING:
     from .gemma import RBLNGemmaForCausalLM
     from .gpt2 import RBLNGPT2LMHeadModel
     from .llama import RBLNLlamaForCausalLM, RBLNLlamaForCausalLMConfig
-    from .llava_next import RBLNLlavaNextForConditionalGeneration
+    from .llava_next import RBLNLlavaNextForConditionalGeneration, RBLNLlavaNextForConditionalGenerationConfig
     from .midm import RBLNMidmLMHeadModel
-    from .mistral import RBLNMistralForCausalLM
+    from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig
     from .phi import RBLNPhiForCausalLM
     from .qwen2 import RBLNQwen2ForCausalLM
     from .t5 import RBLNT5EncoderModel, RBLNT5ForConditionalGeneration
