@@ -32,7 +32,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         self.use_attention_mask = use_attention_mask or False
         npu = self.npu or rebel.get_npu_name()
         if npu == "RBLN-CA02":
-            if use_attention_mask is True:
+            if not self.use_attention_mask:
                 logger.warning("Attention mask should be used with RBLN-CA02. Setting use_attention_mask to True.")
             self.use_attention_mask = True
 
