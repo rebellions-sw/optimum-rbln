@@ -21,7 +21,8 @@ import torch
 
 from ..configuration_utils import RUNTIME_KEYWORDS, ContextRblnConfig, RBLNModelConfig
 from ..modeling import RBLNModel
-from ..transformers import RBLNCLIPTextModelConfig
+
+# from ..transformers import RBLNCLIPTextModelConfig
 from ..utils.decorator_utils import remove_compile_time_kwargs
 from ..utils.logging import get_logger
 
@@ -337,7 +338,7 @@ class RBLNDiffusionMixin:
         prefix: Optional[str] = "",
     ) -> Dict[str, RBLNModel]:
         compiled_submodules = {}
-
+        breakpoint()
         for submodule_name in cls._submodules:
             submodule = passed_submodules.get(submodule_name) or getattr(model, submodule_name, None)
             submodule_rbln_config = cls.get_submodule_rbln_config(model, submodule_name, rbln_config)
