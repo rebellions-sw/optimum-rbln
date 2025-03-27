@@ -50,6 +50,7 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         runtime: rebel.Runtime,
         batch_size: int,
         dec_max_seq_len: int,
+        support_paged_causal_attn: Optional[bool] = None,
         use_attention_mask: Optional[bool] = None,
         support_paged_attn: Optional[bool] = None,
         **kwargs: Any,
@@ -58,8 +59,10 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         self.batch_size = batch_size
         self.dec_max_seq_len = dec_max_seq_len
         self.use_attention_mask = use_attention_mask
-        self.support_paged_attn = support_paged_attn
-        self.default_block_tables = torch.arange(0, self.batch_size, dtype=torch.int16).view(self.batch_size, 1)
+        if support_paged_causal_attn:
+            self.default_block_tables = torch.arange(0, self.batch_size, dtype=torch.int16).view(self.batch_size, 1)
+        else:
+            self.default_block_tables = None
 
     def forward(
         self,
@@ -117,7 +120,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
 
     main_input_name = "input_ids"
     auto_model_class = AutoModelForSeq2SeqLM
-    support_causal_attn = None
+    support_paged_causal_attn = None
 
     def __post_init__(self, **kwargs):
         batch_size = self.rbln_config.model_cfg["batch_size"]
@@ -134,8 +137,8 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
             main_input_name="input_ids",
             batch_size=batch_size,
             dec_max_seq_len=dec_max_seq_len,
-            support_causal_attn=self.support_causal_attn,
-            use_attention_mask=self.use_attention_mask if self.support_causal_attn else True,
+            support_paged_causal_attn=self.support_paged_causal_attn,
+            use_attention_mask=self.use_attention_mask,
         )
 
     @classmethod
@@ -192,13 +195,15 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
         rbln_batch_size = 1 if rbln_batch_size is None else rbln_batch_size
 
-        if cls.support_causal_attn:
+        if cls.support_paged_causal_attn:
             rbln_use_attention_mask = rbln_kwargs.get("use_attention_mask", None)
             if rbln_use_attention_mask is None:
                 rbln_use_attention_mask = False
                 rbln_npu = rbln_kwargs.get("npu", None) or rebel.get_npu_name()
                 if rbln_npu == "RBLN-CA02":
                     rbln_use_attention_mask = True
+        else:
+            rbln_use_attention_mask = True
 
         n_layer = getattr(model_config, "decoder_layers", None) or getattr(model_config, "num_layers")
         n_head = getattr(model_config, "decoder_attention_heads", None) or getattr(model_config, "num_heads")
@@ -303,8 +308,9 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
             ]
         )
 
-        dec_input_info.insert(3, ("block_tables", [rbln_batch_size, 1], "int16"))
-        if (not cls.support_causal_attn) or rbln_use_attention_mask:
+        if cls.support_paged_causal_attn:
+            dec_input_info.insert(3, ("block_tables", [rbln_batch_size, 1], "int16"))
+        if rbln_use_attention_mask:
             dec_input_info.insert(1, ("attention_mask", [rbln_batch_size, rbln_dec_max_seq_len], "float32"))
 
         enc_compile_config = RBLNCompileConfig(compiled_model_name="encoder", input_info=enc_input_info)
