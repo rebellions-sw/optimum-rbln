@@ -28,6 +28,13 @@ class VersionCompat:
 
 
 RBLN_VERSION_COMPATS = {
+    "0.7.4": [
+        VersionCompat(
+            package_name="rebel-compiler",
+            min_version="0.7.3",
+            max_version="0.7.4",
+        ),
+    ],
     "0.7.3": [
         VersionCompat(
             package_name="rebel-compiler",
