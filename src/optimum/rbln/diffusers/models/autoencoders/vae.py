@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, List, Union
+from typing import TYPE_CHECKING, List, Union, Dict, Optional, Tuple
 
 import torch  # noqa: I001
 from diffusers import AutoencoderKL, AutoencoderKLCogVideoX, VQModel
@@ -132,22 +132,19 @@ class RBLNRuntimeVAECogVideoXEncoder(RBLNPytorchRuntime):
 
 
 class RBLNRuntimeVAECogVideoXDecoder(RBLNPytorchRuntime):
-    # def decode(self, z: torch.FloatTensor, **kwargs) -> Union[DecoderOutput, torch.Tensor]:
-    #     return (self.forward(z),)
-
     def _decode(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
         batch_size, num_channels, num_frames, height, width = z.shape
 
-        if self.cog_video_x.use_tiling and (
-            width > self.cog_video_x.tile_latent_min_width or height > self.cog_video_x.tile_latent_min_height
-        ):
-            raise ValueError("Optimum-RBLN doesn't support tiled decoding aross H,W axis")
+        # if self.cog_video_x.use_tiling and (
+        #     width > self.cog_video_x.tile_latent_min_width or height > self.cog_video_x.tile_latent_min_height
+        # ):
+        #     raise ValueError("Optimum-RBLN doesn't support tiled decoding aross H,W axis")
 
         frame_batch_size = 2
         num_batches = max(num_frames // frame_batch_size, 1)
-        conv_cache = None
+        # conv_cache = None
         dec = []
-        z_intermediate, conv_cache = self.forward(z[:,:,:2], conv_cache=conv_cache) # RBLN Runtime or CPU
+        z_intermediate, conv_cache = self.forward(z[:,:,:2]) # RBLN Runtime or CPU
         dec.append(z_intermediate)
 
         for i in range(1, num_batches):
@@ -158,7 +155,7 @@ class RBLNRuntimeVAECogVideoXDecoder(RBLNPytorchRuntime):
             # if self.cog_video_x.post_quant_conv is not None:
             #     z_intermediate = self.cog_video_x.post_quant_conv(z_intermediate)
             # import pdb; pdb.set_trace()
-            z_intermediate, conv_cache = self.forward(z_intermediate, conv_cache=conv_cache)
+            z_intermediate, conv_cache = self.forward(z_intermediate, enc=False)
             dec.append(z_intermediate)
 
         dec = torch.cat(dec, dim=2)
@@ -169,16 +166,24 @@ class RBLNRuntimeVAECogVideoXDecoder(RBLNPytorchRuntime):
         return DecoderOutput(sample=dec)
 
     def decode(self, z: torch.Tensor, conv_cache = None, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
-        if self.cog_video_x.use_slicing and z.shape[0] > 1:
-            # batch split
-            decoded_slices = [self._decode(z_slice).sample for z_slice in z.split(1)]
-            decoded = torch.cat(decoded_slices)
-        else:
-            decoded = self._decode(z).sample
+        # if self.cog_video_x.use_slicing and z.shape[0] > 1:
+        #     # batch split
+        #     decoded_slices = [self._decode(z_slice).sample for z_slice in z.split(1)]
+        #     decoded = torch.cat(decoded_slices)
+        # else:
+        #     decoded = self._decode(z).sample
+        decoded = self._decode(z).sample
 
         if not return_dict:
             return (decoded,)
         return DecoderOutput(sample=decoded)
+
+    def forward(self, *args: List["torch.Tensor"], enc=True, **kwargs: Dict[str, "torch.Tensor"]):
+        # filtering useless args or kwarg such as None.
+        args = list(filter(lambda arg: isinstance(arg, torch.Tensor), args))
+        kwargs = dict(filter(lambda kwarg: isinstance(kwarg[1], torch.Tensor) or kwarg[0] == "out", kwargs.items()))
+        output = self.decode(*args, **kwargs)
+        return output
 
 class _VAECogVideoXEncoder(torch.nn.Module):
     def __init__(self, cog_video_x: AutoencoderKLCogVideoX):
@@ -231,52 +236,131 @@ class _VAECogVideoXDecoder(torch.nn.Module):
         super().__init__()
         self.cog_video_x = cog_video_x
 
-    def _decode(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
-        batch_size, num_channels, num_frames, height, width = z.shape
-
-        if self.cog_video_x.use_tiling and (
-            width > self.cog_video_x.tile_latent_min_width or height > self.cog_video_x.tile_latent_min_height
-        ):
-            raise ValueError("Optimum-RBLN doesn't support tiled decoding aross H,W axis")
-            return self.cog_video_x.tiled_decode(z, return_dict=return_dict)
-
-        frame_batch_size = self.cog_video_x.num_latent_frames_batch_size
-        num_batches = max(num_frames // frame_batch_size, 1)
-        conv_cache = None
-        dec = []
-
-        for i in range(num_batches):
-            remaining_frames = num_frames % frame_batch_size
-            start_frame = frame_batch_size * i + (0 if i == 0 else remaining_frames)
-            end_frame = frame_batch_size * (i + 1) + remaining_frames
-            z_intermediate = z[:, :, start_frame:end_frame]
-            if self.cog_video_x.post_quant_conv is not None:
-                z_intermediate = self.cog_video_x.post_quant_conv(z_intermediate)
-            z_intermediate, conv_cache = self.cog_video_x.decoder(z_intermediate, conv_cache=conv_cache)
-            dec.append(z_intermediate)
-
-        dec = torch.cat(dec, dim=2)
-
-        if not return_dict:
-            return (dec,)
-
-        return DecoderOutput(sample=dec)
-
-    def decode(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
-        if self.cog_video_x.use_slicing and z.shape[0] > 1: # batch split
-            decoded_slices = [self._decode(z_slice).sample for z_slice in z.split(1)]
-            decoded = torch.cat(decoded_slices)
-        else:
-            decoded = self._decode(z).sample
-
-        if not return_dict:
-            return (decoded,)
-        return DecoderOutput(sample=decoded)
-
     def forward(self, z: torch.Tensor):
-        
         # cov_video_dec_out = self.decode(z, return_dict=False)
-        
-        conv_cache = None
-        cov_video_dec_out = self.cog_video_x.decoder(z, conv_cache=conv_cache)
+        enc = z.shape[2] > 2
+        if enc :
+            cov_video_dec_out, conv_cache = self.cog_video_x.decoder(z)
+            import pdb; pdb.set_trace()
+            # 3. update the cross_attention's past_key_value direct to the device-dram for optimization.
+            # batch_axis = torch.tensor(1, dtype=torch.int16)
+            # enc_out = torch.ops.rbln_custom_ops.rbln_cache_update(cross_key_values, cross_kv, b_idx[0], batch_axis)
+        else :
+            cov_video_dec_out, _ = self.cog_video_x.decoder(z)
         return cov_video_dec_out
+
+from diffusers.models.autoencoders.autoencoder_kl_cogvideox import CogVideoXCausalConv3d
+class RBLNCogVideoXCausalConv3dEnc(CogVideoXCausalConv3d):
+    def __init__(
+        self,
+        *args,
+        **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+
+    def fake_context_parallel_forward(
+        self, inputs: torch.Tensor, conv_cache: torch.Tensor = None
+    ) -> torch.Tensor:
+        kernel_size = self.time_kernel_size
+        if kernel_size > 1:
+            # inputs.shape = torch.Size([1, 3, F, 480, 720]) B C F H W
+            cached_inputs = [inputs[:, :, :1]] * (kernel_size - 1)
+            inputs = torch.cat(cached_inputs + [inputs], dim=2) # frame에 padding
+        return inputs
+
+    def forward(self, inputs: torch.Tensor, conv_cache: Optional[torch.Tensor] = None) -> torch.Tensor:
+        inputs = self.fake_context_parallel_forward(inputs, conv_cache) # frame padded inputs # (1, 3, 3, 480, 720)
+        # -1*(frame kernel size - 1) -> -2,-1
+        conv_cache = inputs[:, :, -self.time_kernel_size + 1 :].clone() # TODO: convert to RBLN custom ops
+
+        padding_2d = (self.width_pad, self.width_pad, self.height_pad, self.height_pad) 
+        inputs = torch.nn.functional.pad(inputs, padding_2d, mode="constant", value=0) # (1, 3, 3, 482, 722)
+
+        output = self.conv(inputs)
+        return output, conv_cache
+
+class RBLNCogVideoXCausalConv3dDec(CogVideoXCausalConv3d):
+    def __init__(
+        self,
+        *args,
+        **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+
+    def fake_context_parallel_forward(
+        self, inputs: torch.Tensor, conv_cache: torch.Tensor
+    ) -> torch.Tensor:
+        kernel_size = self.time_kernel_size
+        if kernel_size > 1:
+            cached_inputs = [conv_cache] # TODO: convert to RBLN custom ops
+            inputs = torch.cat(cached_inputs + [inputs], dim=2)
+        return inputs
+
+    def forward(self, inputs: torch.Tensor, conv_cache: torch.Tensor) -> torch.Tensor:
+        inputs = self.fake_context_parallel_forward(inputs, conv_cache) # frame padded inputs # (1, 3, 3, 480, 720)
+        # -1*(frame kernel size - 1) -> -2,-1
+        conv_cache = inputs[:, :, -self.time_kernel_size + 1 :].clone() # TODO: convert to RBLN custom ops
+
+        padding_2d = (self.width_pad, self.width_pad, self.height_pad, self.height_pad) 
+        inputs = torch.nn.functional.pad(inputs, padding_2d, mode="constant", value=0) # (1, 3, 3, 482, 722)
+
+        output = self.conv(inputs)
+        return output, conv_cache
+    
+class _VAECogVideoXDecoder(torch.nn.Module):
+    def __init__(self, cog_video_x: AutoencoderKLCogVideoX):
+        super().__init__()
+        self.cog_video_x = cog_video_x
+        self.keys = self.conv_cache_key()
+
+    def _totuple(self, conv_cache):
+        conv_cache_list = []
+        def isdict(obj, names):
+            if isinstance(obj, dict):
+                for _k, _v in obj.items():
+                    isdict(_v, names+f"_{_k}")
+            else :
+                conv_cache_list.append(obj)
+        
+        for k, v in conv_cache.items():
+            isdict(v, k)
+            
+        return tuple(conv_cache_list)
+    
+    def conv_cache_key(self):
+        from .input_dict import conv_cache as CONV_CACHE
+        keys = []
+        for k in CONV_CACHE.keys():
+            if "norm" not in k:
+                keys.append(k)
+        return keys
+        
+    def forward(self, z: torch.Tensor, *args: Optional[Tuple[torch.Tensor]]):
+        # cov_video_dec_out = self.decode(z, return_dict=False)
+        # import pdb; pdb.set_trace()
+        enc = z.shape[2] > 2
+        if enc :
+            cov_video_dec_out, conv_cache = self.cog_video_x.decoder(z)
+            conv_cache_list = self._totuple(conv_cache)
+        else :
+            conv_cache_dict = {}
+            # import pdb; pdb.set_trace()
+            for k, v in zip(self.keys, args):
+                parts = k.split(".")
+                current = conv_cache_dict
+                
+                # 마지막 부분을 제외한 모든 부분에 대해 중첩 딕셔너리 생성
+                for part in parts[:-1]:
+                    if part not in current:
+                        current[part] = {}
+                    current = current[part]
+                
+                # 마지막 부분에 값 할당
+                current[parts[-1]] = v
+                
+            # conv_cache_dict.update(nested_dict)
+            # import pdb; pdb.set_trace()
+            cov_video_dec_out, conv_cache = self.cog_video_x.decoder(z, conv_cache=conv_cache_dict)
+            conv_cache_list = self._totuple(conv_cache)
+            
+        return (cov_video_dec_out,) + conv_cache_list,

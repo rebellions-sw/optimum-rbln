@@ -38,6 +38,7 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+from .input_dict import conv_cache as CONV_CACHE
 
 class RBLNAutoencoderKLCogVideoX(RBLNModel):
     auto_model_class = AutoencoderKLCogVideoX
@@ -46,12 +47,13 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
-
+        import pdb; pdb.set_trace()
         if self.rbln_config.model_cfg.get("img2vid_pipeline"):
             self.encoder = RBLNRuntimeVAECogVideoXEncoder(runtime=self.model[0], main_input_name="x")
             self.decoder = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model[1], main_input_name="z")
         else:
-            self.decoder = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model[0], main_input_name="z")
+            # self.decoder = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model[0], main_input_name="z")
+            self.decoder = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model, main_input_name="z")
 
         self.image_size = self.rbln_config.model_cfg["sample_size"]
 
@@ -59,22 +61,68 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
     def get_compiled_model(cls, model, rbln_config: RBLNConfig):
         def compile_img2vid():
             encoder_model = _VAECogVideoXEncoder(model)
-            decoder_model = _VAECogVideoXDecoder(model)
+            decoder_model_0 = _VAECogVideoXDecoder(model)
+            decoder_model_1 = _VAECogVideoXDecoder(model)
+            
             encoder_model.eval()
-            decoder_model.eval()
+            decoder_model_0.eval()
+            decoder_model_1.eval()
 
             enc_compiled_model = cls.compile(encoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
-            dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[1])
+            
+            dec_compiled_model_0 = cls.compile(decoder_model_0, rbln_compile_config=rbln_config.compile_cfgs[1])
+            dec_compiled_model_1 = cls.compile(decoder_model_1, rbln_compile_config=rbln_config.compile_cfgs[2])
 
-            return {"encoder": enc_compiled_model, "decoder": dec_compiled_model}
+            return {"encoder": enc_compiled_model, "decoder": (dec_compiled_model_0, dec_compiled_model_1)}
 
         def compile_txt2vid():
-            decoder_model = _VAECogVideoXDecoder(model)
-            decoder_model.eval()
+            # from rebel.compile_context import CompileContext
+            # context = CompileContext(use_weight_sharing=False)
 
-            dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
+            # enc_example_inputs = rbln_config.compile_cfgs[0].get_dummy_inputs(fill=0) # is it needed?
 
-            return dec_compiled_model
+            # # # Mark encoder's static tensors (cross kv states) FIXME decoder_0 output conv cache
+            # static_tensors = {}
+            # import pdb; pdb.set_trace()
+            # for (name, _, _), tensor in zip(rbln_config.compile_cfgs[0].input_info, enc_example_inputs):  # output으로 바꾸기
+            #     if "key_value_states" in name:
+            #         static_tensors[name] = tensor
+            #         context.mark_static_address(tensor)
+
+            # dec_example_inputs = rbln_config.compile_cfgs[1].get_dummy_inputs(fill=0, static_tensors=static_tensors) # is it needed?
+
+            # # Mark decoder's static tensors (self kv states)
+            # for (name, _, _), tensor in zip(rbln_config.compile_cfgs[1].input_info, dec_example_inputs):
+            #     if "conv_cache" in name:
+            #         context.mark_static_address(tensor)
+
+            # compiled_encoder = super().compile(
+            #     decoder_model_0,
+            #     rbln_config.compile_cfgs[0],
+            #     example_inputs=enc_example_inputs,
+            #     compile_context=context,
+            # )
+
+            # compiled_decoder = super().compile(
+            #     decoder_model_1,
+            #     rbln_config.compile_cfgs[1],
+            #     example_inputs=dec_example_inputs,
+            #     compile_context=context,
+            # )
+            
+            ###############################################
+            
+            decoder_model_0 = _VAECogVideoXDecoder(model)
+            decoder_model_1 = _VAECogVideoXDecoder(model)
+            
+            decoder_model_0.eval()
+            decoder_model_1.eval()
+            
+            # import pdb; pdb.set_trace()
+            dec_compiled_model_1 = cls.compile(decoder_model_1, rbln_compile_config=rbln_config.compile_cfgs[1])
+            dec_compiled_model_0 = cls.compile(decoder_model_0, rbln_compile_config=rbln_config.compile_cfgs[0])
+
+            return (dec_compiled_model_0, dec_compiled_model_1)
 
         if rbln_config.model_cfg.get("img2vid_pipeline"):
             return compile_img2vid()
@@ -189,25 +237,52 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
             )
             return rbln_config
         
-        latent_shape = [rbln_batch_size,
-                        model_config.latent_channels,
-                        num_latent_frames_batch_size,
-                        dec_shape[0], dec_shape[1],
-                        ]
-        input_info=[
+        vae_dec_input_info_0=[
                 (
                     "z",
-                    latent_shape,
+                    [
+                        rbln_batch_size,
+                        model_config.latent_channels,
+                        num_latent_frames_batch_size+1, # FIXME make generalize
+                        dec_shape[0], 
+                        dec_shape[1],
+                    ],
                     "float32",
                 )
             ]
-        
-        compile_cfgs = RBLNCompileConfig(
-            input_info=input_info,
-        )
+        vae_dec_input_info_1=[
+                (
+                    "z",
+                    [
+                        rbln_batch_size,
+                        model_config.latent_channels,
+                        num_latent_frames_batch_size,
+                        dec_shape[0], 
+                        dec_shape[1],
+                    ],
+                    "float32",
+                )
+            ]
+
+        for k, v in CONV_CACHE.items():
+            if "norm" not in k :
+                vae_dec_input_info_1.extend(
+                    [
+                        (
+                            k,
+                            list(v),
+                            "float32"
+                        )
+                    ]
+            )
+        import pdb; pdb.set_trace()        
+        dec_0_rbln_compile_config = RBLNCompileConfig(compiled_model_name="decoder_0", input_info=vae_dec_input_info_0)
+        dec_1_rbln_compile_config = RBLNCompileConfig(compiled_model_name="decoder_1", input_info=vae_dec_input_info_1)
+
         rbln_config = RBLNConfig(
             rbln_cls=cls.__name__,
-            compile_cfgs=[compile_cfgs],
+            # compile_cfgs=[compile_cfgs],
+            compile_cfgs=[dec_0_rbln_compile_config, dec_1_rbln_compile_config],
             rbln_kwargs=rbln_kwargs,
         )
         return rbln_config
@@ -237,7 +312,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
         return [
             compiled_model.create_runtime(tensor_type="pt", device=device_val, activate_profiler=activate_profiler)
             for compiled_model, device_val in zip(compiled_models, device_vals)
-        ]
+        ] # FIXME
 
     def encode(self, x: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
         posterior = self.encoder.encode(x)
