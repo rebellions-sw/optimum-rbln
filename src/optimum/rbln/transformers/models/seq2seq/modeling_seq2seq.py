@@ -275,6 +275,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
                 [rbln_batch_size, 1],
                 "int32",
             ),
+            ("block_tables", [rbln_batch_size,1], "int16"),
         ]
         dec_input_info.extend(
             [
