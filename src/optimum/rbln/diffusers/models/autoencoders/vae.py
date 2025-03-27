@@ -144,7 +144,7 @@ class RBLNRuntimeVAECogVideoXDecoder(RBLNPytorchRuntime):
         num_batches = max(num_frames // frame_batch_size, 1)
         # conv_cache = None
         dec = []
-        z_intermediate, conv_cache = self.forward(z[:,:,:2]) # RBLN Runtime or CPU
+        z_intermediate, conv_cache = self.runtime[0](z[:, :, :2]) # RBLN Runtime or CPU
         dec.append(z_intermediate)
 
         for i in range(1, num_batches):
@@ -155,7 +155,8 @@ class RBLNRuntimeVAECogVideoXDecoder(RBLNPytorchRuntime):
             # if self.cog_video_x.post_quant_conv is not None:
             #     z_intermediate = self.cog_video_x.post_quant_conv(z_intermediate)
             # import pdb; pdb.set_trace()
-            z_intermediate, conv_cache = self.forward(z_intermediate, enc=False)
+            z_intermediate, conv_cache = self.runtime[1](z_intermediate, conv_cache=conv_cache)
+            # z_intermediate, conv_cache = output[0], output[1:]
             dec.append(z_intermediate)
 
         dec = torch.cat(dec, dim=2)
@@ -231,24 +232,6 @@ class _VAECogVideoXEncoder(torch.nn.Module):
         return cov_video_enc_out
 
 
-class _VAECogVideoXDecoder(torch.nn.Module):
-    def __init__(self, cog_video_x: AutoencoderKLCogVideoX):
-        super().__init__()
-        self.cog_video_x = cog_video_x
-
-    def forward(self, z: torch.Tensor):
-        # cov_video_dec_out = self.decode(z, return_dict=False)
-        enc = z.shape[2] > 2
-        if enc :
-            cov_video_dec_out, conv_cache = self.cog_video_x.decoder(z)
-            import pdb; pdb.set_trace()
-            # 3. update the cross_attention's past_key_value direct to the device-dram for optimization.
-            # batch_axis = torch.tensor(1, dtype=torch.int16)
-            # enc_out = torch.ops.rbln_custom_ops.rbln_cache_update(cross_key_values, cross_kv, b_idx[0], batch_axis)
-        else :
-            cov_video_dec_out, _ = self.cog_video_x.decoder(z)
-        return cov_video_dec_out
-
 from diffusers.models.autoencoders.autoencoder_kl_cogvideox import CogVideoXCausalConv3d
 class RBLNCogVideoXCausalConv3dEnc(CogVideoXCausalConv3d):
     def __init__(
@@ -311,23 +294,27 @@ class _VAECogVideoXDecoder(torch.nn.Module):
     def __init__(self, cog_video_x: AutoencoderKLCogVideoX):
         super().__init__()
         self.cog_video_x = cog_video_x
-        self.keys = self.conv_cache_key()
+        self.keys = None
+        # self.keys = self.get_conv_cache_key()
 
     def _totuple(self, conv_cache):
         conv_cache_list = []
+        keys = []
         def isdict(obj, names):
             if isinstance(obj, dict):
                 for _k, _v in obj.items():
                     isdict(_v, names+f"_{_k}")
             else :
-                conv_cache_list.append(obj)
+                if "norm" not in names:
+                    conv_cache_list.append(obj)
+                    keys.append(names)
         
         for k, v in conv_cache.items():
             isdict(v, k)
             
-        return tuple(conv_cache_list)
+        return tuple(conv_cache_list), keys
     
-    def conv_cache_key(self):
+    def get_conv_cache_key(self):
         from .input_dict import conv_cache as CONV_CACHE
         keys = []
         for k in CONV_CACHE.keys():
@@ -336,15 +323,14 @@ class _VAECogVideoXDecoder(torch.nn.Module):
         return keys
         
     def forward(self, z: torch.Tensor, *args: Optional[Tuple[torch.Tensor]]):
-        # cov_video_dec_out = self.decode(z, return_dict=False)
-        # import pdb; pdb.set_trace()
         enc = z.shape[2] > 2
         if enc :
             cov_video_dec_out, conv_cache = self.cog_video_x.decoder(z)
-            conv_cache_list = self._totuple(conv_cache)
+            conv_cache_list, self.keys = self._totuple(conv_cache)
+            import pdb; pdb.set_trace()
         else :
             conv_cache_dict = {}
-            # import pdb; pdb.set_trace()
+            import pdb; pdb.set_trace()
             for k, v in zip(self.keys, args):
                 parts = k.split(".")
                 current = conv_cache_dict
@@ -358,9 +344,7 @@ class _VAECogVideoXDecoder(torch.nn.Module):
                 # 마지막 부분에 값 할당
                 current[parts[-1]] = v
                 
-            # conv_cache_dict.update(nested_dict)
-            # import pdb; pdb.set_trace()
             cov_video_dec_out, conv_cache = self.cog_video_x.decoder(z, conv_cache=conv_cache_dict)
             conv_cache_list = self._totuple(conv_cache)
             
-        return (cov_video_dec_out,) + conv_cache_list,
+        return cov_video_dec_out, (conv_cache_list)

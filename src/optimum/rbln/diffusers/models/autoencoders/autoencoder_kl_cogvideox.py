@@ -50,10 +50,10 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
         import pdb; pdb.set_trace()
         if self.rbln_config.model_cfg.get("img2vid_pipeline"):
             self.encoder = RBLNRuntimeVAECogVideoXEncoder(runtime=self.model[0], main_input_name="x")
-            self.decoder = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model[1], main_input_name="z")
+            self.decoder = RBLNRuntimeVAECogVideoXDecoder(runtime=[self.model[1], self.model[2]], main_input_name="z")
         else:
             # self.decoder = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model[0], main_input_name="z")
-            self.decoder = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model, main_input_name="z")
+            self.decoder = RBLNRuntimeVAECogVideoXDecoder(runtime=[self.model[0], self.model[1]], main_input_name="z")
 
         self.image_size = self.rbln_config.model_cfg["sample_size"]
 
@@ -119,8 +119,8 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
             decoder_model_1.eval()
             
             # import pdb; pdb.set_trace()
-            dec_compiled_model_1 = cls.compile(decoder_model_1, rbln_compile_config=rbln_config.compile_cfgs[1])
             dec_compiled_model_0 = cls.compile(decoder_model_0, rbln_compile_config=rbln_config.compile_cfgs[0])
+            dec_compiled_model_1 = cls.compile(decoder_model_1, rbln_compile_config=rbln_config.compile_cfgs[1])
 
             return (dec_compiled_model_0, dec_compiled_model_1)
 
