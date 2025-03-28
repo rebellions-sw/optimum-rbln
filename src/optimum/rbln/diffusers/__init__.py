@@ -45,6 +45,7 @@ _import_structure = {
         "RBLNStableDiffusion3Pipeline",
         "RBLNStableDiffusion3Img2ImgPipeline",
         "RBLNStableDiffusion3InpaintPipeline",
+        "RBLNCogVideoXPipeline",
     ],
     "models": [
         "RBLNAutoencoderKL",
@@ -53,6 +54,8 @@ _import_structure = {
         "RBLNSD3Transformer2DModel",
         "RBLNPriorTransformer",
         "RBLNVQModel",
+        "RBLNCogVideoXTransformer3DModel",
+        "RBLNAutoencoderKLCogVideoX",
     ],
     "modeling_diffusers": [
         "RBLNDiffusionMixin",
@@ -68,6 +71,8 @@ if TYPE_CHECKING:
         RBLNSD3Transformer2DModel,
         RBLNUNet2DConditionModel,
         RBLNVQModel,
+        RBLNAutoencoderKLCogVideoX,
+        RBLNCogVideoXTransformer3DModel,
     )
     from .pipelines import (
         RBLNKandinskyV22CombinedPipeline,
@@ -91,6 +96,7 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLImg2ImgPipeline,
         RBLNStableDiffusionXLInpaintPipeline,
         RBLNStableDiffusionXLPipeline,
+        RBLNCogVideoXPipeline,
     )
 else:
     import sys
