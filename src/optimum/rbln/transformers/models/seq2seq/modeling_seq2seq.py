@@ -58,7 +58,7 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         self.dec_max_seq_len = dec_max_seq_len
         self.use_attention_mask = use_attention_mask
         self.default_block_tables = torch.arange(0, self.batch_size, dtype=torch.int16).view(self.batch_size, 1)
-        
+
     def forward(
         self,
         decoder_input_ids: Optional[torch.LongTensor] = None,
@@ -269,7 +269,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
                 [rbln_batch_size, 1],
                 "int32",
             ),
-            ("block_tables", [rbln_batch_size,1], "int16"),
+            ("block_tables", [rbln_batch_size, 1], "int16"),
         ]
         dec_input_info.extend(
             [

@@ -60,7 +60,7 @@ class RBLNRuntimeEncoder(RBLNPytorchRuntime):
 
 class RBLNRuntimeDecoder(RBLNPytorchRuntime):
     mandatory_members = ["main_input_name"]
-    
+
     def __init__(
         self,
         runtime: rebel.Runtime,

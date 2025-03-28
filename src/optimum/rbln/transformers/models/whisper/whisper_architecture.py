@@ -25,7 +25,7 @@ from transformers.modeling_outputs import (
 )
 from transformers.utils import logging
 
-from ....ops import register_rbln_custom_paged_add_softmax_attention, register_rbln_custom_cache_update
+from ....ops import register_rbln_custom_cache_update, register_rbln_custom_paged_add_softmax_attention
 
 
 logger = logging.get_logger(__name__)
@@ -277,7 +277,7 @@ class WhisperSelfAttention(WhisperAttention):
 
         key_states = self._shape(self.k_proj(hidden_states), -1, bsz)
         value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
-        block_size = past_key_value[0].shape[-2]    
+        block_size = past_key_value[0].shape[-2]
 
         attn_output = torch.ops.rbln_custom_ops.paged_add_softmax_attn_decode(
             query_states,
