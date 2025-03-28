@@ -275,7 +275,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
                         )
                     ]
             )
-        import pdb; pdb.set_trace()        
+
         dec_0_rbln_compile_config = RBLNCompileConfig(compiled_model_name="decoder_0", input_info=vae_dec_input_info_0)
         dec_1_rbln_compile_config = RBLNCompileConfig(compiled_model_name="decoder_1", input_info=vae_dec_input_info_1)
 

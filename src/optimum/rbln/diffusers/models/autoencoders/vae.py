@@ -294,8 +294,8 @@ class _VAECogVideoXDecoder(torch.nn.Module):
     def __init__(self, cog_video_x: AutoencoderKLCogVideoX):
         super().__init__()
         self.cog_video_x = cog_video_x
-        self.keys = None
-        # self.keys = self.get_conv_cache_key()
+        # self.keys = None
+        self.keys = self.get_conv_cache_key()
 
     def _totuple(self, conv_cache):
         conv_cache_list = []
@@ -308,6 +308,8 @@ class _VAECogVideoXDecoder(torch.nn.Module):
                 if "norm" not in names:
                     conv_cache_list.append(obj)
                     keys.append(names)
+                # if names in set(self.keys):
+                #     conv_cache_list.append(obj)
         
         for k, v in conv_cache.items():
             isdict(v, k)
@@ -323,10 +325,10 @@ class _VAECogVideoXDecoder(torch.nn.Module):
         return keys
         
     def forward(self, z: torch.Tensor, *args: Optional[Tuple[torch.Tensor]]):
-        enc = z.shape[2] > 2
+        enc = z.shape[2] > 2 # FIXME make generalized condition
         if enc :
             cov_video_dec_out, conv_cache = self.cog_video_x.decoder(z)
-            conv_cache_list, self.keys = self._totuple(conv_cache)
+            conv_cache_list, _ = self._totuple(conv_cache)
             import pdb; pdb.set_trace()
         else :
             conv_cache_dict = {}
@@ -345,6 +347,6 @@ class _VAECogVideoXDecoder(torch.nn.Module):
                 current[parts[-1]] = v
                 
             cov_video_dec_out, conv_cache = self.cog_video_x.decoder(z, conv_cache=conv_cache_dict)
-            conv_cache_list = self._totuple(conv_cache)
+            conv_cache_list, _ = self._totuple(conv_cache)
             
         return cov_video_dec_out, (conv_cache_list)
