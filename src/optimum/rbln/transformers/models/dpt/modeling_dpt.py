@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, Optional, Union
 from transformers import AutoModelForDepthEstimation
 from transformers.modeling_outputs import DepthEstimatorOutput
 
+from ....configuration_utils import RBLNCompileConfig, RBLNConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 
 
@@ -33,7 +33,7 @@ class RBLNDPTForDepthEstimation(RBLNModel):
     main_input_name = "pixel_values"
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
         model_config: Optional["PretrainedConfig"] = None,

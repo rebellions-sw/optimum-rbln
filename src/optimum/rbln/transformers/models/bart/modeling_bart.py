@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Union
 
 from transformers import BartForConditionalGeneration, PretrainedConfig, PreTrainedModel
 
+from ....configuration_utils import RBLNCompileConfig, RBLNConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ...models.seq2seq import RBLNModelForSeq2SeqLM
 from .bart_architecture import BartWrapper
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 class RBLNBartModel(RBLNModel):
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
         model_config: Optional["PretrainedConfig"] = None,

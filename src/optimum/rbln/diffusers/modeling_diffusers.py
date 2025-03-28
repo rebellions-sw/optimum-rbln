@@ -19,8 +19,9 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import torch
 
+from ..configuration_utils import RUNTIME_KEYWORDS, ContextRblnConfig, RBLNModelConfig
 from ..modeling import RBLNModel
-from ..modeling_config import RUNTIME_KEYWORDS, ContextRblnConfig, use_rbln_config
+from ..transformers import RBLNCLIPTextModelConfig
 from ..utils.decorator_utils import remove_compile_time_kwargs
 from ..utils.logging import get_logger
 
@@ -29,6 +30,43 @@ logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from diffusers.pipelines.controlnet.multicontrolnet import MultiControlNetModel
+
+
+class RBLNDiffusionMixinConfig(RBLNModelConfig):
+    submodules = {
+        "text_encoder": RBLNCLIPTextModelConfig,
+        "unet": RBLNModelConfig,
+        "vae": RBLNModelConfig,
+    }
+
+    def __init__(
+        self,
+        batch_size: Optional[int] = None,
+        text_encoder: Optional[RBLNModelConfig] = None,
+        unet: Optional[RBLNModelConfig] = None,
+        vae: Optional[RBLNModelConfig] = None,
+        guidance_scale: Optional[float] = None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.batch_size = batch_size or 1
+
+        if isinstance(text_encoder, dict):
+            text_encoder = self.submodules["text_encoder"](**text_encoder)
+        if isinstance(unet, dict):
+            unet = self.submodules["unet"](**unet)
+        if isinstance(vae, dict):
+            vae = self.submodules["vae"](**vae)
+
+        self.text_encoder = text_encoder
+        self.unet = unet
+        self.vae = vae
+
+        if guidance_scale is not None:
+            logger.warning("Specifying `guidance_scale` is deprecated. It will be removed in a future version.")
+            do_classifier_free_guidance = guidance_scale > 1.0
+            if do_classifier_free_guidance:
+                self.unet.batch_size = self.batch_size * 2
 
 
 class RBLNDiffusionMixin:
@@ -146,7 +184,6 @@ class RBLNDiffusionMixin:
         return model
 
     @classmethod
-    @use_rbln_config
     def from_pretrained(
         cls,
         model_id: str,

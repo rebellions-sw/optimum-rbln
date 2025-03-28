@@ -36,18 +36,26 @@ _import_structure = {
     "bert": ["RBLNBertModel", "RBLNBertForQuestionAnswering", "RBLNBertForMaskedLM"],
     "clip": [
         "RBLNCLIPTextModel",
+        "RBLNCLIPTextModelConfig",
         "RBLNCLIPTextModelWithProjection",
+        "RBLNCLIPTextModelWithProjectionConfig",
         "RBLNCLIPVisionModel",
+        "RBLNCLIPVisionModelConfig",
         "RBLNCLIPVisionModelWithProjection",
+        "RBLNCLIPVisionModelWithProjectionConfig",
+    ],
+    "decoderonly": [
+        "RBLNDecoderOnlyModelForCausalLM",
+        "RBLNDecoderOnlyModelForCausalLMConfig",
     ],
     "dpt": ["RBLNDPTForDepthEstimation"],
     "exaone": ["RBLNExaoneForCausalLM"],
     "gemma": ["RBLNGemmaForCausalLM"],
     "gpt2": ["RBLNGPT2LMHeadModel"],
-    "llama": ["RBLNLlamaForCausalLM"],
-    "llava_next": ["RBLNLlavaNextForConditionalGeneration"],
+    "llama": ["RBLNLlamaForCausalLM", "RBLNLlamaForCausalLMConfig"],
+    "llava_next": ["RBLNLlavaNextForConditionalGeneration", "RBLNLlavaNextForConditionalGenerationConfig"],
     "midm": ["RBLNMidmLMHeadModel"],
-    "mistral": ["RBLNMistralForCausalLM"],
+    "mistral": ["RBLNMistralForCausalLM", "RBLNMistralForCausalLMConfig"],
     "phi": ["RBLNPhiForCausalLM"],
     "qwen2": ["RBLNQwen2ForCausalLM"],
     "t5": ["RBLNT5EncoderModel", "RBLNT5ForConditionalGeneration"],
@@ -75,18 +83,26 @@ if TYPE_CHECKING:
     from .bert import RBLNBertForMaskedLM, RBLNBertForQuestionAnswering, RBLNBertModel
     from .clip import (
         RBLNCLIPTextModel,
+        RBLNCLIPTextModelConfig,
         RBLNCLIPTextModelWithProjection,
+        RBLNCLIPTextModelWithProjectionConfig,
         RBLNCLIPVisionModel,
+        RBLNCLIPVisionModelConfig,
         RBLNCLIPVisionModelWithProjection,
+        RBLNCLIPVisionModelWithProjectionConfig,
+    )
+    from .decoderonly import (
+        RBLNDecoderOnlyModelForCausalLM,
+        RBLNDecoderOnlyModelForCausalLMConfig,
     )
     from .dpt import RBLNDPTForDepthEstimation
     from .exaone import RBLNExaoneForCausalLM
     from .gemma import RBLNGemmaForCausalLM
     from .gpt2 import RBLNGPT2LMHeadModel
-    from .llama import RBLNLlamaForCausalLM
-    from .llava_next import RBLNLlavaNextForConditionalGeneration
+    from .llama import RBLNLlamaForCausalLM, RBLNLlamaForCausalLMConfig
+    from .llava_next import RBLNLlavaNextForConditionalGeneration, RBLNLlavaNextForConditionalGenerationConfig
     from .midm import RBLNMidmLMHeadModel
-    from .mistral import RBLNMistralForCausalLM
+    from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig
     from .phi import RBLNPhiForCausalLM
     from .qwen2 import RBLNQwen2ForCausalLM
     from .t5 import RBLNT5EncoderModel, RBLNT5ForConditionalGeneration

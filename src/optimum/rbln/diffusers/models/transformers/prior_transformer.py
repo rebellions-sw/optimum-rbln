@@ -19,8 +19,8 @@ import torch
 from diffusers.models.transformers.prior_transformer import PriorTransformer, PriorTransformerOutput
 from transformers import PretrainedConfig, PreTrainedModel
 
+from ....configuration_utils import RBLNCompileConfig, RBLNConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
 from ...modeling_diffusers import RBLNDiffusionMixin
@@ -125,7 +125,7 @@ class RBLNPriorTransformer(RBLNModel):
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors,
         model_config: PretrainedConfig,

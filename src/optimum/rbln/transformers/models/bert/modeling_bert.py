@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 from transformers import PretrainedConfig
 
+from ....configuration_utils import RBLNCompileConfig, RBLNConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ...modeling_generic import RBLNModelForMaskedLM, RBLNModelForQuestionAnswering
 
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 class RBLNBertModel(RBLNModel):
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
         model_config: Optional["PretrainedConfig"] = None,

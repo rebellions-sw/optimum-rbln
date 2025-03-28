@@ -27,8 +27,8 @@ from transformers import (
 )
 from transformers.modeling_outputs import BaseModelOutput, Seq2SeqLMOutput
 
+from ....configuration_utils import RBLNCompileConfig, RBLNConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
 from .generation_whisper import RBLNWhisperGenerationMixin
@@ -196,7 +196,7 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
         return {"encoder": compiled_encoder, "decoder": compiled_decoder}
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor"],
         model_config: "PretrainedConfig",

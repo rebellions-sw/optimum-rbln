@@ -20,8 +20,8 @@ from diffusers import AutoencoderKL
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
 from transformers import PretrainedConfig
 
+from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNConfig
 from ....modeling import RBLNModel
-from ....modeling_config import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
 from .vae import RBLNRuntimeVAEDecoder, RBLNRuntimeVAEEncoder, _VAEDecoder, _VAEEncoder
@@ -120,7 +120,7 @@ class RBLNAutoencoderKL(RBLNModel):
         return rbln_config
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model_config: "PretrainedConfig",
