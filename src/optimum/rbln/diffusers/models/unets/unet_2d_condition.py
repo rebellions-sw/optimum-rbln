@@ -19,7 +19,7 @@ import torch
 from diffusers.models.unets.unet_2d_condition import UNet2DConditionModel
 from transformers import PretrainedConfig
 
-from ....configuration_utils import RBLNCompileConfig, RBLNConfig
+from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
