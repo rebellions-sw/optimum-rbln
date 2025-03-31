@@ -94,7 +94,7 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
             decoder_attention_mask if self.use_attention_mask else None,
             attention_mask,
             cache_position,
-            block_tables,
+            block_tables=block_tables,
         )
 
         return Seq2SeqLMOutput(logits=lm_logits)
@@ -115,6 +115,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
 
     main_input_name = "input_ids"
     auto_model_class = AutoModelForSeq2SeqLM
+    support_causal_attn = None
 
     def __post_init__(self, **kwargs):
         batch_size = self.rbln_config.model_cfg["batch_size"]
@@ -186,13 +187,16 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
         rbln_dec_max_seq_len = rbln_kwargs.get("dec_max_seq_len", None)
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
         rbln_batch_size = 1 if rbln_batch_size is None else rbln_batch_size
-        rbln_use_attention_mask = rbln_kwargs.get("use_attention_mask", None)
 
-        if rbln_use_attention_mask is None:
-            rbln_use_attention_mask = False
-            rbln_npu = rbln_kwargs.get("npu", None) or rebel.get_npu_name()
-            if rbln_npu == "RBLN-CA02":
-                rbln_use_attention_mask = True
+        if cls.support_causal_attn:
+            rbln_use_attention_mask = rbln_kwargs.get("use_attention_mask", None)
+            if rbln_use_attention_mask is None:
+                rbln_use_attention_mask = False
+                rbln_npu = rbln_kwargs.get("npu", None) or rebel.get_npu_name()
+                if rbln_npu == "RBLN-CA02":
+                    rbln_use_attention_mask = True
+        else:
+            rbln_use_attention_mask = True
 
         n_layer = getattr(model_config, "decoder_layers", None) or getattr(model_config, "num_layers")
         n_head = getattr(model_config, "decoder_attention_heads", None) or getattr(model_config, "num_heads")
