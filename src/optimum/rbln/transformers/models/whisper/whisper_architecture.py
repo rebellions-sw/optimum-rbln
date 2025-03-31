@@ -172,8 +172,6 @@ class WhisperDecoder(nn.Module):
             all_hiddens.append(batch_hidden)
         
         hidden_states = torch.stack(all_hiddens, dim=0)
-        # positions = self.embed_positions(input_ids, position_ids=cache_position)
-        # hidden_states = inputs_embeds + positions
 
         # prepare casual_attn_mask
         attention_mask = _prepare_4d_causal_attention_mask(attention_mask, input_shape, inputs_embeds, cache_position)
