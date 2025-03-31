@@ -220,6 +220,7 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
 
         enc_input_info = [
             ("input_features", [1, num_mel_bins, expected_seq_len], "float32"),
+            ("block_tables", [1], "int16"),
             (
                 "cross_key_value_states",
                 [
@@ -231,7 +232,6 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
                 ],
                 "float32",
             ),
-            ("block_tables", [1], "int16"),
         ]
 
         dec_input_info = [
@@ -334,6 +334,7 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
         model_kwargs,
         model_input_name: Optional[str] = None,
         generation_config: Optional["GenerationConfig"] = None,
+        **kwargs,
     ) -> Dict[str, Any]:
         
         batch_size = inputs_tensor.shape[0]
@@ -374,7 +375,6 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
                     decoder_output = self.decoder(
                         decoder_input_ids=input_ids[:, step : step + 1].contiguous(),
                         decoder_attention_mask=self.decoder_attention_mask,
-                        # cache_position = torch.tensor(cache_pos, dtype=torch.int32)
                         cache_position = torch.full((self.batch_size, 1), step, dtype=torch.int32)
                     )
                     cross_attentions.append(decoder_output.cross_attentions)

@@ -57,8 +57,8 @@ class WhisperEncoderWrapper(torch.nn.Module):
     def forward(
         self,
         input_features: Optional[torch.LongTensor],
-        cross_key_values: torch.Tensor,
         b_idx: torch.Tensor,
+        cross_key_values: torch.Tensor,
     ) -> Union[Tuple[torch.FloatTensor], BaseModelOutput]:
         # 1. get encoder last_hidden_states
         encoder_outputs = self.encoder(input_features=input_features)
@@ -77,7 +77,6 @@ class WhisperEncoderWrapper(torch.nn.Module):
         cross_kv = torch.stack(cross_kv, dim=0)
 
         # 3. update cross_attention's past_key_value to the device-dram for optimization.
-        # bidx = torch.tensor(0, dtype=torch.int16)
         batch_axis = torch.tensor(1, dtype=torch.int16)
         enc_output = torch.ops.rbln_custom_ops.rbln_cache_update(cross_key_values, cross_kv, b_idx[0], batch_axis)
 
@@ -294,7 +293,6 @@ class WhisperSelfAttention(WhisperAttention):
             past_key_value[0].view(bsz, self.num_heads, 1, -1, self.head_dim),
             past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
             cache_position,
-            # cache_position.expand(bsz, 1),
             torch.tensor(1.0, dtype=torch.float32),  # scale
             block_tables,
             block_size,
