@@ -28,6 +28,16 @@ if TYPE_CHECKING:
 
 
 class RBLNRuntimeModel(RBLNPytorchRuntime):
+    """
+    A runtime model class for RBLN-optimized decoder-only models, extending `RBLNPytorchRuntime`.
+    This class manages the execution of compiled models in either the prefill or decode phase, handling KV cache management,
+    attention mechanisms, and input processing for efficient inference on RBLN-compatible hardware.
+
+    It supports chunked prefill processing for memory optimization, continuous batching, and attention mask handling.
+    The class is designed to integrate with the Hugging Face Transformers generation pipeline while leveraging RBLN-specific
+    optimizations like paged attention and block-based KV caching.
+    """
+
     mandatory_members = ["main_input_name", "embed_tokens"]
 
     def __init__(

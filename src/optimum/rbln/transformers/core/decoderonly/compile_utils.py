@@ -27,6 +27,7 @@ from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ...utils.rbln_quantization import QuantizationManager
 from .decoderonly_architecture import (
+    DecoderOnlyWrapper,
     validate_attention_method,
 )
 
@@ -38,6 +39,34 @@ if TYPE_CHECKING:
 
 
 class DecoderOnlyCompileUtils:
+    """
+    A utility class that provides methods to compile `RBLNDecoderOnlyModelForCausalLM`, which inherits from `RBLNModel`.
+    This class contains methods either specifically designed for compilation or overrides of `RBLNModel` methods tailored
+    for decoder-only models used in causal language modeling tasks.
+
+    The class includes functionality for loading PyTorch models, wrapping models with specific configurations, compiling
+    models for different phases (prefill and decode), managing quantization, and handling key-value cache configurations.
+    It is designed to work with the RBLN framework and supports efficient model compilation for deployment on specialized
+    hardware like NPUs.
+
+    Attributes:
+        _decoder_wrapper_cls: A class used to wrap the model with additional configurations (assumed to be defined elsewhere).
+        _use_rotary_emb: A class attribute indicating whether rotary embeddings are used (assumed to be defined elsewhere).
+
+    Methods:
+        get_pytorch_model: Loads a PyTorch model, optionally applying quantization if specified.
+        wrap_model_if_needed: Wraps a model with additional configuration settings for decoding.
+        get_compiled_model: Compiles the model into prefill and decode phases using the RBLN framework.
+        _get_rbln_config: Constructs an `RBLNConfig` object based on provided model and compilation parameters.
+        get_input_embeddings: Retrieves the input embeddings from the model.
+        save_torch_artifacts: Saves PyTorch model artifacts (e.g., weights) to disk for CPU execution.
+        get_quantized_model: Loads and prepares a quantized model for compilation.
+        get_maximum_num_blocks: Calculates the maximum number of key-value cache blocks based on memory constraints.
+    """
+
+    _decoder_wrapper_cls = DecoderOnlyWrapper
+    _use_rotary_emb = True
+
     @classmethod
     def get_pytorch_model(cls, *args, **kwargs) -> "PreTrainedModel":
         logger.debug("Loading the LLM model to the CPU.")  # TODO(jongho): Remove.

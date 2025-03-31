@@ -12,20 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+import inspect
 from collections import deque
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 import rebel
 import torch
-from transformers import AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, PreTrainedModel
 from transformers.modeling_utils import no_init_weights
 
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from .compile_utils import DecoderOnlyCompileUtils
-from .decoderonly_architecture import (
-    DecoderOnlyWrapper,
-)
 from .generation_utils import DecoderOnlyGenerationUtils
 from .runtime_utils import RBLNRuntimeModel
 
@@ -58,15 +57,12 @@ class RBLNDecoderOnlyModelForCausalLM(DecoderOnlyCompileUtils, DecoderOnlyGenera
 
     main_input_name = "input_ids"
     auto_model_class = AutoModelForCausalLM
-    _decoder_wrapper_cls = DecoderOnlyWrapper
-    _use_rotary_emb = True
 
     def __post_init__(self, **kwargs):
         self.batch_size = self.rbln_config.model_cfg["batch_size"]
         self.max_seq_len = self.rbln_config.model_cfg["max_seq_len"]
         self.prefill_chunk_size = self.rbln_config.model_cfg["prefill_chunk_size"]
         self.kvcache_block_size = self.rbln_config.model_cfg["kvcache_block_size"]
-        # FIXME get kvcache_num_blocks from compiled results.
         self.kvcache_num_blocks = self.rbln_config.model_cfg["kvcache_num_blocks"]
         self.use_attention_mask = self.rbln_config.model_cfg["use_attention_mask"]
         attn_impl = self.rbln_config.model_cfg["attn_impl"]
@@ -121,6 +117,26 @@ class RBLNDecoderOnlyModelForCausalLM(DecoderOnlyCompileUtils, DecoderOnlyGenera
             use_attention_mask=self.use_attention_mask,
             attn_impl=attn_impl,
         )
+
+    def __getattr__(self, __name: str) -> Any:
+        """
+        Special method to delegate attribute access to the original Huggingface LM class.
+        This method is called when an attribute is not found in the current instance's dictionary.
+        It enables transparent access to the original model's attributes and methods while maintaining
+        proper method binding.
+
+        The method implements a delegation pattern that:
+        1. For methods: Creates a wrapper that properly binds 'self' to method calls
+        2. For other attributes: Returns them directly from the original class
+        """
+
+        def redirect(func):
+            return lambda *pargs, **kwargs: func(self, *pargs, **kwargs)
+
+        val = getattr(self.get_hf_class(), __name, None) or getattr(PreTrainedModel, __name)
+        if isinstance(val, Callable) and "self" in set(inspect.signature(val).parameters):
+            return redirect(val)
+        return val
 
     @classmethod
     def _create_runtimes(
