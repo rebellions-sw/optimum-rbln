@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from .attn import (
-    register_rbln_custom_add_softmax_attention,
+    register_rbln_custom_paged_add_softmax_attention,
     register_rbln_custom_paged_attention,
     register_rbln_custom_paged_causal_attention,
 )
