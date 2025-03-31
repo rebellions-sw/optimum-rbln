@@ -390,6 +390,12 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
         # detect language pass
         # https://github.com/huggingface/transformers/blob/174890280b340b89c5bfa092f6b4fb0e2dc2d7fc/src/transformers/models/whisper/generation_whisper.py#L1442
         else:
+            # for language auto detection (generate with language=None)
+            if encoder_outputs is None:
+                for b in range(input_features.shape[0]):
+                    block_tables = torch.tensor([b], dtype=torch.int16)
+                    self.encoder(input_features=input_features[b].unsqueeze(0), block_tables=block_tables)
+            
             self.decoder_attention_mask = torch.zeros(self.batch_size, self.dec_max_seq_len, dtype=torch.int64)
             self.is_language_detected = True
             self.decoder_attention_mask[:, 0] = 1
