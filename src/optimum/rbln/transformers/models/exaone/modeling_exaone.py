@@ -16,7 +16,7 @@
 from transformers import AutoModelForCausalLM
 
 from ....utils import logging
-from ...generic_models.decoderonly import RBLNDecoderOnlyModelForCausalLM
+from ...core.decoderonly import RBLNDecoderOnlyModelForCausalLM
 from .exaone_architecture import ExaoneForCausalLMWrapper
 
 

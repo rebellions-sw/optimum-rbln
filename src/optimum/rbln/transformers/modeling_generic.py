@@ -32,9 +32,9 @@ from transformers import (
     PretrainedConfig,
 )
 
-from ...modeling import RBLNModel
-from ...modeling_config import RBLNCompileConfig, RBLNConfig
-from ...utils.logging import get_logger
+from ..modeling import RBLNModel
+from ..modeling_config import RBLNCompileConfig, RBLNConfig
+from ..utils.logging import get_logger
 
 
 if TYPE_CHECKING:

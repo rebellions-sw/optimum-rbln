@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from ..utils.logging import get_logger
-from .generic_models.modeling_generic import (
+from .modeling_generic import (
     RBLNModelForAudioClassification,
     RBLNModelForImageClassification,
     RBLNModelForMaskedLM,
