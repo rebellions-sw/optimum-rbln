@@ -226,9 +226,6 @@ def paged_causal_attn_prefill_fake(
     return torch.empty_like(q)
 
 
-torch.library.impl
-
-
 @torch.library.custom_op(
     "rbln_custom_ops::add_softmax_attn_decode",
     mutates_args=(["kcache", "vcache"]),
