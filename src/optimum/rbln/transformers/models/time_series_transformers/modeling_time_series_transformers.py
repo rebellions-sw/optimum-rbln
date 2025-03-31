@@ -232,6 +232,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         context_length = model_config.context_length  # enc_max_seq_len
         predict_length = model_config.prediction_length  # dec_max_seq_len
         feature_size = model_config.feature_size
+        predict_length=64
 
         # model input info
         enc_input_info = [
@@ -377,7 +378,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
 
         # greedy decoding
         future_samples = []
-        dec_attn_mask = torch.zeros(self.batch_size * num_parallel_samples, self.config.prediction_length)
+        dec_attn_mask = torch.zeros(self.batch_size * num_parallel_samples, 64)
         for k in range(self.config.prediction_length):
             lagged_sequence = self._origin_model.model.get_lagged_subsequences(
                 sequence=repeated_past_values,
