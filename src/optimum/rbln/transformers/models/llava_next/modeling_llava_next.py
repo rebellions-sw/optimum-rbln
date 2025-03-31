@@ -29,7 +29,7 @@ from transformers.modeling_outputs import BaseModelOutputWithPooling
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
-from ...core.decoderonly.modeling_decoderonly import RBLNDecoderOnlyOutput
+from ...core.decoderonly.generation_utils import RBLNDecoderOnlyOutput
 
 
 logger = get_logger(__name__)

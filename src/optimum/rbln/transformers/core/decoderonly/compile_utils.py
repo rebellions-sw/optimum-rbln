@@ -38,62 +38,6 @@ if TYPE_CHECKING:
 
 
 class DecoderOnlyCompileUtils:
-    def get_input_embeddings(self):
-        return self.embed_tokens
-
-    @classmethod
-    def save_torch_artifacts(
-        cls,
-        model: "PreTrainedModel",
-        save_dir_path: Path,
-        subfolder: str,
-        rbln_config: RBLNConfig,
-    ):
-        """
-        If you are unavoidably running on a CPU rather than an RBLN device,
-        store the torch tensor, weight, etc. in this function.
-        """
-        if rbln_config.model_cfg["use_inputs_embeds"]:
-            save_dict = {}
-            save_dict["embed_tokens"] = model.get_input_embeddings().state_dict()
-            torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
-
-    @classmethod
-    def get_quantized_model(
-        cls,
-        model_id: str,
-        config: Optional["PretrainedConfig"] = None,
-        use_auth_token: Optional[Union[bool, str]] = None,
-        revision: Optional[str] = None,
-        force_download: bool = False,
-        cache_dir: Optional[str] = None,
-        subfolder: str = "",
-        local_files_only: bool = False,
-        trust_remote_code: bool = False,
-        **kwargs,
-    ):
-        from ...utils.rbln_quantization import prepare_model_for_quantization
-
-        kwargs = cls.update_kwargs(kwargs)
-
-        if config is None:
-            config = AutoConfig.from_pretrained(
-                model_id,
-                use_auth_token=use_auth_token,
-                revision=revision,
-                force_download=force_download,
-                cache_dir=cache_dir,
-                trust_remote_code=trust_remote_code,
-                **kwargs,
-            )
-
-        with no_init_weights():
-            model = AutoModelForCausalLM.from_config(config)
-
-        prepare_model_for_quantization(model, model_id, kwargs.get("num_hidden_layers"))
-
-        return model
-
     @classmethod
     def get_pytorch_model(cls, *args, **kwargs) -> "PreTrainedModel":
         logger.debug("Loading the LLM model to the CPU.")  # TODO(jongho): Remove.
@@ -165,71 +109,6 @@ class DecoderOnlyCompileUtils:
             return {"prefill": compiled_prefill, "decoder": compiled_decoder}
 
         return compile_model(quantize_config=quantize_config)
-
-    @classmethod
-    def get_maximum_num_blocks(
-        cls,
-        config: PretrainedConfig,
-        tensor_parallel_size: int,
-        kvcache_block_size: int,
-        nbits_per_param: int,
-        n_model_params: int,
-    ) -> int:
-        def align(x: int, nbytes: int) -> int:
-            return int(math.ceil(x / nbytes) * nbytes)
-
-        def align_2MB(x: int) -> int:
-            return align(x, 2 * 1024 * 1024)
-
-        num_attention_heads = getattr(config, "n_head", None) or getattr(config, "num_attention_heads")
-        num_layers = getattr(config, "n_layer", None) or getattr(config, "num_hidden_layers")
-        head_dim = getattr(config, "head_dim", None) or config.hidden_size // num_attention_heads
-        vocab_size = config.vocab_size
-        hidden_size = getattr(config, "n_embd", None) or getattr(config, "hidden_size")
-        num_key_value_heads = getattr(config, "num_key_value_heads", None) or num_attention_heads
-
-        # TODO(jongho): Update if target npu is REBEL.
-        ATOM_DRAM_NBYTES = 16 * 2**30
-        ATOM_SYS_DRAM_NBYTES = 288 * 2**20
-        available_dram = tensor_parallel_size * (ATOM_DRAM_NBYTES - ATOM_SYS_DRAM_NBYTES)
-
-        # Get estimated kernel size (approximated)
-        lm_heads_params = align(vocab_size, 64) * hidden_size
-        lm_heads_nbytes = (
-            align_2MB(lm_heads_params * nbits_per_param // 8 / tensor_parallel_size) * tensor_parallel_size
-        )
-        params = n_model_params - lm_heads_params
-        layer_nbytes = (
-            align_2MB(params * nbits_per_param // 8 / num_layers / tensor_parallel_size)
-            * num_layers
-            * tensor_parallel_size
-        )
-        kernel_size = layer_nbytes + lm_heads_nbytes
-
-        available_dram -= kernel_size
-
-        # TODO: Accurate buffer estimation
-        buffer = 2**30  # 1GB Buffer
-        if tensor_parallel_size <= 4:
-            buffer /= 4
-
-        available_dram -= buffer
-
-        # Estimate nbytes per a single kvcache block
-        nbytes_per_block = (
-            align_2MB(
-                kvcache_block_size
-                * head_dim
-                * math.ceil(num_key_value_heads / tensor_parallel_size)  # Shard
-                * 2  # (fp16)
-            )
-            * num_layers
-            * 2  # (k, v)
-            * tensor_parallel_size
-        )
-        n_blocks = available_dram // nbytes_per_block
-
-        return n_blocks, nbytes_per_block
 
     @classmethod
     def _get_rbln_config(
@@ -412,3 +291,124 @@ class DecoderOnlyCompileUtils:
             rbln_config.model_cfg.update({"quantization": rbln_quantization})
 
         return rbln_config
+
+    def get_input_embeddings(self):
+        return self.embed_tokens
+
+    @classmethod
+    def save_torch_artifacts(
+        cls,
+        model: "PreTrainedModel",
+        save_dir_path: Path,
+        subfolder: str,
+        rbln_config: RBLNConfig,
+    ):
+        """
+        If you are unavoidably running on a CPU rather than an RBLN device,
+        store the torch tensor, weight, etc. in this function.
+        """
+        if rbln_config.model_cfg["use_inputs_embeds"]:
+            save_dict = {}
+            save_dict["embed_tokens"] = model.get_input_embeddings().state_dict()
+            torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
+
+    @classmethod
+    def get_quantized_model(
+        cls,
+        model_id: str,
+        config: Optional["PretrainedConfig"] = None,
+        use_auth_token: Optional[Union[bool, str]] = None,
+        revision: Optional[str] = None,
+        force_download: bool = False,
+        cache_dir: Optional[str] = None,
+        subfolder: str = "",
+        local_files_only: bool = False,
+        trust_remote_code: bool = False,
+        **kwargs,
+    ):
+        from ...utils.rbln_quantization import prepare_model_for_quantization
+
+        kwargs = cls.update_kwargs(kwargs)
+
+        if config is None:
+            config = AutoConfig.from_pretrained(
+                model_id,
+                use_auth_token=use_auth_token,
+                revision=revision,
+                force_download=force_download,
+                cache_dir=cache_dir,
+                trust_remote_code=trust_remote_code,
+                **kwargs,
+            )
+
+        with no_init_weights():
+            model = AutoModelForCausalLM.from_config(config)
+
+        prepare_model_for_quantization(model, model_id, kwargs.get("num_hidden_layers"))
+
+        return model
+
+    @classmethod
+    def get_maximum_num_blocks(
+        cls,
+        config: PretrainedConfig,
+        tensor_parallel_size: int,
+        kvcache_block_size: int,
+        nbits_per_param: int,
+        n_model_params: int,
+    ) -> int:
+        def align(x: int, nbytes: int) -> int:
+            return int(math.ceil(x / nbytes) * nbytes)
+
+        def align_2MB(x: int) -> int:
+            return align(x, 2 * 1024 * 1024)
+
+        num_attention_heads = getattr(config, "n_head", None) or getattr(config, "num_attention_heads")
+        num_layers = getattr(config, "n_layer", None) or getattr(config, "num_hidden_layers")
+        head_dim = getattr(config, "head_dim", None) or config.hidden_size // num_attention_heads
+        vocab_size = config.vocab_size
+        hidden_size = getattr(config, "n_embd", None) or getattr(config, "hidden_size")
+        num_key_value_heads = getattr(config, "num_key_value_heads", None) or num_attention_heads
+
+        # TODO(jongho): Update if target npu is REBEL.
+        ATOM_DRAM_NBYTES = 16 * 2**30
+        ATOM_SYS_DRAM_NBYTES = 288 * 2**20
+        available_dram = tensor_parallel_size * (ATOM_DRAM_NBYTES - ATOM_SYS_DRAM_NBYTES)
+
+        # Get estimated kernel size (approximated)
+        lm_heads_params = align(vocab_size, 64) * hidden_size
+        lm_heads_nbytes = (
+            align_2MB(lm_heads_params * nbits_per_param // 8 / tensor_parallel_size) * tensor_parallel_size
+        )
+        params = n_model_params - lm_heads_params
+        layer_nbytes = (
+            align_2MB(params * nbits_per_param // 8 / num_layers / tensor_parallel_size)
+            * num_layers
+            * tensor_parallel_size
+        )
+        kernel_size = layer_nbytes + lm_heads_nbytes
+
+        available_dram -= kernel_size
+
+        # TODO: Accurate buffer estimation
+        buffer = 2**30  # 1GB Buffer
+        if tensor_parallel_size <= 4:
+            buffer /= 4
+
+        available_dram -= buffer
+
+        # Estimate nbytes per a single kvcache block
+        nbytes_per_block = (
+            align_2MB(
+                kvcache_block_size
+                * head_dim
+                * math.ceil(num_key_value_heads / tensor_parallel_size)  # Shard
+                * 2  # (fp16)
+            )
+            * num_layers
+            * 2  # (k, v)
+            * tensor_parallel_size
+        )
+        n_blocks = available_dram // nbytes_per_block
+
+        return n_blocks, nbytes_per_block

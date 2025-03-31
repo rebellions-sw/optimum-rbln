@@ -12,16 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import inspect
 from collections import deque
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 import rebel
 import torch
-from transformers import AutoModelForCausalLM, PreTrainedModel
+from transformers import AutoModelForCausalLM
 from transformers.modeling_utils import no_init_weights
-
 
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
@@ -37,8 +34,6 @@ logger = get_logger()
 
 if TYPE_CHECKING:
     pass
-
-
 
 
 class RBLNDecoderOnlyModelForCausalLM(DecoderOnlyCompileUtils, DecoderOnlyGenerationUtils, RBLNModel):
@@ -126,26 +121,6 @@ class RBLNDecoderOnlyModelForCausalLM(DecoderOnlyCompileUtils, DecoderOnlyGenera
             use_attention_mask=self.use_attention_mask,
             attn_impl=attn_impl,
         )
-
-    def __getattr__(self, __name: str) -> Any:
-        """
-        Special method to delegate attribute access to the original Huggingface LM class.
-        This method is called when an attribute is not found in the current instance's dictionary.
-        It enables transparent access to the original model's attributes and methods while maintaining
-        proper method binding.
-
-        The method implements a delegation pattern that:
-        1. For methods: Creates a wrapper that properly binds 'self' to method calls
-        2. For other attributes: Returns them directly from the original class
-        """
-
-        def redirect(func):
-            return lambda *pargs, **kwargs: func(self, *pargs, **kwargs)
-
-        val = getattr(self.get_hf_class(), __name, None) or getattr(PreTrainedModel, __name)
-        if isinstance(val, Callable) and "self" in set(inspect.signature(val).parameters):
-            return redirect(val)
-        return val
 
     @classmethod
     def _create_runtimes(

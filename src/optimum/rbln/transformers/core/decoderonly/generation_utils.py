@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import inspect
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple
 
 import torch
+from transformers import PreTrainedModel
 from transformers.utils import ModelOutput
 
 from ....utils.logging import get_logger
@@ -26,6 +28,7 @@ logger = get_logger()
 if TYPE_CHECKING:
     pass
 
+
 @dataclass
 class RBLNDecoderOnlyOutput(ModelOutput):
     logits: torch.FloatTensor = None
@@ -33,6 +36,26 @@ class RBLNDecoderOnlyOutput(ModelOutput):
 
 
 class DecoderOnlyGenerationUtils:
+    def __getattr__(self, __name: str) -> Any:
+        """
+        Special method to delegate attribute access to the original Huggingface LM class.
+        This method is called when an attribute is not found in the current instance's dictionary.
+        It enables transparent access to the original model's attributes and methods while maintaining
+        proper method binding.
+
+        The method implements a delegation pattern that:
+        1. For methods: Creates a wrapper that properly binds 'self' to method calls
+        2. For other attributes: Returns them directly from the original class
+        """
+
+        def redirect(func):
+            return lambda *pargs, **kwargs: func(self, *pargs, **kwargs)
+
+        val = getattr(self.get_hf_class(), __name, None) or getattr(PreTrainedModel, __name)
+        if isinstance(val, Callable) and "self" in set(inspect.signature(val).parameters):
+            return redirect(val)
+        return val
+
     def get_decoder(self):
         return self.decoder
 
