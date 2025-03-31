@@ -18,12 +18,6 @@ import torch
 from torch import nn
 from transformers.utils import logging
 
-from ....ops import (
-    register_rbln_custom_cache_update,
-    register_rbln_custom_paged_attention,
-    register_rbln_custom_paged_causal_attention,
-)
-
 
 logger = logging.get_logger(__name__)
 
@@ -59,7 +53,6 @@ class Seq2SeqEncoderWrapper(nn.Module):
 
     def __init__(self, model: nn.Module, enc_max_seq_len: int):
         super().__init__()
-        register_rbln_custom_cache_update()
         self.config = model.config
         self.encoder = model.get_encoder()
         self.encoder_max_length = enc_max_seq_len
@@ -114,9 +107,11 @@ class Seq2SeqEncoderWrapper(nn.Module):
 
         # 3. update the cross_attention's past_key_value direct to the device-dram for optimization.
         batch_axis = torch.tensor(1, dtype=torch.int16)
-        enc_out = torch.ops.rbln_custom_ops.rbln_cache_update(cross_key_values, cross_kv, b_idx[0], batch_axis)
+        cross_key_values = torch.ops.rbln_custom_ops.rbln_cache_update(
+            cross_key_values, cross_kv, b_idx[0], batch_axis
+        )
 
-        return enc_out
+        return cross_key_values
 
 
 class Seq2SeqDecoderWrapper(nn.Module):
@@ -146,11 +141,6 @@ class Seq2SeqDecoderWrapper(nn.Module):
         It is inspired by the BART architecture, but it is designed to be flexible and can be overridden
         by subclasses to modify or add custom attributes as necessary.
         """
-        if self.use_attention_mask:
-            register_rbln_custom_paged_attention()
-        else:
-            register_rbln_custom_paged_causal_attention()
-
         self.num_layers = self.config.decoder_layers
         self.conditional_generation = self.convert_to_rbln_conditional_generation(model)
 

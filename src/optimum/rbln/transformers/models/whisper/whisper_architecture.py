@@ -25,16 +25,12 @@ from transformers.modeling_outputs import (
 )
 from transformers.utils import logging
 
-from ....ops import register_rbln_custom_add_softmax_attention, register_rbln_custom_cache_update
-
 
 logger = logging.get_logger(__name__)
 
 
 class WhisperWrapper:
     def __init__(self, model, rbln_token_timestamps):
-        register_rbln_custom_cache_update()
-        register_rbln_custom_add_softmax_attention()
         self.encoder = WhisperEncoderWrapper(model)
         self.decoder = WhisperDecoderWrapper(model, output_attentions=rbln_token_timestamps)
 
@@ -78,9 +74,14 @@ class WhisperEncoderWrapper(torch.nn.Module):
         # 3. update cross_attention's past_key_value to the device-dram for optimization.
         bidx = torch.tensor(0, dtype=torch.int16)
         axis = torch.tensor(1, dtype=torch.int16)
-        enc_output = torch.ops.rbln_custom_ops.rbln_cache_update(cross_key_values, cross_kv, bidx, axis)
+        cross_key_values = torch.ops.rbln_custom_ops.rbln_cache_update(
+            cache=cross_key_values,
+            state=cross_kv,
+            position=bidx,
+            axis=axis,
+        )
 
-        return enc_output
+        return cross_key_values
 
 
 class WhisperDecoderWrapper(torch.nn.Module):
@@ -272,14 +273,14 @@ class WhisperSelfAttention(WhisperAttention):
         value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
 
         attn_output = torch.ops.rbln_custom_ops.add_softmax_attn_decode(
-            query_states,
-            key_states,
-            value_states,
-            attention_mask.unsqueeze(2),
-            past_key_value[0].view(bsz, self.num_heads, 1, -1, self.head_dim),
-            past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
-            cache_position.expand(bsz, 1),
-            torch.tensor(1.0, dtype=torch.float32),  # scale
+            q=query_states,
+            k=key_states,
+            v=value_states,
+            mask=attention_mask.unsqueeze(2),
+            kcache=past_key_value[0].view(bsz, self.num_heads, 1, -1, self.head_dim),
+            vcache=past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
+            seq=cache_position.expand(bsz, 1),
+            scale=torch.tensor(1.0, dtype=torch.float32),
         )
 
         attn_output = attn_output.view(bsz, self.num_heads, tgt_len, self.head_dim)
