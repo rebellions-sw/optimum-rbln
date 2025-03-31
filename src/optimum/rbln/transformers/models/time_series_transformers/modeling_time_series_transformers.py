@@ -231,6 +231,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
 
         context_length = model_config.context_length  # enc_max_seq_len
         predict_length = model_config.prediction_length  # dec_max_seq_len
+        predict_length = 64  # tmp fix
         feature_size = model_config.feature_size
 
         # model input info
@@ -241,9 +242,8 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         enc_input_info.extend(
             [
                 (
-                    "cross_key_value_states",
+                    f"cross_key_value_states_{i}",
                     [
-                        model_config.decoder_layers * 2,
                         rbln_batch_size,
                         model_config.decoder_attention_heads,
                         context_length,
@@ -251,6 +251,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
                     ],
                     "float32",
                 )
+                for i in range(model_config.decoder_layers * 2)
             ]
         )
 
@@ -263,16 +264,16 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         dec_input_info.extend(
             [
                 (
-                    "cross_key_value_states",
+                    f"cross_key_value_states_{i}",
                     [
-                        model_config.decoder_layers * 2,  # 4
-                        rbln_batch_size,  # 64
-                        model_config.decoder_attention_heads,  # 2
-                        context_length,  # 24
-                        model_config.d_model // model_config.decoder_attention_heads,  # 13
+                        rbln_batch_size,
+                        model_config.decoder_attention_heads,
+                        context_length,
+                        model_config.d_model // model_config.decoder_attention_heads,
                     ],
                     "float32",
                 )
+                for i in range(model_config.decoder_layers * 2)
             ]
         )
         dec_input_info.extend(
@@ -378,6 +379,8 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         # greedy decoding
         future_samples = []
         dec_attn_mask = torch.zeros(self.batch_size * num_parallel_samples, self.config.prediction_length)
+        # tmp fix
+        dec_attn_mask = torch.zeros(self.batch_size * num_parallel_samples, 64)
         for k in range(self.config.prediction_length):
             lagged_sequence = self._origin_model.model.get_lagged_subsequences(
                 sequence=repeated_past_values,

@@ -118,12 +118,14 @@ class TimeSeriesTransformersDecoderWrapper(torch.nn.Module):
         decoder_attention_mask: torch.Tensor,
         # encoder_attention_mask: Optional[torch.Tensor],
         cache_position: torch.Tensor,
-        cross_kv_cache: torch.Tensor,  # batch_size, num_heads, context_length, d_kv
-        *self_kv_cache: torch.Tensor,  # batch_size * num_parallel_samples, num_heads, prediction_length, d_kv
+        *kv_cache: torch.Tensor,  # batch_size * num_parallel_samples, num_heads, prediction_length, d_kv
     ) -> Union[Tuple[torch.FloatTensor], Seq2SeqLMOutput]:
         # prepare past_key_values
         self_past_key_values = ()
         cross_past_key_values = ()
+        cross_kv_cache = kv_cache[: self.num_layers * 2]
+        self_kv_cache = kv_cache[self.num_layers * 2 :]
+
         for i in range(0, self.num_layers * 2, 2):
             self_past_key_values = self_past_key_values + ((self_kv_cache[i], self_kv_cache[i + 1]),)
             cross_past_key_values = cross_past_key_values + ((cross_kv_cache[i], cross_kv_cache[i + 1]),)
