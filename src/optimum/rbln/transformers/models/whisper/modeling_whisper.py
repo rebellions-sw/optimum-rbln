@@ -371,15 +371,11 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
                     self.is_language_detected = False
                 else:
                     self.decoder_attention_mask[:, step] = 1
-                    cache_pos = []
-                    for i in range(self.batch_size):
-                        cache_pos.append([step])
-                    
                     decoder_output = self.decoder(
                         decoder_input_ids=input_ids[:, step : step + 1].contiguous(),
                         decoder_attention_mask=self.decoder_attention_mask,
-                        # cache_position=step.to(torch.int32),
-                        cache_position = torch.tensor(cache_pos, dtype=torch.int32)
+                        # cache_position = torch.tensor(cache_pos, dtype=torch.int32)
+                        cache_position = torch.full((self.batch_size, 1), step, dtype=torch.int32)
                     )
                     cross_attentions.append(decoder_output.cross_attentions)
                     lm_logits = decoder_output.logits
