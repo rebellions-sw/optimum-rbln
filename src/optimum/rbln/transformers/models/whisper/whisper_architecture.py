@@ -58,6 +58,7 @@ class WhisperEncoderWrapper(torch.nn.Module):
         self,
         input_features: Optional[torch.LongTensor],
         cross_key_values: torch.Tensor,
+        b_idx: torch.Tensor,
     ) -> Union[Tuple[torch.FloatTensor], BaseModelOutput]:
         # 1. get encoder last_hidden_states
         encoder_outputs = self.encoder(input_features=input_features)
@@ -76,9 +77,9 @@ class WhisperEncoderWrapper(torch.nn.Module):
         cross_kv = torch.stack(cross_kv, dim=0)
 
         # 3. update cross_attention's past_key_value to the device-dram for optimization.
-        bidx = torch.tensor(0, dtype=torch.int16)
-        axis = torch.tensor(1, dtype=torch.int16)
-        enc_output = torch.ops.rbln_custom_ops.rbln_cache_update(cross_key_values, cross_kv, bidx, axis)
+        # bidx = torch.tensor(0, dtype=torch.int16)
+        batch_axis = torch.tensor(1, dtype=torch.int16)
+        enc_output = torch.ops.rbln_custom_ops.rbln_cache_update(cross_key_values, cross_kv, b_idx[0], batch_axis)
 
         return enc_output
 
@@ -160,8 +161,16 @@ class WhisperDecoder(nn.Module):
 
         # positional embeding
         inputs_embeds = self.embed_tokens(input_ids)
-        positions = self.embed_positions(input_ids, position_ids=cache_position)
-        hidden_states = inputs_embeds + positions
+        all_hiddens = []
+        for i in range(inputs_embeds.shape[0]):
+            position_id = cache_position[i]
+            position = self.embed_positions(input_ids, position_ids=position_id)
+            batch_hidden = position + inputs_embeds[i]
+            all_hiddens.append(batch_hidden)
+        
+        hidden_states = torch.stack(all_hiddens, dim=0)
+        # positions = self.embed_positions(input_ids, position_ids=cache_position)
+        # hidden_states = inputs_embeds + positions
 
         # prepare casual_attn_mask
         attention_mask = _prepare_4d_causal_attention_mask(attention_mask, input_shape, inputs_embeds, cache_position)
@@ -278,7 +287,8 @@ class WhisperSelfAttention(WhisperAttention):
             attention_mask.unsqueeze(2),
             past_key_value[0].view(bsz, self.num_heads, 1, -1, self.head_dim),
             past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
-            cache_position.expand(bsz, 1),
+            cache_position,
+            # cache_position.expand(bsz, 1),
             torch.tensor(1.0, dtype=torch.float32),  # scale
         )
 

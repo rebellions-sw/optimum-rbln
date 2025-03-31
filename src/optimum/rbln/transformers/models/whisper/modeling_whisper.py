@@ -38,22 +38,14 @@ from .whisper_architecture import WhisperWrapper
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import AutoFeatureExtractor, AutoProcessor, PretrainedConfig, PreTrainedModel
+    from transformers import AutoFeatureExtractor, AutoProcessor, PretrainedConfig, PreTrainedModel, GenerationConfig
 
 
 class RBLNRuntimeEncoder(RBLNPytorchRuntime):
     mandatory_members = ["main_input_name"]
 
-    def forward(self, input_features: torch.Tensor = None):
-        # backward compatibility transformers==4.40.2
-        # https://github.com/huggingface/transformers/blob/4fdf58afb72b0754da30037fc800b6044e7d9c99/src/transformers/pipelines/automatic_speech_recognition.py#L494
-
-        n_pad_to_batch = self.batch_size - input_features.shape[0]
-        if n_pad_to_batch > 0:
-            input_features = torch.nn.functional.pad(input_features, (0, 0, 0, 0, 0, n_pad_to_batch))
-
-        _ = super().forward(input_features=input_features)
-
+    def forward(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
+        _ = super().forward(*args, **kwargs)
         # dummy output for generation
         return BaseModelOutput(last_hidden_state=torch.tensor([[-1.0]]))
 
@@ -71,7 +63,7 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         padded_bsz = self.batch_size - inputs_bsz
         if padded_bsz > 0:
             decoder_input_ids = torch.nn.functional.pad(decoder_input_ids, (0, 0, 0, padded_bsz))
-
+        
         outputs = super().forward(
             decoder_input_ids=decoder_input_ids,
             decoder_attention_mask=decoder_attention_mask,
@@ -106,7 +98,7 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
         self.rbln_token_timestamps = self.rbln_config.model_cfg["token_timestamps"]
 
         self.encoder = RBLNRuntimeEncoder(
-            runtime=self.model[0], main_input_name="input_features", batch_size=self.batch_size
+            runtime=self.model[0], main_input_name="input_features"
         )
         self.decoder = RBLNRuntimeDecoder(
             runtime=self.model[1], main_input_name="input_ids", batch_size=self.batch_size
@@ -215,28 +207,26 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
         if rbln_dec_max_seq_len is None:
             rbln_dec_max_seq_len = model_config.max_length
 
-        # model input info
-        enc_input_info = [("input_features", [rbln_batch_size, num_mel_bins, expected_seq_len], "float32")]
-        enc_input_info.extend(
-            [
-                (
-                    "cross_key_value_states",
-                    [
-                        model_config.decoder_layers * 2,
-                        rbln_batch_size,
-                        model_config.decoder_attention_heads,
-                        enc_max_seq_len,
-                        model_config.d_model // model_config.decoder_attention_heads,
-                    ],
-                    "float32",
-                )
-            ]
-        )
+        enc_input_info = [
+            ("input_features", [1, num_mel_bins, expected_seq_len], "float32"),
+            (
+                "cross_key_value_states",
+                [
+                    model_config.decoder_layers * 2,
+                    rbln_batch_size,
+                    model_config.decoder_attention_heads,
+                    enc_max_seq_len,
+                    model_config.d_model // model_config.decoder_attention_heads,
+                ],
+                "float32",
+            ),
+            ("block_tables", [1], "int16"),
+        ]
 
         dec_input_info = [
             ("decoder_input_ids", [rbln_batch_size, 1], "int64"),
             ("decoder_attention_mask", [rbln_batch_size, rbln_dec_max_seq_len], "int64"),
-            ("cache_position", [], "int32"),
+            ("cache_position", [rbln_batch_size, 1], "int32"),
         ]
         dec_input_info.extend(
             [
@@ -327,10 +317,23 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
 
     # https://github.com/huggingface/transformers/blob/174890280b340b89c5bfa092f6b4fb0e2dc2d7fc/src/transformers/generation/utils.py#L512
     def _prepare_encoder_decoder_kwargs_for_generation(
-        self, inputs_tensor: torch.Tensor, model_kwargs, *args, **kwargs
+        self,
+        inputs_tensor: torch.Tensor,
+        model_kwargs,
+        model_input_name: Optional[str] = None,
+        generation_config: Optional["GenerationConfig"] = None,
     ) -> Dict[str, Any]:
+        
+        batch_size = inputs_tensor.shape[0]
+        n_pad_to_batch = self.batch_size - batch_size
+        if n_pad_to_batch > 0:
+            inputs_tensor = torch.nn.functional.pad(inputs_tensor, (0, 0, 0, 0, 0, n_pad_to_batch))
+        
         if not self.is_language_detected:
-            model_kwargs["encoder_outputs"] = self.encoder(input_features=inputs_tensor)
+            for b in range(inputs_tensor.shape[0]):
+                block_tables = torch.tensor([b], dtype=torch.int16)
+                model_kwargs["encoder_outputs"] = self.encoder(input_features=inputs_tensor[b].unsqueeze(0), block_tables=block_tables)
+            
             self.decoder_attention_mask = torch.zeros(self.batch_size, self.dec_max_seq_len, dtype=torch.int64)
         else:
             model_kwargs["encoder_outputs"] = BaseModelOutput(last_hidden_state=torch.tensor([[-1.0]]))
@@ -356,10 +359,15 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
                     self.is_language_detected = False
                 else:
                     self.decoder_attention_mask[:, step] = 1
+                    cache_pos = []
+                    for i in range(self.batch_size):
+                        cache_pos.append([step])
+                    
                     decoder_output = self.decoder(
                         decoder_input_ids=input_ids[:, step : step + 1].contiguous(),
                         decoder_attention_mask=self.decoder_attention_mask,
-                        cache_position=step.to(torch.int32),
+                        # cache_position=step.to(torch.int32),
+                        cache_position = torch.tensor(cache_pos, dtype=torch.int32)
                     )
                     cross_attentions.append(decoder_output.cross_attentions)
                     lm_logits = decoder_output.logits
@@ -374,15 +382,13 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
         # detect language pass
         # https://github.com/huggingface/transformers/blob/174890280b340b89c5bfa092f6b4fb0e2dc2d7fc/src/transformers/models/whisper/generation_whisper.py#L1442
         else:
-            if encoder_outputs is None:
-                self.encoder(input_features=input_features.contiguous())
             self.decoder_attention_mask = torch.zeros(self.batch_size, self.dec_max_seq_len, dtype=torch.int64)
             self.is_language_detected = True
             self.decoder_attention_mask[:, 0] = 1
             decoder_output = self.decoder(
                 decoder_input_ids=decoder_input_ids.contiguous(),
                 decoder_attention_mask=self.decoder_attention_mask,
-                cache_position=torch.zeros([], dtype=torch.int32),
+                cache_position=torch.zeros([self.rbln_config.model_cfg["batch_size"], 1], dtype=torch.int32),
             )
             lm_logits = decoder_output.logits
             self.language_cross = decoder_output.cross_attentions
