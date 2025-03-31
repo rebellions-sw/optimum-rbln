@@ -19,7 +19,7 @@ from torch import nn
 from transformers.utils import logging
 
 from ....ops import register_rbln_custom_paged_add_softmax_attention
-from ..seq2seq.seq2seq_architecture import (
+from ...generic_models.seq2seq.seq2seq_architecture import (
     Seq2SeqDecoder,
     Seq2SeqDecoderLayer,
     Seq2SeqDecoderWrapper,

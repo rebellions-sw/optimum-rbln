@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from ....utils import logging
-from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM
+from ...generic_models.decoderonly import RBLNDecoderOnlyModelForCausalLM
 from .mistral_architecture import MistralForCausalLMWrapper
 
 

@@ -20,7 +20,7 @@ from transformers import BartForConditionalGeneration, PretrainedConfig, PreTrai
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
-from ...models.seq2seq import RBLNModelForSeq2SeqLM
+from ...generic_models.seq2seq import RBLNModelForSeq2SeqLM
 from .bart_architecture import BartWrapper
 
 

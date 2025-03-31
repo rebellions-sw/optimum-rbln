@@ -29,7 +29,7 @@ from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
-from ...models.seq2seq import RBLNModelForSeq2SeqLM
+from ...generic_models.seq2seq import RBLNModelForSeq2SeqLM
 from .t5_architecture import T5Wrapper
 
 

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Optional, Tuple
 import torch
 from transformers import PhiForCausalLM
 
-from ..decoderonly.decoderonly_architecture import (
+from ...generic_models.decoderonly.decoderonly_architecture import (
     DecoderOnlyAttention,
     DecoderOnlyForCausalLM,
     DecoderOnlyLayer,

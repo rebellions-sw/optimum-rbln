@@ -21,7 +21,7 @@ from transformers.modeling_attn_mask_utils import (
 )
 from transformers.utils import logging
 
-from ..seq2seq.seq2seq_architecture import (
+from ...generic_models.seq2seq.seq2seq_architecture import (
     Seq2SeqDecoder,
     Seq2SeqDecoderLayer,
     Seq2SeqDecoderWrapper,

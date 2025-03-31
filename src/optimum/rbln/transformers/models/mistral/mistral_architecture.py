@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ..decoderonly.decoderonly_architecture import DecoderOnlyWrapper
+from ...generic_models.decoderonly.decoderonly_architecture import DecoderOnlyWrapper
 
 
 class MistralForCausalLMWrapper(DecoderOnlyWrapper):

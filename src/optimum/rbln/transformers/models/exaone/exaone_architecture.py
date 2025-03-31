@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 import torch.nn as nn
 
 from ....utils import logging
-from ...models.decoderonly.decoderonly_architecture import (
+from ...generic_models.decoderonly.decoderonly_architecture import (
     DecoderOnlyAttention,
     DecoderOnlyFlashAttention,
     DecoderOnlyForCausalLM,

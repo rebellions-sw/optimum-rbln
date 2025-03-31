@@ -20,7 +20,7 @@ from transformers import PretrainedConfig
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
-from ...modeling_generic import RBLNModelForMaskedLM, RBLNModelForQuestionAnswering
+from ...generic_models.modeling_generic import RBLNModelForMaskedLM, RBLNModelForQuestionAnswering
 
 
 logger = get_logger(__name__)

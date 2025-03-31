@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Tuple
 import torch
 import torch.nn as nn
 
-from ..decoderonly.decoderonly_architecture import (
+from ...generic_models.decoderonly.decoderonly_architecture import (
     DecoderOnlyAttention,
     DecoderOnlyForCausalLM,
     DecoderOnlyLayer,

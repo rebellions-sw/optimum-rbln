@@ -14,7 +14,7 @@
 
 from typing import TYPE_CHECKING
 
-from ...models.decoderonly.decoderonly_architecture import (
+from ...generic_models.decoderonly.decoderonly_architecture import (
     DecoderOnlyAttention,
     DecoderOnlyFlashAttention,
     DecoderOnlyForCausalLM,
