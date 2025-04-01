@@ -135,7 +135,7 @@ class TimeSeriesTransformersDecoderWrapper(torch.nn.Module):
             attention_mask=decoder_attention_mask,
             # encoder_attention_mask=encoder_attention_mask,
             cache_position=cache_position,
-            block_tables= block_tables,
+            block_tables=block_tables,
             self_past_key_values=self_past_key_values,
             cross_past_key_values=cross_past_key_values,
         )
@@ -271,7 +271,9 @@ class TimeSeriesTransformersAttention(nn.Module):
 
 class TimeSeriesTransformersSelfAttention(TimeSeriesTransformersAttention):
     def _shape(self, tensor: torch.Tensor, seq_len: int, bsz: int) -> torch.Tensor:
-        return tensor.view(bsz, seq_len, 1, self.num_heads, self.head_dim).transpose(1, 3)
+        return tensor.view(
+            bsz // self.num_parallel_samples, seq_len, 1, self.num_heads * self.num_parallel_samples, self.head_dim
+        ).transpose(1, 3)
 
     def forward(
         self,
@@ -288,18 +290,18 @@ class TimeSeriesTransformersSelfAttention(TimeSeriesTransformersAttention):
         key_states = self._shape(self.k_proj(hidden_states), -1, bsz)
         value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
 
-        block_size=  past_key_value[0].shape[-2]
+        block_size = past_key_value[0].shape[-2]
         attn_output = torch.ops.rbln_custom_ops.paged_add_softmax_attn_decode(
             query_states,
             key_states,
             value_states,
             attention_mask.unsqueeze(2),
-            past_key_value[0].view(bsz, self.num_heads, 1, -1, self.head_dim),
-            past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
+            past_key_value[0].view(bsz // self.num_parallel_samples, self.num_heads * self.num_parallel_samples, 1, -1, self.head_dim),
+            past_key_value[1].view(bsz // self.num_parallel_samples, self.num_heads * self.num_parallel_samples, 1, -1, self.head_dim),
             cache_position.expand(bsz, 1),
             torch.tensor(1.0, dtype=torch.float32),  # scale
             block_tables,
-            block_size
+            block_size,
         )
 
         attn_output = attn_output.view(bsz, self.num_heads, tgt_len, self.head_dim)

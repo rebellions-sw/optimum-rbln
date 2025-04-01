@@ -104,7 +104,8 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         cache_position: torch.Tensor = None,
         # encoder_attention_mask: torch.Tensor = None,
     ):
-        outputs = super().forward(inputs_embeds, attention_mask, cache_position)
+        block_tables = torch.arange(attention_mask.shape[0], dtype=torch.int16).view(-1,1)
+        outputs = super().forward(inputs_embeds, attention_mask, cache_position,block_tables)
 
         return RBLNSeq2SeqTSDecoderOutput(
             params=outputs[:-1],
@@ -232,7 +233,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         context_length = model_config.context_length  # enc_max_seq_len
         predict_length = model_config.prediction_length  # dec_max_seq_len
         feature_size = model_config.feature_size
-        predict_length=64
+        predict_length = 64
 
         # model input info
         enc_input_info = [
@@ -257,10 +258,10 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
 
         dec_input_info = [
             ("inputs_embeds", [rbln_batch_size * rbln_num_parallel_samples, 1, feature_size], "float32"),
-            ("attention_mask", [rbln_batch_size * rbln_num_parallel_samples, predict_length], "float32"),
+            ("attention_mask", [rbln_batch_size, predict_length], "float32"),
             # ("encoder_attention_mask", [rbln_batch_size, context_length], "float32"),
             ("cache_position", [], "int32"),
-            ("block_tables", [rbln_batch_size * rbln_num_parallel_samples, 1], "int32"),
+            ("block_tables", [rbln_batch_size, 1], "int16"),
         ]
         dec_input_info.extend(
             [
@@ -282,8 +283,8 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
                 (
                     f"self_key_value_states_{i}",
                     [
-                        rbln_batch_size * rbln_num_parallel_samples,
-                        model_config.decoder_attention_heads,
+                        rbln_batch_size,
+                        model_config.decoder_attention_heads * rbln_num_parallel_samples,
                         predict_length,
                         model_config.d_model // model_config.encoder_attention_heads,
                     ],
@@ -379,7 +380,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
 
         # greedy decoding
         future_samples = []
-        dec_attn_mask = torch.zeros(self.batch_size * num_parallel_samples, 64)
+        dec_attn_mask = torch.zeros(self.batch_size, 64)
         for k in range(self.config.prediction_length):
             lagged_sequence = self._origin_model.model.get_lagged_subsequences(
                 sequence=repeated_past_values,
