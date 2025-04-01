@@ -42,6 +42,8 @@ class CogVideoXTransformer3DModelWrapper(torch.nn.Module):
 
 
 class RBLNCogVideoXTransformer3DModel(RBLNModel):
+    hf_library_name = "diffusers"
+    
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
 
@@ -133,7 +135,7 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
                 ],
                 "float32",
             ),
-            ("timestep", [rbln_batch_size], "float32"),
+            ("timestep", [rbln_batch_size], "int64"),
         ]
 
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
@@ -147,6 +149,10 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
         rbln_config.model_cfg.update({"batch_size": rbln_batch_size})
 
         return rbln_config
+    
+    @property
+    def compiled_batch_size(self):
+        return self.rbln_config.compile_cfgs[0].input_info[0][1][0]
 
     def forward(
         self,
