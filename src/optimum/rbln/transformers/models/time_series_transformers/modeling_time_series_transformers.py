@@ -260,6 +260,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
             ("attention_mask", [rbln_batch_size * rbln_num_parallel_samples, predict_length], "float32"),
             # ("encoder_attention_mask", [rbln_batch_size, context_length], "float32"),
             ("cache_position", [], "int32"),
+            ("block_tables", [rbln_batch_size * rbln_num_parallel_samples, 1], "int32"),
         ]
         dec_input_info.extend(
             [
