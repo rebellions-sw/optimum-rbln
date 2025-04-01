@@ -165,11 +165,13 @@ class TestWhisperModel(BaseTest.TestModel):
     }
 
     def test_generate(self):
-        from transformers import AutoProcessor
         from datasets import load_dataset
+        from transformers import AutoProcessor
 
         processor = AutoProcessor.from_pretrained(self.HF_MODEL_ID)
-        ds = load_dataset("hf-internal-testing/librispeech_asr_dummy", "clean", split="validation", trust_remote_code=True)
+        ds = load_dataset(
+            "hf-internal-testing/librispeech_asr_dummy", "clean", split="validation", trust_remote_code=True
+        )
         input_features_list = []
 
         for i in range(2):
@@ -183,7 +185,7 @@ class TestWhisperModel(BaseTest.TestModel):
         input_features = torch.cat(input_features_list, dim=0)
         output = self.model.generate(input_features=input_features, max_new_tokens=10)
         self.EXPECTED_OUTPUT = output
-        
+
         # test_generate_language
         output = self.model.generate(input_features=input_features, max_new_tokens=10, language="en")
         self.assertTrue(torch.all(output == self.EXPECTED_OUTPUT))
@@ -191,7 +193,7 @@ class TestWhisperModel(BaseTest.TestModel):
         # test_generate_language_auto_detect
         output = self.model.generate(input_features=input_features, max_new_tokens=10, language=None)
         self.assertTrue(torch.all(output == self.EXPECTED_OUTPUT))
-    
+
     def test_long_form_language_auto_detect_generate(self):
         inputs = self.get_inputs()
 
@@ -201,7 +203,7 @@ class TestWhisperModel(BaseTest.TestModel):
         inputs["attention_mask"] = torch.ones(2, 3002, dtype=torch.int64)
 
         _ = self.model.generate(**inputs, temperature=0.0, language=None, return_timestamps=True)
-    
+
     def test_long_form_generate(self):
         inputs = self.get_inputs()
 
