@@ -38,8 +38,8 @@ class RBLNRuntimeEncoder(RBLNPytorchRuntime):
     mandatory_members = ["main_input_name"]
 
     def forward(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
-        output = super().forward(*args, **kwargs)
-        return BaseModelOutput(last_hidden_state=output)
+        _ = super().forward(*args, **kwargs)
+        return BaseModelOutput(last_hidden_state=torch.tensor([1.0]))
 
 
 class RBLNRuntimeDecoder(RBLNPytorchRuntime):
