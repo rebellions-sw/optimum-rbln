@@ -172,8 +172,8 @@ class WhisperDecoder(nn.Module):
         
         hidden_states = torch.stack(all_hiddens, dim=0)
 
-        # prepare casual_attn_mask
-        attention_mask = _prepare_4d_causal_attention_mask(attention_mask, input_shape, inputs_embeds, cache_position)
+        # prepare attn mask 
+        attention_mask = attention_mask[:, None, None, :]
 
         cross_attentions = ()
         # iterate decoder_layer
