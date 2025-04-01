@@ -34,7 +34,7 @@ from transformers.modeling_outputs import (
 )
 from transformers.utils import logging
 
-from ....ops import register_rbln_custom_paged_add_softmax_attention, register_rbln_custom_cache_update
+from ....ops import register_rbln_custom_cache_update, register_rbln_custom_paged_add_softmax_attention
 
 
 logger = logging.get_logger(__name__)
@@ -271,9 +271,7 @@ class TimeSeriesTransformersAttention(nn.Module):
 
 class TimeSeriesTransformersSelfAttention(TimeSeriesTransformersAttention):
     def _shape(self, tensor: torch.Tensor, seq_len: int, bsz: int) -> torch.Tensor:
-        return tensor.view(
-            bsz // self.num_parallel_samples, seq_len, 1, self.num_heads * self.num_parallel_samples, self.head_dim
-        ).transpose(1, 3)
+        return tensor.view(1, seq_len, 1, bsz * self.num_heads, self.head_dim).transpose(1, 3)
 
     def forward(
         self,
@@ -296,8 +294,8 @@ class TimeSeriesTransformersSelfAttention(TimeSeriesTransformersAttention):
             key_states,
             value_states,
             attention_mask.unsqueeze(2),
-            past_key_value[0].view(bsz // self.num_parallel_samples, self.num_heads * self.num_parallel_samples, 1, -1, self.head_dim),
-            past_key_value[1].view(bsz // self.num_parallel_samples, self.num_heads * self.num_parallel_samples, 1, -1, self.head_dim),
+            past_key_value[0].view(1, bsz * self.num_heads, 1, -1, self.head_dim),
+            past_key_value[1].view(1, bsz * self.num_heads, 1, -1, self.head_dim),
             cache_position.expand(bsz, 1),
             torch.tensor(1.0, dtype=torch.float32),  # scale
             block_tables,

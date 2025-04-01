@@ -104,8 +104,8 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         cache_position: torch.Tensor = None,
         # encoder_attention_mask: torch.Tensor = None,
     ):
-        block_tables = torch.arange(attention_mask.shape[0], dtype=torch.int16).view(-1,1)
-        outputs = super().forward(inputs_embeds, attention_mask, cache_position,block_tables)
+        block_tables = torch.zeros(1, 1, dtype=torch.int16)
+        outputs = super().forward(inputs_embeds, attention_mask, cache_position, block_tables)
 
         return RBLNSeq2SeqTSDecoderOutput(
             params=outputs[:-1],
@@ -126,6 +126,8 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
         self.batch_size = self.rbln_config.model_cfg["batch_size"]
+        self.dec_max_seq_len = self.rbln_config.model_cfg["dec_max_seq_len"]
+        self.num_parallel_samples = self.rbln_config.model_cfg["num_parallel_samples"]
 
         with no_init_weights():
             self._origin_model = TimeSeriesTransformerForPrediction._from_config(self.config)
@@ -222,22 +224,25 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         model_config: "PretrainedConfig",
         rbln_kwargs: Dict[str, Any] = {},
     ) -> RBLNConfig:
-        rbln_batch_size = rbln_kwargs.get("batch_size", None)
-
-        rbln_batch_size = 1 if rbln_batch_size is None else rbln_batch_size
-        rbln_num_parallel_samples = model_config.num_parallel_samples
+        rbln_batch_size = rbln_kwargs.get("batch_size", 1)
+        rbln_dec_max_seq_len = rbln_kwargs.get("dec_max_seq_len", None)
+        rbln_num_parallel_samples = rbln_kwargs.get("num_parallel_samples", None)
 
         if not isinstance(rbln_batch_size, int):
             raise TypeError(f"Expected rbln_batch_size to be an int, but got {type(rbln_batch_size)}")
 
-        context_length = model_config.context_length  # enc_max_seq_len
-        predict_length = model_config.prediction_length  # dec_max_seq_len
-        feature_size = model_config.feature_size
-        predict_length = 64
+        rbln_num_parallel_samples = (
+            model_config.num_parallel_samples if rbln_num_parallel_samples is None else rbln_num_parallel_samples
+        )
+        if rbln_dec_max_seq_len is None:
+            predict_length = model_config.prediction_length
+            rbln_dec_max_seq_len = (
+                predict_length if predict_length % 64 == 0 else predict_length + (64 - predict_length % 64)
+            )
 
         # model input info
         enc_input_info = [
-            ("inputs_embeds", [rbln_batch_size, context_length, feature_size], "float32"),
+            ("inputs_embeds", [rbln_batch_size, model_config.context_length, model_config.feature_size], "float32"),
             # ("attention_mask", [rbln_batch_size, context_length], "float32"),
         ]
         enc_input_info.extend(
@@ -248,7 +253,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
                         model_config.decoder_layers * 2,
                         rbln_batch_size,
                         model_config.decoder_attention_heads,
-                        context_length,
+                        model_config.context_length,
                         model_config.d_model // model_config.decoder_attention_heads,
                     ],
                     "float32",
@@ -257,11 +262,11 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         )
 
         dec_input_info = [
-            ("inputs_embeds", [rbln_batch_size * rbln_num_parallel_samples, 1, feature_size], "float32"),
-            ("attention_mask", [rbln_batch_size, predict_length], "float32"),
+            ("inputs_embeds", [rbln_batch_size * rbln_num_parallel_samples, 1, model_config.feature_size], "float32"),
+            ("attention_mask", [1, rbln_dec_max_seq_len], "float32"),
             # ("encoder_attention_mask", [rbln_batch_size, context_length], "float32"),
             ("cache_position", [], "int32"),
-            ("block_tables", [rbln_batch_size, 1], "int16"),
+            ("block_tables", [1, 1], "int16"),
         ]
         dec_input_info.extend(
             [
@@ -271,7 +276,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
                         model_config.decoder_layers * 2,  # 4
                         rbln_batch_size,  # 64
                         model_config.decoder_attention_heads,  # 2
-                        context_length,  # 24
+                        model_config.context_length,  # 24
                         model_config.d_model // model_config.decoder_attention_heads,  # 13
                     ],
                     "float32",
@@ -283,9 +288,9 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
                 (
                     f"self_key_value_states_{i}",
                     [
-                        rbln_batch_size,
-                        model_config.decoder_attention_heads * rbln_num_parallel_samples,
-                        predict_length,
+                        1,
+                        model_config.decoder_attention_heads * rbln_num_parallel_samples * rbln_batch_size,
+                        rbln_dec_max_seq_len,
                         model_config.d_model // model_config.encoder_attention_heads,
                     ],
                     "float32",
@@ -306,6 +311,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
             {
                 "batch_size": rbln_batch_size,
                 "num_parallel_samples": rbln_num_parallel_samples,
+                "dec_max_seq_len": rbln_dec_max_seq_len,
             }
         )
 
@@ -366,7 +372,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         scale = outputs.scale
         static_feat = outputs.static_features
 
-        num_parallel_samples = self.config.num_parallel_samples
+        num_parallel_samples = self.num_parallel_samples
         repeated_loc = loc.repeat_interleave(repeats=num_parallel_samples, dim=0)
         repeated_scale = scale.repeat_interleave(repeats=num_parallel_samples, dim=0)
 
@@ -380,7 +386,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
 
         # greedy decoding
         future_samples = []
-        dec_attn_mask = torch.zeros(self.batch_size, 64)
+        dec_attn_mask = torch.zeros(1, self.dec_max_seq_len)
         for k in range(self.config.prediction_length):
             lagged_sequence = self._origin_model.model.get_lagged_subsequences(
                 sequence=repeated_past_values,
