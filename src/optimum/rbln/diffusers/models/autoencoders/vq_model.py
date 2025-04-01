@@ -90,9 +90,17 @@ class RBLNVQModel(RBLNModel):
         model_config: "PretrainedConfig",
         rbln_kwargs: Dict[str, Any] = {},
     ) -> RBLNConfig:
-        batch_size = rbln_kwargs.get("batch_size") or 1
-        height = rbln_kwargs.get("img_height") or 512
-        width = rbln_kwargs.get("img_width") or 512
+        batch_size = rbln_kwargs.get("batch_size")
+        if batch_size is None:
+            batch_size = 1
+
+        height = rbln_kwargs.get("img_height")
+        if height is None:
+            height = 512
+
+        width = rbln_kwargs.get("img_width")
+        if width is None:
+            width = 512
 
         if hasattr(model_config, "block_out_channels"):
             scale_factor = 2 ** (len(model_config.block_out_channels) - 1)

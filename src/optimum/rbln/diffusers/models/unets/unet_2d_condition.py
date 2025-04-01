@@ -176,15 +176,22 @@ class RBLNUNet2DConditionModel(RBLNModel):
             raise ValueError("Both image height and image width must be given or not given")
         elif image_size[0] is None and image_size[1] is None:
             if rbln_config["img2img_pipeline"]:
-                # In case of img2img, sample size of unet is determined by vae encoder.
-                vae_sample_size = pipe.vae.config.sample_size
-                if isinstance(vae_sample_size, int):
-                    sample_size = vae_sample_size // scale_factor
-                else:
-                    sample_size = (
-                        vae_sample_size[0] // scale_factor,
-                        vae_sample_size[1] // scale_factor,
+                if hasattr(pipe, "vae"):
+                    # In case of img2img, sample size of unet is determined by vae encoder.
+                    vae_sample_size = pipe.vae.config.sample_size
+                    if isinstance(vae_sample_size, int):
+                        sample_size = vae_sample_size // scale_factor
+                    else:
+                        sample_size = (
+                            vae_sample_size[0] // scale_factor,
+                            vae_sample_size[1] // scale_factor,
+                        )
+                elif hasattr(pipe, "movq"):
+                    logger.warning(
+                        "RBLN config 'img_height' and 'img_width' should have been provided for this pipeline. "
+                        "Both variable will be set 512 by default."
                     )
+                    sample_size = (512 // scale_factor, 512 // scale_factor)
             else:
                 sample_size = pipe.unet.config.sample_size
         else:

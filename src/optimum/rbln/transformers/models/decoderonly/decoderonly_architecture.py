@@ -98,6 +98,18 @@ def validate_attention_method(
                 "this requirement, or consider switching `rbln_attn_impl` to 'eager' for shorter lengths."
             )
 
+    if rbln_kvcache_block_size is not None:
+        if rbln_attn_impl == "flash_attn" and rbln_kvcache_partition_len != rbln_kvcache_block_size:
+            raise ValueError(
+                f" When using 'flash attention', the `rbln_kvcache_block_size` ({rbln_kvcache_block_size})  "
+                f"must always be set equal to the `rbln_kvcache_partition_len` {rbln_kvcache_partition_len}."
+            )
+        elif rbln_attn_impl == "eager" and rbln_kvcache_block_size != rbln_max_seq_len:
+            raise ValueError(
+                f" When using 'eager attention', the `rbln_kvcache_block_size` ({rbln_kvcache_block_size})  "
+                f"must always be set equal to the `rbln_max_seq_len` {rbln_max_seq_len}."
+            )
+
     return rbln_attn_impl, rbln_kvcache_partition_len, rbln_kvcache_block_size
 
 
