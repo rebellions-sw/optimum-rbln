@@ -26,11 +26,12 @@ from transformers import AutoConfig, AutoModelForCausalLM, PretrainedConfig, Pre
 from transformers.modeling_utils import no_init_weights
 from transformers.utils import ModelOutput
 
-from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
+from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
 from ...utils.rbln_quantization import QuantizationManager
+from .configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
 from .decoderonly_architecture import (
     DecoderOnlyWrapper,
     set_default_values,
@@ -421,7 +422,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         model: "PreTrainedModel",
         save_dir_path: Path,
         subfolder: str,
-        rbln_config: RBLNModelConfig,
+        rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
     ):
         """
         If you are unavoidably running on a CPU rather than an RBLN device,
@@ -506,19 +507,20 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         return model
 
     @classmethod
-    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: "RBLNModelConfig"):
-        wrapper_cfg = {"max_seq_len": rbln_config.max_seq_len}
-        wrapper_cfg["attn_impl"] = rbln_config.attn_impl
-        wrapper_cfg["kvcache_partition_len"] = rbln_config.kvcache_partition_len
-        wrapper_cfg["kvcache_block_size"] = rbln_config.kvcache_block_size
-        wrapper_cfg["use_rotary_emb"] = cls._use_rotary_emb
-        wrapper_cfg["use_attention_mask"] = rbln_config.use_attention_mask
-
+    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: "RBLNDecoderOnlyModelForCausalLMConfig"):
+        wrapper_cfg = {
+            "max_seq_len": rbln_config.max_seq_len,
+            "attn_impl": rbln_config.attn_impl,
+            "kvcache_partition_len": rbln_config.kvcache_partition_len,
+            "kvcache_block_size": rbln_config.kvcache_block_size,
+            "use_rotary_emb": cls._use_rotary_emb,
+            "use_attention_mask": rbln_config.use_attention_mask,
+        }
         return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
 
     @classmethod
     @torch.inference_mode()
-    def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
+    def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNDecoderOnlyModelForCausalLMConfig):
         wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
 
         rbln_compile_configs = rbln_config.compile_cfgs
@@ -632,8 +634,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
         model: Optional["PreTrainedModel"] = None,
         model_config: Optional["PretrainedConfig"] = None,
-        rbln_config: Optional[RBLNModelConfig] = None,
-    ) -> RBLNModelConfig:
+        rbln_config: Optional[RBLNDecoderOnlyModelForCausalLMConfig] = None,
+    ) -> RBLNDecoderOnlyModelForCausalLMConfig:
         # rbln_quantization = QuantizationManager.validate_quantization_config(rbln_kwargs.get("quantization", None))
 
         if rbln_config.max_seq_len is None:

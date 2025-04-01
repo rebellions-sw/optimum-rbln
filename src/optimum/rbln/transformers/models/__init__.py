@@ -32,7 +32,12 @@ _import_structure = {
         "RBLNAutoModelForSpeechSeq2Seq",
         "RBLNAutoModelForVision2Seq",
     ],
-    "bart": ["RBLNBartForConditionalGeneration", "RBLNBartModel"],
+    "bart": [
+        "RBLNBartForConditionalGeneration",
+        "RBLNBartModel",
+        "RBLNBartForConditionalGenerationConfig",
+        "RBLNBartModelConfig",
+    ],
     "bert": ["RBLNBertModel", "RBLNBertForQuestionAnswering", "RBLNBertForMaskedLM"],
     "clip": [
         "RBLNCLIPTextModel",
@@ -79,7 +84,12 @@ if TYPE_CHECKING:
         RBLNAutoModelForSpeechSeq2Seq,
         RBLNAutoModelForVision2Seq,
     )
-    from .bart import RBLNBartForConditionalGeneration, RBLNBartModel
+    from .bart import (
+        RBLNBartForConditionalGeneration,
+        RBLNBartForConditionalGenerationConfig,
+        RBLNBartModel,
+        RBLNBartModelConfig,
+    )
     from .bert import RBLNBertForMaskedLM, RBLNBertForQuestionAnswering, RBLNBertModel
     from .clip import (
         RBLNCLIPTextModel,
