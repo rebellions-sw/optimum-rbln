@@ -1,4 +1,4 @@
-# Copyright 2025 Rebellions Inc. All rights reserved.
+# Copyright 2024 Rebellions Inc.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,10 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .attn import (
-    register_rbln_custom_paged_add_softmax_attention,
-    register_rbln_custom_paged_attention,
-    register_rbln_custom_paged_causal_attention,
-)
-from .flash_attn import register_rbln_custom_paged_flash_attention, register_rbln_custom_paged_flash_causal_attention
-from .kv_cache_update import register_rbln_custom_cache_update
+from diffusers import KandinskyV22Pipeline
+
+from ...modeling_diffusers import RBLNDiffusionMixin
+
+
+class RBLNKandinskyV22Pipeline(RBLNDiffusionMixin, KandinskyV22Pipeline):
+    original_class = KandinskyV22Pipeline
+    _submodules = ["unet", "movq"]
+
+    def get_compiled_image_size(self):
+        return self.movq.image_size
