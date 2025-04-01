@@ -18,7 +18,7 @@ import torch
 from torch import nn
 from transformers.utils import logging
 
-from ....ops import register_rbln_custom_add_softmax_attention
+from ....ops import register_rbln_custom_paged_add_softmax_attention
 from ..seq2seq.seq2seq_architecture import (
     Seq2SeqDecoder,
     Seq2SeqDecoderLayer,
@@ -55,7 +55,7 @@ class T5EncoderWrapper(Seq2SeqEncoderWrapper):
 
 class T5DecoderWrapper(Seq2SeqDecoderWrapper):
     def __post_init__(self, model, dec_max_seq_len: int = None):
-        register_rbln_custom_add_softmax_attention()
+        register_rbln_custom_paged_add_softmax_attention()
         self.num_layers = self.config.num_layers
         self.conditional_generation = self.convert_to_rbln_conditional_generation(model, dec_max_seq_len)
 
@@ -77,6 +77,7 @@ class T5DecoderWrapper(Seq2SeqDecoderWrapper):
         attention_mask,
         encoder_attention_mask,
         cache_position,
+        block_tables,
         *kv_cache,
     ) -> Tuple[torch.FloatTensor, Tuple[torch.FloatTensor]]:
         self_past_key_values = ()
@@ -96,6 +97,7 @@ class T5DecoderWrapper(Seq2SeqDecoderWrapper):
             self_past_key_values=self_past_key_values,
             cross_past_key_values=cross_past_key_values,
             cache_position=cache_position,
+            block_tables=block_tables,
         )
 
         return lm_logits
@@ -163,7 +165,7 @@ class T5LayerSelfAttention(Seq2SeqSelfAttention):
         self.out_proj = self._original_mod.o
         self.num_heads = self._original_mod.n_heads
         self.head_dim = self._original_mod.key_value_proj_dim
-        self.attn_decode = torch.ops.rbln_custom_ops.add_softmax_attn_decode
+        self.attn_decode = torch.ops.rbln_custom_ops.paged_add_softmax_attn_decode
 
     def projection(self, hidden_states) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         query_states = self.q_proj(hidden_states)
@@ -177,6 +179,7 @@ class T5LayerSelfAttention(Seq2SeqSelfAttention):
         past_key_value: Tuple[torch.Tensor],
         attention_mask: torch.Tensor,
         cache_position: torch.Tensor,
+        block_tables: torch.Tensor,
         **kwargs,
     ) -> Tuple[torch.Tensor, Tuple[torch.Tensor]]:
         bsz, tgt_len, _ = hidden_states.size()
@@ -186,6 +189,7 @@ class T5LayerSelfAttention(Seq2SeqSelfAttention):
         key_states = self._shape(key_states, -1, bsz)
         value_states = self._shape(value_states, -1, bsz)
 
+        block_size = past_key_value[0].shape[-2]
         attn_output = self.attn_decode(
             query_states,
             key_states,
@@ -197,6 +201,8 @@ class T5LayerSelfAttention(Seq2SeqSelfAttention):
             past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
             cache_position,
             torch.tensor(1.0, dtype=torch.float32),  # scale
+            block_tables,
+            block_size,
         )
 
         attn_output = attn_output.view(bsz, self.num_heads, -1, self.head_dim).transpose(1, 2)

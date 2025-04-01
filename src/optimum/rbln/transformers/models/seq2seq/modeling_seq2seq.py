@@ -50,7 +50,6 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         runtime: rebel.Runtime,
         batch_size: int,
         dec_max_seq_len: int,
-        support_paged_causal_attn: Optional[bool] = None,
         use_attention_mask: Optional[bool] = None,
         **kwargs: Any,
     ) -> None:
@@ -58,10 +57,7 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         self.batch_size = batch_size
         self.dec_max_seq_len = dec_max_seq_len
         self.use_attention_mask = use_attention_mask
-        if support_paged_causal_attn:
-            self.default_block_tables = torch.arange(0, self.batch_size, dtype=torch.int16).view(self.batch_size, 1)
-        else:
-            self.default_block_tables = None
+        self.default_block_tables = torch.arange(0, self.batch_size, dtype=torch.int16).view(self.batch_size, 1)
 
     def forward(
         self,
@@ -119,7 +115,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
 
     main_input_name = "input_ids"
     auto_model_class = AutoModelForSeq2SeqLM
-    support_paged_causal_attn = None
+    support_causal_attn = None
 
     def __post_init__(self, **kwargs):
         batch_size = self.rbln_config.model_cfg["batch_size"]
@@ -135,7 +131,6 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
             main_input_name="input_ids",
             batch_size=batch_size,
             dec_max_seq_len=dec_max_seq_len,
-            support_paged_causal_attn=self.support_paged_causal_attn,
             use_attention_mask=self.use_attention_mask,
         )
 
@@ -193,7 +188,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
         rbln_batch_size = 1 if rbln_batch_size is None else rbln_batch_size
 
-        if cls.support_paged_causal_attn:
+        if cls.support_causal_attn:
             rbln_use_attention_mask = rbln_kwargs.get("use_attention_mask", None)
             if rbln_use_attention_mask is None:
                 rbln_use_attention_mask = False
@@ -278,6 +273,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
                 [rbln_batch_size, 1],
                 "int32",
             ),
+            ("block_tables", [rbln_batch_size, 1], "int16"),
         ]
         dec_input_info.extend(
             [
@@ -310,8 +306,6 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
             ]
         )
 
-        if cls.support_paged_causal_attn:
-            dec_input_info.insert(3, ("block_tables", [rbln_batch_size, 1], "int16"))
         if rbln_use_attention_mask:
             dec_input_info.insert(1, ("attention_mask", [rbln_batch_size, rbln_dec_max_seq_len], "float32"))
 

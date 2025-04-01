@@ -189,7 +189,7 @@ class RBLNT5EncoderModel(RBLNModel):
 
 
 class RBLNT5ForConditionalGeneration(RBLNModelForSeq2SeqLM):
-    support_causal_paged_attn = False
+    support_causal_attn = False
 
     @classmethod
     def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: "RBLNConfig"):

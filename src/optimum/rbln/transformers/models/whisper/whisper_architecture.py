@@ -25,7 +25,7 @@ from transformers.modeling_outputs import (
 )
 from transformers.utils import logging
 
-from ....ops import register_rbln_custom_add_softmax_attention, register_rbln_custom_cache_update
+from ....ops import register_rbln_custom_cache_update, register_rbln_custom_paged_add_softmax_attention
 
 
 logger = logging.get_logger(__name__)
@@ -34,7 +34,7 @@ logger = logging.get_logger(__name__)
 class WhisperWrapper:
     def __init__(self, model, rbln_token_timestamps):
         register_rbln_custom_cache_update()
-        register_rbln_custom_add_softmax_attention()
+        register_rbln_custom_paged_add_softmax_attention()
         self.encoder = WhisperEncoderWrapper(model)
         self.decoder = WhisperDecoderWrapper(model, output_attentions=rbln_token_timestamps)
 
@@ -108,6 +108,7 @@ class WhisperDecoderWrapper(torch.nn.Module):
         decoder_input_ids: torch.Tensor,
         decoder_attention_mask: torch.Tensor,
         cache_position: torch.Tensor,
+        block_tables: torch.Tensor,
         cross_kv_cache: torch.Tensor,
         *self_kv_cache: torch.Tensor,
     ) -> Union[Tuple[torch.FloatTensor], Seq2SeqLMOutput]:
@@ -125,6 +126,7 @@ class WhisperDecoderWrapper(torch.nn.Module):
             cache_position=cache_position,
             self_past_key_values=self_past_key_values,
             cross_past_key_values=cross_past_key_values,
+            block_tables=block_tables,
         )
 
         lm_logits = self.proj_out(sequence_output)
@@ -154,6 +156,7 @@ class WhisperDecoder(nn.Module):
         self_past_key_values: Optional[torch.Tensor] = None,
         cross_past_key_values: Optional[torch.Tensor] = None,
         cache_position: Optional[torch.Tensor] = None,
+        block_tables: Optional[torch.Tensor] = None,
     ):
         input_shape = input_ids.size()
         input_ids = input_ids.view(-1, input_shape[-1])
@@ -177,6 +180,7 @@ class WhisperDecoder(nn.Module):
                 self_past_key_value=self_past_key_value,
                 cross_past_key_value=cross_past_key_value,
                 cache_position=cache_position,
+                block_tables=block_tables,
             )
             cross_attentions += (cross_attn_weights,)
 
@@ -205,6 +209,7 @@ class WhisperDecoderLayer(nn.Module):
         self_past_key_value: Optional[Tuple[torch.Tensor]] = None,
         cross_past_key_value: Optional[Tuple[torch.Tensor]] = None,
         cache_position: Optional[torch.Tensor] = None,
+        block_tables: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         # Self Attention Block
         residual = hidden_states
@@ -214,6 +219,7 @@ class WhisperDecoderLayer(nn.Module):
             past_key_value=self_past_key_value,
             attention_mask=attention_mask,
             cache_position=cache_position,
+            block_tables=block_tables,
         )
         hidden_states = residual + hidden_states
 
@@ -263,6 +269,7 @@ class WhisperSelfAttention(WhisperAttention):
         past_key_value: Optional[Tuple[torch.Tensor]] = None,
         attention_mask: Optional[torch.Tensor] = None,
         cache_position: Optional[torch.Tensor] = None,
+        block_tables: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         bsz, tgt_len, _ = hidden_states.size()
         query_states = self._shape(self.q_proj(hidden_states), tgt_len, bsz)
@@ -270,8 +277,9 @@ class WhisperSelfAttention(WhisperAttention):
 
         key_states = self._shape(self.k_proj(hidden_states), -1, bsz)
         value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
+        block_size = past_key_value[0].shape[-2]
 
-        attn_output = torch.ops.rbln_custom_ops.add_softmax_attn_decode(
+        attn_output = torch.ops.rbln_custom_ops.paged_add_softmax_attn_decode(
             query_states,
             key_states,
             value_states,
@@ -280,6 +288,8 @@ class WhisperSelfAttention(WhisperAttention):
             past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
             cache_position.expand(bsz, 1),
             torch.tensor(1.0, dtype=torch.float32),  # scale
+            block_tables,
+            block_size,
         )
 
         attn_output = attn_output.view(bsz, self.num_heads, tgt_len, self.head_dim)
