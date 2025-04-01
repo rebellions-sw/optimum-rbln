@@ -280,7 +280,7 @@ class WhisperSelfAttention(WhisperAttention):
         value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
         block_size = past_key_value[0].shape[-2]
 
-        attn_output = torch.ops.rbln_custom_ops.add_softmax_attn_decode(
+        attn_output = torch.ops.rbln_custom_ops.paged_add_softmax_attn_decode(
             q=query_states,
             k=key_states,
             v=value_states,

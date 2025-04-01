@@ -12,5 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ....ops import add_softmax_attn_decode, rbln_cache_update
+from ....ops import paged_add_softmax_attn_decode
 from .modeling_whisper import RBLNWhisperForConditionalGeneration
