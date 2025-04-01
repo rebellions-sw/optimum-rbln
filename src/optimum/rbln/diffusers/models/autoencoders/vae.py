@@ -329,10 +329,10 @@ class _VAECogVideoXDecoder(torch.nn.Module):
         if enc :
             cov_video_dec_out, conv_cache = self.cog_video_x.decoder(z)
             conv_cache_list, _ = self._totuple(conv_cache)
-            import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
         else :
             conv_cache_dict = {}
-            import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
             for k, v in zip(self.keys, args):
                 parts = k.split(".")
                 current = conv_cache_dict

@@ -118,8 +118,8 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
             decoder_model_0.eval()
             decoder_model_1.eval()
             
-            # import pdb; pdb.set_trace()
             dec_compiled_model_0 = cls.compile(decoder_model_0, rbln_compile_config=rbln_config.compile_cfgs[0])
+            # import pdb; pdb.set_trace()
             dec_compiled_model_1 = cls.compile(decoder_model_1, rbln_compile_config=rbln_config.compile_cfgs[1])
 
             return (dec_compiled_model_0, dec_compiled_model_1)
@@ -212,7 +212,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
                     "float32",
                 )
             ]
-            vae_dec_input_info = [
+            vae_dec_input_info = [ # TODO : need one more decoder
                 (
                     "z",
                     [
