@@ -16,16 +16,17 @@ from typing import Optional, Tuple, Union
 
 import torch
 from torch import nn
-from transformers.modeling_attn_mask_utils import (
-    _prepare_4d_causal_attention_mask,
-)
 from transformers.modeling_outputs import (
     BaseModelOutput,
     Seq2SeqLMOutput,
 )
 from transformers.utils import logging
 
-from ....ops import register_rbln_custom_cache_update, register_rbln_custom_paged_attention, register_rbln_custom_paged_causal_attention
+from ....ops import (
+    register_rbln_custom_cache_update,
+    register_rbln_custom_paged_attention,
+    register_rbln_custom_paged_causal_attention,
+)
 
 
 logger = logging.get_logger(__name__)
@@ -35,7 +36,9 @@ class WhisperWrapper:
     def __init__(self, model, use_attention_mask, rbln_token_timestamps):
         register_rbln_custom_cache_update()
         self.encoder = WhisperEncoderWrapper(model)
-        self.decoder = WhisperDecoderWrapper(model, use_attention_mask=use_attention_mask, output_attentions=rbln_token_timestamps)
+        self.decoder = WhisperDecoderWrapper(
+            model, use_attention_mask=use_attention_mask, output_attentions=rbln_token_timestamps
+        )
 
 
 class WhisperEncoderWrapper(torch.nn.Module):
@@ -90,7 +93,7 @@ class WhisperDecoderWrapper(torch.nn.Module):
         self.use_attention_mask = use_attention_mask
         self.output_attentions = output_attentions
         self.__post_init__(model, **kwargs)
-        
+
     def __post_init__(self, model: nn.Module, **kwargs):
         """
         Post-initialization to extract and configure encoder-related attributes.
@@ -120,7 +123,6 @@ class WhisperDecoderWrapper(torch.nn.Module):
         self,
         *args,
     ) -> Union[Tuple[torch.FloatTensor], Seq2SeqLMOutput]:
-        
         if self.use_attention_mask:
             (
                 decoder_input_ids,
@@ -133,7 +135,7 @@ class WhisperDecoderWrapper(torch.nn.Module):
         else:
             decoder_attention_mask = None
             (decoder_input_ids, cache_position, block_tables, cross_kv_cache, *self_kv_cache) = args
-        
+
         # prepare past_key_values
         self_past_key_values = ()
         cross_past_key_values = ()
@@ -191,7 +193,7 @@ class WhisperDecoder(nn.Module):
             position = self.embed_positions(input_ids, position_ids=position_id)
             batch_hidden = position + inputs_embeds[i]
             all_hiddens.append(batch_hidden)
-        
+
         hidden_states = torch.stack(all_hiddens, dim=0)
 
         # prepare attn mask (normal attention - masked)
@@ -307,7 +309,7 @@ class WhisperSelfAttention(WhisperAttention):
         key_states = self._shape(self.k_proj(hidden_states), -1, bsz)
         value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
         block_size = past_key_value[0].shape[-2]
-        
+
         args = [
             query_states,
             key_states,
