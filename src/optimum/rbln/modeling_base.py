@@ -344,21 +344,8 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         """
         Extract rbln-config from kwargs and convert it to RBLNModelConfig.
         """
-        kwargs_keys = list(kwargs.keys())
-        rbln_kwargs = {key[5:]: kwargs.pop(key) for key in kwargs_keys if key.startswith("rbln_")}
-
-        if isinstance(rbln_config, dict):
-            rbln_config = cls.get_rbln_config_class()(**rbln_config)
-            for key, value in rbln_kwargs.items():
-                setattr(rbln_config, key, value)
-
-        elif rbln_config is None:
-            rbln_config = cls.get_rbln_config_class()(**rbln_kwargs)
-
-        elif isinstance(rbln_config, RBLNModelConfig):
-            for key, value in rbln_kwargs.items():
-                setattr(rbln_config, key, value)
-
+        config_cls = cls.get_rbln_config_class()
+        rbln_config, kwargs = config_cls.initialize_from_kwargs(rbln_config, **kwargs)
         return rbln_config, kwargs
 
     @classmethod

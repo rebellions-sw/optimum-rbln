@@ -350,6 +350,32 @@ class RBLNModelConfig:
 
         return cls(**config_file)
 
+    @classmethod
+    def initialize_from_kwargs(
+        cls: Type["RBLNModelConfig"],
+        rbln_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None,
+        **kwargs,
+    ) -> Tuple["RBLNModelConfig", Dict[str, Any]]:
+        """
+        Initialize RBLNModelConfig from kwargs.
+        """
+        kwargs_keys = list(kwargs.keys())
+        rbln_kwargs = {key[5:]: kwargs.pop(key) for key in kwargs_keys if key.startswith("rbln_")}
+
+        if isinstance(rbln_config, dict):
+            rbln_config = cls(**rbln_config)
+            for key, value in rbln_kwargs.items():
+                setattr(rbln_config, key, value)
+
+        elif rbln_config is None:
+            rbln_config = cls(**rbln_kwargs)
+
+        elif isinstance(rbln_config, RBLNModelConfig):
+            for key, value in rbln_kwargs.items():
+                setattr(rbln_config, key, value)
+
+        return rbln_config, kwargs
+
     @property
     def create_runtimes(self):
         context = ContextRblnConfig.get_current_context()["create_runtimes"]
