@@ -38,6 +38,13 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      - name: Get commit message if not provided
+        id: get_commit_message
+        if: ${{ inputs.commit_message == '' }}
+        run: |
+          COMMIT_MESSAGE=$(git log -1 --pretty=%B)
+          echo "message=$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
+
       - name: Setup uv
         uses: astral-sh/setup-uv@v3
         with:
@@ -56,20 +63,39 @@ jobs:
           PYPI_URL=$(echo ${{ env.REBEL_PYPI_ENDPOINT }} | sed "s/\/\//\0${{ env.REBEL_PYPI_USERNAME}}:${{ env.REBEL_PYPI_PASSWORD}}@/")
           uv pip install --extra-index-url $PYPI_URL rebel-compiler==${{ inputs.rebel_compiler_version }}
 
+      - name: Run pytest (config)
+        env:
+          OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
+        run: |
+          uv run --no-sync pytest tests/test_config.py
+
       - name: Run pytest (transformers)
         env:
           OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
         run: |
-          uv run --no-sync pytest tests/test_transformers.py
+          echo 
+          if ${{ !contains( steps.get_commit_message.outputs.message , '[skip-transformers]') }}; then
+            uv run --no-sync pytest tests/test_transformers.py
+          else
+            echo "Found [skip-transformers] in commit message, skipping CI"
+          fi
 
       - name: Run pytest (diffusers)
         env:
           OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
         run: |
-          uv run --no-sync pytest tests/test_diffusers.py
+          if ${{ !contains( steps.get_commit_message.outputs.message , '[skip-diffusers]') }}; then
+            uv run --no-sync pytest tests/test_diffusers.py
+          else
+            echo "Found [skip-diffusers] in commit message, skipping CI"
+          fi
 
       - name: Run pytest (llm)
         env:
           OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
         run: |
-          uv run --no-sync pytest tests/test_llm.py      
+          if ${{ !contains( steps.get_commit_message.outputs.message , '[skip-llms]') }}; then
+            uv run --no-sync pytest tests/test_llm.py
+          else
+            echo "Found [skip-llms] in commit message, skipping CI"
+          fi

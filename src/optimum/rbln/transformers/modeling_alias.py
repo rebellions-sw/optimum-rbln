@@ -13,15 +13,6 @@
 # limitations under the License.
 
 from ..utils.logging import get_logger
-from .configuration_alias import (
-    RBLNASTForAudioClassificationConfig,
-    RBLNDistilBertForQuestionAnsweringConfig,
-    RBLNResNetForImageClassificationConfig,
-    RBLNRobertaForMaskedLMConfig,
-    RBLNRobertaForSequenceClassificationConfig,
-    RBLNViTForImageClassificationConfig,
-    RBLNXLMRobertaForSequenceClassificationConfig,
-)
 from .modeling_generic import (
     RBLNModelForAudioClassification,
     RBLNModelForImageClassification,

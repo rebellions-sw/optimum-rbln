@@ -197,9 +197,10 @@ class RBLNModelConfig:
             self._attributes_map[key] = value
 
         if hasattr(self, "_frozen") and self._frozen:
-            raise RuntimeError(
-                f"`{self.__class__.__name__}` is frozen. Cannot set attribute after setting compile_cfgs."
-            )
+            if not hasattr(self, key) or getattr(self, key) != value:
+                raise RuntimeError(
+                    f"`{self.__class__.__name__}` is frozen. Cannot update or set attribute after freezing."
+                )
 
         # If the submodule is a dict, Instantiate the submodule config class
         if key in self.submodules and isinstance(value, dict) and (cls_name := value.get("cls_name")):

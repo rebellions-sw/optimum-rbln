@@ -17,11 +17,12 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Union
 
 from transformers import BartForConditionalGeneration, PretrainedConfig, PreTrainedModel
 
-from ....configuration_utils import RBLNCompileConfig, RBLNConfig
+from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...models.seq2seq import RBLNModelForSeq2SeqLM
 from .bart_architecture import BartWrapper
+from .configuration_bart import RBLNBartForConditionalGenerationConfig, RBLNBartModelConfig
 
 
 logger = get_logger()
@@ -35,10 +36,11 @@ class RBLNBartModel(RBLNModel):
     @classmethod
     def _update_rbln_config(
         cls,
-        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+        preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
+        model: Optional["PreTrainedModel"] = None,
         model_config: Optional["PretrainedConfig"] = None,
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
+        rbln_config: Optional[RBLNBartModelConfig] = None,
+    ) -> RBLNBartModelConfig:
         rbln_max_seq_len = rbln_kwargs.get("max_seq_len", None)
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
         rbln_model_input_names = rbln_kwargs.get("model_input_names", None)
@@ -108,16 +110,13 @@ class RBLNBartModel(RBLNModel):
 
 
 class RBLNBartForConditionalGeneration(RBLNModelForSeq2SeqLM):
-    support_paged_causal_attn = True
+    support_causal_attn = True
 
     @classmethod
-    def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: "RBLNConfig"):
-        enc_max_seq_len = (
-            rbln_config.model_cfg["enc_max_seq_len"] if "enc_max_seq_len" in rbln_config.model_cfg else 1024
+    def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: RBLNBartForConditionalGenerationConfig):
+        return BartWrapper(
+            model, enc_max_seq_len=rbln_config.enc_max_seq_len, use_attention_mask=rbln_config.use_attention_mask
         )
-        use_attention_mask = rbln_config.model_cfg.get("use_attention_mask", False)
-
-        return BartWrapper(model, enc_max_seq_len=enc_max_seq_len, use_attention_mask=use_attention_mask)
 
     def __getattr__(self, __name: str) -> Any:
         def redirect(func):
