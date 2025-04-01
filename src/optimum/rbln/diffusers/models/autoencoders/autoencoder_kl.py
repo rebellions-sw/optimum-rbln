@@ -15,14 +15,15 @@
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 import rebel
-import torch  # noqa: I001
+import torch
 from diffusers import AutoencoderKL
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
 from transformers import PretrainedConfig
 
-from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
+from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
+from ...configurations import RBLNAutoencoderKLConfig
 from .vae import RBLNRuntimeVAEDecoder, RBLNRuntimeVAEEncoder, _VAEDecoder, _VAEEncoder
 
 
@@ -51,7 +52,7 @@ class RBLNAutoencoderKL(RBLNModel):
         self.image_size = self.rbln_config.image_size
 
     @classmethod
-    def get_compiled_model(cls, model, rbln_config: RBLNModelConfig) -> Dict[str, rebel.RBLNCompiledModel]:
+    def get_compiled_model(cls, model, rbln_config: RBLNAutoencoderKLConfig) -> Dict[str, rebel.RBLNCompiledModel]:
         if rbln_config.needs_encoder:
             expected_models = ["encoder", "decoder"]
         else:
@@ -72,7 +73,7 @@ class RBLNAutoencoderKL(RBLNModel):
 
     @classmethod
     def get_vae_sample_size(
-        cls, pipe: "RBLNDiffusionMixin", rbln_config: RBLNModelConfig
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: RBLNAutoencoderKLConfig
     ) -> Union[int, Tuple[int, int]]:
         image_size = rbln_config.image_size
         noise_module = getattr(pipe, "unet", None) or getattr(pipe, "transformer", None)
@@ -112,8 +113,8 @@ class RBLNAutoencoderKL(RBLNModel):
 
     @classmethod
     def update_rbln_config_using_pipe(
-        cls, pipe: "RBLNDiffusionMixin", rbln_config: RBLNModelConfig
-    ) -> RBLNModelConfig:
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: RBLNAutoencoderKLConfig
+    ) -> RBLNAutoencoderKLConfig:
         rbln_config.sample_size = cls.get_vae_sample_size(pipe, rbln_config)
         return rbln_config
 
@@ -123,8 +124,8 @@ class RBLNAutoencoderKL(RBLNModel):
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model: "PreTrainedModel",
         model_config: "PretrainedConfig",
-        rbln_config: RBLNModelConfig,
-    ) -> RBLNModelConfig:
+        rbln_config: RBLNAutoencoderKLConfig,
+    ) -> RBLNAutoencoderKLConfig:
         if rbln_config.sample_size is None:
             rbln_config.sample_size = model_config.sample_size
 
