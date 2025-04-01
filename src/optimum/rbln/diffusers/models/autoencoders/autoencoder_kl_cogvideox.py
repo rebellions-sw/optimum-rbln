@@ -18,6 +18,7 @@ import rebel
 import torch  # noqa: I001
 from diffusers import AutoencoderKLCogVideoX
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
+from diffusers.models.autoencoders.vae import DecoderOutput
 from transformers import PretrainedConfig
 
 from ....modeling import RBLNModel
@@ -50,10 +51,11 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
         import pdb; pdb.set_trace()
         if self.rbln_config.model_cfg.get("img2vid_pipeline"):
             self.encoder = RBLNRuntimeVAECogVideoXEncoder(runtime=self.model[0], main_input_name="x")
-            self.decoder = RBLNRuntimeVAECogVideoXDecoder(runtime=[self.model[1], self.model[2]], main_input_name="z")
+            self.decoder_0 = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model[1], main_input_name="z")
+            self.decoder_1 = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model[2], main_input_name="z")
         else:
-            # self.decoder = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model[0], main_input_name="z")
-            self.decoder = RBLNRuntimeVAECogVideoXDecoder(runtime=[self.model[0], self.model[1]], main_input_name="z")
+            self.decoder_0 = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model[0], main_input_name="z")
+            self.decoder_1 = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model[1], main_input_name="z")
 
         self.image_size = self.rbln_config.model_cfg["sample_size"]
 
@@ -318,5 +320,44 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
         posterior = self.encoder.encode(x)
         return AutoencoderKLOutput(latent_dist=posterior)
 
-    def decode(self, z: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
-        return self.decoder.decode(z)
+    def _decode(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
+        batch_size, num_channels, num_frames, height, width = z.shape
+
+        # if self.cog_video_x.use_tiling and (
+        #     width > self.cog_video_x.tile_latent_min_width or height > self.cog_video_x.tile_latent_min_height
+        # ):
+        #     raise ValueError("Optimum-RBLN doesn't support tiled decoding aross H,W axis")
+
+        frame_batch_size = 2
+        num_batches = max(num_frames // frame_batch_size, 1)
+        # conv_cache = None
+        dec = []
+        z_intermediate, conv_cache = self.decoder_0(z[:, :, :3])
+        dec.append(z_intermediate)
+
+        for i in range(1, num_batches):
+            remaining_frames = num_frames % frame_batch_size
+            start_frame = frame_batch_size * i + (0 if i == 0 else remaining_frames)
+            end_frame = frame_batch_size * (i + 1) + remaining_frames
+            z_intermediate = z[:, :, start_frame:end_frame]
+            # if self.cog_video_x.post_quant_conv is not None:
+            #     z_intermediate = self.cog_video_x.post_quant_conv(z_intermediate)
+            # import pdb; pdb.set_trace()
+            z_intermediate, conv_cache = self.decoder_1(z_intermediate, conv_cache=conv_cache)
+            # z_intermediate, conv_cache = output[0], output[1:]
+            dec.append(z_intermediate)
+
+        dec = torch.cat(dec, dim=2)
+
+        if not return_dict:
+            return (dec,)
+
+        return DecoderOutput(sample=dec)
+        
+    
+    def decode(self, z: torch.FloatTensor, return_dict: bool = True) -> torch.FloatTensor:
+        decoded = self._decode(z).sample
+
+        if not return_dict:
+            return (decoded,)
+        return DecoderOutput(sample=decoded)

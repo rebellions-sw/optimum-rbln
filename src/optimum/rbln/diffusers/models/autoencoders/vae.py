@@ -132,59 +132,7 @@ class RBLNRuntimeVAECogVideoXEncoder(RBLNPytorchRuntime):
 
 
 class RBLNRuntimeVAECogVideoXDecoder(RBLNPytorchRuntime):
-    def _decode(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
-        batch_size, num_channels, num_frames, height, width = z.shape
-
-        # if self.cog_video_x.use_tiling and (
-        #     width > self.cog_video_x.tile_latent_min_width or height > self.cog_video_x.tile_latent_min_height
-        # ):
-        #     raise ValueError("Optimum-RBLN doesn't support tiled decoding aross H,W axis")
-
-        frame_batch_size = 2
-        num_batches = max(num_frames // frame_batch_size, 1)
-        # conv_cache = None
-        dec = []
-        z_intermediate, conv_cache = self.runtime[0](z[:, :, :2]) # RBLN Runtime or CPU
-        dec.append(z_intermediate)
-
-        for i in range(1, num_batches):
-            remaining_frames = num_frames % frame_batch_size
-            start_frame = frame_batch_size * i + (0 if i == 0 else remaining_frames)
-            end_frame = frame_batch_size * (i + 1) + remaining_frames
-            z_intermediate = z[:, :, start_frame:end_frame]
-            # if self.cog_video_x.post_quant_conv is not None:
-            #     z_intermediate = self.cog_video_x.post_quant_conv(z_intermediate)
-            # import pdb; pdb.set_trace()
-            z_intermediate, conv_cache = self.runtime[1](z_intermediate, conv_cache=conv_cache)
-            # z_intermediate, conv_cache = output[0], output[1:]
-            dec.append(z_intermediate)
-
-        dec = torch.cat(dec, dim=2)
-
-        if not return_dict:
-            return (dec,)
-
-        return DecoderOutput(sample=dec)
-
-    def decode(self, z: torch.Tensor, conv_cache = None, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
-        # if self.cog_video_x.use_slicing and z.shape[0] > 1:
-        #     # batch split
-        #     decoded_slices = [self._decode(z_slice).sample for z_slice in z.split(1)]
-        #     decoded = torch.cat(decoded_slices)
-        # else:
-        #     decoded = self._decode(z).sample
-        decoded = self._decode(z).sample
-
-        if not return_dict:
-            return (decoded,)
-        return DecoderOutput(sample=decoded)
-
-    def forward(self, *args: List["torch.Tensor"], enc=True, **kwargs: Dict[str, "torch.Tensor"]):
-        # filtering useless args or kwarg such as None.
-        args = list(filter(lambda arg: isinstance(arg, torch.Tensor), args))
-        kwargs = dict(filter(lambda kwarg: isinstance(kwarg[1], torch.Tensor) or kwarg[0] == "out", kwargs.items()))
-        output = self.decode(*args, **kwargs)
-        return output
+    pass
 
 class _VAECogVideoXEncoder(torch.nn.Module):
     def __init__(self, cog_video_x: AutoencoderKLCogVideoX):

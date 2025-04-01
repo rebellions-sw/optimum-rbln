@@ -29,7 +29,8 @@ prompt = "A panda, dressed in a small, red jacket and a tiny hat, sits on a wood
 
 # rbln compile & run
 # model_id = "THUDM/CogVideoX-2b"
-model_id = "/home/seinpark/optimum-rbln/examples/cogvideo/CogVideoX-2b_0331"
+# model_id = "/home/seinpark/optimum-rbln/examples/cogvideo/CogVideoX-2b_0331"
+model_id = "/home/seinpark/nas_data/cogvideox/CogVideoX-2b_0331"
 pipe = RBLNCogVideoXPipeline.from_pretrained(
     model_id=os.path.basename(model_id),
     export=False,
