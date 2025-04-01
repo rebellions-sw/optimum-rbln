@@ -122,7 +122,6 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         else:
             self.generation_config = None
 
-        # self.generation_config = GenerationConfig.from_model_config(config) if self.can_generate() else None
         if self.generation_config is not None:
             self.generation_config.use_cache = True
 
@@ -559,6 +558,8 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     def from_model(
         cls,
         model: "PreTrainedModel",
+        config: Optional[PretrainedConfig] = None,
+        rbln_config: Optional[RBLNModelConfig] = None,
         model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
         subfolder: str = "",
         **kwargs,

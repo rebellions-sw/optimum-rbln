@@ -7,6 +7,8 @@ class RBLNCLIPTextModelConfig(RBLNModelConfig):
     def __init__(self, batch_size: Optional[int] = None, **kwargs):
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
+        if not isinstance(self.batch_size, int) or self.batch_size < 0:
+            raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
 
 class RBLNCLIPTextModelWithProjectionConfig(RBLNCLIPTextModelConfig):
@@ -17,6 +19,9 @@ class RBLNCLIPVisionModelConfig(RBLNModelConfig):
     def __init__(self, batch_size: Optional[int] = None, image_size: Optional[int] = None, **kwargs):
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
+        if not isinstance(self.batch_size, int) or self.batch_size < 0:
+            raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
+
         self.image_size = image_size
 
     @property
