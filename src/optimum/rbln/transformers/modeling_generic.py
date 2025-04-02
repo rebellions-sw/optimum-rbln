@@ -153,6 +153,7 @@ class RBLNModelForTextEncoding(_RBLNTransformerEncoder):
 
 
 class RBLNModelForFeatureExtraction(_RBLNTransformerEncoder):
+    # TODO: RBLNModel is also for feature extraction.
     auto_model_class = AutoModel
     rbln_model_input_names = ["input_ids", "attention_mask"]
 

@@ -74,6 +74,9 @@ _import_structure = {
         "RBLNT5ForConditionalGeneration",
         "RBLNWav2Vec2ForCTC",
         "RBLNWhisperForConditionalGeneration",
+        "RBLNTimeSeriesTransformerForPrediction",
+        "RBLNLlavaNextForConditionalGeneration",
+        "RBLNMidmLMHeadModel",
         "RBLNXLMRobertaModel",
     ],
     "modeling_alias": [
@@ -151,6 +154,7 @@ if TYPE_CHECKING:
         RBLNQwen2ForCausalLM,
         RBLNT5EncoderModel,
         RBLNT5ForConditionalGeneration,
+        RBLNTimeSeriesTransformerForPrediction,
         RBLNWav2Vec2ForCTC,
         RBLNWhisperForConditionalGeneration,
         RBLNXLMRobertaModel,

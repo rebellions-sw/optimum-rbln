@@ -91,6 +91,8 @@ _import_structure = {
         "RBLNXLMRobertaForSequenceClassification",
         "RBLNXLMRobertaForSequenceClassificationConfig",
         "RBLNXLMRobertaModel",
+        "RBLNBertForMaskedLM",
+        "RBLNTimeSeriesTransformerForPrediction",
     ],
     "diffusers": [
         "RBLNAutoencoderKL",
@@ -228,6 +230,7 @@ if TYPE_CHECKING:
         RBLNRobertaForSequenceClassificationConfig,
         RBLNT5EncoderModel,
         RBLNT5ForConditionalGeneration,
+        RBLNTimeSeriesTransformerForPrediction,
         RBLNViTForImageClassification,
         RBLNViTForImageClassificationConfig,
         RBLNWav2Vec2ForCTC,
