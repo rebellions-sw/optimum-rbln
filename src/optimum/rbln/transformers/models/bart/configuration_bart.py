@@ -1,8 +1,8 @@
-from ...configuration_generic import RBLNModelForTextEncodingConfig
+from ...configuration_generic import RBLNTransformerEncoderForFeatureExtractionConfig
 from ..seq2seq import RBLNSeq2SeqModelConfig
 
 
-class RBLNBartModelConfig(RBLNModelForTextEncodingConfig):
+class RBLNBartModelConfig(RBLNTransformerEncoderForFeatureExtractionConfig):
     pass
 
 

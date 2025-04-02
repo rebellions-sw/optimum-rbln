@@ -13,43 +13,26 @@
 # limitations under the License.
 
 import inspect
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable
 
-from transformers import BartForConditionalGeneration, PretrainedConfig, PreTrainedModel
+from transformers import BartForConditionalGeneration, PreTrainedModel
 
-from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from ...modeling_generic import update_rbln_config_for_transformers_encoder
+from ...modeling_generic import RBLNTransformerEncoderForFeatureExtraction
 from ...models.seq2seq import RBLNModelForSeq2SeqLM
 from .bart_architecture import BartWrapper
-from .configuration_bart import RBLNBartForConditionalGenerationConfig, RBLNBartModelConfig
+from .configuration_bart import RBLNBartForConditionalGenerationConfig
 
 
 logger = get_logger()
 
 
 if TYPE_CHECKING:
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PreTrainedModel
+    from transformers import PreTrainedModel
 
 
-class RBLNBartModel(RBLNModel):
-    rbln_model_input_names = ["input_ids", "attention_mask"]
-
-    @classmethod
-    def _update_rbln_config(
-        cls,
-        preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
-        model: Optional["PreTrainedModel"] = None,
-        model_config: Optional["PretrainedConfig"] = None,
-        rbln_config: Optional[RBLNBartModelConfig] = None,
-    ) -> RBLNBartModelConfig:
-        return update_rbln_config_for_transformers_encoder(
-            preprocessors=preprocessors,
-            model=model,
-            model_config=model_config,
-            rbln_config=rbln_config,
-            rbln_model_input_names=cls.rbln_model_input_names,
-        )
+class RBLNBartModel(RBLNTransformerEncoderForFeatureExtraction):
+    pass
 
 
 class RBLNBartForConditionalGeneration(RBLNModelForSeq2SeqLM):

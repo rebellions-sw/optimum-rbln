@@ -1,11 +1,11 @@
 from ...configuration_generic import (
-    RBLNModelForFeatureExtractionConfig,
     RBLNModelForMaskedLMConfig,
     RBLNModelForQuestionAnsweringConfig,
+    RBLNTransformerEncoderForFeatureExtractionConfig,
 )
 
 
-class RBLNBertModelConfig(RBLNModelForFeatureExtractionConfig):
+class RBLNBertModelConfig(RBLNTransformerEncoderForFeatureExtractionConfig):
     pass
 
 

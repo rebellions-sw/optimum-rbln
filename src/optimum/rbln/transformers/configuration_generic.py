@@ -22,27 +22,7 @@ class _RBLNTransformerEncoderConfig(RBLNModelConfig):
         self.model_input_names = model_input_names or self.rbln_model_input_names
 
 
-class RBLNModelForQuestionAnsweringConfig(_RBLNTransformerEncoderConfig):
-    pass
-
-
-class RBLNModelForSequenceClassificationConfig(_RBLNTransformerEncoderConfig):
-    pass
-
-
-class RBLNModelForMaskedLMConfig(_RBLNTransformerEncoderConfig):
-    pass
-
-
-class RBLNModelForTextEncodingConfig(_RBLNTransformerEncoderConfig):
-    pass
-
-
-class RBLNModelForFeatureExtractionConfig(_RBLNTransformerEncoderConfig):
-    pass
-
-
-class RBLNModelForImageClassificationConfig(RBLNModelConfig):
+class _RBLNImageModelConfig(RBLNModelConfig):
     def __init__(
         self, image_size: Optional[Union[int, Tuple[int, int]]] = None, batch_size: Optional[int] = None, **kwargs
     ):
@@ -69,6 +49,34 @@ class RBLNModelForImageClassificationConfig(RBLNModelConfig):
             return self.image_size[0]
         else:
             return self.image_size["height"]
+
+
+class RBLNModelForQuestionAnsweringConfig(_RBLNTransformerEncoderConfig):
+    pass
+
+
+class RBLNModelForSequenceClassificationConfig(_RBLNTransformerEncoderConfig):
+    pass
+
+
+class RBLNModelForMaskedLMConfig(_RBLNTransformerEncoderConfig):
+    pass
+
+
+class RBLNModelForTextEncodingConfig(_RBLNTransformerEncoderConfig):
+    pass
+
+
+class RBLNTransformerEncoderForFeatureExtractionConfig(_RBLNTransformerEncoderConfig):
+    pass
+
+
+class RBLNModelForImageClassificationConfig(_RBLNImageModelConfig):
+    pass
+
+
+class RBLNModelForDepthEstimationConfig(_RBLNImageModelConfig):
+    pass
 
 
 class RBLNModelForAudioClassificationConfig(RBLNModelConfig):

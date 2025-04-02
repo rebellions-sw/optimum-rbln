@@ -60,7 +60,10 @@ _import_structure = {
         "RBLNDecoderOnlyModelForCausalLM",
         "RBLNDecoderOnlyModelForCausalLMConfig",
     ],
-    "dpt": ["RBLNDPTForDepthEstimation"],
+    "dpt": [
+        "RBLNDPTForDepthEstimation",
+        "RBLNDPTForDepthEstimationConfig",
+    ],
     "exaone": ["RBLNExaoneForCausalLM"],
     "gemma": ["RBLNGemmaForCausalLM"],
     "gpt2": ["RBLNGPT2LMHeadModel"],
@@ -120,7 +123,10 @@ if TYPE_CHECKING:
         RBLNDecoderOnlyModelForCausalLM,
         RBLNDecoderOnlyModelForCausalLMConfig,
     )
-    from .dpt import RBLNDPTForDepthEstimation
+    from .dpt import (
+        RBLNDPTForDepthEstimation,
+        RBLNDPTForDepthEstimationConfig,
+    )
     from .exaone import RBLNExaoneForCausalLM
     from .gemma import RBLNGemmaForCausalLM
     from .gpt2 import RBLNGPT2LMHeadModel

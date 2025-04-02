@@ -13,13 +13,17 @@
 # limitations under the License.
 
 from ....utils.logging import get_logger
-from ...modeling_generic import RBLNModelForFeatureExtraction, RBLNModelForMaskedLM, RBLNModelForQuestionAnswering
+from ...modeling_generic import (
+    RBLNModelForMaskedLM,
+    RBLNModelForQuestionAnswering,
+    RBLNTransformerEncoderForFeatureExtraction,
+)
 
 
 logger = get_logger(__name__)
 
 
-class RBLNBertModel(RBLNModelForFeatureExtraction):
+class RBLNBertModel(RBLNTransformerEncoderForFeatureExtraction):
     rbln_model_input_names = ["input_ids", "attention_mask"]
 
 
