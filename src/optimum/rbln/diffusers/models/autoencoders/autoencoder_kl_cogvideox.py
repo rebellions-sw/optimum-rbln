@@ -165,7 +165,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
     def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
         num_frames = rbln_config.get("num_frames")
         if num_frames is None:
-            num_frames = pipe.transformer.sample_frames
+            num_frames = pipe.transformer.config.sample_frames
 
         rbln_config.update(
             {
@@ -173,6 +173,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
                 "sample_size": cls.get_vae_sample_size(pipe, rbln_config),
                 "vae_scale_factor_spatial": pipe.vae_scale_factor_spatial,
                 "vae_scale_factor_temporal": pipe.vae_scale_factor_temporal,
+                "num_latent_frames_batch_size": pipe.vae.num_latent_frames_batch_size
             }
         )
         return rbln_config
@@ -194,9 +195,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
 
         vae_scale_factor_spatial = rbln_kwargs["vae_scale_factor_spatial"]
         vae_scale_factor_temporal = rbln_kwargs["vae_scale_factor_temporal"]
-        # https://github.com/huggingface/diffusers/blob/89e4d6219805975bd7d253a267e1951badc9f1c0/src/diffusers/models/autoencoders/autoencoder_kl_cogvideox.py#L1099
-        num_latent_frames_batch_size = 2
-        rbln_kwargs["num_latent_frames_batch_size"] = num_latent_frames_batch_size
+        num_latent_frames_batch_size = rbln_kwargs.get("num_latent_frames_batch_size")
 
         dec_shape = (sample_size[0] // vae_scale_factor_spatial, sample_size[1] // vae_scale_factor_spatial)
 
@@ -215,31 +214,52 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
                     "float32",
                 )
             ]
-            vae_dec_input_info = [ # TODO : need one more decoder
-                (
-                    "z",
-                    [
-                        rbln_batch_size,
-                        model_config.latent_channels,
-                        num_latent_frames_batch_size,
-                        dec_shape[0],
-                        dec_shape[1],
-                    ],
-                    "float32",
-                )
-            ]
+            
+            vae_dec_input_info_0=[
+                    (
+                        "z",
+                        [
+                            rbln_batch_size,
+                            model_config.latent_channels,
+                            num_latent_frames_batch_size + num_frames%num_latent_frames_batch_size,
+                            dec_shape[0],
+                            dec_shape[1],
+                        ],
+                        "float32",
+                    )
+                ]
+            vae_dec_input_info_1=[
+                    (
+                        "z",
+                        [
+                            rbln_batch_size,
+                            model_config.latent_channels,
+                            num_latent_frames_batch_size,
+                            dec_shape[0], 
+                            dec_shape[1],
+                        ],
+                        "float32",
+                    )
+                ]
+
+            for k, v in CONV_CACHE.items():
+                if "norm" not in k :
+                    _input_info = (k, list(v), "float32")
+                    vae_dec_input_info_0.extend([_input_info])
+                    vae_dec_input_info_1.extend([_input_info])
 
             enc_rbln_compile_config = RBLNCompileConfig(compiled_model_name="encoder", input_info=vae_enc_input_info)
-            dec_rbln_compile_config = RBLNCompileConfig(compiled_model_name="decoder", input_info=vae_dec_input_info)
+            dec_0_rbln_compile_config = RBLNCompileConfig(compiled_model_name="decoder_0", input_info=vae_dec_input_info_0)
+            dec_1_rbln_compile_config = RBLNCompileConfig(compiled_model_name="decoder_1", input_info=vae_dec_input_info_1)
 
-            compile_cfgs = [enc_rbln_compile_config, dec_rbln_compile_config]
+            compile_cfgs = [enc_rbln_compile_config, dec_0_rbln_compile_config, dec_1_rbln_compile_config]
             rbln_config = RBLNConfig(
                 rbln_cls=cls.__name__,
                 compile_cfgs=compile_cfgs,
                 rbln_kwargs=rbln_kwargs,
             )
             return rbln_config
-        
+
         vae_dec_input_info_0=[
                 (
                     "z",
@@ -278,7 +298,6 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
 
         rbln_config = RBLNConfig(
             rbln_cls=cls.__name__,
-            # compile_cfgs=[compile_cfgs],
             compile_cfgs=[dec_0_rbln_compile_config, dec_1_rbln_compile_config],
             rbln_kwargs=rbln_kwargs,
         )
@@ -292,6 +311,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
         activate_profiler: Optional[bool] = None,
     ) -> List[rebel.Runtime]:
         if len(compiled_models) == 1:
+            raise ValueError("compiled_models argument has two models")
             if DEFAULT_COMPILED_MODEL_NAME not in rbln_device_map:
                 cls._raise_missing_compiled_file_error([DEFAULT_COMPILED_MODEL_NAME])
 
@@ -301,15 +321,24 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
                     tensor_type="pt", device=device_val, activate_profiler=activate_profiler
                 )
             ]
+        elif len(compiled_models) == 2: # TODO(si) WIP
+            if any(model_name not in rbln_device_map for model_name in ["decoder_0", "decoder_1"]):
+                cls._raise_missing_compiled_file_error(["decoder_0", "decoder_1"])
 
-        if any(model_name not in rbln_device_map for model_name in ["encoder", "decoder"]):
-            cls._raise_missing_compiled_file_error(["encoder", "decoder"])
+            device_vals = [rbln_device_map["decoder_0"], rbln_device_map["decoder_1"]]
+            return [
+                compiled_model.create_runtime(tensor_type="pt", device=device_val, activate_profiler=activate_profiler)
+                for compiled_model, device_val in zip(compiled_models, device_vals)
+            ]
 
-        device_vals = [rbln_device_map["encoder"], rbln_device_map["decoder"]]
+        if any(model_name not in rbln_device_map for model_name in ["encoder", "decoder_0", "decoder_1"]):
+            cls._raise_missing_compiled_file_error(["encoder", "decoder_0", "decoder_1"])
+
+        device_vals = [rbln_device_map["encoder"], rbln_device_map["decoder_0"], rbln_device_map["decoder_1"]]
         return [
             compiled_model.create_runtime(tensor_type="pt", device=device_val, activate_profiler=activate_profiler)
             for compiled_model, device_val in zip(compiled_models, device_vals)
-        ] # FIXME
+        ]
 
     def encode(self, x: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
         posterior = self.encoder.encode(x)

@@ -247,7 +247,7 @@ class _VAECogVideoXDecoder(torch.nn.Module):
         # self.keys = None
         self.keys = self.get_conv_cache_key()
 
-    def _totuple(self, conv_cache):
+    def _to_tuple(self, conv_cache):
         conv_cache_list = []
         keys = []
         def isdict(obj, names):
@@ -265,7 +265,23 @@ class _VAECogVideoXDecoder(torch.nn.Module):
             isdict(v, k)
             
         return tuple(conv_cache_list), keys
-    
+
+    def _to_nested_dict(self, conv_cache_list, keys):
+        conv_cache_dict = {}
+        for k, v in zip(keys, conv_cache_list):
+            parts = k.split(".")
+            current = conv_cache_dict
+            
+            # 마지막 부분을 제외한 모든 부분에 대해 중첩 딕셔너리 생성
+            for part in parts[:-1]:
+                if part not in current:
+                    current[part] = {}
+                current = current[part]
+            
+            # 마지막 부분에 값 할당
+            current[parts[-1]] = v
+        return conv_cache_dict
+
     def get_conv_cache_key(self):
         from .input_dict import conv_cache as CONV_CACHE
         keys = []
@@ -279,7 +295,7 @@ class _VAECogVideoXDecoder(torch.nn.Module):
         dummy_outs=[]
         if enc :
             cov_video_dec_out, conv_cache = self.cog_video_x.decoder(z)
-            conv_cache_list, _ = self._totuple(conv_cache)
+            conv_cache_list, _ = self._to_tuple(conv_cache)
             
             for cache, conv_cache in zip(args, conv_cache_list):
                 batch_dim = torch.tensor(0, dtype=torch.int16)
@@ -290,26 +306,11 @@ class _VAECogVideoXDecoder(torch.nn.Module):
                 dummy_outs.append(dummy_out)
             # import pdb; pdb.set_trace()
         else :
-            conv_cache_dict = {}
-            # import pdb; pdb.set_trace()
-            for k, v in zip(self.keys, args):
-                parts = k.split(".")
-                current = conv_cache_dict
-                
-                # 마지막 부분을 제외한 모든 부분에 대해 중첩 딕셔너리 생성
-                for part in parts[:-1]:
-                    if part not in current:
-                        current[part] = {}
-                    current = current[part]
-                
-                # 마지막 부분에 값 할당
-                current[parts[-1]] = v
-                
+            conv_cache_dict = self._to_nested_dict(args, self.keys)
             cov_video_dec_out, conv_cache = self.cog_video_x.decoder(z, conv_cache=conv_cache_dict)
-            conv_cache_list, _ = self._totuple(conv_cache)
+            conv_cache_list, _ = self._to_tuple(conv_cache)
             
             for cache, conv_cache in zip(args, conv_cache_list):
-                # import pdb; pdb.set_trace()
                 batch_dim = torch.tensor(0, dtype=torch.int16)
                 batch_axis = torch.tensor(0, dtype=torch.int16)
                 
