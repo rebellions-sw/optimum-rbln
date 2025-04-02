@@ -148,13 +148,14 @@ class RBLNAutoConfig:
         return cls(**kwargs)
 
     @staticmethod
-    def load(path: str, **kwargs) -> "RBLNModelConfig":
+    def load(path: str, passed_rbln_config: Optional["RBLNModelConfig"] = None, **kwargs) -> "RBLNModelConfig":
         """
         Load RBLNModelConfig from a path.
         Class name is automatically inferred from the `rbln_config.json` file.
 
         Args:
             path (str): Path to the RBLNModelConfig.
+            passed_rbln_config (Optional["RBLNModelConfig"]): RBLNModelConfig to be passed runtime options.
 
         Returns:
             RBLNModelConfig: The loaded RBLNModelConfig.
@@ -174,6 +175,12 @@ class RBLNAutoConfig:
             raise ValueError(f"Cannot set the following arguments: {list(rbln_kwargs.keys())}")
 
         config_file.update(rbln_runtime_kwargs)
+
+        if passed_rbln_config is not None:
+            for key, value in passed_rbln_config._runtime_options.items():
+                if key in config_file:
+                    raise ValueError(f"Already set runtime option: {key}")
+                config_file[key] = value
 
         return cls(**config_file)
 
