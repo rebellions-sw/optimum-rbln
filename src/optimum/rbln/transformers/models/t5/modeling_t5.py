@@ -102,7 +102,7 @@ class RBLNT5EncoderModel(RBLNModel):
     rbln_model_input_names = ["input_ids", "attention_mask"]
 
     def __post_init__(self, **kwargs):
-        self.max_seq_len = self.rbln_config.model_cfg["dec_max_seq_len"]
+        self.max_seq_len = self.rbln_config.model_cfg["max_seq_len"]
         self.model = RBLNRuntimeModel(runtime=self.model[0], max_seq_len=self.max_seq_len)
 
     @classmethod
