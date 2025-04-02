@@ -48,7 +48,6 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
-        import pdb; pdb.set_trace()
         if self.rbln_config.model_cfg.get("img2vid_pipeline"):
             self.encoder = RBLNRuntimeVAECogVideoXEncoder(runtime=self.model[0], main_input_name="x")
             self.decoder_0 = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model[1], main_input_name="z")
@@ -58,6 +57,8 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
             self.decoder_1 = RBLNRuntimeVAECogVideoXDecoder(runtime=self.model[1], main_input_name="z")
 
         self.image_size = self.rbln_config.model_cfg["sample_size"]
+        self.num_latent_frames_batch_size = self.rbln_config.model_cfg["num_latent_frames_batch_size"]
+        
 
     @classmethod
     def get_compiled_model(cls, model, rbln_config: RBLNConfig):
@@ -78,51 +79,50 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
             return {"encoder": enc_compiled_model, "decoder": (dec_compiled_model_0, dec_compiled_model_1)}
 
         def compile_txt2vid():
-            # from rebel.compile_context import CompileContext
-            # context = CompileContext(use_weight_sharing=False)
-
-            # enc_example_inputs = rbln_config.compile_cfgs[0].get_dummy_inputs(fill=0) # is it needed?
-
-            # # # Mark encoder's static tensors (cross kv states) FIXME decoder_0 output conv cache
-            # static_tensors = {}
-            # import pdb; pdb.set_trace()
-            # for (name, _, _), tensor in zip(rbln_config.compile_cfgs[0].input_info, enc_example_inputs):  # output으로 바꾸기
-            #     if "key_value_states" in name:
-            #         static_tensors[name] = tensor
-            #         context.mark_static_address(tensor)
-
-            # dec_example_inputs = rbln_config.compile_cfgs[1].get_dummy_inputs(fill=0, static_tensors=static_tensors) # is it needed?
-
-            # # Mark decoder's static tensors (self kv states)
-            # for (name, _, _), tensor in zip(rbln_config.compile_cfgs[1].input_info, dec_example_inputs):
-            #     if "conv_cache" in name:
-            #         context.mark_static_address(tensor)
-
-            # compiled_encoder = super().compile(
-            #     decoder_model_0,
-            #     rbln_config.compile_cfgs[0],
-            #     example_inputs=enc_example_inputs,
-            #     compile_context=context,
-            # )
-
-            # compiled_decoder = super().compile(
-            #     decoder_model_1,
-            #     rbln_config.compile_cfgs[1],
-            #     example_inputs=dec_example_inputs,
-            #     compile_context=context,
-            # )
-            
-            ###############################################
-            
             decoder_model_0 = _VAECogVideoXDecoder(model)
             decoder_model_1 = _VAECogVideoXDecoder(model)
-            
-            decoder_model_0.eval()
-            decoder_model_1.eval()
-            
-            dec_compiled_model_0 = cls.compile(decoder_model_0, rbln_compile_config=rbln_config.compile_cfgs[0])
+
+            from rebel.compile_context import CompileContext
+            context = CompileContext(use_weight_sharing=False) # NOTE(si) : True possible?
+
+            enc_example_inputs = rbln_config.compile_cfgs[0].get_dummy_inputs(fill=0) # is it needed?
+
+            # # Mark encoder's static tensors (cross kv states) FIXME decoder_0 output conv cache
+            static_tensors = {}
             # import pdb; pdb.set_trace()
-            dec_compiled_model_1 = cls.compile(decoder_model_1, rbln_compile_config=rbln_config.compile_cfgs[1])
+            for (name, _, _), tensor in zip(rbln_config.compile_cfgs[0].input_info, enc_example_inputs):
+                if "conv" in name:
+                    static_tensors[name] = tensor
+                    context.mark_static_address(tensor)
+
+            dec_example_inputs = rbln_config.compile_cfgs[1].get_dummy_inputs(fill=0, static_tensors=static_tensors)
+
+            # Mark decoder's static tensors (self kv states)
+            for (name, _, _), tensor in zip(rbln_config.compile_cfgs[1].input_info, dec_example_inputs):
+                if "conv" in name:
+                    context.mark_static_address(tensor)
+
+            dec_compiled_model_0 = cls.compile(
+                decoder_model_0.eval(),
+                rbln_config.compile_cfgs[0],
+                example_inputs=enc_example_inputs,
+                compile_context=context,
+            )
+
+            dec_compiled_model_1 = cls.compile(
+                decoder_model_1.eval(),
+                rbln_config.compile_cfgs[1],
+                example_inputs=dec_example_inputs,
+                compile_context=context,
+            )
+
+            ###############################################
+
+            # decoder_model_0.eval()
+            # decoder_model_1.eval()
+            
+            # dec_compiled_model_0 = cls.compile(decoder_model_0, rbln_compile_config=rbln_config.compile_cfgs[0])
+            # dec_compiled_model_1 = cls.compile(decoder_model_1, rbln_compile_config=rbln_config.compile_cfgs[1])
 
             return (dec_compiled_model_0, dec_compiled_model_1)
 
@@ -196,6 +196,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
         vae_scale_factor_temporal = rbln_kwargs["vae_scale_factor_temporal"]
         # https://github.com/huggingface/diffusers/blob/89e4d6219805975bd7d253a267e1951badc9f1c0/src/diffusers/models/autoencoders/autoencoder_kl_cogvideox.py#L1099
         num_latent_frames_batch_size = 2
+        rbln_kwargs["num_latent_frames_batch_size"] = num_latent_frames_batch_size
 
         dec_shape = (sample_size[0] // vae_scale_factor_spatial, sample_size[1] // vae_scale_factor_spatial)
 
@@ -245,8 +246,8 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
                     [
                         rbln_batch_size,
                         model_config.latent_channels,
-                        num_latent_frames_batch_size+1, # FIXME make generalize
-                        dec_shape[0], 
+                        num_latent_frames_batch_size + num_frames%num_latent_frames_batch_size,
+                        dec_shape[0],
                         dec_shape[1],
                     ],
                     "float32",
@@ -268,15 +269,9 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
 
         for k, v in CONV_CACHE.items():
             if "norm" not in k :
-                vae_dec_input_info_1.extend(
-                    [
-                        (
-                            k,
-                            list(v),
-                            "float32"
-                        )
-                    ]
-            )
+                _input_info = (k, list(v), "float32")
+                vae_dec_input_info_0.extend([_input_info])
+                vae_dec_input_info_1.extend([_input_info])
 
         dec_0_rbln_compile_config = RBLNCompileConfig(compiled_model_name="decoder_0", input_info=vae_dec_input_info_0)
         dec_1_rbln_compile_config = RBLNCompileConfig(compiled_model_name="decoder_1", input_info=vae_dec_input_info_1)
@@ -328,23 +323,32 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
         # ):
         #     raise ValueError("Optimum-RBLN doesn't support tiled decoding aross H,W axis")
 
-        frame_batch_size = 2
+        frame_batch_size = self.num_latent_frames_batch_size
         num_batches = max(num_frames // frame_batch_size, 1)
         # conv_cache = None
         dec = []
-        z_intermediate, conv_cache = self.decoder_0(z[:, :, :3])
+        remaining_frames = num_frames % frame_batch_size
+        outputs = self.decoder_0(z[:, :, :frame_batch_size+remaining_frames])
+        z_intermediate = outputs[0]
+        import pdb; pdb.set_trace()
         dec.append(z_intermediate)
 
         for i in range(1, num_batches):
-            remaining_frames = num_frames % frame_batch_size
-            start_frame = frame_batch_size * i + (0 if i == 0 else remaining_frames)
+            # remaining_frames = num_frames % frame_batch_size
+            start_frame = frame_batch_size * i + remaining_frames
             end_frame = frame_batch_size * (i + 1) + remaining_frames
             z_intermediate = z[:, :, start_frame:end_frame]
             # if self.cog_video_x.post_quant_conv is not None:
             #     z_intermediate = self.cog_video_x.post_quant_conv(z_intermediate)
             # import pdb; pdb.set_trace()
-            z_intermediate, conv_cache = self.decoder_1(z_intermediate, conv_cache=conv_cache)
+            
+            # z_intermediate, conv_cache = self.decoder_1(z_intermediate, conv_cache=conv_cache)
+            outputs = self.decoder_1(z_intermediate)
+            import pdb; pdb.set_trace()
+            z_intermediate = outputs[0]
+            # z_intermediate, conv_cache, dummy = outputs[0], outputs[1:1+len(outputs)//2], outputs[1+len(outputs)//2]
             # z_intermediate, conv_cache = output[0], output[1:]
+            # outputs, _ = self.decoder_1(z_intermediate)
             dec.append(z_intermediate)
 
         dec = torch.cat(dec, dim=2)

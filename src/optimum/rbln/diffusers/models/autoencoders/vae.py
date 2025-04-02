@@ -20,6 +20,7 @@ from diffusers.models.autoencoders.vae import DecoderOutput, DiagonalGaussianDis
 from diffusers.models.autoencoders.vq_model import VQEncoderOutput
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
 
+from ....ops import register_rbln_custom_cache_update
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
 
@@ -241,6 +242,7 @@ class RBLNCogVideoXCausalConv3dDec(CogVideoXCausalConv3d):
 class _VAECogVideoXDecoder(torch.nn.Module):
     def __init__(self, cog_video_x: AutoencoderKLCogVideoX):
         super().__init__()
+        register_rbln_custom_cache_update()
         self.cog_video_x = cog_video_x
         # self.keys = None
         self.keys = self.get_conv_cache_key()
@@ -274,9 +276,18 @@ class _VAECogVideoXDecoder(torch.nn.Module):
         
     def forward(self, z: torch.Tensor, *args: Optional[Tuple[torch.Tensor]]):
         enc = z.shape[2] > 2 # FIXME make generalized condition
+        dummy_outs=[]
         if enc :
             cov_video_dec_out, conv_cache = self.cog_video_x.decoder(z)
             conv_cache_list, _ = self._totuple(conv_cache)
+            
+            for cache, conv_cache in zip(args, conv_cache_list):
+                batch_dim = torch.tensor(0, dtype=torch.int16)
+                batch_axis = torch.tensor(0, dtype=torch.int16)
+                
+                # import pdb; pdb.set_trace()
+                dummy_out = torch.ops.rbln_custom_ops.rbln_cache_update(cache, conv_cache, batch_dim, batch_axis)
+                dummy_outs.append(dummy_out)
             # import pdb; pdb.set_trace()
         else :
             conv_cache_dict = {}
@@ -297,4 +308,14 @@ class _VAECogVideoXDecoder(torch.nn.Module):
             cov_video_dec_out, conv_cache = self.cog_video_x.decoder(z, conv_cache=conv_cache_dict)
             conv_cache_list, _ = self._totuple(conv_cache)
             
-        return cov_video_dec_out, (conv_cache_list)
+            for cache, conv_cache in zip(args, conv_cache_list):
+                # import pdb; pdb.set_trace()
+                batch_dim = torch.tensor(0, dtype=torch.int16)
+                batch_axis = torch.tensor(0, dtype=torch.int16)
+                
+                dummy_out = torch.ops.rbln_custom_ops.rbln_cache_update(cache, conv_cache, batch_dim, batch_axis)
+                dummy_outs.append(dummy_out)
+        
+        # import pdb; pdb.set_trace()
+        # return cov_video_dec_out, conv_cache_list, tuple(dummy_outs)
+        return cov_video_dec_out, torch.stack(tuple(dummy_outs))
