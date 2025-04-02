@@ -49,6 +49,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
     ) -> None:
         super().__init__(runtime, **kwargs)
         self.max_seq_len = max_seq_len
+        self.pad_len = None
 
     def validate_inputs(
         self,
@@ -62,6 +63,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             pad_len = self.max_seq_len - input_len
             input_ids = torch.nn.functional.pad(input_ids, (0, pad_len))
             attention_mask = torch.nn.functional.pad(attention_mask, (0, pad_len), value=0)
+            self.pad_len = pad_len
 
         return input_ids, attention_mask
 
@@ -74,14 +76,15 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         **kwargs,
     ):
         input_ids, attention_mask = self.validate_inputs(input_ids, attention_mask)
-
-        return super().forward(
+        logits = super().forward(
             input_ids,
             attention_mask,
             head_mask,
             inputs_embeds,
             **kwargs,
         )
+
+        return logits[:, : -self.pad_len, :] if self.pad_len is not None else logits
 
 
 class T5EncoderWrapper(torch.nn.Module):
