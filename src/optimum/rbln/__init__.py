@@ -42,6 +42,7 @@ _import_structure = {
         "RBLNAutoModelForSequenceClassification",
         "RBLNAutoModelForSpeechSeq2Seq",
         "RBLNAutoModelForVision2Seq",
+        "RBLNAutoModelForObjectDetection",
         "RBLNBartForConditionalGeneration",
         "RBLNBartModel",
         "RBLNBertModel",
@@ -73,6 +74,8 @@ _import_structure = {
         "RBLNRobertaForMaskedLM",
         "RBLNViTForImageClassification",
         "RBLNBertForMaskedLM",
+        "RBLNDetrForObjectDetection",
+        "RBLNDeformableDetrForObjectDetection",
     ],
     "diffusers": [
         "RBLNAutoencoderKL",
@@ -159,6 +162,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForSequenceClassification,
         RBLNAutoModelForSpeechSeq2Seq,
         RBLNAutoModelForVision2Seq,
+        RBLNAutoModelForObjectDetection,
         RBLNBartForConditionalGeneration,
         RBLNBartModel,
         RBLNBertForMaskedLM,
@@ -189,6 +193,8 @@ if TYPE_CHECKING:
         RBLNWhisperForConditionalGeneration,
         RBLNXLMRobertaForSequenceClassification,
         RBLNXLMRobertaModel,
+        RBLNDeformableDetrForObjectDetection,
+        RBLNDetrForObjectDetection,
     )
 
 else:

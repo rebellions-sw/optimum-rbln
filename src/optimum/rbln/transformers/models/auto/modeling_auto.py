@@ -25,6 +25,8 @@ from transformers.models.auto.modeling_auto import (
     MODEL_FOR_IMAGE_CLASSIFICATION_MAPPING_NAMES,
     MODEL_FOR_MASKED_LM_MAPPING,
     MODEL_FOR_MASKED_LM_MAPPING_NAMES,
+    MODEL_FOR_OBJECT_DETECTION_MAPPING,
+    MODEL_FOR_OBJECT_DETECTION_MAPPING_NAMES,
     MODEL_FOR_QUESTION_ANSWERING_MAPPING,
     MODEL_FOR_QUESTION_ANSWERING_MAPPING_NAMES,
     MODEL_FOR_SEQ_TO_SEQ_CAUSAL_LM_MAPPING,
@@ -108,3 +110,7 @@ class RBLNAutoModelForImageClassification(_BaseAutoModelClass):
 class RBLNAutoModelForQuestionAnswering(_BaseAutoModelClass):
     _model_mapping = MODEL_FOR_QUESTION_ANSWERING_MAPPING
     _model_mapping_names = MODEL_FOR_QUESTION_ANSWERING_MAPPING_NAMES
+    
+class RBLNAutoModelForObjectDetection(_BaseAutoModelClass):
+    _model_mapping = MODEL_FOR_OBJECT_DETECTION_MAPPING
+    _model_mapping_names = MODEL_FOR_OBJECT_DETECTION_MAPPING_NAMES

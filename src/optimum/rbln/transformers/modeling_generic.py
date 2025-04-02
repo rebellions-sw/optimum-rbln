@@ -29,6 +29,7 @@ from transformers import (
     AutoModelForMaskedLM,
     AutoModelForQuestionAnswering,
     AutoModelForSequenceClassification,
+    AutoModelForObjectDetection,
     PretrainedConfig,
 )
 
@@ -39,6 +40,7 @@ from ..utils.logging import get_logger
 
 if TYPE_CHECKING:
     from transformers import (
+        AutoImageProcessor,
         AutoFeatureExtractor,
         AutoProcessor,
         AutoTokenizer,
@@ -402,3 +404,68 @@ class RBLNModelForMaskedLM(RBLNModel):
         )
         rbln_config.model_cfg.update({"max_seq_len": rbln_max_seq_len})
         return rbln_config
+
+
+class RBLNModelForObjectDetection(RBLNModel):
+    """
+    This is a generic model class that will be instantiated as one of the model classes of the library (with a object detection head) when created with the from_pretrained() class method
+    """
+
+    auto_model_class = AutoModelForObjectDetection
+
+    @classmethod
+    def _get_rbln_config(
+        cls,
+        preprocessors: Optional[Union["AutoImageProcessor", "AutoProcessor"]],
+        model_config: Optional["PretrainedConfig"] = None,
+        rbln_kwargs: Dict[str, Any] = {},
+    ) -> RBLNConfig:
+        rbln_image_size = rbln_kwargs.get("image_size", None)
+        rbln_batch_size = rbln_kwargs.get("batch_size", None)
+
+        if rbln_image_size is None:
+            for processor in preprocessors:
+                if hasattr(processor, "size"):
+                    if all(required_key in processor.size.keys() for required_key in ["height", "width"]):
+                        rbln_image_size = (processor.size["height"], processor.size["width"])
+                    elif "shortest_edge" in processor.size.keys():
+                        rbln_image_size = (processor.size["shortest_edge"], processor.size["shortest_edge"])
+                    elif "longest_edge" in processor.size.keys():
+                        rbln_image_size = (processor.size["longest_edge"], processor.size["longest_edge"])
+                    break
+
+            if rbln_image_size is None:
+                rbln_image_size = model_config.image_size
+
+            if rbln_image_size is None:
+                raise ValueError("`rbln_image_size` should be specified!")
+
+        if rbln_batch_size is None:
+            rbln_batch_size = 1
+
+        if isinstance(rbln_image_size, int):
+            rbln_image_height, rbln_image_width = rbln_image_size, rbln_image_size
+        elif isinstance(rbln_image_size, (list, tuple)):
+            rbln_image_height, rbln_image_width = rbln_image_size[0], rbln_image_size[1]
+        elif isinstance(rbln_image_size, dict):
+            rbln_image_height, rbln_image_width = rbln_image_size["height"], rbln_image_size["width"]
+        else:
+            raise ValueError(
+                "`rbln_image_size` should be `int` (ex. 800), `tuple` (ex. 800, 800), `dict` (ex. {'height': 800, 'width': 800}) format"
+            )
+
+        input_info = [
+            (
+                "pixel_values",
+                [rbln_batch_size, 3, rbln_image_height, rbln_image_width],
+                "float32",
+            ),
+            (
+                "pixel_mask",
+                [rbln_batch_size, rbln_image_height, rbln_image_width],
+                "int64",
+            ),
+        ]
+
+        rbln_compile_config = RBLNCompileConfig(input_info=input_info)
+        return RBLNConfig(rbln_cls=cls.__name__, compile_cfgs=[rbln_compile_config], rbln_kwargs=rbln_kwargs)

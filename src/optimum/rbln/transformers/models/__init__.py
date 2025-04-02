@@ -31,6 +31,7 @@ _import_structure = {
         "RBLNAutoModelForSequenceClassification",
         "RBLNAutoModelForSpeechSeq2Seq",
         "RBLNAutoModelForVision2Seq",
+        "RBLNAutoModelForObjectDetection",
     ],
     "bart": ["RBLNBartForConditionalGeneration", "RBLNBartModel"],
     "bert": ["RBLNBertModel", "RBLNBertForQuestionAnswering", "RBLNBertForMaskedLM"],
@@ -54,6 +55,8 @@ _import_structure = {
     "wav2vec2": ["RBLNWav2Vec2ForCTC"],
     "whisper": ["RBLNWhisperForConditionalGeneration"],
     "xlm_roberta": ["RBLNXLMRobertaModel"],
+    "detr": ["RBLNDetrForObjectDetection"],
+    "deformable_detr": ["RBLNDeformableDetrForObjectDetection"],
 }
 
 if TYPE_CHECKING:
@@ -70,6 +73,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForSequenceClassification,
         RBLNAutoModelForSpeechSeq2Seq,
         RBLNAutoModelForVision2Seq,
+        RBLNAutoModelForObjectDetection,
     )
     from .bart import RBLNBartForConditionalGeneration, RBLNBartModel
     from .bert import RBLNBertForMaskedLM, RBLNBertForQuestionAnswering, RBLNBertModel
@@ -93,6 +97,8 @@ if TYPE_CHECKING:
     from .wav2vec2 import RBLNWav2Vec2ForCTC
     from .whisper import RBLNWhisperForConditionalGeneration
     from .xlm_roberta import RBLNXLMRobertaModel
+    from .detr import RBLNDetrForObjectDetection
+    from .deformable_detr import RBLNDeformableDetrForObjectDetection
 
 else:
     import sys

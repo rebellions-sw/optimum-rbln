@@ -32,6 +32,7 @@ _import_structure = {
         "RBLNAutoModelForSequenceClassification",
         "RBLNAutoModelForSpeechSeq2Seq",
         "RBLNAutoModelForVision2Seq",
+        "RBLNAutoModelForObjectDetection",
         "RBLNBartForConditionalGeneration",
         "RBLNBartModel",
         "RBLNBertModel",
@@ -56,6 +57,8 @@ _import_structure = {
         "RBLNMidmLMHeadModel",
         "RBLNXLMRobertaModel",
         "RBLNMistralForCausalLM",
+        "RBLNDetrForObjectDetection",
+        "RBLNDeformerDetrForObjectDetection",
     ],
     "modeling_alias": [
         "RBLNASTForAudioClassification",
@@ -92,6 +95,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForSequenceClassification,
         RBLNAutoModelForSpeechSeq2Seq,
         RBLNAutoModelForVision2Seq,
+        RBLNAutoModelForObjectDetection,
         RBLNBartForConditionalGeneration,
         RBLNBartModel,
         RBLNBertForMaskedLM,
@@ -116,6 +120,8 @@ if TYPE_CHECKING:
         RBLNWav2Vec2ForCTC,
         RBLNWhisperForConditionalGeneration,
         RBLNXLMRobertaModel,
+        RBLNDetrForObjectDetection,
+        RBLNDeformableDetrForObjectDetection,
     )
 else:
     import sys
