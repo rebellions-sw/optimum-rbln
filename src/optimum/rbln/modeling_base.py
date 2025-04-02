@@ -217,8 +217,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
                 rbln_config_as_kwargs = {f"rbln_{key}": value for key, value in rbln_config.items()}
                 kwargs.update(rbln_config_as_kwargs)
 
-            if not isinstance(rbln_config, RBLNModelConfig):
-                rbln_config = RBLNAutoConfig.load(model_path_subfolder, **kwargs)
+            rbln_config = RBLNAutoConfig.load(model_path_subfolder, passed_rbln_config=rbln_config, **kwargs)
 
             if rbln_config.rbln_model_cls_name != cls.__name__:
                 raise NameError(
