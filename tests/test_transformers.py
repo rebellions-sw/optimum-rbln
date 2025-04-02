@@ -7,12 +7,14 @@ from transformers import T5EncoderModel
 
 from optimum.rbln import (
     RBLNASTForAudioClassification,
+    RBLNBartModel,
     RBLNBertForMaskedLM,
     RBLNBertForQuestionAnswering,
     RBLNCLIPTextModel,
     RBLNDPTForDepthEstimation,
     RBLNResNetForImageClassification,
     RBLNT5EncoderModel,
+    RBLNTimeSeriesTransformerForPrediction,
     RBLNWav2Vec2ForCTC,
     RBLNWhisperForConditionalGeneration,
     RBLNXLMRobertaForSequenceClassification,
@@ -315,6 +317,37 @@ class TestWav2VecModel(BaseTest.TestModel):
     HF_MODEL_ID = "hf-internal-testing/tiny-random-Wav2Vec2ForCTC"
     GENERATION_KWARGS = {"input_values": RANDOM_AUDIO}
     RBLN_CLASS_KWARGS = {"rbln_max_seq_len": 160005}
+
+
+class TestTimeSeriesTransformerForPrediction(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = None
+    RBLN_CLASS = RBLNTimeSeriesTransformerForPrediction
+    HF_MODEL_ID = "huggingface/time-series-transformer-tourism-monthly"
+    GENERATION_KWARGS = {
+        "static_categorical_features": torch.ones(1, 1, dtype=torch.long),
+        "static_real_features": torch.ones(1, 1, dtype=torch.float),
+        "past_time_features": torch.randn(1, 61, 2),
+        "past_values": torch.randn(1, 61),
+        "past_observed_mask": torch.ones(1, 61, dtype=torch.long),
+        "future_time_features": torch.randn(1, 24, 2),
+    }
+    RBLN_CLASS_KWARGS = {"rbln_batch_size": 1, "rbln_num_parallel_samples": 100}
+
+    def test_generate(self):
+        inputs = self.get_inputs()
+        _ = self.model.generate(**inputs)
+
+
+class TestRBLNBartModel(BaseTest.TestModel):
+    RBLN_CLASS = RBLNBartModel
+    HF_MODEL_ID = "hf-internal-testing/tiny-random-BartModel"
+    RBLN_CLASS_KWARGS = {"rbln_max_seq_len": 100}
+    GENERATION_KWARGS = {
+        "input_ids": torch.randint(low=0, high=50, size=(1, 100), generator=torch.manual_seed(42), dtype=torch.int64),
+        "attention_mask": torch.randint(
+            low=0, high=2, size=(1, 100), generator=torch.manual_seed(42), dtype=torch.int64
+        ),
+    }
 
 
 if __name__ == "__main__":
