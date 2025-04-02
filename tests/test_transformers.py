@@ -336,6 +336,7 @@ class TestTimeSeriesTransformerForPrediction(BaseTest.TestModel):
         inputs = self.get_inputs()
         _ = self.model.generate(**inputs)
 
+
 class TestRBLNBartModel(BaseTest.TestModel):
     RBLN_CLASS = RBLNBartModel
     HF_MODEL_ID = "hf-internal-testing/tiny-random-BartModel"
