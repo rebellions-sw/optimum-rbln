@@ -234,6 +234,7 @@ class TestWhisperModel_TokenTimestamps(BaseTest.TestModel):
         "max_new_tokens": 1,
         "return_token_timestamps": True,
         "return_timestamps": True,
+        "generation_config": None,
     }
 
     HF_CONFIG_KWARGS = {
