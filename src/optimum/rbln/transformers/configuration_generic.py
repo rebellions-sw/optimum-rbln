@@ -3,7 +3,9 @@ from typing import List, Optional, Tuple, Union
 from ..configuration_utils import RBLNModelConfig
 
 
-class RBLNModelForQuestionAnsweringConfig(RBLNModelConfig):
+class _RBLNTransformerEncoderConfig(RBLNModelConfig):
+    rbln_model_input_names: Optional[List[str]] = None
+
     def __init__(
         self,
         max_seq_len: Optional[int] = None,
@@ -17,7 +19,19 @@ class RBLNModelForQuestionAnsweringConfig(RBLNModelConfig):
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
-        self.model_input_names = model_input_names
+        self.model_input_names = model_input_names or self.rbln_model_input_names
+
+
+class RBLNModelForQuestionAnsweringConfig(_RBLNTransformerEncoderConfig):
+    pass
+
+
+class RBLNModelForSequenceClassificationConfig(_RBLNTransformerEncoderConfig):
+    pass
+
+
+class RBLNModelForMaskedLMConfig(_RBLNTransformerEncoderConfig):
+    pass
 
 
 class RBLNModelForImageClassificationConfig(RBLNModelConfig):
@@ -64,37 +78,3 @@ class RBLNModelForAudioClassificationConfig(RBLNModelConfig):
 
         self.max_length = max_length
         self.num_mel_bins = num_mel_bins
-
-
-class RBLNModelForSequenceClassificationConfig(RBLNModelConfig):
-    def __init__(
-        self,
-        max_seq_len: Optional[int] = None,
-        batch_size: Optional[int] = None,
-        model_input_names: Optional[List[str]] = None,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.max_seq_len = max_seq_len
-        self.batch_size = batch_size or 1
-        if not isinstance(self.batch_size, int) or self.batch_size < 0:
-            raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
-
-        self.model_input_names = model_input_names
-
-
-class RBLNModelForMaskedLMConfig(RBLNModelConfig):
-    def __init__(
-        self,
-        max_seq_len: Optional[int] = None,
-        batch_size: Optional[int] = None,
-        model_input_names: Optional[List[str]] = None,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.max_seq_len = max_seq_len
-        self.batch_size = batch_size or 1
-        if not isinstance(self.batch_size, int) or self.batch_size < 0:
-            raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
-
-        self.model_input_names = model_input_names

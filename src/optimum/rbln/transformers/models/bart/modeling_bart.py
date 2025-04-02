@@ -13,13 +13,13 @@
 # limitations under the License.
 
 import inspect
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from transformers import BartForConditionalGeneration, PretrainedConfig, PreTrainedModel
 
-from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
+from ...modeling_generic import update_rbln_config_for_transformers_encoder
 from ...models.seq2seq import RBLNModelForSeq2SeqLM
 from .bart_architecture import BartWrapper
 from .configuration_bart import RBLNBartForConditionalGenerationConfig, RBLNBartModelConfig
@@ -33,6 +33,8 @@ if TYPE_CHECKING:
 
 
 class RBLNBartModel(RBLNModel):
+    rbln_model_input_names = ["input_ids", "attention_mask"]
+
     @classmethod
     def _update_rbln_config(
         cls,
@@ -41,72 +43,13 @@ class RBLNBartModel(RBLNModel):
         model_config: Optional["PretrainedConfig"] = None,
         rbln_config: Optional[RBLNBartModelConfig] = None,
     ) -> RBLNBartModelConfig:
-        rbln_max_seq_len = rbln_kwargs.get("max_seq_len", None)
-        rbln_batch_size = rbln_kwargs.get("batch_size", None)
-        rbln_model_input_names = rbln_kwargs.get("model_input_names", None)
-
-        max_position_embeddings = getattr(model_config, "max_position_embeddings", None)
-
-        if rbln_max_seq_len is None:
-            rbln_max_seq_len = max_position_embeddings
-            if rbln_max_seq_len is None:
-                for tokenizer in preprocessors:
-                    if hasattr(tokenizer, "model_max_length"):
-                        rbln_max_seq_len = tokenizer.model_max_length
-                        break
-                if rbln_max_seq_len is None:
-                    raise ValueError("`rbln_max_seq_len` should be specified!")
-
-        if max_position_embeddings is not None and rbln_max_seq_len > max_position_embeddings:
-            raise ValueError("`rbln_max_seq_len` should be less or equal than max_position_embeddings!")
-
-        signature_params = inspect.signature(cls.get_hf_class().forward).parameters.keys()
-
-        if rbln_model_input_names is None:
-            for tokenizer in preprocessors:
-                if hasattr(tokenizer, "model_input_names"):
-                    rbln_model_input_names = [name for name in signature_params if name in tokenizer.model_input_names]
-                    # BartModel's forward() does not take token_type_ids as input.
-                    # (Added because some of the tokenizers includes 'token_type_ids')
-                    if "token_type_ids" in rbln_model_input_names:
-                        rbln_model_input_names.remove("token_type_ids")
-
-                    invalid_params = set(rbln_model_input_names) - set(signature_params)
-                    if invalid_params:
-                        raise ValueError(f"Invalid model input names: {invalid_params}")
-                    break
-            if rbln_model_input_names is None and hasattr(cls, "rbln_model_input_names"):
-                rbln_model_input_names = cls.rbln_model_input_names
-            elif rbln_model_input_names is None and hasattr(cls, "rbln_model_input_names") is False:
-                raise ValueError(
-                    "Specify the model input names obtained by the tokenizer via `rbln_model_input_names`, "
-                    f"and be sure to make the order of the inputs same as BartModel forward() arguments like ({list(signature_params)})"
-                )
-        else:
-            invalid_params = set(rbln_model_input_names) - set(signature_params)
-            if invalid_params:
-                raise ValueError(f"Invalid model input names: {invalid_params}")
-            rbln_model_input_names = [name for name in signature_params if name in rbln_model_input_names]
-
-        if rbln_batch_size is None:
-            rbln_batch_size = 1
-
-        input_info = [
-            (model_input_name, [rbln_batch_size, rbln_max_seq_len], "int64")
-            for model_input_name in rbln_model_input_names
-        ]
-
-        enc_compile_config = RBLNCompileConfig(input_info=input_info, compiled_model_name="encoder")
-        dec_compile_config = RBLNCompileConfig(input_info=input_info, compiled_model_name="decoder")
-
-        rbln_config = RBLNModelConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[enc_compile_config, dec_compile_config],
-            rbln_kwargs=rbln_kwargs,
+        return update_rbln_config_for_transformers_encoder(
+            preprocessors=preprocessors,
+            model=model,
+            model_config=model_config,
+            rbln_config=rbln_config,
+            rbln_model_input_names=cls.rbln_model_input_names,
         )
-
-        rbln_config.model_cfg.update({"max_seq_len": rbln_max_seq_len})
-        return rbln_config
 
 
 class RBLNBartForConditionalGeneration(RBLNModelForSeq2SeqLM):

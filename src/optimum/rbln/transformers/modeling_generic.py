@@ -21,14 +21,16 @@ different model architectures.
 """
 
 import inspect
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, List, Optional, Union
 
 from transformers import (
+    AutoModel,
     AutoModelForAudioClassification,
     AutoModelForImageClassification,
     AutoModelForMaskedLM,
     AutoModelForQuestionAnswering,
     AutoModelForSequenceClassification,
+    AutoModelForTextEncoding,
     PretrainedConfig,
 )
 
@@ -38,9 +40,7 @@ from ..utils.logging import get_logger
 from .configuration_generic import (
     RBLNModelForAudioClassificationConfig,
     RBLNModelForImageClassificationConfig,
-    RBLNModelForMaskedLMConfig,
-    RBLNModelForQuestionAnsweringConfig,
-    RBLNModelForSequenceClassificationConfig,
+    _RBLNTransformerEncoderConfig,
 )
 
 
@@ -50,18 +50,19 @@ if TYPE_CHECKING:
 logger = get_logger()
 
 
-class RBLNModelForQuestionAnswering(RBLNModel):
-    auto_model_class = AutoModelForQuestionAnswering
-    rbln_model_input_names = ["input_ids", "attention_mask", "token_type_ids"]
+def update_rbln_config_for_transformers_encoder(
+    preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
+    model: Optional["PreTrainedModel"] = None,
+    model_config: Optional["PretrainedConfig"] = None,
+    rbln_config: Optional[_RBLNTransformerEncoderConfig] = None,
+    rbln_model_input_names: Optional[List[str]] = None,
+) -> _RBLNTransformerEncoderConfig:
+    max_position_embeddings = getattr(model_config, "n_positions", None) or getattr(
+        model_config, "max_position_embeddings", None
+    )
 
-    @classmethod
-    def _update_rbln_config(
-        cls,
-        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
-        model: Optional["PreTrainedModel"] = None,
-        model_config: Optional["PretrainedConfig"] = None,
-        rbln_config: Optional[RBLNModelForQuestionAnsweringConfig] = None,
-    ) -> RBLNModelForQuestionAnsweringConfig:
+    if rbln_config.max_seq_len is None:
+        rbln_config.max_seq_len = max_position_embeddings
         if rbln_config.max_seq_len is None:
             for tokenizer in preprocessors:
                 if hasattr(tokenizer, "model_max_length"):
@@ -70,41 +71,90 @@ class RBLNModelForQuestionAnswering(RBLNModel):
             if rbln_config.max_seq_len is None:
                 raise ValueError("`max_seq_len` should be specified!")
 
-        signature_params = inspect.signature(cls.get_hf_class().forward).parameters.keys()
+    if max_position_embeddings is not None and rbln_config.max_seq_len > max_position_embeddings:
+        raise ValueError("`max_seq_len` should be less or equal than max_position_embeddings!")
 
-        if rbln_config.model_input_names is None:
-            for tokenizer in preprocessors:
-                if hasattr(tokenizer, "model_input_names"):
-                    rbln_config.model_input_names = [
-                        name for name in signature_params if name in tokenizer.model_input_names
-                    ]
+    signature_params = inspect.signature(model.forward).parameters.keys()
 
-                    invalid_params = set(rbln_config.model_input_names) - set(signature_params)
-                    if invalid_params:
-                        raise ValueError(f"Invalid model input names: {invalid_params}")
-                    break
-            if rbln_config.model_input_names is None and hasattr(cls, "rbln_model_input_names"):
-                rbln_config.model_input_names = cls.rbln_model_input_names
-            elif rbln_config.model_input_names is None and hasattr(cls, "rbln_model_input_names") is False:
-                raise ValueError(
-                    "Specify the model input names obtained by the tokenizer via `rbln_model_input_names`, "
-                    f"and be sure to make the order of the inputs same as QuestionAnswering forward() arguments like ({list(signature_params)})"
-                )
-        else:
-            invalid_params = set(rbln_config.model_input_names) - set(signature_params)
-            if invalid_params:
-                raise ValueError(f"Invalid model input names: {invalid_params}")
-            rbln_config.model_input_names = [
-                name for name in signature_params if name in rbln_config.model_input_names
-            ]
+    if rbln_config.model_input_names is None:
+        for tokenizer in preprocessors:
+            if hasattr(tokenizer, "model_input_names"):
+                rbln_config.model_input_names = [
+                    name for name in signature_params if name in tokenizer.model_input_names
+                ]
 
-        input_info = [
-            (model_input_name, [rbln_config.batch_size, rbln_config.max_seq_len], "int64")
-            for model_input_name in rbln_config.model_input_names
-        ]
+                invalid_params = set(rbln_config.model_input_names) - set(signature_params)
+                if invalid_params:
+                    raise ValueError(f"Invalid model input names: {invalid_params}")
+                break
+        if rbln_config.model_input_names is None and rbln_model_input_names is not None:
+            rbln_config.model_input_names = rbln_model_input_names
 
-        rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
-        return rbln_config
+    else:
+        invalid_params = set(rbln_config.model_input_names) - set(signature_params)
+        if invalid_params:
+            raise ValueError(f"Invalid model input names: {invalid_params}")
+        rbln_config.model_input_names = [name for name in signature_params if name in rbln_config.model_input_names]
+
+    if rbln_config.model_input_names is None or len(rbln_config.model_input_names) == 0:
+        raise ValueError(
+            "Specify the model input names obtained by the tokenizer via `rbln_model_input_names`. "
+            "This is an internal error. Please report it to the developers."
+        )
+
+    input_info = [
+        (model_input_name, [rbln_config.batch_size, rbln_config.max_seq_len], "int64")
+        for model_input_name in rbln_config.model_input_names
+    ]
+
+    rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
+    return rbln_config
+
+
+class _RBLNTransformerEncoder(RBLNModel):
+    auto_model_class = AutoModel
+    rbln_model_input_names = ["input_ids", "attention_mask", "token_type_ids"]
+
+    @classmethod
+    def _update_rbln_config(
+        cls,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
+        model: Optional["PreTrainedModel"] = None,
+        model_config: Optional["PretrainedConfig"] = None,
+        rbln_config: Optional[_RBLNTransformerEncoderConfig] = None,
+    ) -> _RBLNTransformerEncoderConfig:
+        return update_rbln_config_for_transformers_encoder(
+            preprocessors=preprocessors,
+            model=model,
+            model_config=model_config,
+            rbln_config=rbln_config,
+            rbln_model_input_names=cls.rbln_model_input_names,
+        )
+
+
+class RBLNModelForQuestionAnswering(_RBLNTransformerEncoder):
+    auto_model_class = AutoModelForQuestionAnswering
+    rbln_model_input_names = ["input_ids", "attention_mask", "token_type_ids"]
+
+
+class RBLNModelForSequenceClassification(_RBLNTransformerEncoder):
+    auto_model_class = AutoModelForSequenceClassification
+    rbln_model_input_names = ["input_ids", "attention_mask"]
+
+
+class RBLNModelForMaskedLM(_RBLNTransformerEncoder):
+    auto_model_class = AutoModelForMaskedLM
+    rbln_model_input_names = ["input_ids", "attention_mask"]
+
+
+class RBLNModelForTextEncoding(_RBLNTransformerEncoder):
+    auto_model_class = AutoModelForTextEncoding
+    rbln_model_input_names = ["input_ids", "attention_mask"]
+
+
+class RBLNModelForFeatureExtraction(_RBLNTransformerEncoder):
+    auto_model_class = AutoModel
+    rbln_model_input_names = ["input_ids", "attention_mask"]
 
 
 class RBLNModelForImageClassification(RBLNModel):
@@ -201,136 +251,6 @@ class RBLNModelForAudioClassification(RBLNModel):
                 [rbln_config.batch_size, rbln_config.max_length, rbln_config.num_mel_bins],
                 "float32",
             ),
-        ]
-
-        rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
-        return rbln_config
-
-
-class RBLNModelForSequenceClassification(RBLNModel):
-    auto_model_class = AutoModelForSequenceClassification
-
-    @classmethod
-    def _update_rbln_config(
-        cls,
-        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
-        model: Optional["PreTrainedModel"] = None,
-        model_config: Optional["PretrainedConfig"] = None,
-        rbln_config: Optional[RBLNModelForSequenceClassificationConfig] = None,
-    ) -> RBLNModelForSequenceClassificationConfig:
-        max_position_embeddings = getattr(model_config, "n_positions", None) or getattr(
-            model_config, "max_position_embeddings", None
-        )
-
-        if rbln_config.max_seq_len is None:
-            rbln_config.max_seq_len = max_position_embeddings
-            if rbln_config.max_seq_len is None:
-                for tokenizer in preprocessors:
-                    if hasattr(tokenizer, "model_max_length"):
-                        rbln_config.max_seq_len = tokenizer.model_max_length
-                        break
-                if rbln_config.max_seq_len is None:
-                    raise ValueError("`max_seq_len` should be specified!")
-
-        if max_position_embeddings is not None and rbln_config.max_seq_len > max_position_embeddings:
-            raise ValueError("`max_seq_len` should be less or equal than max_position_embeddings!")
-
-        signature_params = inspect.signature(cls.get_hf_class().forward).parameters.keys()
-
-        if rbln_config.model_input_names is None:
-            for tokenizer in preprocessors:
-                if hasattr(tokenizer, "model_input_names"):
-                    rbln_config.model_input_names = [
-                        name for name in signature_params if name in tokenizer.model_input_names
-                    ]
-
-                    invalid_params = set(rbln_config.model_input_names) - set(signature_params)
-                    if invalid_params:
-                        raise ValueError(f"Invalid model input names: {invalid_params}")
-                    break
-            if rbln_config.model_input_names is None and hasattr(cls, "rbln_model_input_names"):
-                rbln_config.model_input_names = cls.rbln_model_input_names
-            elif rbln_config.model_input_names is None and hasattr(cls, "rbln_model_input_names") is False:
-                raise ValueError(
-                    "Specify the model input names obtained by the tokenizer via `rbln_model_input_names`, "
-                    f"and be sure to make the order of the inputs same as SequenceClassification forward() arguments like ({list(signature_params)})"
-                )
-        else:
-            invalid_params = set(rbln_config.model_input_names) - set(signature_params)
-            if invalid_params:
-                raise ValueError(f"Invalid model input names: {invalid_params}")
-            rbln_config.model_input_names = [
-                name for name in signature_params if name in rbln_config.model_input_names
-            ]
-
-        input_info = [
-            (model_input_name, [rbln_config.batch_size, rbln_config.max_seq_len], "int64")
-            for model_input_name in rbln_config.model_input_names
-        ]
-
-        rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
-        return rbln_config
-
-
-class RBLNModelForMaskedLM(RBLNModel):
-    auto_model_class = AutoModelForMaskedLM
-
-    @classmethod
-    def _update_rbln_config(
-        cls,
-        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
-        model: Optional["PreTrainedModel"] = None,
-        model_config: Optional["PretrainedConfig"] = None,
-        rbln_config: Optional[RBLNModelForMaskedLMConfig] = None,
-    ) -> RBLNModelForMaskedLMConfig:
-        max_position_embeddings = getattr(model_config, "n_positions", None) or getattr(
-            model_config, "max_position_embeddings", None
-        )
-
-        if rbln_config.max_seq_len is None:
-            rbln_config.max_seq_len = max_position_embeddings
-            if rbln_config.max_seq_len is None:
-                for tokenizer in preprocessors:
-                    if hasattr(tokenizer, "model_max_length"):
-                        rbln_config.max_seq_len = tokenizer.model_max_length
-                        break
-                if rbln_config.max_seq_len is None:
-                    raise ValueError("`max_seq_len` should be specified!")
-
-        if max_position_embeddings is not None and rbln_config.max_seq_len > max_position_embeddings:
-            raise ValueError("`max_seq_len` should be less or equal than max_position_embeddings!")
-
-        signature_params = inspect.signature(cls.get_hf_class().forward).parameters.keys()
-
-        if rbln_config.model_input_names is None:
-            for tokenizer in preprocessors:
-                if hasattr(tokenizer, "model_input_names"):
-                    rbln_config.model_input_names = [
-                        name for name in signature_params if name in tokenizer.model_input_names
-                    ]
-
-                    invalid_params = set(rbln_config.model_input_names) - set(signature_params)
-                    if invalid_params:
-                        raise ValueError(f"Invalid model input names: {invalid_params}")
-                    break
-            if rbln_config.model_input_names is None and hasattr(cls, "rbln_model_input_names"):
-                rbln_config.model_input_names = cls.rbln_model_input_names
-            elif rbln_config.model_input_names is None and hasattr(cls, "rbln_model_input_names") is False:
-                raise ValueError(
-                    "Specify the model input names obtained by the tokenizer via `rbln_model_input_names`, "
-                    f"and be sure to make the order of the inputs same as MaskedLM forward() arguments like ({list(signature_params)})"
-                )
-        else:
-            invalid_params = set(rbln_config.model_input_names) - set(signature_params)
-            if invalid_params:
-                raise ValueError(f"Invalid model input names: {invalid_params}")
-            rbln_config.model_input_names = [
-                name for name in signature_params if name in rbln_config.model_input_names
-            ]
-
-        input_info = [
-            (model_input_name, [rbln_config.batch_size, rbln_config.max_seq_len], "int64")
-            for model_input_name in rbln_config.model_input_names
         ]
 
         rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
