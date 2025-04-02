@@ -116,7 +116,6 @@ class TimeSeriesTransformersDecoderWrapper(torch.nn.Module):
         self,
         inputs_embeds: torch.Tensor,
         decoder_attention_mask: torch.Tensor,
-        # encoder_attention_mask: Optional[torch.Tensor],
         cache_position: torch.Tensor,
         block_tables: torch.Tensor,
         cross_kv_cache: torch.Tensor,  # batch_size, num_heads, context_length, d_kv
@@ -133,7 +132,6 @@ class TimeSeriesTransformersDecoderWrapper(torch.nn.Module):
         last_hidden_states = self.decoder(
             inputs_embeds=inputs_embeds,
             attention_mask=decoder_attention_mask,
-            # encoder_attention_mask=encoder_attention_mask,
             cache_position=cache_position,
             block_tables=block_tables,
             self_past_key_values=self_past_key_values,
@@ -163,7 +161,6 @@ class TimeSeriesTransformersDecoder(nn.Module):
         self,
         inputs_embeds: torch.Tensor = None,
         attention_mask: Optional[torch.Tensor] = None,
-        # encoder_attention_mask: Optional[torch.LongTensor] = None,
         self_past_key_values: Optional[torch.Tensor] = None,
         cross_past_key_values: Optional[torch.Tensor] = None,
         cache_position: Optional[torch.Tensor] = None,
@@ -213,7 +210,6 @@ class TimeSeriesTransformersDecoderLayer(nn.Module):
         self,
         hidden_states: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
-        # encoder_attention_mask: Optional[torch.Tensor] = None,
         self_past_key_value: Optional[Tuple[torch.Tensor]] = None,
         cross_past_key_value: Optional[Tuple[torch.Tensor]] = None,
         cache_position: Optional[torch.Tensor] = None,
@@ -314,7 +310,6 @@ class TimeSeriesTransformersCrossAttention(TimeSeriesTransformersSelfAttention):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        # attention_mask: torch.Tensor,
         past_key_value: Optional[Tuple[torch.Tensor]] = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         batch_size, query_len, _ = hidden_states.size()

@@ -102,7 +102,6 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         inputs_embeds: torch.Tensor = None,
         attention_mask: torch.Tensor = None,
         cache_position: torch.Tensor = None,
-        # encoder_attention_mask: torch.Tensor = None,
     ):
         block_tables = torch.zeros(1, 1, dtype=torch.int16)
         outputs = super().forward(inputs_embeds, attention_mask, cache_position, block_tables)
@@ -120,7 +119,7 @@ class RBLNSeq2SeqTSDecoderOutput(ModelOutput):
 
 
 class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
-    auto_model_class = None  # TODO
+    auto_model_class = None
     main_input_name = "inputs_embeds"
 
     def __post_init__(self, **kwargs):
@@ -140,7 +139,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         )
         self.decoder = RBLNRuntimeDecoder(
             runtime=self.model[1],
-            main_input_name="inputs_embeds",  # , batch_size=self.batch_size
+            main_input_name="inputs_embeds",
         )
 
     def __getattr__(self, __name: str) -> Any:
@@ -243,7 +242,6 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         # model input info
         enc_input_info = [
             ("inputs_embeds", [rbln_batch_size, model_config.context_length, model_config.feature_size], "float32"),
-            # ("attention_mask", [rbln_batch_size, context_length], "float32"),
         ]
         enc_input_info.extend(
             [
@@ -264,7 +262,6 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         dec_input_info = [
             ("inputs_embeds", [rbln_batch_size * rbln_num_parallel_samples, 1, model_config.feature_size], "float32"),
             ("attention_mask", [1, rbln_dec_max_seq_len], "float32"),
-            # ("encoder_attention_mask", [rbln_batch_size, context_length], "float32"),
             ("cache_position", [], "int32"),
             ("block_tables", [1, 1], "int16"),
         ]
