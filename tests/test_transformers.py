@@ -7,6 +7,7 @@ from transformers import T5EncoderModel
 
 from optimum.rbln import (
     RBLNASTForAudioClassification,
+    RBLNBartModel,
     RBLNBertForMaskedLM,
     RBLNBertForQuestionAnswering,
     RBLNCLIPTextModel,
@@ -314,6 +315,18 @@ class TestWav2VecModel(BaseTest.TestModel):
     HF_MODEL_ID = "hf-internal-testing/tiny-random-Wav2Vec2ForCTC"
     GENERATION_KWARGS = {"input_values": RANDOM_AUDIO}
     RBLN_CLASS_KWARGS = {"rbln_max_seq_len": 160005}
+
+
+class TestRBLNBartModel(BaseTest.TestModel):
+    RBLN_CLASS = RBLNBartModel
+    HF_MODEL_ID = "hf-internal-testing/tiny-random-BartModel"
+    RBLN_CLASS_KWARGS = {"rbln_max_seq_len": 100}
+    GENERATION_KWARGS = {
+        "input_ids": torch.randint(low=0, high=50, size=(1, 100), generator=torch.manual_seed(42), dtype=torch.int64),
+        "attention_mask": torch.randint(
+            low=0, high=2, size=(1, 100), generator=torch.manual_seed(42), dtype=torch.int64
+        ),
+    }
 
 
 if __name__ == "__main__":
