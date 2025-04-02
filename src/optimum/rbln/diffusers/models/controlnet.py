@@ -19,7 +19,7 @@ import torch
 from diffusers import ControlNetModel
 from transformers import PretrainedConfig
 
-from ...configuration_utils import RBLNCompileConfig
+from ...configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ...modeling import RBLNModel
 from ...utils.logging import get_logger
 from ..modeling_diffusers import RBLNDiffusionMixin

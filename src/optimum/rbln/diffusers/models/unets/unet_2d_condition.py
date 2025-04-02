@@ -19,7 +19,7 @@ import torch
 from diffusers.models.unets.unet_2d_condition import UNet2DConditionModel
 from transformers import PretrainedConfig
 
-from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
+from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...configurations import RBLNUNet2DConditionModelConfig
@@ -160,7 +160,9 @@ class RBLNUNet2DConditionModel(RBLNModel):
             self.add_embedding = ADDEMBEDDING(LINEAR1(self.in_features))
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
+    def wrap_model_if_needed(
+        cls, model: torch.nn.Module, rbln_config: RBLNUNet2DConditionModelConfig
+    ) -> torch.nn.Module:
         if model.config.addition_embed_type == "text_time":
             return _UNet_SDXL(model).eval()
         elif model.config.addition_embed_type == "image":
