@@ -319,7 +319,6 @@ class TestWav2VecModel(BaseTest.TestModel):
 
 class TestRBLNBartModel(BaseTest.TestModel):
     RBLN_CLASS = RBLNBartModel
-    # FIXME:: Update to internal once enabled tiny model
     HF_MODEL_ID = "hf-internal-testing/tiny-random-BartModel"
     RBLN_CLASS_KWARGS = {"rbln_max_seq_len": 100}
     GENERATION_KWARGS = {
