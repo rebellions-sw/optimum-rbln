@@ -15,7 +15,7 @@
 from transformers import AutoModelForCausalLM
 
 from ....utils import logging
-from ..decoderonly import RBLNDecoderOnlyModelForCausalLM
+from ...core.decoderonly import RBLNDecoderOnlyModelForCausalLM
 from .midm_architecture import MidmLMHeadModelWrapper
 
 

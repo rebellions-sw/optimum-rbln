@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from ....utils import logging
-from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM
+from ...core.decoderonly import RBLNDecoderOnlyModelForCausalLM
 from .qwen2_architecture import QWEN2Wrapper
 
 
