@@ -66,7 +66,6 @@ class TimeSeriesTransformersEncoderWrapper(torch.nn.Module):
     def forward(
         self,
         inputs_embeds: torch.Tensor,
-        # attention_mask: Optional[torch.Tensor] = None,
         cross_key_values: torch.Tensor,  # n_layers, batch_size, num_heads, context_length, d_kv
     ) -> Union[Tuple[torch.FloatTensor], BaseModelOutput]:
         # 1. get encoder last_hidden_states
