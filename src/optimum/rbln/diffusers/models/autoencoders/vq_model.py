@@ -21,7 +21,7 @@ from diffusers.models.autoencoders.vae import DecoderOutput
 from diffusers.models.autoencoders.vq_model import VQEncoderOutput
 from transformers import PretrainedConfig
 
-from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNConfig
+from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
@@ -50,7 +50,7 @@ class RBLNVQModel(RBLNModel):
         self.image_size = [height, width]
 
     @classmethod
-    def get_compiled_model(cls, model, rbln_config: RBLNConfig):
+    def get_compiled_model(cls, model, rbln_config: RBLNModelConfig):
         encoder_model = _VQEncoder(model)
         decoder_model = _VQDecoder(model)
         encoder_model.eval()
@@ -89,7 +89,7 @@ class RBLNVQModel(RBLNModel):
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model_config: "PretrainedConfig",
         rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
+    ) -> RBLNModelConfig:
         batch_size = rbln_kwargs.get("batch_size")
         if batch_size is None:
             batch_size = 1
@@ -130,7 +130,7 @@ class RBLNVQModel(RBLNModel):
         dec_rbln_compile_config = RBLNCompileConfig(compiled_model_name="decoder", input_info=dec_input_info)
 
         compile_cfgs = [enc_rbln_compile_config, dec_rbln_compile_config]
-        rbln_config = RBLNConfig(
+        rbln_config = RBLNModelConfig(
             rbln_cls=cls.__name__,
             compile_cfgs=compile_cfgs,
             rbln_kwargs=rbln_kwargs,

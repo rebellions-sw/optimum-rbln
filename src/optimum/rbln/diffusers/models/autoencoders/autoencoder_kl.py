@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
 
 import rebel
 import torch
@@ -39,11 +39,12 @@ logger = get_logger(__name__)
 class RBLNAutoencoderKL(RBLNModel):
     auto_model_class = AutoencoderKL
     hf_library_name = "diffusers"
+    _rbln_config_class = RBLNAutoencoderKLConfig
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
 
-        if self.rbln_config.needs_encoder:
+        if self.rbln_config.uses_encoder:
             self.encoder = RBLNRuntimeVAEEncoder(runtime=self.model[0], main_input_name="x")
         else:
             self.encoder = None
@@ -53,7 +54,7 @@ class RBLNAutoencoderKL(RBLNModel):
 
     @classmethod
     def get_compiled_model(cls, model, rbln_config: RBLNAutoencoderKLConfig) -> Dict[str, rebel.RBLNCompiledModel]:
-        if rbln_config.needs_encoder:
+        if rbln_config.uses_encoder:
             expected_models = ["encoder", "decoder"]
         else:
             expected_models = ["decoder"]
@@ -72,10 +73,8 @@ class RBLNAutoencoderKL(RBLNModel):
         return compiled_models
 
     @classmethod
-    def get_vae_sample_size(
-        cls, pipe: "RBLNDiffusionMixin", rbln_config: RBLNAutoencoderKLConfig
-    ) -> Union[int, Tuple[int, int]]:
-        image_size = rbln_config.image_size
+    def get_vae_sample_size(cls, pipe: "RBLNDiffusionMixin", rbln_config: RBLNAutoencoderKLConfig) -> Tuple[int, int]:
+        sample_size = rbln_config.sample_size
         noise_module = getattr(pipe, "unet", None) or getattr(pipe, "transformer", None)
         vae_scale_factor = (
             pipe.vae_scale_factor
@@ -88,34 +87,19 @@ class RBLNAutoencoderKL(RBLNModel):
                 "Cannot find noise processing or predicting module attributes. ex. U-Net, Transformer, ..."
             )
 
-        if (image_size[0] is None) != (image_size[1] is None):
-            raise ValueError("Both image height and image width must be given or not given")
+        if sample_size is None:
+            sample_size = noise_module.config.sample_size
+            if isinstance(sample_size, int):
+                sample_size = (sample_size, sample_size)
+            sample_size = (sample_size[0] * vae_scale_factor, sample_size[1] * vae_scale_factor)
 
-        elif image_size[0] is None and image_size[1] is None:
-            if rbln_config.img2img_pipeline:
-                sample_size = noise_module.config.sample_size
-            elif rbln_config.inpaint_pipeline:
-                sample_size = noise_module.config.sample_size * vae_scale_factor
-            else:
-                # In case of text2img, sample size of vae decoder is determined by unet.
-                noise_module_sample_size = noise_module.config.sample_size
-                if isinstance(noise_module_sample_size, int):
-                    sample_size = noise_module_sample_size * vae_scale_factor
-                else:
-                    sample_size = (
-                        noise_module_sample_size[0] * vae_scale_factor,
-                        noise_module_sample_size[1] * vae_scale_factor,
-                    )
-        else:
-            sample_size = (image_size[0], image_size[1])
-
-        return sample_size
+        return sample_size, vae_scale_factor
 
     @classmethod
     def update_rbln_config_using_pipe(
         cls, pipe: "RBLNDiffusionMixin", rbln_config: RBLNAutoencoderKLConfig
     ) -> RBLNAutoencoderKLConfig:
-        rbln_config.sample_size = cls.get_vae_sample_size(pipe, rbln_config)
+        rbln_config.sample_size, rbln_config.vae_scale_factor = cls.get_vae_sample_size(pipe, rbln_config)
         return rbln_config
 
     @classmethod
@@ -146,7 +130,7 @@ class RBLNAutoencoderKL(RBLNModel):
                 rbln_config.vae_scale_factor = 8
 
         compile_cfgs = []
-        if rbln_config.needs_encoder:
+        if rbln_config.uses_encoder:
             vae_enc_input_info = [
                 (
                     "x",
@@ -167,8 +151,8 @@ class RBLNAutoencoderKL(RBLNModel):
                 [
                     rbln_config.batch_size,
                     rbln_config.latent_channels,
-                    rbln_config.sample_size[0] // rbln_config.vae_scale_factor,
-                    rbln_config.sample_size[1] // rbln_config.vae_scale_factor,
+                    rbln_config.latent_sample_size[0],
+                    rbln_config.latent_sample_size[1],
                 ],
                 "float32",
             )

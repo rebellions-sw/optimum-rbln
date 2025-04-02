@@ -19,7 +19,7 @@ import torch
 from diffusers.models.transformers.prior_transformer import PriorTransformer, PriorTransformerOutput
 from transformers import PretrainedConfig, PreTrainedModel
 
-from ....configuration_utils import RBLNCompileConfig, RBLNConfig
+from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
@@ -82,7 +82,7 @@ class RBLNPriorTransformer(RBLNModel):
         self.clip_std = artifacts["clip_std"]
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
         return _PriorTransformer(model).eval()
 
     @classmethod
@@ -117,7 +117,7 @@ class RBLNPriorTransformer(RBLNModel):
         model: "PreTrainedModel",
         save_dir_path: Path,
         subfolder: str,
-        rbln_config: RBLNConfig,
+        rbln_config: RBLNModelConfig,
     ):
         save_dict = {}
         save_dict["clip_mean"] = model.clip_mean
@@ -130,7 +130,7 @@ class RBLNPriorTransformer(RBLNModel):
         preprocessors,
         model_config: PretrainedConfig,
         rbln_kwargs,
-    ) -> RBLNConfig:
+    ) -> RBLNModelConfig:
         batch_size = rbln_kwargs.get("batch_size") or 1
         embedding_dim = rbln_kwargs.get("embedding_dim") or model_config.embedding_dim
         num_embeddings = rbln_kwargs.get("num_embeddings") or model_config.num_embeddings
@@ -144,7 +144,7 @@ class RBLNPriorTransformer(RBLNModel):
         ]
 
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
-        rbln_config = RBLNConfig(
+        rbln_config = RBLNModelConfig(
             rbln_cls=cls.__name__,
             compile_cfgs=[rbln_compile_config],
             rbln_kwargs=rbln_kwargs,

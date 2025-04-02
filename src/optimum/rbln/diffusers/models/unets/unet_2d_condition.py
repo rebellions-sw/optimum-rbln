@@ -22,11 +22,12 @@ from transformers import PretrainedConfig
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
+from ...configurations import RBLNUNet2DConditionModelConfig
 from ...modeling_diffusers import RBLNDiffusionMixin
 
 
 if TYPE_CHECKING:
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PreTrainedModel
 
 logger = get_logger(__name__)
 
@@ -141,10 +142,11 @@ class _UNet_Kandinsky(torch.nn.Module):
 class RBLNUNet2DConditionModel(RBLNModel):
     hf_library_name = "diffusers"
     auto_model_class = UNet2DConditionModel
+    _rbln_config_class = RBLNUNet2DConditionModelConfig
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
-        self.in_features = self.rbln_config.model_cfg.get("in_features", None)
+        self.in_features = self.rbln_config.in_features
         if self.in_features is not None:
 
             @dataclass
@@ -158,7 +160,7 @@ class RBLNUNet2DConditionModel(RBLNModel):
             self.add_embedding = ADDEMBEDDING(LINEAR1(self.in_features))
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
         if model.config.addition_embed_type == "text_time":
             return _UNet_SDXL(model).eval()
         elif model.config.addition_embed_type == "image":
@@ -168,67 +170,54 @@ class RBLNUNet2DConditionModel(RBLNModel):
 
     @classmethod
     def get_unet_sample_size(
-        cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]
-    ) -> Union[int, Tuple[int, int]]:
-        image_size = (rbln_config.get("img_height"), rbln_config.get("img_width"))
+        cls, pipe: RBLNDiffusionMixin, rbln_config: RBLNUNet2DConditionModelConfig
+    ) -> Tuple[int, int]:
+        image_size = rbln_config.image_size
         scale_factor = pipe.movq_scale_factor if hasattr(pipe, "movq_scale_factor") else pipe.vae_scale_factor
-        if (image_size[0] is None) != (image_size[1] is None):
-            raise ValueError("Both image height and image width must be given or not given")
-        elif image_size[0] is None and image_size[1] is None:
-            if rbln_config["img2img_pipeline"]:
+
+        if image_size is None:
+            if "Img2Img" in pipe.__class__.__name__:
                 if hasattr(pipe, "vae"):
                     # In case of img2img, sample size of unet is determined by vae encoder.
                     vae_sample_size = pipe.vae.config.sample_size
                     if isinstance(vae_sample_size, int):
-                        sample_size = vae_sample_size // scale_factor
-                    else:
-                        sample_size = (
-                            vae_sample_size[0] // scale_factor,
-                            vae_sample_size[1] // scale_factor,
-                        )
+                        vae_sample_size = (vae_sample_size, vae_sample_size)
+
+                    sample_size = (
+                        vae_sample_size[0] // scale_factor,
+                        vae_sample_size[1] // scale_factor,
+                    )
                 elif hasattr(pipe, "movq"):
                     logger.warning(
-                        "RBLN config 'img_height' and 'img_width' should have been provided for this pipeline. "
+                        "RBLN config 'image_size' should have been provided for this pipeline. "
                         "Both variable will be set 512 by default."
                     )
                     sample_size = (512 // scale_factor, 512 // scale_factor)
             else:
                 sample_size = pipe.unet.config.sample_size
+                if isinstance(sample_size, int):
+                    sample_size = (sample_size, sample_size)
         else:
             sample_size = (image_size[0] // scale_factor, image_size[1] // scale_factor)
 
         return sample_size
 
     @classmethod
-    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
-        text_model_hidden_size = pipe.text_encoder_2.config.hidden_size if hasattr(pipe, "text_encoder_2") else None
-        image_model_hidden_size = pipe.unet.config.encoder_hid_dim if hasattr(pipe, "unet") else None
-
-        batch_size = rbln_config.get("batch_size")
-        if not batch_size:
-            do_classifier_free_guidance = (
-                rbln_config.get("guidance_scale", 5.0) > 1.0 and pipe.unet.config.time_cond_proj_dim is None
-            )
-            batch_size = 2 if do_classifier_free_guidance else 1
-        else:
-            if rbln_config.get("guidance_scale"):
-                logger.warning(
-                    "guidance_scale is ignored because batch size is explicitly specified. "
-                    "To ensure consistent behavior, consider removing the guidance scale or "
-                    "adjusting the batch size configuration as needed."
-                )
-
-        max_seq_len = pipe.text_encoder.config.max_position_embeddings if hasattr(pipe, "text_encoder") else None
-        rbln_config.update(
-            {
-                "max_seq_len": max_seq_len,
-                "text_model_hidden_size": text_model_hidden_size,
-                "image_model_hidden_size": image_model_hidden_size,
-                "sample_size": cls.get_unet_sample_size(pipe, rbln_config),
-                "batch_size": batch_size,
-                "is_controlnet": "controlnet" in pipe.config.keys(),
-            }
+    def update_rbln_config_using_pipe(
+        cls, pipe: RBLNDiffusionMixin, rbln_config: RBLNUNet2DConditionModelConfig
+    ) -> RBLNUNet2DConditionModelConfig:
+        rbln_config.text_model_hidden_size = (
+            pipe.text_encoder_2.config.hidden_size if hasattr(pipe, "text_encoder_2") else None
         )
+        rbln_config.image_model_hidden_size = pipe.unet.config.encoder_hid_dim if hasattr(pipe, "unet") else None
+
+        rbln_config.max_seq_len = (
+            pipe.text_encoder.config.max_position_embeddings if hasattr(pipe, "text_encoder") else None
+        )
+
+        rbln_config.sample_size = cls.get_unet_sample_size(pipe, rbln_config)
+
+        rbln_config.use_additional_residuals = "controlnet" in pipe.config.keys()
 
         return rbln_config
 
@@ -236,49 +225,59 @@ class RBLNUNet2DConditionModel(RBLNModel):
     def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
+        model: "PreTrainedModel",
         model_config: "PretrainedConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
-        batch_size = rbln_kwargs.get("batch_size")
-        max_seq_len = rbln_kwargs.get("max_seq_len")
-        sample_size = rbln_kwargs.get("sample_size")
-        is_controlnet = rbln_kwargs.get("is_controlnet")
-        rbln_in_features = None
+        rbln_config: RBLNUNet2DConditionModelConfig,
+    ) -> RBLNUNet2DConditionModelConfig:
+        if rbln_config.sample_size is None:
+            rbln_config.sample_size = model_config.sample_size
 
-        if batch_size is None:
-            batch_size = 1
-
-        if sample_size is None:
-            sample_size = model_config.sample_size
-
-        if isinstance(sample_size, int):
-            sample_size = (sample_size, sample_size)
+        if isinstance(rbln_config.sample_size, int):
+            rbln_config.sample_size = (rbln_config.sample_size, rbln_config.sample_size)
 
         input_info = [
-            ("sample", [batch_size, model_config.in_channels, sample_size[0], sample_size[1]], "float32"),
+            (
+                "sample",
+                [
+                    rbln_config.batch_size,
+                    model_config.in_channels,
+                    rbln_config.sample_size[0],
+                    rbln_config.sample_size[1],
+                ],
+                "float32",
+            ),
             ("timestep", [], "float32"),
         ]
 
-        if max_seq_len is not None:
+        if rbln_config.max_seq_len is not None:
             input_info.append(
-                ("encoder_hidden_states", [batch_size, max_seq_len, model_config.cross_attention_dim], "float32"),
+                (
+                    "encoder_hidden_states",
+                    [rbln_config.batch_size, rbln_config.max_seq_len, model_config.cross_attention_dim],
+                    "float32",
+                ),
             )
 
-        if is_controlnet:
+        if rbln_config.use_additional_residuals:
             # down block addtional residuals
-            first_shape = [batch_size, model_config.block_out_channels[0], sample_size[0], sample_size[1]]
-            height, width = sample_size[0], sample_size[1]
+            first_shape = [
+                rbln_config.batch_size,
+                model_config.block_out_channels[0],
+                rbln_config.sample_size[0],
+                rbln_config.sample_size[1],
+            ]
+            height, width = rbln_config.sample_size[0], rbln_config.sample_size[1]
             input_info.append(("down_block_additional_residuals_0", first_shape, "float32"))
             name_idx = 1
             for idx, _ in enumerate(model_config.down_block_types):
-                shape = [batch_size, model_config.block_out_channels[idx], height, width]
+                shape = [rbln_config.batch_size, model_config.block_out_channels[idx], height, width]
                 for _ in range(model_config.layers_per_block):
                     input_info.append((f"down_block_additional_residuals_{name_idx}", shape, "float32"))
                     name_idx += 1
                 if idx != len(model_config.down_block_types) - 1:
                     height = height // 2
                     width = width // 2
-                    shape = [batch_size, model_config.block_out_channels[idx], height, width]
+                    shape = [rbln_config.batch_size, model_config.block_out_channels[idx], height, width]
                     input_info.append((f"down_block_additional_residuals_{name_idx}", shape, "float32"))
                     name_idx += 1
 
@@ -286,33 +285,27 @@ class RBLNUNet2DConditionModel(RBLNModel):
             num_cross_attn_blocks = model_config.down_block_types.count("CrossAttnDownBlock2D")
             out_channels = model_config.block_out_channels[-1]
             shape = [
-                batch_size,
+                rbln_config.batch_size,
                 out_channels,
-                sample_size[0] // 2**num_cross_attn_blocks,
-                sample_size[1] // 2**num_cross_attn_blocks,
+                rbln_config.sample_size[0] // 2**num_cross_attn_blocks,
+                rbln_config.sample_size[1] // 2**num_cross_attn_blocks,
             ]
             input_info.append(("mid_block_additional_residual", shape, "float32"))
 
         if hasattr(model_config, "addition_embed_type"):
             if model_config.addition_embed_type == "text_time":
-                rbln_text_model_hidden_size = rbln_kwargs["text_model_hidden_size"]
-                rbln_in_features = model_config.projection_class_embeddings_input_dim
-                input_info.append(("text_embeds", [batch_size, rbln_text_model_hidden_size], "float32"))
-                input_info.append(("time_ids", [batch_size, 6], "float32"))
+                rbln_config.in_features = model_config.projection_class_embeddings_input_dim
+                input_info.append(
+                    ("text_embeds", [rbln_config.batch_size, rbln_config.text_model_hidden_size], "float32")
+                )
+                input_info.append(("time_ids", [rbln_config.batch_size, 6], "float32"))
             elif model_config.addition_embed_type == "image":
-                rbln_image_model_hidden_size = rbln_kwargs["image_model_hidden_size"]
-                input_info.append(("image_embeds", [batch_size, rbln_image_model_hidden_size], "float32"))
+                input_info.append(
+                    ("image_embeds", [rbln_config.batch_size, rbln_config.image_model_hidden_size], "float32")
+                )
 
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
-
-        rbln_config = RBLNConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[rbln_compile_config],
-            rbln_kwargs=rbln_kwargs,
-        )
-
-        if rbln_in_features is not None:
-            rbln_config.model_cfg["in_features"] = rbln_in_features
+        rbln_config.set_compile_cfgs([rbln_compile_config])
 
         return rbln_config
 

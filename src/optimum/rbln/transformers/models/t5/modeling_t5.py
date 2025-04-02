@@ -24,7 +24,7 @@ from transformers import (
 )
 from transformers.modeling_outputs import BaseModelOutput
 
-from ....configuration_utils import RBLNCompileConfig, RBLNConfig
+from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....diffusers.modeling_diffusers import RBLNDiffusionMixin
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
@@ -75,7 +75,7 @@ class RBLNT5EncoderModel(RBLNModel):
         self.model = RBLNRuntimeModel(runtime=self.model[0])
 
     @classmethod
-    def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: "RBLNConfig"):
+    def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: "RBLNModelConfig"):
         return T5EncoderWrapper(model)
 
     @classmethod
@@ -100,7 +100,7 @@ class RBLNT5EncoderModel(RBLNModel):
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
         model_config: Optional["PretrainedConfig"] = None,
         rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
+    ) -> RBLNModelConfig:
         rbln_max_seq_len = rbln_kwargs.get("max_seq_len", None)
         rbln_model_input_names = rbln_kwargs.get("model_input_names", None)
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
@@ -154,7 +154,7 @@ class RBLNT5EncoderModel(RBLNModel):
 
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
 
-        rbln_config = RBLNConfig(
+        rbln_config = RBLNModelConfig(
             rbln_cls=cls.__name__,
             compile_cfgs=[rbln_compile_config],
             rbln_kwargs=rbln_kwargs,
@@ -192,7 +192,7 @@ class RBLNT5ForConditionalGeneration(RBLNModelForSeq2SeqLM):
     support_causal_attn = False
 
     @classmethod
-    def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: "RBLNConfig"):
+    def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: "RBLNModelConfig"):
         enc_max_seq_len = rbln_config.model_cfg["enc_max_seq_len"]
         dec_max_seq_len = rbln_config.model_cfg["dec_max_seq_len"]
 

@@ -23,6 +23,10 @@ ALL_IMPORTABLE_CLASSES.update(LOADABLE_CLASSES["optimum.rbln"])
 
 
 _import_structure = {
+    "configurations": [
+        "RBLNAutoencoderKLConfig",
+        "RBLNUNet2DConditionModelConfig",
+    ],
     "pipelines": [
         "RBLNKandinskyV22CombinedPipeline",
         "RBLNKandinskyV22Img2ImgCombinedPipeline",
@@ -60,6 +64,10 @@ _import_structure = {
 }
 
 if TYPE_CHECKING:
+    from .configurations import (
+        RBLNAutoencoderKLConfig,
+        RBLNUNet2DConditionModelConfig,
+    )
     from .modeling_diffusers import RBLNDiffusionMixin
     from .models import (
         RBLNAutoencoderKL,

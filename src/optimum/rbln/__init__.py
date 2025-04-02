@@ -94,6 +94,7 @@ _import_structure = {
     ],
     "diffusers": [
         "RBLNAutoencoderKL",
+        "RBLNAutoencoderKLConfig",
         "RBLNControlNetModel",
         "RBLNDiffusionMixin",
         "RBLNKandinskyV22CombinedPipeline",
@@ -120,6 +121,7 @@ _import_structure = {
         "RBLNStableDiffusionXLInpaintPipeline",
         "RBLNStableDiffusionXLPipeline",
         "RBLNUNet2DConditionModel",
+        "RBLNUNet2DConditionModelConfig",
         "RBLNVQModel",
     ],
 }
@@ -131,6 +133,7 @@ if TYPE_CHECKING:
     )
     from .diffusers import (
         RBLNAutoencoderKL,
+        RBLNAutoencoderKLConfig,
         RBLNControlNetModel,
         RBLNDiffusionMixin,
         RBLNKandinskyV22CombinedPipeline,
@@ -157,6 +160,7 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLInpaintPipeline,
         RBLNStableDiffusionXLPipeline,
         RBLNUNet2DConditionModel,
+        RBLNUNet2DConditionModelConfig,
         RBLNVQModel,
     )
     from .modeling import (
