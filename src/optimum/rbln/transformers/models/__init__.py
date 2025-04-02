@@ -38,7 +38,14 @@ _import_structure = {
         "RBLNBartForConditionalGenerationConfig",
         "RBLNBartModelConfig",
     ],
-    "bert": ["RBLNBertModel", "RBLNBertForQuestionAnswering", "RBLNBertForMaskedLM"],
+    "bert": [
+        "RBLNBertModel",
+        "RBLNBertModelConfig",
+        "RBLNBertForQuestionAnswering",
+        "RBLNBertForQuestionAnsweringConfig",
+        "RBLNBertForMaskedLM",
+        "RBLNBertForMaskedLMConfig",
+    ],
     "clip": [
         "RBLNCLIPTextModel",
         "RBLNCLIPTextModelConfig",
@@ -91,7 +98,14 @@ if TYPE_CHECKING:
         RBLNBartModel,
         RBLNBartModelConfig,
     )
-    from .bert import RBLNBertForMaskedLM, RBLNBertForQuestionAnswering, RBLNBertModel
+    from .bert import (
+        RBLNBertForMaskedLM,
+        RBLNBertForMaskedLMConfig,
+        RBLNBertForQuestionAnswering,
+        RBLNBertForQuestionAnsweringConfig,
+        RBLNBertModel,
+        RBLNBertModelConfig,
+    )
     from .clip import (
         RBLNCLIPTextModel,
         RBLNCLIPTextModelConfig,

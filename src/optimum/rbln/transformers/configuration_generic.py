@@ -38,6 +38,10 @@ class RBLNModelForTextEncodingConfig(_RBLNTransformerEncoderConfig):
     pass
 
 
+class RBLNModelForFeatureExtractionConfig(_RBLNTransformerEncoderConfig):
+    pass
+
+
 class RBLNModelForImageClassificationConfig(RBLNModelConfig):
     def __init__(
         self, image_size: Optional[Union[int, Tuple[int, int]]] = None, batch_size: Optional[int] = None, **kwargs
