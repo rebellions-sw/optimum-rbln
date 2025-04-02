@@ -152,6 +152,7 @@ class TestWhisperModel(BaseTest.TestModel):
             low=0, high=50, size=(2, 80, 3000), generator=torch.manual_seed(42), dtype=torch.float32
         ),
         "max_new_tokens": 10,
+        "generation_config": None,
     }
     HF_CONFIG_KWARGS = {
         "num_hidden_layers": 1,
