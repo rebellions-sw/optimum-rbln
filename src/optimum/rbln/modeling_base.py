@@ -403,6 +403,11 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             rbln_config_class_name = cls.__name__ + "Config"
             library = importlib.import_module("optimum.rbln")
             cls._rbln_config_class = getattr(library, rbln_config_class_name, None)
+            if cls._rbln_config_class is None:
+                raise ValueError(
+                    f"RBLN config class {rbln_config_class_name} not found. This is an internal error. "
+                    "Please report it to the developers."
+                )
         return cls._rbln_config_class
 
     def can_generate(self):

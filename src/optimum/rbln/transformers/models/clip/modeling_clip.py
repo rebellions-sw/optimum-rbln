@@ -15,25 +15,22 @@
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
 
 import torch
-from transformers import (
-    CLIPTextConfig,
-    CLIPTextModel,
-    CLIPVisionConfig,
-    CLIPVisionModel,
-)
+from transformers import CLIPTextConfig, CLIPTextModel, CLIPVisionConfig, CLIPVisionModel
 from transformers.modeling_outputs import BaseModelOutputWithPooling
 from transformers.models.clip.modeling_clip import CLIPTextModelOutput, CLIPVisionModelOutput
 
-from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
-from ....diffusers.modeling_diffusers import RBLNDiffusionMixin
+from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
+from .configuration_clip import RBLNCLIPTextModelConfig, RBLNCLIPVisionModelConfig
 
 
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, CLIPTextModel, PreTrainedModel
+
+    from ....diffusers.modeling_diffusers import RBLNDiffusionMixin
 
 
 class _TextEncoder(torch.nn.Module):
@@ -48,11 +45,11 @@ class _TextEncoder(torch.nn.Module):
 
 class RBLNCLIPTextModel(RBLNModel):
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNCLIPTextModelConfig) -> torch.nn.Module:
         return _TextEncoder(model).eval()
 
     @classmethod
-    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
+    def update_rbln_config_using_pipe(cls, pipe: "RBLNDiffusionMixin", rbln_config: Dict[str, Any]) -> Dict[str, Any]:
         return rbln_config
 
     @classmethod
@@ -61,8 +58,8 @@ class RBLNCLIPTextModel(RBLNModel):
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model: Optional["PreTrainedModel"] = None,
         model_config: "CLIPTextConfig" = None,
-        rbln_config: Optional[RBLNModelConfig] = None,
-    ) -> RBLNModelConfig:
+        rbln_config: Optional[RBLNCLIPTextModelConfig] = None,
+    ) -> RBLNCLIPTextModelConfig:
         input_info = [
             (
                 "input_ids",
@@ -102,11 +99,11 @@ class _VisionEncoder(torch.nn.Module):
 
 class RBLNCLIPVisionModel(RBLNModel):
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNCLIPVisionModelConfig) -> torch.nn.Module:
         return _VisionEncoder(model).eval()
 
     @classmethod
-    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
+    def update_rbln_config_using_pipe(cls, pipe: "RBLNDiffusionMixin", rbln_config: Dict[str, Any]) -> Dict[str, Any]:
         return rbln_config
 
     @classmethod
@@ -115,8 +112,8 @@ class RBLNCLIPVisionModel(RBLNModel):
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model: Optional["PreTrainedModel"] = None,
         model_config: "CLIPVisionConfig" = None,
-        rbln_config: Optional[RBLNModelConfig] = None,
-    ) -> RBLNModelConfig:
+        rbln_config: Optional[RBLNCLIPVisionModelConfig] = None,
+    ) -> RBLNCLIPVisionModelConfig:
         if rbln_config.image_size is None:
             rbln_config.image_size = getattr(model_config, "image_size", None)
 

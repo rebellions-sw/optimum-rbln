@@ -12,73 +12,69 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
 
 import rebel
-import torch  # noqa: I001
+import torch
 from diffusers import AutoencoderKL
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
 from transformers import PretrainedConfig
 
-from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNModelConfig
+from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from ...modeling_diffusers import RBLNDiffusionMixin
+from ...configurations import RBLNAutoencoderKLConfig
 from .vae import RBLNRuntimeVAEDecoder, RBLNRuntimeVAEEncoder, _VAEDecoder, _VAEEncoder
 
 
 if TYPE_CHECKING:
     import torch
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig, PreTrainedModel
+
+    from ...modeling_diffusers import RBLNDiffusionMixin
 
 logger = get_logger(__name__)
 
 
 class RBLNAutoencoderKL(RBLNModel):
     auto_model_class = AutoencoderKL
-    config_name = "config.json"
     hf_library_name = "diffusers"
+    _rbln_config_class = RBLNAutoencoderKLConfig
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
 
-        if self.rbln_config.model_cfg.get("img2img_pipeline") or self.rbln_config.model_cfg.get("inpaint_pipeline"):
+        if self.rbln_config.uses_encoder:
             self.encoder = RBLNRuntimeVAEEncoder(runtime=self.model[0], main_input_name="x")
-            self.decoder = RBLNRuntimeVAEDecoder(runtime=self.model[1], main_input_name="z")
         else:
-            self.decoder = RBLNRuntimeVAEDecoder(runtime=self.model[0], main_input_name="z")
+            self.encoder = None
 
-        self.image_size = self.rbln_config.model_cfg["sample_size"]
+        self.decoder = RBLNRuntimeVAEDecoder(runtime=self.model[-1], main_input_name="z")
+        self.image_size = self.rbln_config.image_size
 
     @classmethod
-    def get_compiled_model(cls, model, rbln_config: RBLNModelConfig):
-        def compile_img2img():
-            encoder_model = _VAEEncoder(model)
-            decoder_model = _VAEDecoder(model)
-            encoder_model.eval()
-            decoder_model.eval()
-
-            enc_compiled_model = cls.compile(encoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
-            dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[1])
-
-            return {"encoder": enc_compiled_model, "decoder": dec_compiled_model}
-
-        def compile_text2img():
-            decoder_model = _VAEDecoder(model)
-            decoder_model.eval()
-
-            dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
-
-            return dec_compiled_model
-
-        if rbln_config.model_cfg.get("img2img_pipeline") or rbln_config.model_cfg.get("inpaint_pipeline"):
-            return compile_img2img()
+    def get_compiled_model(cls, model, rbln_config: RBLNAutoencoderKLConfig) -> Dict[str, rebel.RBLNCompiledModel]:
+        if rbln_config.uses_encoder:
+            expected_models = ["encoder", "decoder"]
         else:
-            return compile_text2img()
+            expected_models = ["decoder"]
+
+        compiled_models = {}
+        for i, model_name in enumerate(expected_models):
+            if model_name == "encoder":
+                wrapped_model = _VAEEncoder(model)
+            else:
+                wrapped_model = _VAEDecoder(model)
+
+            wrapped_model.eval()
+
+            compiled_models[model_name] = cls.compile(wrapped_model, rbln_compile_config=rbln_config.compile_cfgs[i])
+
+        return compiled_models
 
     @classmethod
-    def get_vae_sample_size(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Union[int, Tuple[int, int]]:
-        image_size = (rbln_config.get("img_height"), rbln_config.get("img_width"))
+    def get_vae_sample_size(cls, pipe: "RBLNDiffusionMixin", rbln_config: RBLNAutoencoderKLConfig) -> Tuple[int, int]:
+        sample_size = rbln_config.sample_size
         noise_module = getattr(pipe, "unet", None) or getattr(pipe, "transformer", None)
         vae_scale_factor = (
             pipe.vae_scale_factor
@@ -91,107 +87,79 @@ class RBLNAutoencoderKL(RBLNModel):
                 "Cannot find noise processing or predicting module attributes. ex. U-Net, Transformer, ..."
             )
 
-        if (image_size[0] is None) != (image_size[1] is None):
-            raise ValueError("Both image height and image width must be given or not given")
+        if sample_size is None:
+            sample_size = noise_module.config.sample_size
+            if isinstance(sample_size, int):
+                sample_size = (sample_size, sample_size)
+            sample_size = (sample_size[0] * vae_scale_factor, sample_size[1] * vae_scale_factor)
 
-        elif image_size[0] is None and image_size[1] is None:
-            if rbln_config["img2img_pipeline"]:
-                sample_size = noise_module.config.sample_size
-            elif rbln_config["inpaint_pipeline"]:
-                sample_size = noise_module.config.sample_size * vae_scale_factor
-            else:
-                # In case of text2img, sample size of vae decoder is determined by unet.
-                noise_module_sample_size = noise_module.config.sample_size
-                if isinstance(noise_module_sample_size, int):
-                    sample_size = noise_module_sample_size * vae_scale_factor
-                else:
-                    sample_size = (
-                        noise_module_sample_size[0] * vae_scale_factor,
-                        noise_module_sample_size[1] * vae_scale_factor,
-                    )
-        else:
-            sample_size = (image_size[0], image_size[1])
-
-        return sample_size
+        return sample_size, vae_scale_factor
 
     @classmethod
-    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
-        rbln_config.update({"sample_size": cls.get_vae_sample_size(pipe, rbln_config)})
+    def update_rbln_config_using_pipe(
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: RBLNAutoencoderKLConfig
+    ) -> RBLNAutoencoderKLConfig:
+        rbln_config.sample_size, rbln_config.vae_scale_factor = cls.get_vae_sample_size(pipe, rbln_config)
         return rbln_config
 
     @classmethod
     def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
+        model: "PreTrainedModel",
         model_config: "PretrainedConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNModelConfig:
-        rbln_batch_size = rbln_kwargs.get("batch_size")
-        sample_size = rbln_kwargs.get("sample_size")
-        is_img2img = rbln_kwargs.get("img2img_pipeline")
-        is_inpaint = rbln_kwargs.get("inpaint_pipeline")
+        rbln_config: RBLNAutoencoderKLConfig,
+    ) -> RBLNAutoencoderKLConfig:
+        if rbln_config.sample_size is None:
+            rbln_config.sample_size = model_config.sample_size
 
-        if rbln_batch_size is None:
-            rbln_batch_size = 1
+        if isinstance(rbln_config.sample_size, int):
+            rbln_config.sample_size = (rbln_config.sample_size, rbln_config.sample_size)
 
-        if sample_size is None:
-            sample_size = model_config.sample_size
+        if rbln_config.in_channels is None:
+            rbln_config.in_channels = model_config.in_channels
 
-        if isinstance(sample_size, int):
-            sample_size = (sample_size, sample_size)
+        if rbln_config.latent_channels is None:
+            rbln_config.latent_channels = model_config.latent_channels
 
-        rbln_kwargs["sample_size"] = sample_size
+        if rbln_config.vae_scale_factor is None:
+            if hasattr(model_config, "block_out_channels"):
+                rbln_config.vae_scale_factor = 2 ** (len(model_config.block_out_channels) - 1)
+            else:
+                # vae image processor default value 8 (int)
+                rbln_config.vae_scale_factor = 8
 
-        if hasattr(model_config, "block_out_channels"):
-            vae_scale_factor = 2 ** (len(model_config.block_out_channels) - 1)
-        else:
-            # vae image processor default value 8 (int)
-            vae_scale_factor = 8
-
-        dec_shape = (sample_size[0] // vae_scale_factor, sample_size[1] // vae_scale_factor)
-        enc_shape = (sample_size[0], sample_size[1])
-
-        if is_img2img or is_inpaint:
+        compile_cfgs = []
+        if rbln_config.uses_encoder:
             vae_enc_input_info = [
                 (
                     "x",
-                    [rbln_batch_size, model_config.in_channels, enc_shape[0], enc_shape[1]],
+                    [
+                        rbln_config.batch_size,
+                        rbln_config.in_channels,
+                        rbln_config.sample_size[0],
+                        rbln_config.sample_size[1],
+                    ],
                     "float32",
                 )
             ]
-            vae_dec_input_info = [
-                (
-                    "z",
-                    [rbln_batch_size, model_config.latent_channels, dec_shape[0], dec_shape[1]],
-                    "float32",
-                )
-            ]
+            compile_cfgs.append(RBLNCompileConfig(compiled_model_name="encoder", input_info=vae_enc_input_info))
 
-            enc_rbln_compile_config = RBLNCompileConfig(compiled_model_name="encoder", input_info=vae_enc_input_info)
-            dec_rbln_compile_config = RBLNCompileConfig(compiled_model_name="decoder", input_info=vae_dec_input_info)
-
-            compile_cfgs = [enc_rbln_compile_config, dec_rbln_compile_config]
-            rbln_config = RBLNModelConfig(
-                rbln_cls=cls.__name__,
-                compile_cfgs=compile_cfgs,
-                rbln_kwargs=rbln_kwargs,
+        vae_dec_input_info = [
+            (
+                "z",
+                [
+                    rbln_config.batch_size,
+                    rbln_config.latent_channels,
+                    rbln_config.latent_sample_size[0],
+                    rbln_config.latent_sample_size[1],
+                ],
+                "float32",
             )
-            return rbln_config
+        ]
+        compile_cfgs.append(RBLNCompileConfig(compiled_model_name="decoder", input_info=vae_dec_input_info))
 
-        vae_config = RBLNCompileConfig(
-            input_info=[
-                (
-                    "z",
-                    [rbln_batch_size, model_config.latent_channels, dec_shape[0], dec_shape[1]],
-                    "float32",
-                )
-            ]
-        )
-        rbln_config = RBLNModelConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[vae_config],
-            rbln_kwargs=rbln_kwargs,
-        )
+        rbln_config.set_compile_cfgs(compile_cfgs)
         return rbln_config
 
     @classmethod
@@ -202,20 +170,16 @@ class RBLNAutoencoderKL(RBLNModel):
         activate_profiler: Optional[bool] = None,
     ) -> List[rebel.Runtime]:
         if len(compiled_models) == 1:
-            if DEFAULT_COMPILED_MODEL_NAME not in rbln_device_map:
-                cls._raise_missing_compiled_file_error([DEFAULT_COMPILED_MODEL_NAME])
+            # decoder
+            expected_models = ["decoder"]
+        else:
+            # encoder, decoder
+            expected_models = ["encoder", "decoder"]
 
-            device_val = rbln_device_map[DEFAULT_COMPILED_MODEL_NAME]
-            return [
-                compiled_models[0].create_runtime(
-                    tensor_type="pt", device=device_val, activate_profiler=activate_profiler
-                )
-            ]
+        if any(model_name not in rbln_device_map for model_name in expected_models):
+            cls._raise_missing_compiled_file_error(expected_models)
 
-        if any(model_name not in rbln_device_map for model_name in ["encoder", "decoder"]):
-            cls._raise_missing_compiled_file_error(["encoder", "decoder"])
-
-        device_vals = [rbln_device_map["encoder"], rbln_device_map["decoder"]]
+        device_vals = [rbln_device_map[model_name] for model_name in expected_models]
         return [
             compiled_model.create_runtime(tensor_type="pt", device=device_val, activate_profiler=activate_profiler)
             for compiled_model, device_val in zip(compiled_models, device_vals)

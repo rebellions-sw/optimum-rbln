@@ -94,6 +94,7 @@ _import_structure = {
     ],
     "diffusers": [
         "RBLNAutoencoderKL",
+        "RBLNAutoencoderKLConfig",
         "RBLNControlNetModel",
         "RBLNDiffusionMixin",
         "RBLNKandinskyV22CombinedPipeline",
@@ -112,14 +113,18 @@ _import_structure = {
         "RBLNStableDiffusionControlNetImg2ImgPipeline",
         "RBLNStableDiffusionControlNetPipeline",
         "RBLNStableDiffusionImg2ImgPipeline",
+        "RBLNStableDiffusionImg2ImgPipelineConfig",
         "RBLNStableDiffusionInpaintPipeline",
+        "RBLNStableDiffusionInpaintPipelineConfig",
         "RBLNStableDiffusionPipeline",
+        "RBLNStableDiffusionPipelineConfig",
         "RBLNStableDiffusionXLControlNetImg2ImgPipeline",
         "RBLNStableDiffusionXLControlNetPipeline",
         "RBLNStableDiffusionXLImg2ImgPipeline",
         "RBLNStableDiffusionXLInpaintPipeline",
         "RBLNStableDiffusionXLPipeline",
         "RBLNUNet2DConditionModel",
+        "RBLNUNet2DConditionModelConfig",
         "RBLNVQModel",
     ],
 }
@@ -131,6 +136,7 @@ if TYPE_CHECKING:
     )
     from .diffusers import (
         RBLNAutoencoderKL,
+        RBLNAutoencoderKLConfig,
         RBLNControlNetModel,
         RBLNDiffusionMixin,
         RBLNKandinskyV22CombinedPipeline,
@@ -149,14 +155,18 @@ if TYPE_CHECKING:
         RBLNStableDiffusionControlNetImg2ImgPipeline,
         RBLNStableDiffusionControlNetPipeline,
         RBLNStableDiffusionImg2ImgPipeline,
+        RBLNStableDiffusionImg2ImgPipelineConfig,
         RBLNStableDiffusionInpaintPipeline,
+        RBLNStableDiffusionInpaintPipelineConfig,
         RBLNStableDiffusionPipeline,
+        RBLNStableDiffusionPipelineConfig,
         RBLNStableDiffusionXLControlNetImg2ImgPipeline,
         RBLNStableDiffusionXLControlNetPipeline,
         RBLNStableDiffusionXLImg2ImgPipeline,
         RBLNStableDiffusionXLInpaintPipeline,
         RBLNStableDiffusionXLPipeline,
         RBLNUNet2DConditionModel,
+        RBLNUNet2DConditionModelConfig,
         RBLNVQModel,
     )
     from .modeling import (

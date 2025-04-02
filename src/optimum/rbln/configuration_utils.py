@@ -199,6 +199,32 @@ class RBLNModelConfig:
     ]
     submodules: List[str] = []
 
+    def init_submodule_config(
+        self,
+        submodule_config_cls: Type["RBLNModelConfig"],
+        submodule_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None,
+        **kwargs,
+    ):
+        """
+        Initialize a submodule config from a dict or a RBLNModelConfig.
+
+        kwargs is specified from the predecessor config.
+        """
+        if submodule_config is None:
+            submodule_config = {}
+
+        if isinstance(submodule_config, dict):
+            from_predecessor = self._runtime_options.copy()
+            from_predecessor.update(kwargs)
+            init_kwargs = from_predecessor
+            init_kwargs.update(submodule_config)
+            submodule_config = submodule_config_cls(**init_kwargs)
+
+        if not isinstance(submodule_config, submodule_config_cls):
+            raise TypeError(f"Invalid submodule config type: {type(submodule_config)}")
+
+        return submodule_config
+
     def __setattr__(self, key, value):
         if key != "_attributes_map" and key not in self.non_save_attributes:
             self._attributes_map[key] = value
@@ -263,8 +289,18 @@ class RBLNModelConfig:
             raise ValueError(f"Unexpected arguments: {kwargs.keys()}")
 
     @property
-    def rbln_model_cls_name(self):
+    def rbln_model_cls_name(self) -> str:
         return self.cls_name[:-6]
+
+    @property
+    def rbln_model_cls(self) -> Type:
+        rbln_model_cls = getattr(importlib.import_module("optimum.rbln"), self.rbln_model_cls_name, None)
+        if rbln_model_cls is None:
+            raise ValueError(
+                f"RBLN model class {self.rbln_model_cls_name} not found. This is an internal error. "
+                "Please report it to the developers."
+            )
+        return rbln_model_cls
 
     def _prepare_for_serialization(self):
         """
