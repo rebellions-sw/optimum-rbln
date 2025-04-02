@@ -176,7 +176,9 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
                 "Adjust the batch size during compilation or modify the 'guidance scale' to match the compiled batch size.\n\n"
                 "For details, see: https://docs.rbln.ai/software/optimum/model_api.html#stable-diffusion"
             )
-        sample = super().forward(hidden_states, encoder_hidden_states, timestep)
+        sample = super().forward(hidden_states, 
+                                 encoder_hidden_states, 
+                                 timestep.contiguous())
 
         if not return_dict:
             return (sample,)
