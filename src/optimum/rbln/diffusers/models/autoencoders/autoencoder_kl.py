@@ -62,13 +62,13 @@ class RBLNAutoencoderKL(RBLNModel):
         compiled_models = {}
         for i, model_name in enumerate(expected_models):
             if model_name == "encoder":
-                model = _VAEEncoder(model)
+                wrapped_model = _VAEEncoder(model)
             else:
-                model = _VAEDecoder(model)
+                wrapped_model = _VAEDecoder(model)
 
-            model.eval()
+            wrapped_model.eval()
 
-            compiled_models[model_name] = cls.compile(model, rbln_compile_config=rbln_config.compile_cfgs[i])
+            compiled_models[model_name] = cls.compile(wrapped_model, rbln_compile_config=rbln_config.compile_cfgs[i])
 
         return compiled_models
 

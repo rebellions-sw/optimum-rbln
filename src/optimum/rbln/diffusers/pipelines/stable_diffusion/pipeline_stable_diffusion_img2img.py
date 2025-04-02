@@ -14,9 +14,11 @@
 
 from diffusers import StableDiffusionImg2ImgPipeline
 
+from ...configurations import RBLNStableDiffusionImg2ImgPipelineConfig
 from ...modeling_diffusers import RBLNDiffusionMixin
 
 
 class RBLNStableDiffusionImg2ImgPipeline(RBLNDiffusionMixin, StableDiffusionImg2ImgPipeline):
     original_class = StableDiffusionImg2ImgPipeline
+    _rbln_config_class = RBLNStableDiffusionImg2ImgPipelineConfig
     _submodules = ["text_encoder", "unet", "vae"]

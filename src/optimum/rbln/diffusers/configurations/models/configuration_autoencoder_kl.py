@@ -1,6 +1,6 @@
 from typing import Optional, Tuple
 
-from ...configuration_utils import RBLNModelConfig
+from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNAutoencoderKLConfig(RBLNModelConfig):

@@ -33,34 +33,7 @@ if TYPE_CHECKING:
 
 
 class RBLNDiffusionMixinConfig(RBLNModelConfig):
-    submodules = ["text_encoder", "unet", "vae"]
-
-    def __init__(
-        self,
-        batch_size: Optional[int] = None,
-        text_encoder: Optional[RBLNModelConfig] = None,
-        unet: Optional[RBLNModelConfig] = None,
-        vae: Optional[RBLNModelConfig] = None,
-        guidance_scale: Optional[float] = None,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.batch_size = batch_size or 1
-        if not isinstance(self.batch_size, int) or self.batch_size < 0:
-            raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
-
-        from ..transformers import RBLNCLIPTextModelConfig
-        from .configurations import RBLNAutoencoderKLConfig, RBLNUNet2DConditionModelConfig
-
-        self.text_encoder = self.init_submodule_config(RBLNCLIPTextModelConfig, text_encoder, batch_size=batch_size)
-        self.unet = self.init_submodule_config(RBLNUNet2DConditionModelConfig, unet, batch_size=batch_size)
-        self.vae = self.init_submodule_config(RBLNAutoencoderKLConfig, vae, batch_size=batch_size)
-
-        if guidance_scale is not None:
-            logger.warning("Specifying `guidance_scale` is deprecated. It will be removed in a future version.")
-            do_classifier_free_guidance = guidance_scale > 1.0
-            if do_classifier_free_guidance:
-                self.unet.batch_size = self.batch_size * 2
+    pass
 
 
 class RBLNDiffusionMixin:
@@ -191,21 +164,11 @@ class RBLNDiffusionMixin:
         else:
             # raise error if any of submodules are torch module.
             model_index_config = cls.load_config(pretrained_model_name_or_path=model_id)
-            rbln_config = cls._flatten_rbln_config(rbln_config)
             for submodule_name in cls._submodules:
                 if isinstance(kwargs.get(submodule_name), torch.nn.Module):
                     raise AssertionError(
                         f"{submodule_name} is not compiled torch module. If you want to compile, set `export=True`."
                     )
-
-                submodule_config = rbln_config.get(submodule_name, {})
-
-                for key, value in rbln_config.items():
-                    if key in RUNTIME_KEYWORDS and key not in submodule_config:
-                        submodule_config[key] = value
-
-                if not any(kwd in submodule_config for kwd in RUNTIME_KEYWORDS):
-                    continue
 
                 module_name, class_name = model_index_config[submodule_name]
                 if module_name != "optimum.rbln":
@@ -215,8 +178,8 @@ class RBLNDiffusionMixin:
                         "Expected 'optimum.rbln'. Please check the model_index.json configuration."
                     )
 
-                submodule_cls: RBLNModel = getattr(importlib.import_module("optimum.rbln"), class_name)
-
+                submodule_cls: Type[RBLNModel] = getattr(importlib.import_module("optimum.rbln"), class_name)
+                submodule_config = getattr(rbln_config, submodule_name)
                 submodule = submodule_cls.from_pretrained(
                     model_id, export=False, subfolder=submodule_name, rbln_config=submodule_config
                 )
