@@ -18,7 +18,7 @@ import torch
 from transformers import AutoModelForMaskedLM, PretrainedConfig, Wav2Vec2ForCTC
 from transformers.modeling_outputs import CausalLMOutput
 
-from ....configuration_utils import RBLNCompileConfig, RBLNConfig
+from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 
@@ -60,7 +60,7 @@ class RBLNWav2Vec2ForCTC(RBLNModel):
     auto_model_class = AutoModelForMaskedLM
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
         return _Wav2Vec2(model).eval()
 
     @classmethod
@@ -69,7 +69,7 @@ class RBLNWav2Vec2ForCTC(RBLNModel):
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model_config: "PretrainedConfig",
         rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
+    ) -> RBLNModelConfig:
         rbln_max_seq_len = rbln_kwargs.get("max_seq_len", None)
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
 
@@ -97,7 +97,7 @@ class RBLNWav2Vec2ForCTC(RBLNModel):
 
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
 
-        rbln_config = RBLNConfig(
+        rbln_config = RBLNModelConfig(
             rbln_cls=cls.__name__,
             compile_cfgs=[rbln_compile_config],
             rbln_kwargs=rbln_kwargs,

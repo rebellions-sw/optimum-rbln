@@ -19,7 +19,7 @@ import torch
 from diffusers import ControlNetModel
 from transformers import PretrainedConfig
 
-from ...configuration_utils import RBLNCompileConfig, RBLNConfig
+from ...configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ...modeling import RBLNModel
 from ...utils.logging import get_logger
 from ..modeling_diffusers import RBLNDiffusionMixin
@@ -106,7 +106,7 @@ class RBLNControlNetModel(RBLNModel):
         )
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
         use_encoder_hidden_states = False
         for down_block in model.down_blocks:
             if use_encoder_hidden_states := getattr(down_block, "has_cross_attention", False):
@@ -155,7 +155,7 @@ class RBLNControlNetModel(RBLNModel):
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model_config: "PretrainedConfig",
         rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
+    ) -> RBLNModelConfig:
         batch_size = rbln_kwargs.get("batch_size")
         max_seq_len = rbln_kwargs.get("max_seq_len")
         unet_sample_size = rbln_kwargs.get("unet_sample_size")
@@ -217,7 +217,7 @@ class RBLNControlNetModel(RBLNModel):
 
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
 
-        rbln_config = RBLNConfig(
+        rbln_config = RBLNModelConfig(
             rbln_cls=cls.__name__,
             compile_cfgs=[rbln_compile_config],
             rbln_kwargs=rbln_kwargs,

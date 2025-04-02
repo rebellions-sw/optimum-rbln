@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, Optional, Union
 from transformers import AutoModelForDepthEstimation
 from transformers.modeling_outputs import DepthEstimatorOutput
 
-from ....configuration_utils import RBLNCompileConfig, RBLNConfig
+from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 
@@ -38,7 +38,7 @@ class RBLNDPTForDepthEstimation(RBLNModel):
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
         model_config: Optional["PretrainedConfig"] = None,
         rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
+    ) -> RBLNModelConfig:
         rbln_image_size = rbln_kwargs.get("image_size", None)
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
 
@@ -73,7 +73,7 @@ class RBLNDPTForDepthEstimation(RBLNModel):
 
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
 
-        rbln_config = RBLNConfig(
+        rbln_config = RBLNModelConfig(
             rbln_cls=cls.__name__,
             compile_cfgs=[rbln_compile_config],
             rbln_kwargs=rbln_kwargs,

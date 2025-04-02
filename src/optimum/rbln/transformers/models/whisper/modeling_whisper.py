@@ -27,7 +27,7 @@ from transformers import (
 )
 from transformers.modeling_outputs import BaseModelOutput, Seq2SeqLMOutput
 
-from ....configuration_utils import RBLNCompileConfig, RBLNConfig
+from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
@@ -161,13 +161,13 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
         raise NotImplementedError
 
     @classmethod
-    def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: "RBLNConfig"):
+    def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: "RBLNModelConfig"):
         rbln_token_timestamps = rbln_config.model_cfg["token_timestamps"]
         return WhisperWrapper(model, rbln_token_timestamps)
 
     @classmethod
     @torch.inference_mode()
-    def get_compiled_model(cls, model, rbln_config: RBLNConfig):
+    def get_compiled_model(cls, model, rbln_config: RBLNModelConfig):
         wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
 
         enc_compile_config = rbln_config.compile_cfgs[0]
@@ -212,7 +212,7 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor"],
         model_config: "PretrainedConfig",
         rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
+    ) -> RBLNModelConfig:
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
         rbln_token_timestamps = rbln_kwargs.get("token_timestamps", False)
         rbln_batch_size = 1 if rbln_batch_size is None else rbln_batch_size
@@ -284,7 +284,7 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
         enc_compile_config = RBLNCompileConfig(compiled_model_name="encoder", input_info=enc_input_info)
         dec_compile_config = RBLNCompileConfig(compiled_model_name="decoder", input_info=dec_input_info)
 
-        rbln_config = RBLNConfig(
+        rbln_config = RBLNModelConfig(
             rbln_cls=cls.__name__,
             compile_cfgs=[enc_compile_config, dec_compile_config],
             rbln_kwargs=rbln_kwargs,

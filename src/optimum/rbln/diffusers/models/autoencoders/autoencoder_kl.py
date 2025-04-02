@@ -20,7 +20,7 @@ from diffusers import AutoencoderKL
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
 from transformers import PretrainedConfig
 
-from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNConfig
+from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
@@ -51,7 +51,7 @@ class RBLNAutoencoderKL(RBLNModel):
         self.image_size = self.rbln_config.model_cfg["sample_size"]
 
     @classmethod
-    def get_compiled_model(cls, model, rbln_config: RBLNConfig):
+    def get_compiled_model(cls, model, rbln_config: RBLNModelConfig):
         def compile_img2img():
             encoder_model = _VAEEncoder(model)
             decoder_model = _VAEDecoder(model)
@@ -125,7 +125,7 @@ class RBLNAutoencoderKL(RBLNModel):
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model_config: "PretrainedConfig",
         rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
+    ) -> RBLNModelConfig:
         rbln_batch_size = rbln_kwargs.get("batch_size")
         sample_size = rbln_kwargs.get("sample_size")
         is_img2img = rbln_kwargs.get("img2img_pipeline")
@@ -171,7 +171,7 @@ class RBLNAutoencoderKL(RBLNModel):
             dec_rbln_compile_config = RBLNCompileConfig(compiled_model_name="decoder", input_info=vae_dec_input_info)
 
             compile_cfgs = [enc_rbln_compile_config, dec_rbln_compile_config]
-            rbln_config = RBLNConfig(
+            rbln_config = RBLNModelConfig(
                 rbln_cls=cls.__name__,
                 compile_cfgs=compile_cfgs,
                 rbln_kwargs=rbln_kwargs,
@@ -187,7 +187,7 @@ class RBLNAutoencoderKL(RBLNModel):
                 )
             ]
         )
-        rbln_config = RBLNConfig(
+        rbln_config = RBLNModelConfig(
             rbln_cls=cls.__name__,
             compile_cfgs=[vae_config],
             rbln_kwargs=rbln_kwargs,

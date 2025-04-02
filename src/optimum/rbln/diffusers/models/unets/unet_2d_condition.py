@@ -19,7 +19,7 @@ import torch
 from diffusers.models.unets.unet_2d_condition import UNet2DConditionModel
 from transformers import PretrainedConfig
 
-from ....configuration_utils import RBLNCompileConfig, RBLNConfig
+from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
@@ -158,7 +158,7 @@ class RBLNUNet2DConditionModel(RBLNModel):
             self.add_embedding = ADDEMBEDDING(LINEAR1(self.in_features))
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
         if model.config.addition_embed_type == "text_time":
             return _UNet_SDXL(model).eval()
         elif model.config.addition_embed_type == "image":
@@ -238,7 +238,7 @@ class RBLNUNet2DConditionModel(RBLNModel):
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model_config: "PretrainedConfig",
         rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
+    ) -> RBLNModelConfig:
         batch_size = rbln_kwargs.get("batch_size")
         max_seq_len = rbln_kwargs.get("max_seq_len")
         sample_size = rbln_kwargs.get("sample_size")
@@ -305,7 +305,7 @@ class RBLNUNet2DConditionModel(RBLNModel):
 
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
 
-        rbln_config = RBLNConfig(
+        rbln_config = RBLNModelConfig(
             rbln_cls=cls.__name__,
             compile_cfgs=[rbln_compile_config],
             rbln_kwargs=rbln_kwargs,
