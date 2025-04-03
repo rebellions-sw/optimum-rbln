@@ -19,8 +19,8 @@ from diffusers.models.modeling_outputs import Transformer2DModelOutput
 from diffusers.models.transformers.transformer_sd3 import SD3Transformer2DModel
 from transformers import PretrainedConfig
 
+from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
 
@@ -63,7 +63,7 @@ class RBLNSD3Transformer2DModel(RBLNModel):
         super().__post_init__(**kwargs)
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
         return SD3Transformer2DModelWrapper(model).eval()
 
     @classmethod
@@ -104,12 +104,12 @@ class RBLNSD3Transformer2DModel(RBLNModel):
         return rbln_config
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model_config: "PretrainedConfig",
         rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
+    ) -> RBLNModelConfig:
         rbln_batch_size = rbln_kwargs.get("batch_size", None)
 
         sample_size = rbln_kwargs.get("sample_size", model_config.sample_size)
@@ -153,7 +153,7 @@ class RBLNSD3Transformer2DModel(RBLNModel):
 
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
 
-        rbln_config = RBLNConfig(
+        rbln_config = RBLNModelConfig(
             rbln_cls=cls.__name__,
             compile_cfgs=[rbln_compile_config],
             rbln_kwargs=rbln_kwargs,

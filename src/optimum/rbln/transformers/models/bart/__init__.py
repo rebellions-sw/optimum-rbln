@@ -12,4 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .configuration_bart import RBLNBartForConditionalGenerationConfig, RBLNBartModelConfig
 from .modeling_bart import RBLNBartForConditionalGeneration, RBLNBartModel

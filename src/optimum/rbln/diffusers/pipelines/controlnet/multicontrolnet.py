@@ -81,7 +81,7 @@ class RBLNMultiControlNetModel(RBLNModel):
             model.save_pretrained(real_save_path)
 
     @classmethod
-    def _get_rbln_config(cls, **rbln_config_kwargs):
+    def _update_rbln_config(cls, **rbln_config_kwargs):
         pass
 
     def forward(
