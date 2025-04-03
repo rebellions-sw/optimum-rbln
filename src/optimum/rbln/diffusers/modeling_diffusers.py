@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
 
 import torch
 
-from ..configuration_utils import RUNTIME_KEYWORDS, ContextRblnConfig, RBLNModelConfig
+from ..configuration_utils import ContextRblnConfig, RBLNModelConfig
 from ..modeling import RBLNModel
 
 # from ..transformers import RBLNCLIPTextModelConfig

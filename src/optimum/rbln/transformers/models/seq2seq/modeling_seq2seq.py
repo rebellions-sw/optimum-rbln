@@ -26,7 +26,7 @@ from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
-from .configuration_seq2seq2 import RBLNSeq2SeqModelConfig
+from .configuration_seq2seq2 import RBLNModelForSeq2SeqLMConfig
 
 
 logger = get_logger(__name__)
@@ -137,7 +137,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
 
     @classmethod
     @torch.inference_mode()
-    def get_compiled_model(cls, model: PreTrainedModel, rbln_config: RBLNSeq2SeqModelConfig):
+    def get_compiled_model(cls, model: PreTrainedModel, rbln_config: RBLNModelForSeq2SeqLMConfig):
         wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
 
         enc_compile_config = rbln_config.compile_cfgs[0]
@@ -183,8 +183,8 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model: Optional["PreTrainedModel"] = None,
         model_config: Optional["PretrainedConfig"] = None,
-        rbln_config: Optional[RBLNSeq2SeqModelConfig] = None,
-    ) -> RBLNSeq2SeqModelConfig:
+        rbln_config: Optional[RBLNModelForSeq2SeqLMConfig] = None,
+    ) -> RBLNModelForSeq2SeqLMConfig:
         if not cls.support_causal_attn:
             rbln_config.use_attention_mask = True
 

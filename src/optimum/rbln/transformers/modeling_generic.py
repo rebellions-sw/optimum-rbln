@@ -21,7 +21,7 @@ different model architectures.
 """
 
 import inspect
-from typing import TYPE_CHECKING, List, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 from transformers import (
     AutoModel,
@@ -34,7 +34,7 @@ from transformers import (
     AutoModelForTextEncoding,
     PretrainedConfig,
 )
-from transformers.modeling_outputs import DepthEstimatorOutput
+from transformers.modeling_outputs import BaseModelOutput, DepthEstimatorOutput
 
 from ..configuration_utils import RBLNCompileConfig
 from ..modeling import RBLNModel
@@ -216,6 +216,15 @@ class RBLNTransformerEncoderForFeatureExtraction(_RBLNTransformerEncoder):
     # TODO: RBLNModel is also for feature extraction.
     auto_model_class = AutoModel
     rbln_model_input_names = ["input_ids", "attention_mask"]
+
+    def forward(self, *args, return_dict: Optional[bool] = None, **kwargs):
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
+        encoder_outputs = self.model[0](*args, **kwargs)
+        if not return_dict:
+            return (encoder_outputs,)
+        else:
+            return BaseModelOutput(last_hidden_state=encoder_outputs)
 
 
 class RBLNModelForImageClassification(_RBLNImageModel):

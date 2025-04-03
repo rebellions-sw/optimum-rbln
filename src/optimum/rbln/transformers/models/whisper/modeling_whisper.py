@@ -18,16 +18,10 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
 import rebel
 import torch
 from rebel.compile_context import CompileContext
-from transformers import (
-    AutoModelForSpeechSeq2Seq,
-    AutoProcessor,
-    PretrainedConfig,
-    WhisperForConditionalGeneration,
-    WhisperModel,
-)
+from transformers import AutoModelForSpeechSeq2Seq, WhisperForConditionalGeneration, WhisperModel
 from transformers.modeling_outputs import BaseModelOutput, Seq2SeqLMOutput
 
-from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
+from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
@@ -39,7 +33,7 @@ from .whisper_architecture import WhisperWrapper
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import AutoFeatureExtractor, AutoProcessor, PretrainedConfig, PreTrainedModel
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig, PreTrainedModel
 
 
 class RBLNRuntimeEncoder(RBLNPytorchRuntime):

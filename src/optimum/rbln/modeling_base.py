@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 
 import rebel
 import torch
-from transformers import AutoConfig, AutoModel, GenerationConfig, LlavaNextConfig, PretrainedConfig
+from transformers import AutoConfig, AutoModel, GenerationConfig, PretrainedConfig
 
 from .configuration_utils import RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig
 from .utils.hub import PushToHubMixin, pull_compiled_model_from_hub, validate_files

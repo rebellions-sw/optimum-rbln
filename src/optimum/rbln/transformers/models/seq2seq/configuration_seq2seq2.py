@@ -9,7 +9,7 @@ from ....utils.logging import get_logger
 logger = get_logger()
 
 
-class RBLNSeq2SeqModelConfig(RBLNModelConfig):
+class RBLNModelForSeq2SeqLMConfig(RBLNModelConfig):
     def __init__(
         self,
         batch_size: Optional[int] = None,
