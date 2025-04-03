@@ -53,6 +53,8 @@ tests = [
     "sacremoses>=0.1.1",
     "safetensors>=0.4.2",
     "protobuf>=5.27.2",
+    "soundfile>=0.13.1",
+    "librosa>=0.11.0",
 ]
 quality = [
     "ruff>=0.3.3",
