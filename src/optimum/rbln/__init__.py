@@ -75,7 +75,6 @@ _import_structure = {
         "RBLNViTForImageClassification",
         "RBLNBertForMaskedLM",
         "RBLNDetrForObjectDetection",
-        "RBLNDeformableDetrForObjectDetection",
     ],
     "diffusers": [
         "RBLNAutoencoderKL",
@@ -193,7 +192,6 @@ if TYPE_CHECKING:
         RBLNWhisperForConditionalGeneration,
         RBLNXLMRobertaForSequenceClassification,
         RBLNXLMRobertaModel,
-        RBLNDeformableDetrForObjectDetection,
         RBLNDetrForObjectDetection,
     )
 

@@ -56,7 +56,6 @@ _import_structure = {
     "whisper": ["RBLNWhisperForConditionalGeneration"],
     "xlm_roberta": ["RBLNXLMRobertaModel"],
     "detr": ["RBLNDetrForObjectDetection"],
-    "deformable_detr": ["RBLNDeformableDetrForObjectDetection"],
 }
 
 if TYPE_CHECKING:
@@ -98,7 +97,6 @@ if TYPE_CHECKING:
     from .whisper import RBLNWhisperForConditionalGeneration
     from .xlm_roberta import RBLNXLMRobertaModel
     from .detr import RBLNDetrForObjectDetection
-    from .deformable_detr import RBLNDeformableDetrForObjectDetection
 
 else:
     import sys

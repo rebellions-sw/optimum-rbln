@@ -58,7 +58,6 @@ _import_structure = {
         "RBLNXLMRobertaModel",
         "RBLNMistralForCausalLM",
         "RBLNDetrForObjectDetection",
-        "RBLNDeformerDetrForObjectDetection",
     ],
     "modeling_alias": [
         "RBLNASTForAudioClassification",
@@ -121,7 +120,6 @@ if TYPE_CHECKING:
         RBLNWhisperForConditionalGeneration,
         RBLNXLMRobertaModel,
         RBLNDetrForObjectDetection,
-        RBLNDeformableDetrForObjectDetection,
     )
 else:
     import sys
