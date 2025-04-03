@@ -40,7 +40,9 @@ def main(
         model = RBLNDetrForObjectDetection.from_pretrained(model_id=os.path.basename(model_id), export=False)
 
     image_processor = DetrImageProcessor.from_pretrained(model_id)
-    inputs = image_processor([image] * batch_size, size={"width": width_size, "height": height_size},  return_tensors="pt")
+    inputs = image_processor(
+        [image] * batch_size, size={"width": width_size, "height": height_size}, return_tensors="pt"
+    )
 
     outputs = model(**inputs)
 
@@ -51,8 +53,8 @@ def main(
         for score, label, box in zip(results[i]["scores"], results[i]["labels"], results[i]["boxes"]):
             box = [round(i, 2) for i in box.tolist()]
             print(
-                    f"Detected {model.config.id2label[label.item()]} with confidence "
-                    f"{round(score.item(), 3)} at location {box}"
+                f"Detected {model.config.id2label[label.item()]} with confidence "
+                f"{round(score.item(), 3)} at location {box}"
             )
 
 

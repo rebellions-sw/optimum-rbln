@@ -26,8 +26,8 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-class RBLNDetrForObjectDetection(RBLNModel):
 
+class RBLNDetrForObjectDetection(RBLNModel):
     auto_model_class = AutoModelForObjectDetection
 
     @classmethod

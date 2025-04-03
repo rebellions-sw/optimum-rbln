@@ -110,7 +110,8 @@ class RBLNAutoModelForImageClassification(_BaseAutoModelClass):
 class RBLNAutoModelForQuestionAnswering(_BaseAutoModelClass):
     _model_mapping = MODEL_FOR_QUESTION_ANSWERING_MAPPING
     _model_mapping_names = MODEL_FOR_QUESTION_ANSWERING_MAPPING_NAMES
-    
+
+
 class RBLNAutoModelForObjectDetection(_BaseAutoModelClass):
     _model_mapping = MODEL_FOR_OBJECT_DETECTION_MAPPING
     _model_mapping_names = MODEL_FOR_OBJECT_DETECTION_MAPPING_NAMES
