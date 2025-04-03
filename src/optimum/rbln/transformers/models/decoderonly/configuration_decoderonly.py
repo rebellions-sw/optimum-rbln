@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import rebel
 
 from ....configuration_utils import RBLNModelConfig
 from ....utils.logging import get_logger
+from ...utils.rbln_quantization import QuantizationManager
 
 
 logger = get_logger()
@@ -33,7 +34,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         attn_impl: Optional[str] = None,
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
-        quantization: Optional[str] = None,
+        quantization: Optional[Dict[str, Any]] = None,
         prefill_chunk_size: Optional[int] = None,
         kvcache_num_blocks: Optional[int] = None,
         **kwargs,
@@ -58,7 +59,9 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         self.attn_impl = attn_impl
         self.kvcache_partition_len = kvcache_partition_len
         self.kvcache_block_size = kvcache_block_size
-        self.quantization = quantization
+        self.quantization = quantization or {}
+        if self.quantization:
+            QuantizationManager.validate_quantization_config(self.quantization)
 
         self.prefill_chunk_size = prefill_chunk_size or 128
         if self.prefill_chunk_size % 64 != 0 or self.prefill_chunk_size <= 0:
