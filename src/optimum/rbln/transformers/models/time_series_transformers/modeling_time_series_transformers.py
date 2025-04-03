@@ -38,9 +38,10 @@ from transformers import (
 from transformers.modeling_outputs import ModelOutput, SampleTSPredictionOutput, Seq2SeqTSModelOutput
 from transformers.modeling_utils import no_init_weights
 
+from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.runtime_utils import RBLNPytorchRuntime
+from .configuration_time_series_transformer import RBLNTimeSeriesTransformerForPredictionConfig
 from .time_series_transformers_architecture import TimeSeriesTransformersWrapper
 
 
@@ -124,9 +125,9 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
-        self.batch_size = self.rbln_config.model_cfg["batch_size"]
-        self.dec_max_seq_len = self.rbln_config.model_cfg["dec_max_seq_len"]
-        self.num_parallel_samples = self.rbln_config.model_cfg["num_parallel_samples"]
+        self.batch_size = self.rbln_config.batch_size
+        self.dec_max_seq_len = self.rbln_config.dec_max_seq_len
+        self.num_parallel_samples = self.rbln_config.num_parallel_samples
 
         with no_init_weights():
             self._origin_model = TimeSeriesTransformerForPrediction._from_config(self.config)
@@ -156,12 +157,14 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
             return redirect(val)
 
     @classmethod
-    def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: "RBLNConfig"):
-        return TimeSeriesTransformersWrapper(model, rbln_config.model_cfg["num_parallel_samples"])
+    def wrap_model_if_needed(
+        self, model: "PreTrainedModel", rbln_config: RBLNTimeSeriesTransformerForPredictionConfig
+    ):
+        return TimeSeriesTransformersWrapper(model, rbln_config.num_parallel_samples)
 
     @classmethod
     @torch.inference_mode()
-    def get_compiled_model(cls, model, rbln_config: RBLNConfig):
+    def get_compiled_model(cls, model, rbln_config: RBLNTimeSeriesTransformerForPredictionConfig):
         wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
 
         enc_compile_config = rbln_config.compile_cfgs[0]
@@ -206,7 +209,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         model: "PreTrainedModel",
         save_dir_path: Path,
         subfolder: str,
-        rbln_config: RBLNConfig,
+        rbln_config: RBLNTimeSeriesTransformerForPredictionConfig,
     ):
         """
         If you are unavoidably running on a CPU rather than an RBLN device,
@@ -217,31 +220,28 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
-        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
-        model_config: "PretrainedConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
-        rbln_batch_size = rbln_kwargs.get("batch_size", 1)
-        rbln_dec_max_seq_len = rbln_kwargs.get("dec_max_seq_len", None)
-        rbln_num_parallel_samples = rbln_kwargs.get("num_parallel_samples", None)
-
-        if not isinstance(rbln_batch_size, int):
-            raise TypeError(f"Expected rbln_batch_size to be an int, but got {type(rbln_batch_size)}")
-
-        rbln_num_parallel_samples = (
-            model_config.num_parallel_samples if rbln_num_parallel_samples is None else rbln_num_parallel_samples
-        )
-        if rbln_dec_max_seq_len is None:
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
+        model: Optional["PreTrainedModel"] = None,
+        model_config: Optional["PretrainedConfig"] = None,
+        rbln_config: Optional[RBLNTimeSeriesTransformerForPredictionConfig] = None,
+    ) -> RBLNTimeSeriesTransformerForPredictionConfig:
+        rbln_config.num_parallel_samples = rbln_config.num_parallel_samples or model_config.num_parallel_samples
+        rbln_config.dec_max_seq_len = rbln_config.dec_max_seq_len or model_config.prediction_length
+        if rbln_config.dec_max_seq_len is None:
             predict_length = model_config.prediction_length
-            rbln_dec_max_seq_len = (
+            rbln_config.dec_max_seq_len = (
                 predict_length if predict_length % 64 == 0 else predict_length + (64 - predict_length % 64)
             )
 
         # model input info
         enc_input_info = [
-            ("inputs_embeds", [rbln_batch_size, model_config.context_length, model_config.feature_size], "float32"),
+            (
+                "inputs_embeds",
+                [rbln_config.batch_size, model_config.context_length, model_config.feature_size],
+                "float32",
+            ),
         ]
         enc_input_info.extend(
             [
@@ -249,7 +249,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
                     "cross_key_value_states",
                     [
                         model_config.decoder_layers * 2,
-                        rbln_batch_size,
+                        rbln_config.batch_size,
                         model_config.decoder_attention_heads,
                         model_config.context_length,
                         model_config.d_model // model_config.decoder_attention_heads,
@@ -260,8 +260,12 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         )
 
         dec_input_info = [
-            ("inputs_embeds", [rbln_batch_size * rbln_num_parallel_samples, 1, model_config.feature_size], "float32"),
-            ("attention_mask", [1, rbln_dec_max_seq_len], "float32"),
+            (
+                "inputs_embeds",
+                [rbln_config.batch_size * rbln_config.num_parallel_samples, 1, model_config.feature_size],
+                "float32",
+            ),
+            ("attention_mask", [1, rbln_config.dec_max_seq_len], "float32"),
             ("cache_position", [], "int32"),
             ("block_tables", [1, 1], "int16"),
         ]
@@ -271,7 +275,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
                     "cross_key_value_states",
                     [
                         model_config.decoder_layers * 2,  # 4
-                        rbln_batch_size,  # 64
+                        rbln_config.batch_size,  # 64
                         model_config.decoder_attention_heads,  # 2
                         model_config.context_length,  # 24
                         model_config.d_model // model_config.decoder_attention_heads,  # 13
@@ -286,8 +290,10 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
                     f"self_key_value_states_{i}",
                     [
                         1,
-                        model_config.decoder_attention_heads * rbln_num_parallel_samples * rbln_batch_size,
-                        rbln_dec_max_seq_len,
+                        model_config.decoder_attention_heads
+                        * rbln_config.num_parallel_samples
+                        * rbln_config.batch_size,
+                        rbln_config.dec_max_seq_len,
                         model_config.d_model // model_config.encoder_attention_heads,
                     ],
                     "float32",
@@ -298,20 +304,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         enc_compile_config = RBLNCompileConfig(compiled_model_name="encoder", input_info=enc_input_info)
         dec_compile_config = RBLNCompileConfig(compiled_model_name="decoder", input_info=dec_input_info)
 
-        rbln_config = RBLNConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[enc_compile_config, dec_compile_config],
-            rbln_kwargs=rbln_kwargs,
-        )
-
-        rbln_config.model_cfg.update(
-            {
-                "batch_size": rbln_batch_size,
-                "num_parallel_samples": rbln_num_parallel_samples,
-                "dec_max_seq_len": rbln_dec_max_seq_len,
-            }
-        )
-
+        rbln_config.set_compile_cfgs([enc_compile_config, dec_compile_config])
         return rbln_config
 
     @classmethod
