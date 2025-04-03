@@ -148,16 +148,17 @@ class TestWhisperModel(BaseTest.TestModel):
     RBLN_AUTO_CLASS = RBLNAutoModelForSpeechSeq2Seq
     RBLN_CLASS = RBLNWhisperForConditionalGeneration
     HF_MODEL_ID = "openai/whisper-tiny"
+    DEVICE = 0
 
     GENERATION_KWARGS = {
         "input_features": torch.randint(
-            low=0, high=50, size=(2, 80, 3000), generator=torch.manual_seed(42), dtype=torch.float32
+            low=-1, high=1, size=(2, 80, 3000), generator=torch.manual_seed(42), dtype=torch.float32
         ),
         "max_new_tokens": 10,
     }
     HF_CONFIG_KWARGS = {
-        "num_hidden_layers": 1,
-        "encoder_layers": 1,
+        "num_hidden_layers": 4,
+        "encoder_layers": 4,
         "decoder_layers": 4,
     }
     RBLN_CLASS_KWARGS = {
@@ -166,28 +167,50 @@ class TestWhisperModel(BaseTest.TestModel):
     }
 
     def test_generate(self):
+        from datasets import load_dataset
+        from transformers import AutoProcessor
+
+        processor = AutoProcessor.from_pretrained(self.HF_MODEL_ID)
+        ds = load_dataset(
+            "hf-internal-testing/librispeech_asr_dummy", "clean", split="validation", trust_remote_code=True
+        )
+        input_features_list = []
+
+        for i in range(2):
+            input_features = processor(
+                ds[i]["audio"]["array"],
+                sampling_rate=ds[i]["audio"]["sampling_rate"],
+                truncation=False,
+                return_tensors="pt",
+            ).input_features
+            input_features_list.append(input_features)
+        input_features = torch.cat(input_features_list, dim=0)
+        output = self.model.generate(input_features=input_features, max_new_tokens=10)
+        self.EXPECTED_OUTPUT = output[:, :5]
+
+        # test_generate_language
+        output = self.model.generate(input_features=input_features, max_new_tokens=10, language="en")[:, :5]
+        self.assertTrue(torch.all(output == self.EXPECTED_OUTPUT))
+
+        # test_generate_language_auto_detect
+        output = self.model.generate(input_features=input_features, max_new_tokens=10, language=None)[:, :5]
+        self.assertTrue(torch.all(output == self.EXPECTED_OUTPUT))
+
+    def test_long_form_language_auto_detect_generate(self):
         inputs = self.get_inputs()
-        output = self.model.generate(**inputs)
 
-        if self.EXPECTED_OUTPUT is not None:
-            self.assertEqual(output, self.EXPECTED_OUTPUT)
-        else:
-            self.EXPECTED_OUTPUT = output
+        inputs["input_features"] = torch.randint(
+            low=-1, high=1, size=(2, 80, 3001), generator=torch.manual_seed(42), dtype=torch.float32
+        )
+        inputs["attention_mask"] = torch.ones(2, 3002, dtype=torch.int64)
 
-    def test_generate_language(self):
-        inputs = self.get_inputs()
-        output = self.model.generate(**inputs, language="en")
-
-        if self.EXPECTED_OUTPUT is not None:
-            self.assertEqual(output, self.EXPECTED_OUTPUT)
-        else:
-            self.EXPECTED_OUTPUT = output
+        _ = self.model.generate(**inputs, temperature=0.0, language=None, return_timestamps=True)
 
     def test_long_form_generate(self):
         inputs = self.get_inputs()
 
         inputs["input_features"] = torch.randint(
-            low=0, high=50, size=(2, 80, 3001), generator=torch.manual_seed(42), dtype=torch.float32
+            low=-1, high=1, size=(2, 80, 3001), generator=torch.manual_seed(42), dtype=torch.float32
         )
         inputs["attention_mask"] = torch.ones(2, 3002, dtype=torch.int64)
 
