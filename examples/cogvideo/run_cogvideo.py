@@ -28,16 +28,12 @@ prompt = "A panda, dressed in a small, red jacket and a tiny hat, sits on a wood
 
 
 # rbln compile & run
-# model_id = "THUDM/CogVideoX-2b"
-# model_id = "/home/seinpark/optimum-rbln/examples/cogvideo/CogVideoX-2b_0331"
-model_id = "/home/seinpark/nas_data/cogvideox/CogVideoX-2b_0331"
+model_id = "THUDM/CogVideoX-2b"
 pipe = RBLNCogVideoXPipeline.from_pretrained(
-    model_id=os.path.basename(model_id),
-    export=False,
-    # model_id=model_id,
-    # export=True,
+    model_id=model_id,
+    export=True,
 )
-# pipe.save_pretrained(os.path.basename(model_id))
+pipe.save_pretrained(os.path.basename(model_id)+"_test")
 
 video = pipe(
     prompt=prompt,
@@ -47,5 +43,6 @@ video = pipe(
     guidance_scale=6,
     generator=torch.manual_seed(42),
 ).frames[0]
+
 
 export_to_video(video, "output.mp4", fps=8)

@@ -8,6 +8,6 @@ class RBLNCogVideoXPipeline(RBLNDiffusionMixin, CogVideoXPipeline):
     # ref: https://github.com/huggingface/diffusers/blob/v0.32.0/src/diffusers/pipelines/cogvideo/pipeline_cogvideox.py
     original_class = CogVideoXPipeline
     # _submodules = ["text_encoder", "transformer", "vae"]
-    _submodules = ["transformer"]
-    # _submodules = ["vae"]
+    # _submodules = ["transformer"]
+    _submodules = ["vae"]
     # _submodules = ["text_encoder"]
