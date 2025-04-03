@@ -12,7 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import rebel
+
 from ....configuration_utils import RBLNModelConfig
+from ....utils.logging import get_logger
+
+
+logger = get_logger()
 
 
 class RBLNWhisperForConditionalGenerationConfig(RBLNModelConfig):
@@ -20,6 +26,7 @@ class RBLNWhisperForConditionalGenerationConfig(RBLNModelConfig):
         self,
         batch_size: int = None,
         token_timestamps: bool = None,
+        use_attention_mask: bool = None,
         enc_max_seq_len: int = None,
         dec_max_seq_len: int = None,
         **kwargs,
@@ -33,3 +40,12 @@ class RBLNWhisperForConditionalGenerationConfig(RBLNModelConfig):
         self.token_timestamps = token_timestamps or False
         self.enc_max_seq_len = enc_max_seq_len
         self.dec_max_seq_len = dec_max_seq_len
+
+        self.use_attention_mask = use_attention_mask
+        npu = self.npu or rebel.get_npu_name()
+        if npu == "RBLN-CA02":
+            if self.use_attention_mask is False:
+                logger.warning("Attention mask should be used with RBLN-CA02. Setting use_attention_mask to True.")
+            self.use_attention_mask = True
+        else:
+            self.use_attention_mask = self.use_attention_mask or False
