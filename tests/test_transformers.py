@@ -148,6 +148,7 @@ class TestWhisperModel(BaseTest.TestModel):
     RBLN_AUTO_CLASS = RBLNAutoModelForSpeechSeq2Seq
     RBLN_CLASS = RBLNWhisperForConditionalGeneration
     HF_MODEL_ID = "openai/whisper-tiny"
+    DEVICE=0
 
     GENERATION_KWARGS = {
         "input_features": torch.randint(
@@ -333,6 +334,7 @@ class TestTimeSeriesTransformerForPrediction(BaseTest.TestModel):
         "future_time_features": torch.randn(1, 24, 2),
     }
     RBLN_CLASS_KWARGS = {"rbln_batch_size": 1, "rbln_num_parallel_samples": 100}
+    DEVICE=0
 
     def test_generate(self):
         inputs = self.get_inputs()
