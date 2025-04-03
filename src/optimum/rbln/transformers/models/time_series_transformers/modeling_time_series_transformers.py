@@ -228,7 +228,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         rbln_config: Optional[RBLNTimeSeriesTransformerForPredictionConfig] = None,
     ) -> RBLNTimeSeriesTransformerForPredictionConfig:
         rbln_config.num_parallel_samples = rbln_config.num_parallel_samples or model_config.num_parallel_samples
-        rbln_config.dec_max_seq_len = rbln_config.dec_max_seq_len or model_config.prediction_length
+
         if rbln_config.dec_max_seq_len is None:
             predict_length = model_config.prediction_length
             rbln_config.dec_max_seq_len = (
