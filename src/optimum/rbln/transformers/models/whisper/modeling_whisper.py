@@ -132,6 +132,7 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
         #     input_stride = self.model.encoder.conv1.stride[0] * self.model.encoder.conv2.stride[0]
         self.model = WhisperModel(self.config)
         self.pad_token_id = self.config.pad_token_id
+        self.generation_config.forced_decoder_ids = None
 
     def can_generate(self):
         return True
