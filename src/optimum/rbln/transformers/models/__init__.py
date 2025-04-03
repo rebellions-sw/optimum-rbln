@@ -64,15 +64,15 @@ _import_structure = {
         "RBLNDPTForDepthEstimation",
         "RBLNDPTForDepthEstimationConfig",
     ],
-    "exaone": ["RBLNExaoneForCausalLM"],
-    "gemma": ["RBLNGemmaForCausalLM"],
-    "gpt2": ["RBLNGPT2LMHeadModel"],
+    "exaone": ["RBLNExaoneForCausalLM", "RBLNExaoneForCausalLMConfig"],
+    "gemma": ["RBLNGemmaForCausalLM", "RBLNGemmaForCausalLMConfig"],
+    "gpt2": ["RBLNGPT2LMHeadModel", "RBLNGPT2LMHeadModelConfig"],
     "llama": ["RBLNLlamaForCausalLM", "RBLNLlamaForCausalLMConfig"],
     "llava_next": ["RBLNLlavaNextForConditionalGeneration", "RBLNLlavaNextForConditionalGenerationConfig"],
-    "midm": ["RBLNMidmLMHeadModel"],
+    "midm": ["RBLNMidmLMHeadModel", "RBLNMidmForCausalLMConfig"],
     "mistral": ["RBLNMistralForCausalLM", "RBLNMistralForCausalLMConfig"],
-    "phi": ["RBLNPhiForCausalLM"],
-    "qwen2": ["RBLNQwen2ForCausalLM"],
+    "phi": ["RBLNPhiForCausalLM", "RBLNPhiForCausalLMConfig"],
+    "qwen2": ["RBLNQwen2ForCausalLM", "RBLNQwen2ForCausalLMConfig"],
     "time_series_transformers": ["RBLNTimeSeriesTransformerForPrediction"],
     "t5": ["RBLNT5EncoderModel", "RBLNT5ForConditionalGeneration"],
     "wav2vec2": ["RBLNWav2Vec2ForCTC", "RBLNWav2Vec2ForCTCConfig"],
@@ -127,15 +127,15 @@ if TYPE_CHECKING:
         RBLNDPTForDepthEstimation,
         RBLNDPTForDepthEstimationConfig,
     )
-    from .exaone import RBLNExaoneForCausalLM
-    from .gemma import RBLNGemmaForCausalLM
-    from .gpt2 import RBLNGPT2LMHeadModel
+    from .exaone import RBLNExaoneForCausalLM, RBLNExaoneForCausalLMConfig
+    from .gemma import RBLNGemmaForCausalLM, RBLNGemmaForCausalLMConfig
+    from .gpt2 import RBLNGPT2LMHeadModel, RBLNGPT2LMHeadModelConfig
     from .llama import RBLNLlamaForCausalLM, RBLNLlamaForCausalLMConfig
     from .llava_next import RBLNLlavaNextForConditionalGeneration, RBLNLlavaNextForConditionalGenerationConfig
-    from .midm import RBLNMidmLMHeadModel
+    from .midm import RBLNMidmForCausalLMConfig, RBLNMidmLMHeadModel
     from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig
-    from .phi import RBLNPhiForCausalLM
-    from .qwen2 import RBLNQwen2ForCausalLM
+    from .phi import RBLNPhiForCausalLM, RBLNPhiForCausalLMConfig
+    from .qwen2 import RBLNQwen2ForCausalLM, RBLNQwen2ForCausalLMConfig
     from .t5 import RBLNT5EncoderModel, RBLNT5ForConditionalGeneration
     from .time_series_transformers import RBLNTimeSeriesTransformerForPrediction
     from .wav2vec2 import RBLNWav2Vec2ForCTC, RBLNWav2Vec2ForCTCConfig
