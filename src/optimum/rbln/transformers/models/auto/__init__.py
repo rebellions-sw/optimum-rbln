@@ -20,10 +20,10 @@ from .modeling_auto import (
     RBLNAutoModelForDepthEstimation,
     RBLNAutoModelForImageClassification,
     RBLNAutoModelForMaskedLM,
+    RBLNAutoModelForObjectDetection,
     RBLNAutoModelForQuestionAnswering,
     RBLNAutoModelForSeq2SeqLM,
     RBLNAutoModelForSequenceClassification,
     RBLNAutoModelForSpeechSeq2Seq,
     RBLNAutoModelForVision2Seq,
-    RBLNAutoModelForObjectDetection,
 )

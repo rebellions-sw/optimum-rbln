@@ -68,12 +68,12 @@ if TYPE_CHECKING:
         RBLNAutoModelForDepthEstimation,
         RBLNAutoModelForImageClassification,
         RBLNAutoModelForMaskedLM,
+        RBLNAutoModelForObjectDetection,
         RBLNAutoModelForQuestionAnswering,
         RBLNAutoModelForSeq2SeqLM,
         RBLNAutoModelForSequenceClassification,
         RBLNAutoModelForSpeechSeq2Seq,
         RBLNAutoModelForVision2Seq,
-        RBLNAutoModelForObjectDetection,
     )
     from .bart import RBLNBartForConditionalGeneration, RBLNBartModel
     from .bert import RBLNBertForMaskedLM, RBLNBertForQuestionAnswering, RBLNBertModel
@@ -83,6 +83,7 @@ if TYPE_CHECKING:
         RBLNCLIPVisionModel,
         RBLNCLIPVisionModelWithProjection,
     )
+    from .detr import RBLNDetrForObjectDetection
     from .dpt import RBLNDPTForDepthEstimation
     from .exaone import RBLNExaoneForCausalLM
     from .gemma import RBLNGemmaForCausalLM
@@ -98,7 +99,6 @@ if TYPE_CHECKING:
     from .wav2vec2 import RBLNWav2Vec2ForCTC
     from .whisper import RBLNWhisperForConditionalGeneration
     from .xlm_roberta import RBLNXLMRobertaModel
-    from .detr import RBLNDetrForObjectDetection
 
 else:
     import sys

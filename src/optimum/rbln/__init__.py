@@ -157,12 +157,12 @@ if TYPE_CHECKING:
         RBLNAutoModelForDepthEstimation,
         RBLNAutoModelForImageClassification,
         RBLNAutoModelForMaskedLM,
+        RBLNAutoModelForObjectDetection,
         RBLNAutoModelForQuestionAnswering,
         RBLNAutoModelForSeq2SeqLM,
         RBLNAutoModelForSequenceClassification,
         RBLNAutoModelForSpeechSeq2Seq,
         RBLNAutoModelForVision2Seq,
-        RBLNAutoModelForObjectDetection,
         RBLNBartForConditionalGeneration,
         RBLNBartModel,
         RBLNBertForMaskedLM,
@@ -172,6 +172,7 @@ if TYPE_CHECKING:
         RBLNCLIPTextModelWithProjection,
         RBLNCLIPVisionModel,
         RBLNCLIPVisionModelWithProjection,
+        RBLNDetrForObjectDetection,
         RBLNDistilBertForQuestionAnswering,
         RBLNDPTForDepthEstimation,
         RBLNExaoneForCausalLM,
@@ -194,7 +195,6 @@ if TYPE_CHECKING:
         RBLNWhisperForConditionalGeneration,
         RBLNXLMRobertaForSequenceClassification,
         RBLNXLMRobertaModel,
-        RBLNDetrForObjectDetection,
     )
 
 else:

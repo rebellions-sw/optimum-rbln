@@ -1,8 +1,8 @@
 import os
-import torch
 import urllib
 
 import fire
+import torch
 from PIL import Image
 from transformers import DetrImageProcessor
 
