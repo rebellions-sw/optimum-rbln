@@ -55,6 +55,7 @@ logger = get_logger()
 class _RBLNTransformerEncoder(RBLNModel):
     auto_model_class = AutoModel
     rbln_model_input_names = ["input_ids", "attention_mask", "token_type_ids"]
+    rbln_dtype = "int64"
 
     @classmethod
     def _update_rbln_config(
@@ -69,16 +70,15 @@ class _RBLNTransformerEncoder(RBLNModel):
             model=model,
             model_config=model_config,
             rbln_config=rbln_config,
-            rbln_model_input_names=cls.rbln_model_input_names,
         )
 
-    @staticmethod
+    @classmethod
     def update_rbln_config_for_transformers_encoder(
+        cls,
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
         model: Optional["PreTrainedModel"] = None,
         model_config: Optional["PretrainedConfig"] = None,
         rbln_config: Optional[_RBLNTransformerEncoderConfig] = None,
-        rbln_model_input_names: Optional[List[str]] = None,
     ) -> _RBLNTransformerEncoderConfig:
         max_position_embeddings = getattr(model_config, "n_positions", None) or getattr(
             model_config, "max_position_embeddings", None
@@ -110,8 +110,8 @@ class _RBLNTransformerEncoder(RBLNModel):
                     if invalid_params:
                         raise ValueError(f"Invalid model input names: {invalid_params}")
                     break
-            if rbln_config.model_input_names is None and rbln_model_input_names is not None:
-                rbln_config.model_input_names = rbln_model_input_names
+            if rbln_config.model_input_names is None and cls.rbln_model_input_names is not None:
+                rbln_config.model_input_names = cls.rbln_model_input_names
 
         else:
             invalid_params = set(rbln_config.model_input_names) - set(signature_params)
@@ -128,7 +128,7 @@ class _RBLNTransformerEncoder(RBLNModel):
             )
 
         input_info = [
-            (model_input_name, [rbln_config.batch_size, rbln_config.max_seq_len], "int64")
+            (model_input_name, [rbln_config.batch_size, rbln_config.max_seq_len], cls.rbln_dtype)
             for model_input_name in rbln_config.model_input_names
         ]
 

@@ -12,26 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict, Union
 
 import torch
-from transformers import AutoModelForMaskedLM, PretrainedConfig, Wav2Vec2ForCTC
+from transformers import AutoModelForMaskedLM, Wav2Vec2ForCTC
 from transformers.modeling_outputs import CausalLMOutput
 
-from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
-from ....modeling import RBLNModel
-from ....utils.logging import get_logger
-
-
-logger = get_logger(__name__)
-
-if TYPE_CHECKING:
-    from transformers import (
-        AutoFeatureExtractor,
-        AutoProcessor,
-        AutoTokenizer,
-        PretrainedConfig,
-    )
+from ...modeling_generic import RBLNModelForMaskedLM
+from .configuration_wav2vec import RBLNWav2Vec2ForCTCConfig
 
 
 class _Wav2Vec2(torch.nn.Module):
@@ -44,11 +31,11 @@ class _Wav2Vec2(torch.nn.Module):
         return self.model.lm_head(output[0])
 
 
-class RBLNWav2Vec2ForCTC(RBLNModel):
+class RBLNWav2Vec2ForCTC(RBLNModelForMaskedLM):
     """
     Wav2Vec2 Model with a `language modeling` head on top for Connectionist Temporal Classification (CTC).
 
-    This model inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods the
+    This model inherits from [`RBLNModelForMaskedLM`]. Check the superclass documentation for the generic methods the
     library implements for all its model.
 
     It implements the methods to convert a pre-trained Wav2Vec2 model into a RBLN Wav2Vec2 model by:
@@ -58,59 +45,11 @@ class RBLNWav2Vec2ForCTC(RBLNModel):
 
     main_input_name = "input_values"
     auto_model_class = AutoModelForMaskedLM
+    rbln_dtype = "float32"
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNWav2Vec2ForCTCConfig) -> torch.nn.Module:
         return _Wav2Vec2(model).eval()
-
-    @classmethod
-    def _update_rbln_config(
-        cls,
-        preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
-        model_config: "PretrainedConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNModelConfig:
-        rbln_max_seq_len = rbln_kwargs.get("max_seq_len", None)
-        rbln_batch_size = rbln_kwargs.get("batch_size", None)
-
-        if rbln_max_seq_len is None:
-            for tokenizer in preprocessors:
-                if hasattr(tokenizer, "model_max_length"):
-                    rbln_max_seq_len = tokenizer.model_max_length
-                    break
-            if rbln_max_seq_len is None:
-                raise ValueError("`rbln_max_seq_len` should be specified!")
-
-        if rbln_batch_size is None:
-            rbln_batch_size = 1
-
-        input_info = [
-            (
-                "input_values",
-                [
-                    rbln_batch_size,
-                    rbln_max_seq_len,
-                ],
-                "float32",
-            ),
-        ]
-
-        rbln_compile_config = RBLNCompileConfig(input_info=input_info)
-
-        rbln_config = RBLNModelConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[rbln_compile_config],
-            rbln_kwargs=rbln_kwargs,
-        )
-
-        rbln_config.model_cfg.update(
-            {
-                "max_seq_len": rbln_max_seq_len,
-                "batch_size": rbln_batch_size,
-            }
-        )
-
-        return rbln_config
 
     def forward(self, input_values: "torch.Tensor", **kwargs):
         outputs = super().forward(input_values, **kwargs)

@@ -67,6 +67,7 @@ class RBLNModelForTextEncodingConfig(_RBLNTransformerEncoderConfig):
     pass
 
 
+# FIXME : Appropriate name ?
 class RBLNTransformerEncoderForFeatureExtractionConfig(_RBLNTransformerEncoderConfig):
     pass
 

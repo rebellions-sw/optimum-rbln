@@ -77,7 +77,9 @@ _import_structure = {
         "RBLNT5EncoderModel",
         "RBLNT5ForConditionalGeneration",
         "RBLNWav2Vec2ForCTC",
+        "RBLNWav2Vec2ForCTCConfig",
         "RBLNWhisperForConditionalGeneration",
+        "RBLNWhisperForConditionalGenerationConfig",
         "RBLNTimeSeriesTransformerForPrediction",
         "RBLNLlavaNextForConditionalGeneration",
         "RBLNMidmLMHeadModel",
@@ -164,7 +166,9 @@ if TYPE_CHECKING:
         RBLNT5ForConditionalGeneration,
         RBLNTimeSeriesTransformerForPrediction,
         RBLNWav2Vec2ForCTC,
+        RBLNWav2Vec2ForCTCConfig,
         RBLNWhisperForConditionalGeneration,
+        RBLNWhisperForConditionalGenerationConfig,
         RBLNXLMRobertaModel,
     )
 else:
