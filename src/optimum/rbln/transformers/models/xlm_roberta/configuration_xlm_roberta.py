@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
+from ...configuration_generic import RBLNTransformerEncoderForFeatureExtractionConfig
 
 
-class RBLNLlamaForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
+class RBLNXLMRobertaModelConfig(RBLNTransformerEncoderForFeatureExtractionConfig):
     pass

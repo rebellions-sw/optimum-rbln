@@ -82,7 +82,7 @@ _import_structure = {
     ],
     "wav2vec2": ["RBLNWav2Vec2ForCTC", "RBLNWav2Vec2ForCTCConfig"],
     "whisper": ["RBLNWhisperForConditionalGeneration", "RBLNWhisperForConditionalGenerationConfig"],
-    "xlm_roberta": ["RBLNXLMRobertaModel"],
+    "xlm_roberta": ["RBLNXLMRobertaModel", "RBLNXLMRobertaModelConfig"],
 }
 
 if TYPE_CHECKING:
@@ -150,7 +150,7 @@ if TYPE_CHECKING:
     from .time_series_transformers import RBLNTimeSeriesTransformerForPrediction
     from .wav2vec2 import RBLNWav2Vec2ForCTC, RBLNWav2Vec2ForCTCConfig
     from .whisper import RBLNWhisperForConditionalGeneration, RBLNWhisperForConditionalGenerationConfig
-    from .xlm_roberta import RBLNXLMRobertaModel
+    from .xlm_roberta import RBLNXLMRobertaModel, RBLNXLMRobertaModelConfig
 
 else:
     import sys

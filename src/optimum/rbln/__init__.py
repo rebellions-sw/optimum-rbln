@@ -105,6 +105,7 @@ _import_structure = {
         "RBLNXLMRobertaForSequenceClassification",
         "RBLNXLMRobertaForSequenceClassificationConfig",
         "RBLNXLMRobertaModel",
+        "RBLNXLMRobertaModelConfig",
         "RBLNBertForMaskedLM",
         "RBLNTimeSeriesTransformerForPrediction",
     ],
@@ -266,6 +267,7 @@ if TYPE_CHECKING:
         RBLNXLMRobertaForSequenceClassification,
         RBLNXLMRobertaForSequenceClassificationConfig,
         RBLNXLMRobertaModel,
+        RBLNXLMRobertaModelConfig,
     )
 
 else:

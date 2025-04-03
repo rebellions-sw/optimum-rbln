@@ -92,6 +92,7 @@ _import_structure = {
         "RBLNLlavaNextForConditionalGeneration",
         "RBLNMidmLMHeadModel",
         "RBLNXLMRobertaModel",
+        "RBLNXLMRobertaModelConfig",
     ],
     "modeling_alias": [
         "RBLNASTForAudioClassification",
@@ -186,6 +187,7 @@ if TYPE_CHECKING:
         RBLNWhisperForConditionalGeneration,
         RBLNWhisperForConditionalGenerationConfig,
         RBLNXLMRobertaModel,
+        RBLNXLMRobertaModelConfig,
     )
 else:
     import sys
