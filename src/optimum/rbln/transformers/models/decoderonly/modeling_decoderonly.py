@@ -545,22 +545,27 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
         @QuantizationManager.with_quantization_env
         def compile_model(*args, **kwargs):
-            wrapped_model.phase = "prefill"
-            compiled_prefill = RBLNModel.compile(
-                wrapped_model,
-                prefill_compile_config,
-                example_inputs=prefill_example_inputs,
-                compile_context=context,
-            )
+            try:
+                original_linear = torch.nn.functional.linear
+                torch.nn.functional.linear = torch.ops.rbln_custom_ops.linear
+                wrapped_model.phase = "prefill"
+                compiled_prefill = RBLNModel.compile(
+                    wrapped_model,
+                    prefill_compile_config,
+                    example_inputs=prefill_example_inputs,
+                    compile_context=context,
+                )
 
-            wrapped_model.phase = "decode"
-            compiled_decoder = RBLNModel.compile(
-                wrapped_model,
-                dec_compile_config,
-                example_inputs=dec_example_inputs,
-                compile_context=context,
-            )
-            return {"prefill": compiled_prefill, "decoder": compiled_decoder}
+                wrapped_model.phase = "decode"
+                compiled_decoder = RBLNModel.compile(
+                    wrapped_model,
+                    dec_compile_config,
+                    example_inputs=dec_example_inputs,
+                    compile_context=context,
+                )
+                return {"prefill": compiled_prefill, "decoder": compiled_decoder}
+            finally:
+                torch.nn.functional.linear = original_linear
 
         return compile_model(quantize_config=quantize_config)
 
