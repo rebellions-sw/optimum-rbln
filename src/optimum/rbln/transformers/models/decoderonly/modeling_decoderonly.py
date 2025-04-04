@@ -222,8 +222,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
             attention_mask = self.dec_attn_mask
 
-            attention_mask = self.dec_attn_mask
-
         logits = super().forward(
             inputs,
             cache_position,
