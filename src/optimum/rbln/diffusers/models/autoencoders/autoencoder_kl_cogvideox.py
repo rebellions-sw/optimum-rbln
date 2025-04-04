@@ -170,7 +170,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
                     [
                         rbln_batch_size,
                         model_config.latent_channels,
-                        num_latent_frames_batch_size,
+                        num_latent_frames_batch_size+1, # first batch
                         dec_shape[0],
                         dec_shape[1],
                     ],

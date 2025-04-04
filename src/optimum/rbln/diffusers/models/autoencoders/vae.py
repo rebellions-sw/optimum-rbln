@@ -231,6 +231,25 @@ class _VAECogVideoXDecoder(torch.nn.Module):
         super().__init__()
         self.cog_video_x = cog_video_x
 
+    def _totuple(self, conv_cache):
+        conv_cache_list = []
+        keys = []
+        def isdict(obj, names):
+            if isinstance(obj, dict):
+                for _k, _v in obj.items():
+                    isdict(_v, names+f"_{_k}")
+            else :
+                if "norm" not in names:
+                    conv_cache_list.append(obj)
+                    keys.append(names)
+                # if names in set(self.keys):
+                #     conv_cache_list.append(obj)
+        
+        for k, v in conv_cache.items():
+            isdict(v, k)
+            
+        return tuple(conv_cache_list), keys
+
     def _decode(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
         batch_size, num_channels, num_frames, height, width = z.shape
 
@@ -278,5 +297,6 @@ class _VAECogVideoXDecoder(torch.nn.Module):
         # cov_video_dec_out = self.decode(z, return_dict=False)
         
         conv_cache = None
-        cov_video_dec_out = self.cog_video_x.decoder(z, conv_cache=conv_cache)
-        return cov_video_dec_out
+        cov_video_dec_out, conv_cache = self.cog_video_x.decoder(z)
+        conv_cache_list, _ = self._totuple(conv_cache)
+        return cov_video_dec_out, (conv_cache_list)
