@@ -12,7 +12,7 @@ from optimum.rbln import RBLNDetrForObjectDetection
 def main(
     model_id: str = "facebook/detr-resnet-50",
     from_transformers: bool = False,
-    height_size: int = 600,
+    height_size: int = 640,
     width_size: int = 480,
     batch_size: int = 1,
 ):

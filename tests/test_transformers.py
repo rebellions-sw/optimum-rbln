@@ -19,6 +19,7 @@ from optimum.rbln import (
     RBLNWhisperForConditionalGeneration,
     RBLNXLMRobertaForSequenceClassification,
     RBLNXLMRobertaModel,
+    RBLNDetrForObjectDetection,
 )
 from optimum.rbln.transformers.models.auto.modeling_auto import (
     RBLNAutoModel,
@@ -30,6 +31,7 @@ from optimum.rbln.transformers.models.auto.modeling_auto import (
     RBLNAutoModelForQuestionAnswering,
     RBLNAutoModelForSequenceClassification,
     RBLNAutoModelForSpeechSeq2Seq,
+    RBLNAutoModelForObjectDetection,
 )
 from optimum.rbln.utils.runtime_utils import ContextRblnConfig
 from optimum.rbln.utils.save_utils import maybe_load_preprocessors
@@ -372,6 +374,23 @@ class TestRBLNBartModel(BaseTest.TestModel):
             low=0, high=2, size=(1, 100), generator=torch.manual_seed(42), dtype=torch.int64
         ),
     }
+
+
+class TestRBLNDetrObjectDetection(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoModelForObjectDetection
+    RBLN_CLASS = RBLNDetrForObjectDetection
+    HF_MODEL_ID = "facebook/detr-resnet-50"
+    RBLN_CLASS_KWARGS = {
+        "rbln_image_size": {
+            "height": 224,
+            "width": 224,
+        }
+    }
+    GENERATION_KWARGS = {
+        "pixel_values": torch.randn(1, 3, 224, 224, generator=torch.manual_seed(42), dtype=torch.float32),
+        "pixel_mask": torch.ones([1, 224, 224], dtype=torch.int64),
+    }
+    HF_CONFIG_KWARGS = {"revision": "no_timm"}
 
 
 if __name__ == "__main__":
