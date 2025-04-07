@@ -142,6 +142,7 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
         #     input_stride = self.model.encoder.conv1.stride[0] * self.model.encoder.conv2.stride[0]
         self.model = WhisperModel(self.config)
         self.pad_token_id = self.config.pad_token_id
+        self.generation_config.forced_decoder_ids = None
 
     def can_generate(self):
         return True
@@ -357,6 +358,7 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
                 model_kwargs["encoder_outputs"] = self.encoder(
                     input_features=inputs_tensor[b].unsqueeze(0), block_tables=block_tables
                 )
+            self.decoder_attention_mask = torch.zeros(self.batch_size, self.dec_max_seq_len, dtype=torch.float32)
         else:
             model_kwargs["encoder_outputs"] = BaseModelOutput(last_hidden_state=torch.tensor([[-1.0]]))
 

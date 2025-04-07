@@ -256,6 +256,7 @@ class TestWhisperModel_TokenTimestamps(BaseTest.TestModel):
         "max_new_tokens": 1,
         "return_token_timestamps": True,
         "return_timestamps": True,
+        "generation_config": None,
     }
 
     HF_CONFIG_KWARGS = {
@@ -354,6 +355,7 @@ class TestTimeSeriesTransformerForPrediction(BaseTest.TestModel):
         "future_time_features": torch.randn(1, 24, 2),
     }
     RBLN_CLASS_KWARGS = {"rbln_batch_size": 1, "rbln_num_parallel_samples": 100}
+    DEVICE = 0
 
     def test_generate(self):
         inputs = self.get_inputs()
