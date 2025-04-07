@@ -584,7 +584,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         available_dram - kernel_size - buffer
             - num_layers * 2 * tensor_parallel_size
             * align_2MB(
-                n_blocks
+                x
                 * block_size
                 * align_64(head_dim)
                 * math.ceil(num_key_value_heads / tensor_parallel_size)
@@ -593,9 +593,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
         This inequality can be rewritten as follows:
 
-        a / c > align_2MB(b * x)
+        a - c * align_2MB(b * x) > 0
         where
-           a = available_dram
+           a = available_dram - kernel_size - buffer
            b = block_size * align_64(head_dim) * math.ceil(num_key_value_heads / tensor_parallel_size) * 2
            c = num_layers * 2 * tensor_parallel_size
 
