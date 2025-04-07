@@ -25,6 +25,7 @@ logger = get_logger(__name__)
 
 class _RBLNStableDiffusionPipelineBaseConfig(RBLNModelConfig):
     submodules = ["text_encoder", "unet", "vae"]
+    _vae_uses_encoder = False
 
     def __init__(
         self,
@@ -34,6 +35,9 @@ class _RBLNStableDiffusionPipelineBaseConfig(RBLNModelConfig):
         vae: Optional[RBLNModelConfig] = None,
         guidance_scale: Optional[float] = None,
         vae_uses_encoder: Optional[bool] = None,
+        *,
+        img_height: Optional[int] = None,
+        img_width: Optional[int] = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -42,12 +46,16 @@ class _RBLNStableDiffusionPipelineBaseConfig(RBLNModelConfig):
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
         self.text_encoder = self.init_submodule_config(RBLNCLIPTextModelConfig, text_encoder, batch_size=batch_size)
-        self.unet = self.init_submodule_config(RBLNUNet2DConditionModelConfig, unet, batch_size=batch_size)
+        self.unet = self.init_submodule_config(
+            RBLNUNet2DConditionModelConfig, unet, batch_size=batch_size, img_height=img_height, img_width=img_width
+        )
         self.vae = self.init_submodule_config(
             RBLNAutoencoderKLConfig,
             vae,
             batch_size=batch_size,
-            uses_encoder=vae_uses_encoder,
+            uses_encoder=vae_uses_encoder or self.__class__._vae_uses_encoder,
+            img_height=img_height,
+            img_width=img_width,
         )
 
         if guidance_scale is not None:
@@ -58,66 +66,12 @@ class _RBLNStableDiffusionPipelineBaseConfig(RBLNModelConfig):
 
 
 class RBLNStableDiffusionPipelineConfig(_RBLNStableDiffusionPipelineBaseConfig):
-    # uses_encoder is False
-    def __init__(
-        self,
-        batch_size: Optional[int] = None,
-        text_encoder: Optional[RBLNModelConfig] = None,
-        unet: Optional[RBLNModelConfig] = None,
-        vae: Optional[RBLNModelConfig] = None,
-        guidance_scale: Optional[float] = None,
-        **kwargs,
-    ):
-        super().__init__(
-            batch_size=batch_size,
-            text_encoder=text_encoder,
-            unet=unet,
-            vae=vae,
-            guidance_scale=guidance_scale,
-            vae_uses_encoder=False,
-            **kwargs,
-        )
+    _vae_uses_encoder = False
 
 
 class RBLNStableDiffusionImg2ImgPipelineConfig(_RBLNStableDiffusionPipelineBaseConfig):
-    # uses_encoder is True
-    def __init__(
-        self,
-        batch_size: Optional[int] = None,
-        text_encoder: Optional[RBLNModelConfig] = None,
-        unet: Optional[RBLNModelConfig] = None,
-        vae: Optional[RBLNModelConfig] = None,
-        guidance_scale: Optional[float] = None,
-        **kwargs,
-    ):
-        super().__init__(
-            batch_size=batch_size,
-            text_encoder=text_encoder,
-            unet=unet,
-            vae=vae,
-            guidance_scale=guidance_scale,
-            vae_uses_encoder=True,
-            **kwargs,
-        )
+    _vae_uses_encoder = True
 
 
 class RBLNStableDiffusionInpaintPipelineConfig(_RBLNStableDiffusionPipelineBaseConfig):
-    # uses_encoder is True
-    def __init__(
-        self,
-        batch_size: Optional[int] = None,
-        text_encoder: Optional[RBLNModelConfig] = None,
-        unet: Optional[RBLNModelConfig] = None,
-        vae: Optional[RBLNModelConfig] = None,
-        guidance_scale: Optional[float] = None,
-        **kwargs,
-    ):
-        super().__init__(
-            batch_size=batch_size,
-            text_encoder=text_encoder,
-            unet=unet,
-            vae=vae,
-            guidance_scale=guidance_scale,
-            vae_uses_encoder=True,
-            **kwargs,
-        )
+    _vae_uses_encoder = True

@@ -25,6 +25,7 @@ logger = get_logger(__name__)
 
 class _RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
     submodules = ["text_encoder", "text_encoder_2", "unet", "vae"]
+    _vae_uses_encoder = False
 
     def __init__(
         self,
@@ -35,6 +36,9 @@ class _RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
         vae: Optional[RBLNModelConfig] = None,
         guidance_scale: Optional[float] = None,
         vae_uses_encoder: Optional[bool] = None,
+        *,
+        img_height: Optional[int] = None,
+        img_width: Optional[int] = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -46,12 +50,16 @@ class _RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
         self.text_encoder_2 = self.init_submodule_config(
             RBLNCLIPTextModelWithProjectionConfig, text_encoder_2, batch_size=batch_size
         )
-        self.unet = self.init_submodule_config(RBLNUNet2DConditionModelConfig, unet, batch_size=batch_size)
+        self.unet = self.init_submodule_config(
+            RBLNUNet2DConditionModelConfig, unet, batch_size=batch_size, img_height=img_height, img_width=img_width
+        )
         self.vae = self.init_submodule_config(
             RBLNAutoencoderKLConfig,
             vae,
             batch_size=batch_size,
-            uses_encoder=vae_uses_encoder,
+            uses_encoder=vae_uses_encoder or self.__class__._vae_uses_encoder,
+            img_height=img_height,
+            img_width=img_width,
         )
 
         if guidance_scale is not None:
@@ -62,72 +70,12 @@ class _RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
 
 
 class RBLNStableDiffusionXLPipelineConfig(_RBLNStableDiffusionXLPipelineBaseConfig):
-    # uses_encoder is False
-    def __init__(
-        self,
-        batch_size: Optional[int] = None,
-        text_encoder: Optional[RBLNModelConfig] = None,
-        text_encoder_2: Optional[RBLNModelConfig] = None,
-        unet: Optional[RBLNModelConfig] = None,
-        vae: Optional[RBLNModelConfig] = None,
-        guidance_scale: Optional[float] = None,
-        **kwargs,
-    ):
-        super().__init__(
-            batch_size=batch_size,
-            text_encoder=text_encoder,
-            text_encoder_2=text_encoder_2,
-            unet=unet,
-            vae=vae,
-            guidance_scale=guidance_scale,
-            vae_uses_encoder=False,
-            **kwargs,
-        )
+    _vae_uses_encoder = False
 
 
 class RBLNStableDiffusionXLImg2ImgPipelineConfig(_RBLNStableDiffusionXLPipelineBaseConfig):
-    # uses_encoder is True
-    def __init__(
-        self,
-        batch_size: Optional[int] = None,
-        text_encoder: Optional[RBLNModelConfig] = None,
-        text_encoder_2: Optional[RBLNModelConfig] = None,
-        unet: Optional[RBLNModelConfig] = None,
-        vae: Optional[RBLNModelConfig] = None,
-        guidance_scale: Optional[float] = None,
-        **kwargs,
-    ):
-        super().__init__(
-            batch_size=batch_size,
-            text_encoder=text_encoder,
-            text_encoder_2=text_encoder_2,
-            unet=unet,
-            vae=vae,
-            guidance_scale=guidance_scale,
-            vae_uses_encoder=True,
-            **kwargs,
-        )
+    _vae_uses_encoder = True
 
 
 class RBLNStableDiffusionXLInpaintPipelineConfig(_RBLNStableDiffusionXLPipelineBaseConfig):
-    # uses_encoder is True
-    def __init__(
-        self,
-        batch_size: Optional[int] = None,
-        text_encoder: Optional[RBLNModelConfig] = None,
-        text_encoder_2: Optional[RBLNModelConfig] = None,
-        unet: Optional[RBLNModelConfig] = None,
-        vae: Optional[RBLNModelConfig] = None,
-        guidance_scale: Optional[float] = None,
-        **kwargs,
-    ):
-        super().__init__(
-            batch_size=batch_size,
-            text_encoder=text_encoder,
-            text_encoder_2=text_encoder_2,
-            unet=unet,
-            vae=vae,
-            guidance_scale=guidance_scale,
-            vae_uses_encoder=True,
-            **kwargs,
-        )
+    _vae_uses_encoder = True

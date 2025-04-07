@@ -212,7 +212,7 @@ class RBLNControlNetModel(RBLNModel):
         ):
             raise ValueError(
                 f"Mismatch between ControlNet's runtime batch size ({sample_batch_size}) and compiled batch size ({compiled_batch_size}). "
-                "This may be caused by the 'guidance scale' parameter, which doubles the runtime batch size in Stable Diffusion. "
+                "This may be caused by the 'guidance_scale' parameter, which doubles the runtime batch size of ControlNet in Stable Diffusion. "
                 "Adjust the batch size during compilation to match the compiled batch size.\n\n"
                 "For details, see: https://docs.rbln.ai/software/optimum/model_api.html#stable-diffusion"
             )

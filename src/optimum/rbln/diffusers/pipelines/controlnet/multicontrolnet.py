@@ -100,7 +100,7 @@ class RBLNMultiControlNetModel(RBLNModel):
         return_dict: bool = True,
     ):
         for i, (image, scale, controlnet) in enumerate(zip(controlnet_cond, conditioning_scale, self.nets)):
-            output = controlnet.model[0](
+            output = controlnet(
                 sample=sample.contiguous(),
                 timestep=timestep.float(),
                 encoder_hidden_states=encoder_hidden_states,

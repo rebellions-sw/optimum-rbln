@@ -204,7 +204,7 @@ class RBLNModelConfig:
         submodule_config_cls: Type["RBLNModelConfig"],
         submodule_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None,
         **kwargs,
-    ):
+    ) -> "RBLNModelConfig":
         """
         Initialize a submodule config from a dict or a RBLNModelConfig.
 
@@ -406,9 +406,8 @@ class RBLNModelConfig:
         rbln_kwargs = {key[5:]: kwargs.pop(key) for key in kwargs_keys if key.startswith("rbln_")}
 
         if isinstance(rbln_config, dict):
+            rbln_config.update(rbln_kwargs)
             rbln_config = cls(**rbln_config)
-            for key, value in rbln_kwargs.items():
-                setattr(rbln_config, key, value)
 
         elif rbln_config is None:
             rbln_config = cls(**rbln_kwargs)

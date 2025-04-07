@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 import importlib
 from os import PathLike
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
@@ -357,22 +358,24 @@ class RBLNDiffusionMixin:
         cls,
         controlnets: "MultiControlNetModel",
         model_save_dir: Optional[PathLike],
-        controlnet_rbln_config: Dict[str, Any],
+        controlnet_rbln_config: RBLNModelConfig,
         prefix: Optional[str] = "",
     ):
         # Compile multiple ControlNet models for a MultiControlNet setup
         from .models.controlnet import RBLNControlNetModel
         from .pipelines.controlnet import RBLNMultiControlNetModel
 
-        compiled_controlnets = [
-            RBLNControlNetModel.from_model(
-                model=controlnet,
-                subfolder=f"{prefix}controlnet" if i == 0 else f"{prefix}controlnet_{i}",
-                model_save_dir=model_save_dir,
-                rbln_config=controlnet_rbln_config,
+        compiled_controlnets = []
+        for i, controlnet in enumerate(controlnets.nets):
+            _controlnet_rbln_config = copy.deepcopy(controlnet_rbln_config)
+            compiled_controlnets.append(
+                RBLNControlNetModel.from_model(
+                    model=controlnet,
+                    subfolder=f"{prefix}controlnet" if i == 0 else f"{prefix}controlnet_{i}",
+                    model_save_dir=model_save_dir,
+                    rbln_config=_controlnet_rbln_config,
+                )
             )
-            for i, controlnet in enumerate(controlnets.nets)
-        ]
         return RBLNMultiControlNetModel(compiled_controlnets)
 
     @classmethod
