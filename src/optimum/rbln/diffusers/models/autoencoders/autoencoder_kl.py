@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     import torch
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig, PreTrainedModel
 
-    from ...modeling_diffusers import RBLNDiffusionMixin
+    from ...modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 
 logger = get_logger(__name__)
 
@@ -73,7 +73,9 @@ class RBLNAutoencoderKL(RBLNModel):
         return compiled_models
 
     @classmethod
-    def get_vae_sample_size(cls, pipe: "RBLNDiffusionMixin", rbln_config: RBLNAutoencoderKLConfig) -> Tuple[int, int]:
+    def get_vae_sample_size(
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: RBLNAutoencoderKLConfig, return_vae_scale_factor: bool = False
+    ) -> Tuple[int, int]:
         sample_size = rbln_config.sample_size
         noise_module = getattr(pipe, "unet", None) or getattr(pipe, "transformer", None)
         vae_scale_factor = (
@@ -93,13 +95,18 @@ class RBLNAutoencoderKL(RBLNModel):
                 sample_size = (sample_size, sample_size)
             sample_size = (sample_size[0] * vae_scale_factor, sample_size[1] * vae_scale_factor)
 
-        return sample_size, vae_scale_factor
+        if return_vae_scale_factor:
+            return sample_size, vae_scale_factor
+        else:
+            return sample_size
 
     @classmethod
     def update_rbln_config_using_pipe(
-        cls, pipe: "RBLNDiffusionMixin", rbln_config: RBLNAutoencoderKLConfig
-    ) -> RBLNAutoencoderKLConfig:
-        rbln_config.sample_size, rbln_config.vae_scale_factor = cls.get_vae_sample_size(pipe, rbln_config)
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig"
+    ) -> "RBLNDiffusionMixinConfig":
+        rbln_config.vae.sample_size, rbln_config.vae.vae_scale_factor = cls.get_vae_sample_size(
+            pipe, rbln_config.vae, return_vae_scale_factor=True
+        )
         return rbln_config
 
     @classmethod

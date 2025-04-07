@@ -23,7 +23,7 @@ from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...configurations import RBLNUNet2DConditionModelConfig
-from ...modeling_diffusers import RBLNDiffusionMixin
+from ...modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 
 
 if TYPE_CHECKING:
@@ -206,20 +206,19 @@ class RBLNUNet2DConditionModel(RBLNModel):
 
     @classmethod
     def update_rbln_config_using_pipe(
-        cls, pipe: RBLNDiffusionMixin, rbln_config: RBLNUNet2DConditionModelConfig
-    ) -> RBLNUNet2DConditionModelConfig:
-        rbln_config.text_model_hidden_size = (
+        cls, pipe: RBLNDiffusionMixin, rbln_config: "RBLNDiffusionMixinConfig"
+    ) -> "RBLNDiffusionMixinConfig":
+        rbln_config.unet.text_model_hidden_size = (
             pipe.text_encoder_2.config.hidden_size if hasattr(pipe, "text_encoder_2") else None
         )
-        rbln_config.image_model_hidden_size = pipe.unet.config.encoder_hid_dim if hasattr(pipe, "unet") else None
+        rbln_config.unet.image_model_hidden_size = pipe.unet.config.encoder_hid_dim if hasattr(pipe, "unet") else None
 
-        rbln_config.max_seq_len = (
+        rbln_config.unet.max_seq_len = (
             pipe.text_encoder.config.max_position_embeddings if hasattr(pipe, "text_encoder") else None
         )
 
-        rbln_config.sample_size = cls.get_unet_sample_size(pipe, rbln_config)
-
-        rbln_config.use_additional_residuals = "controlnet" in pipe.config.keys()
+        rbln_config.unet.sample_size = cls.get_unet_sample_size(pipe, rbln_config.unet)
+        rbln_config.unet.use_additional_residuals = "controlnet" in pipe.config.keys()
 
         return rbln_config
 

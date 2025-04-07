@@ -1,2 +1,3 @@
 from .configuration_autoencoder_kl import RBLNAutoencoderKLConfig
+from .configuration_controlnet import RBLNControlNetModelConfig
 from .configuration_unet_2d_condition import RBLNUNet2DConditionModelConfig

@@ -69,9 +69,10 @@ class TestSDXLModel(BaseTest.TestModel):
     # Fix incorrect tiny-sd-pipe-xl's vae config.json sample_size
     RBLN_CLASS_KWARGS = {
         "rbln_config": {
+            "unet": {"batch_size": 2},
             "vae": {
                 "sample_size": (64, 64),
-            }
+            },
         }
     }
 
@@ -110,6 +111,14 @@ class TestSDControlNetModel(BaseTest.TestModel):
     RBLN_CLASS_KWARGS = {
         "rbln_img_width": 64,
         "rbln_img_height": 64,
+        "rbln_config": {
+            "controlnet": {
+                "batch_size": 2,
+            },
+            "unet": {
+                "batch_size": 2,
+            },
+        },
     }
 
     @classmethod
