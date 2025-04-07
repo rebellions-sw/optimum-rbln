@@ -12,11 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .attn import (
-    register_rbln_custom_paged_add_softmax_attention,
-    register_rbln_custom_paged_attention,
-    register_rbln_custom_paged_causal_attention,
-)
-from .flash_attn import register_rbln_custom_paged_flash_attention, register_rbln_custom_paged_flash_causal_attention
-from .kv_cache_update import register_rbln_custom_cache_update
-from .linear import linear
+from typing import Optional
+
+import torch
+from torch import Tensor
+
+
+@torch.library.custom_op("rbln_custom_ops::linear", mutates_args=())
+def linear(input: Tensor, weight: Tensor, bias: Optional[Tensor] = None) -> Tensor:
+    output_shape = list(input.shape[:-1])
+    output_shape += [weight.shape[0]]
+    return torch.empty(size=output_shape, dtype=input.dtype, device=input.device, requires_grad=input.requires_grad)
