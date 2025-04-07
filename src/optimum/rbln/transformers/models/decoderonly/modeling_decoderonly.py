@@ -580,6 +580,19 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
     ) -> int:
         """
         We are finding max_n_blocks(x) that satisfies the following equation:
+
+        available_dram - kernel_size - buffer
+            - num_layers * 2 * tensor_parallel_size
+            * align_2MB(
+                n_blocks
+                * block_size
+                * align_64(head_dim)
+                * math.ceil(num_key_value_heads / tensor_parallel_size)
+                * 2
+            ) > 0
+
+        This inequality can be rewritten as follows:
+
         a / c > align_2MB(b * x)
         where
            a = available_dram
