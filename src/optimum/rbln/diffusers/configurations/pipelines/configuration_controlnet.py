@@ -127,7 +127,6 @@ class _RBLNStableDiffusionXLControlNetPipelineBaseConfig(RBLNModelConfig):
             RBLNUNet2DConditionModelConfig,
             unet,
             batch_size=batch_size,
-            image_size=image_size,
             sample_size=sample_size,
         )
         self.vae = self.init_submodule_config(
