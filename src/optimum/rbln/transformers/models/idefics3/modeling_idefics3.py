@@ -160,13 +160,11 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
         if rbln_batch_size is None:
             rbln_batch_size = 1
         
-        # pixel_values = batch_size, num_images, num_channels, height, width
         input_info = [
             (
                 "hidden_states",
                 [
                     rbln_batch_size * 30, # batch_size * num_images
-                    # model_config.num_channels,
                     (model_config.image_size // model_config.patch_size) ** 2,
                     model_config.hidden_size
                 ],
