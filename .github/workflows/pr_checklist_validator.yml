@@ -10,7 +10,7 @@ on:
 
 jobs:
   validate-pr-checklist:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-rbln
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
