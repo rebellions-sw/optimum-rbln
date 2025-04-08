@@ -233,32 +233,6 @@ class RBLNDiffusionMixin:
         return prepared_config
 
     @classmethod
-    def _flatten_rbln_config(
-        cls,
-        rbln_config,
-    ) -> Dict[str, Any]:
-        prepared_config = cls._prepare_rbln_config(rbln_config)
-        flattened_config = {}
-        pipe_global_config = {k: v for k, v in prepared_config.items() if k not in cls._connected_classes.keys()}
-        for connected_pipe_name, connected_pipe_cls in cls._connected_classes.items():
-            connected_pipe_config = prepared_config.pop(connected_pipe_name)
-            prefix = cls._prefix.get(connected_pipe_name, "")
-            connected_pipe_global_config = {
-                k: v for k, v in connected_pipe_config.items() if k not in connected_pipe_cls._submodules
-            }
-            for submodule_name in connected_pipe_cls._submodules:
-                flattened_config[prefix + submodule_name] = connected_pipe_config[submodule_name]
-                flattened_config[prefix + submodule_name].update(
-                    {
-                        k: v
-                        for k, v in connected_pipe_global_config.items()
-                        if k not in flattened_config[prefix + submodule_name]
-                    }
-                )
-        flattened_config.update(pipe_global_config)
-        return flattened_config
-
-    @classmethod
     def _compile_pipelines(
         cls,
         model: torch.nn.Module,
@@ -292,7 +266,7 @@ class RBLNDiffusionMixin:
         model: torch.nn.Module,
         passed_submodules: Dict[str, RBLNModel],
         model_save_dir: Optional[PathLike],
-        rbln_config: Dict[str, Any],
+        rbln_config: RBLNDiffusionMixinConfig,
         prefix: Optional[str] = "",
     ) -> Dict[str, RBLNModel]:
         compiled_submodules = {}
