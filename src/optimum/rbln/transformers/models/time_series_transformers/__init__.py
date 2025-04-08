@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .pipeline_kandinsky2_2 import RBLNKandinskyV22Pipeline
-from .pipeline_kandinsky2_2_combined import (
-    RBLNKandinskyV22CombinedPipeline,
-    RBLNKandinskyV22Img2ImgCombinedPipeline,
-    RBLNKandinskyV22InpaintCombinedPipeline,
-)
-from .pipeline_kandinsky2_2_img2img import RBLNKandinskyV22Img2ImgPipeline
-from .pipeline_kandinsky2_2_inpaint import RBLNKandinskyV22InpaintPipeline
-from .pipeline_kandinsky2_2_prior import RBLNKandinskyV22PriorPipeline
+# Portions of this software are licensed under the Apache License,
+# Version 2.0. See the NOTICE file distributed with this work for
+# additional information regarding copyright ownership.
+
+# All other portions of this software, including proprietary code,
+# are the intellectual property of Rebellions Inc. and may not be
+# copied, modified, or distributed without prior written permission
+# from Rebellions Inc.
+
+from .modeling_time_series_transformers import RBLNTimeSeriesTransformerForPrediction

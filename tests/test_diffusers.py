@@ -4,7 +4,7 @@ import torch
 from diffusers import ControlNetModel
 
 from optimum.rbln import (
-    RBLNKandinskyV22InpaintCombinedPipeline,
+    RBLNKandinskyV22CombinedPipeline,
     RBLNStableDiffusion3Img2ImgPipeline,
     RBLNStableDiffusion3Pipeline,
     RBLNStableDiffusionControlNetPipeline,
@@ -211,20 +211,49 @@ class TestSDMultiControlNetModel(BaseTest.TestModel):
         return super().setUpClass()
 
 
-class TestKandinskyV22InpaintingModel(BaseTest.TestModel):
-    RBLN_CLASS = RBLNKandinskyV22InpaintCombinedPipeline
-    # HF_MODEL_ID = "hf-internal-testing/tiny-random-kandinsky-v22-decoder"
-    HF_MODEL_ID = "kandinsky-community/kandinsky-2-2-decoder-inpaint"
+class TestKandinskyV22Model(BaseTest.TestModel):
+    RBLN_CLASS = RBLNKandinskyV22CombinedPipeline
+    HF_MODEL_ID = "hf-internal-testing/tiny-random-kandinsky-v22-decoder"
     GENERATION_KWARGS = {
-        "prompt": "concept art digital painting of an elven castle, inspired by lord of the rings, highly detailed, 8k",
+        "prompt": "red cat, 4k photo",
         "generator": torch.manual_seed(42),
-        "image": torch.FloatTensor(1, 3, 512, 512).uniform_(-1, 1),
-        "mask_image": torch.randn(1, 1, 512, 512).uniform_(0, 1),
+        "num_inference_steps": 3,
     }
     RBLN_CLASS_KWARGS = {
-        "rbln_img_width": 512,
-        "rbln_img_height": 512,
+        "rbln_img_width": 64,
+        "rbln_img_height": 64,
     }
+
+    def test_complicate_config(self):
+        rbln_config = {
+            "prior_pipe": {
+                "text_encoder": {
+                    "batch_size": 2,
+                },
+            },
+            "prior_prior": {
+                "batch_size": 4,
+            },
+            "unet": {
+                "batch_size": 2,
+            },
+            "batch_size": 1,
+            "prior_guidance_scale": 5.0,
+            "guidance_scale": 3.0,
+        }
+        with self.subTest():
+            _ = self.RBLN_CLASS.from_pretrained(
+                model_id=self.HF_MODEL_ID,
+                export=True,
+                rbln_config=rbln_config,
+                **self.RBLN_CLASS_KWARGS,
+            )
+        with self.subTest():
+            self.assertEqual(_.prior_text_encoder.rbln_config.model_cfg["batch_size"], 2)
+            self.assertEqual(_.prior_prior.rbln_config.model_cfg["batch_size"], 4)
+            self.assertEqual(_.prior_prior.rbln_config.model_cfg["guidance_scale"], 5.0)
+            self.assertEqual(_.unet.rbln_config.model_cfg["batch_size"], 2)
+            self.assertEqual(_.unet.rbln_config.model_cfg["guidance_scale"], 3.0)
 
 
 class TestSVDImg2VidModel(BaseTest.TestModel):
