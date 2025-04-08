@@ -1,37 +1,36 @@
-# coding=utf-8
-# Copyright 2021 Facebook AI Research The HuggingFace Inc. team. All rights reserved.
-#
+# Copyright 2025 Rebellions Inc. All rights reserved.
+
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
+# You may obtain a copy of the License at:
+
 #     http://www.apache.org/licenses/LICENSE-2.0
-#
+
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""PyTorch DETR model."""
 
 import math
 from typing import Optional
 
 import torch
 from torch import nn
-
+from transformers.modeling_outputs import BaseModelOutput
+from transformers.models.detr.configuration_detr import DetrConfig
 from transformers.models.detr.modeling_detr import (
-    DetrForObjectDetection,
     DetrDecoderOutput,
+    DetrForObjectDetection,
     DetrLearnedPositionEmbedding,
 )
-from transformers.modeling_outputs import BaseModelOutput
 from transformers.utils import logging
-from transformers.models.detr.configuration_detr import DetrConfig
+
 
 logger = logging.get_logger(__name__)
 
 
+# ref: https://github.com/huggingface/transformers/blob/794fde7b1c3d041519fc28ea3e1461b0cfcad4e7/src/transformers/modeling_attn_mask_utils.py#L181
 def _prepare_4d_attention_mask(mask: torch.Tensor, dtype: torch.dtype, tgt_len: Optional[int] = None):
     """
     Expands attention_mask from `[bsz, seq_len]` to `[bsz, 1, tgt_seq_len, src_seq_len]`.
@@ -46,6 +45,7 @@ def _prepare_4d_attention_mask(mask: torch.Tensor, dtype: torch.dtype, tgt_len: 
     return inverted_mask * torch.finfo(dtype).min
 
 
+# ref: https://github.com/huggingface/transformers/blob/794fde7b1c3d041519fc28ea3e1461b0cfcad4e7/src/transformers/models/detr/modeling_detr.py#L412
 class DetrSinePositionEmbedding(nn.Module):
     """
     This is a more standard version of the position embedding, very similar to the one used by the Attention is all you
@@ -97,6 +97,7 @@ def build_position_encoding(config):
     return position_embedding
 
 
+# https://github.com/huggingface/transformers/blob/794fde7b1c3d041519fc28ea3e1461b0cfcad4e7/src/transformers/models/detr/modeling_detr.py#L874
 class DetrEncoder(nn.Module):
     """
     Transformer encoder consisting of *config.encoder_layers* self attention layers. Each layer is a
@@ -200,6 +201,7 @@ class DetrEncoder(nn.Module):
         )
 
 
+# ref: https://github.com/huggingface/transformers/blob/794fde7b1c3d041519fc28ea3e1461b0cfcad4e7/src/transformers/models/detr/modeling_detr.py#L988
 class DetrDecoder(nn.Module):
     """
     Transformer decoder consisting of *config.decoder_layers* layers. Each layer is a [`DetrDecoderLayer`].
@@ -368,6 +370,7 @@ class DetrDecoder(nn.Module):
         )
 
 
+# ref: https://github.com/huggingface/transformers/blob/794fde7b1c3d041519fc28ea3e1461b0cfcad4e7/src/transformers/models/detr/modeling_detr.py#L391
 class DetrConvModel(nn.Module):
     """
     This module adds 2D position embeddings to all intermediate feature maps of the convolutional encoder.
