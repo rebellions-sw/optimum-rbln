@@ -11,6 +11,7 @@ from optimum.rbln import (
     RBLNBertForMaskedLM,
     RBLNBertForQuestionAnswering,
     RBLNCLIPTextModel,
+    RBLNDetrForObjectDetection,
     RBLNDPTForDepthEstimation,
     RBLNResNetForImageClassification,
     RBLNT5EncoderModel,
@@ -19,7 +20,6 @@ from optimum.rbln import (
     RBLNWhisperForConditionalGeneration,
     RBLNXLMRobertaForSequenceClassification,
     RBLNXLMRobertaModel,
-    RBLNDetrForObjectDetection,
 )
 from optimum.rbln.transformers.models.auto.modeling_auto import (
     RBLNAutoModel,
@@ -28,10 +28,10 @@ from optimum.rbln.transformers.models.auto.modeling_auto import (
     RBLNAutoModelForDepthEstimation,
     RBLNAutoModelForImageClassification,
     RBLNAutoModelForMaskedLM,
+    RBLNAutoModelForObjectDetection,
     RBLNAutoModelForQuestionAnswering,
     RBLNAutoModelForSequenceClassification,
     RBLNAutoModelForSpeechSeq2Seq,
-    RBLNAutoModelForObjectDetection,
 )
 from optimum.rbln.utils.runtime_utils import ContextRblnConfig
 from optimum.rbln.utils.save_utils import maybe_load_preprocessors
