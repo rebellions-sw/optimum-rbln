@@ -14,12 +14,13 @@
 
 from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
-from transformers import AutoModelForObjectDetection, PretrainedConfig
+from transformers import AutoModelForObjectDetection, PretrainedConfig, PreTrainedModel
 from transformers.models.detr.modeling_detr import DetrObjectDetectionOutput
 
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
+from .detr_architecture import DetrForObjectDetectionWrapper
 
 
 if TYPE_CHECKING:
@@ -30,6 +31,12 @@ logger = get_logger(__name__)
 
 class RBLNDetrForObjectDetection(RBLNModel):
     auto_model_class = AutoModelForObjectDetection
+    _decoder_wrapper_cls = DetrForObjectDetectionWrapper
+
+    @classmethod
+    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: "RBLNConfig"):
+        print("wrapping detr model for optimize..")
+        return cls._decoder_wrapper_cls(model).eval()
 
     @classmethod
     def _get_rbln_config(
