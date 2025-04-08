@@ -263,7 +263,7 @@ class _VAECogVideoXDecoder(torch.nn.Module):
         
         for k, v in conv_cache.items():
             isdict(v, k)
-            
+
         return tuple(conv_cache_list), keys
 
     def _to_nested_dict(self, conv_cache_list, keys):
@@ -301,12 +301,18 @@ class _VAECogVideoXDecoder(torch.nn.Module):
                 batch_dim = torch.tensor(0, dtype=torch.int16)
                 batch_axis = torch.tensor(0, dtype=torch.int16)
                 
-                # import pdb; pdb.set_trace()
+                # cache_flatten = cache.reshape(cache.shape[0], -1)
+                # conv_cache_flatten = conv_cache.reshape(conv_cache.shape[0], -1) # (b, cdhw) # pair with rbln_decorator in compile i2v
+                # assert (cache_flatten.shape[-1] == conv_cache_flatten.shape[-1])
+                # dummy_out = torch.ops.rbln_custom_ops.rbln_cache_update(cache_flatten, conv_cache_flatten, batch_dim, batch_axis)
+                
                 dummy_out = torch.ops.rbln_custom_ops.rbln_cache_update(cache, conv_cache, batch_dim, batch_axis)
                 dummy_outs.append(dummy_out)
-            # import pdb; pdb.set_trace()
+            
+            return cov_video_dec_out, torch.stack(tuple(dummy_outs))
+                
         else :
-            conv_cache_dict = self._to_nested_dict(args, self.keys)
+            conv_cache_dict = self._to_nested_dict(args, self.keys)            
             cov_video_dec_out, conv_cache = self.cog_video_x.decoder(z, conv_cache=conv_cache_dict)
             conv_cache_list, _ = self._to_tuple(conv_cache)
             
@@ -314,9 +320,15 @@ class _VAECogVideoXDecoder(torch.nn.Module):
                 batch_dim = torch.tensor(0, dtype=torch.int16)
                 batch_axis = torch.tensor(0, dtype=torch.int16)
                 
+                # cache_flatten = cache.reshape(cache.shape[0], -1)
+                # conv_cache_flatten = conv_cache.reshape(conv_cache.shape[0], -1) # (b, cdhw) # pair with rbln_decorator in compile t2v
+                # assert (cache_flatten.shape[-1] == conv_cache_flatten.shape[-1])
+                # dummy_out = torch.ops.rbln_custom_ops.rbln_cache_update(cache_flatten, conv_cache_flatten, batch_dim, batch_axis)
+                
                 dummy_out = torch.ops.rbln_custom_ops.rbln_cache_update(cache, conv_cache, batch_dim, batch_axis)
                 dummy_outs.append(dummy_out)
+                
+        # return cov_video_dec_out, conv_cache_list, torch.stack(tuple(dummy_outs))
+        # return cov_video_dec_out
         
-        # import pdb; pdb.set_trace()
-        # return cov_video_dec_out, conv_cache_list, tuple(dummy_outs)
         return cov_video_dec_out, torch.stack(tuple(dummy_outs))

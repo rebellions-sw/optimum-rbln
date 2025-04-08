@@ -79,8 +79,24 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
             return {"encoder": enc_compiled_model, "decoder": (dec_compiled_model_0, dec_compiled_model_1)}
 
         def compile_txt2vid():
+            def rbln_decorator(func):
+                def wrapper(*args, **kwargs):
+                    b, c, d, h, w = args[0].shape # z
+                    conv_cache = kwargs.get("conv_cache") # None
+                    if conv_cache is not None :
+                        if len(conv_cache) < 3:
+                            conv_cache = conv_cache.view(b, c, 2, h, w)
+                    elif len(args) > 1 :
+                        if args[-1] is not None and len(args[-1]) < 3:
+                            conv_cache = args[-1].view(b, c, 2, h, w)
+                    
+                    result = func(args[0], conv_cache=conv_cache) # todo(si) 일반화? 고도화? functionality 검증?
+                    return result
+                return wrapper
+            
             decoder_model_0 = _VAECogVideoXDecoder(model)
-            decoder_model_1 = _VAECogVideoXDecoder(model)
+            # decoder_model_0 = _VAECogVideoXDecoder(model)
+            # decoder_model_1 = _VAECogVideoXDecoder(model)
 
             from rebel.compile_context import CompileContext
             context = CompileContext(use_weight_sharing=False) # NOTE(si) : True possible?
@@ -89,7 +105,6 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
 
             # # Mark encoder's static tensors (cross kv states) FIXME decoder_0 output conv cache
             static_tensors = {}
-            # import pdb; pdb.set_trace()
             for (name, _, _), tensor in zip(rbln_config.compile_cfgs[0].input_info, enc_example_inputs):
                 if "conv" in name:
                     static_tensors[name] = tensor
@@ -108,6 +123,14 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
                 example_inputs=enc_example_inputs,
                 compile_context=context,
             )
+            
+            # # for rbln cache update
+            # for m in model.modules():
+            #     from diffusers.models.autoencoders.autoencoder_kl_cogvideox import CogVideoXCausalConv3d
+            #     if isinstance(m, CogVideoXCausalConv3d):
+            #         m.fake_context_parallel_forward = rbln_decorator(m.fake_context_parallel_forward)
+                    
+            decoder_model_1 = _VAECogVideoXDecoder(model)
 
             dec_compiled_model_1 = cls.compile(
                 decoder_model_1.eval(),
