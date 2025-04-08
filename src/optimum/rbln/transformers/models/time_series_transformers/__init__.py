@@ -1,4 +1,4 @@
-# Copyright 2025 Rebellions Inc. All rights reserved.
+# Copyright 2024 Rebellions Inc.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .attn import *
-from .flash_attn import *
-from .kv_cache_update import *
-from .linear import linear
+# Portions of this software are licensed under the Apache License,
+# Version 2.0. See the NOTICE file distributed with this work for
+# additional information regarding copyright ownership.
+
+# All other portions of this software, including proprietary code,
+# are the intellectual property of Rebellions Inc. and may not be
+# copied, modified, or distributed without prior written permission
+# from Rebellions Inc.
+
+from .modeling_time_series_transformers import RBLNTimeSeriesTransformerForPrediction

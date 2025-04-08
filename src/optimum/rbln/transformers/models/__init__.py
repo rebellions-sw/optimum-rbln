@@ -50,6 +50,7 @@ _import_structure = {
     "mistral": ["RBLNMistralForCausalLM"],
     "phi": ["RBLNPhiForCausalLM"],
     "qwen2": ["RBLNQwen2ForCausalLM"],
+    "time_series_transformers": ["RBLNTimeSeriesTransformerForPrediction"],
     "t5": ["RBLNT5EncoderModel", "RBLNT5ForConditionalGeneration"],
     "wav2vec2": ["RBLNWav2Vec2ForCTC"],
     "whisper": ["RBLNWhisperForConditionalGeneration"],
@@ -90,6 +91,7 @@ if TYPE_CHECKING:
     from .phi import RBLNPhiForCausalLM
     from .qwen2 import RBLNQwen2ForCausalLM
     from .t5 import RBLNT5EncoderModel, RBLNT5ForConditionalGeneration
+    from .time_series_transformers import RBLNTimeSeriesTransformerForPrediction
     from .wav2vec2 import RBLNWav2Vec2ForCTC
     from .whisper import RBLNWhisperForConditionalGeneration
     from .xlm_roberta import RBLNXLMRobertaModel
