@@ -35,7 +35,6 @@ class RBLNDetrForObjectDetection(RBLNModel):
 
     @classmethod
     def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: "RBLNConfig"):
-        print("wrapping detr model for optimize..")
         return cls._decoder_wrapper_cls(model).eval()
 
     @classmethod
