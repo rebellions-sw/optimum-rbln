@@ -22,11 +22,13 @@ from transformers import PretrainedConfig
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from ...modeling_diffusers import RBLNDiffusionMixin
+from ...configurations import RBLNSD3Transformer2DModelConfig
 
 
 if TYPE_CHECKING:
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PreTrainedModel
+
+    from ...modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 
 logger = get_logger(__name__)
 
@@ -67,75 +69,52 @@ class RBLNSD3Transformer2DModel(RBLNModel):
         return SD3Transformer2DModelWrapper(model).eval()
 
     @classmethod
-    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
-        sample_size = rbln_config.get("sample_size", pipe.default_sample_size)
-        img_width = rbln_config.get("img_width")
-        img_height = rbln_config.get("img_height")
-
-        if (img_width is None) ^ (img_height is None):
-            raise RuntimeError
-
-        elif img_width and img_height:
-            sample_size = img_height // pipe.vae_scale_factor, img_width // pipe.vae_scale_factor
-
-        prompt_max_length = rbln_config.get("max_sequence_length", 256)
-        prompt_embed_length = pipe.tokenizer_max_length + prompt_max_length
-
-        batch_size = rbln_config.get("batch_size")
-        if not batch_size:
-            do_classifier_free_guidance = rbln_config.get("guidance_scale", 5.0) > 1.0
-            batch_size = 2 if do_classifier_free_guidance else 1
-        else:
-            if rbln_config.get("guidance_scale"):
-                logger.warning(
-                    "guidance_scale is ignored because batch size is explicitly specified. "
-                    "To ensure consistent behavior, consider removing the guidance scale or "
-                    "adjusting the batch size configuration as needed."
+    def update_rbln_config_using_pipe(
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
+    ) -> "RBLNDiffusionMixinConfig":
+        if rbln_config.sample_size is None:
+            if rbln_config.image_size is not None:
+                rbln_config.transformer.sample_size = (
+                    rbln_config.image_size[0] // pipe.vae_scale_factor,
+                    rbln_config.image_size[1] // pipe.vae_scale_factor,
                 )
+            else:
+                rbln_config.transformer.sample_size = pipe.default_sample_size
 
-        rbln_config.update(
-            {
-                "batch_size": batch_size,
-                "prompt_embed_length": prompt_embed_length,
-                "sample_size": sample_size,
-            }
-        )
-
+        prompt_embed_length = pipe.tokenizer_max_length + rbln_config.max_seq_len
+        rbln_config.transformer.prompt_embed_length = prompt_embed_length
         return rbln_config
 
     @classmethod
     def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
+        model: "PreTrainedModel",
         model_config: "PretrainedConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNModelConfig:
-        rbln_batch_size = rbln_kwargs.get("batch_size", None)
+        rbln_config: RBLNSD3Transformer2DModelConfig,
+    ) -> RBLNSD3Transformer2DModelConfig:
+        if rbln_config.sample_size is None:
+            rbln_config.sample_size = model_config.sample_size
 
-        sample_size = rbln_kwargs.get("sample_size", model_config.sample_size)
-        if isinstance(sample_size, int):
-            sample_size = (sample_size, sample_size)
-
-        rbln_prompt_embed_length = rbln_kwargs.get("prompt_embed_length")
-        if rbln_prompt_embed_length is None:
-            raise ValueError("rbln_prompt_embed_length should be specified.")
+        if isinstance(rbln_config.sample_size, int):
+            rbln_config.sample_size = (rbln_config.sample_size, rbln_config.sample_size)
 
         input_info = [
             (
                 "hidden_states",
                 [
-                    rbln_batch_size,
+                    rbln_config.batch_size,
                     model_config.in_channels,
-                    sample_size[0],
-                    sample_size[1],
+                    rbln_config.sample_size[0],
+                    rbln_config.sample_size[1],
                 ],
                 "float32",
             ),
             (
                 "encoder_hidden_states",
                 [
-                    rbln_batch_size,
-                    rbln_prompt_embed_length,
+                    rbln_config.batch_size,
+                    rbln_config.prompt_embed_length,
                     model_config.joint_attention_dim,
                 ],
                 "float32",
@@ -143,24 +122,16 @@ class RBLNSD3Transformer2DModel(RBLNModel):
             (
                 "pooled_projections",
                 [
-                    rbln_batch_size,
+                    rbln_config.batch_size,
                     model_config.pooled_projection_dim,
                 ],
                 "float32",
             ),
-            ("timestep", [rbln_batch_size], "float32"),
+            ("timestep", [rbln_config.batch_size], "float32"),
         ]
 
-        rbln_compile_config = RBLNCompileConfig(input_info=input_info)
-
-        rbln_config = RBLNModelConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[rbln_compile_config],
-            rbln_kwargs=rbln_kwargs,
-        )
-
-        rbln_config.model_cfg.update({"batch_size": rbln_batch_size})
-
+        compile_config = RBLNCompileConfig(input_info=input_info)
+        rbln_config.set_compile_cfgs([compile_config])
         return rbln_config
 
     @property

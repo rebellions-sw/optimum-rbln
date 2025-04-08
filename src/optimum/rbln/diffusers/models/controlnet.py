@@ -120,7 +120,10 @@ class RBLNControlNetModel(RBLNModel):
 
     @classmethod
     def update_rbln_config_using_pipe(
-        cls, pipe: RBLNDiffusionMixin, rbln_config: "RBLNDiffusionMixinConfig"
+        cls,
+        pipe: RBLNDiffusionMixin,
+        rbln_config: "RBLNDiffusionMixinConfig",
+        submodule_name: str,
     ) -> "RBLNDiffusionMixinConfig":
         rbln_vae_cls = getattr(importlib.import_module("optimum.rbln"), f"RBLN{pipe.vae.__class__.__name__}")
         rbln_unet_cls = getattr(importlib.import_module("optimum.rbln"), f"RBLN{pipe.unet.__class__.__name__}")
@@ -129,7 +132,9 @@ class RBLNControlNetModel(RBLNModel):
         text_model_hidden_size = pipe.text_encoder_2.config.hidden_size if hasattr(pipe, "text_encoder_2") else None
         rbln_config.controlnet.text_model_hidden_size = text_model_hidden_size
         rbln_config.controlnet.vae_sample_size = rbln_vae_cls.get_vae_sample_size(pipe, rbln_config.vae)
-        rbln_config.controlnet.unet_sample_size = rbln_unet_cls.get_unet_sample_size(pipe, rbln_config.unet)
+        rbln_config.controlnet.unet_sample_size = rbln_unet_cls.get_unet_sample_size(
+            pipe, rbln_config.unet, image_size=rbln_config.image_size
+        )
 
         return rbln_config
 

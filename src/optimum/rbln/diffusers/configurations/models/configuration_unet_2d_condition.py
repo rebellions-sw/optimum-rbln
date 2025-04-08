@@ -29,10 +29,6 @@ class RBLNUNet2DConditionModelConfig(RBLNModelConfig):
         in_features: Optional[int] = None,
         text_model_hidden_size: Optional[int] = None,
         image_model_hidden_size: Optional[int] = None,
-        image_size: Optional[Tuple[int, int]] = None,
-        *,
-        img_height: Optional[int] = None,
-        img_width: Optional[int] = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -49,13 +45,5 @@ class RBLNUNet2DConditionModelConfig(RBLNModelConfig):
         self.image_model_hidden_size = image_model_hidden_size
 
         self.sample_size = sample_size
-        if isinstance(self.sample_size, int):
-            self.sample_size = (self.sample_size, self.sample_size)
-
-        if image_size is not None and (img_height is not None or img_width is not None):
-            raise ValueError("image_size and img_height/img_width cannot both be provided")
-
-        if img_height is not None and img_width is not None:
-            self.image_size = (img_height, img_width)
-        else:
-            self.image_size = image_size
+        if isinstance(sample_size, int):
+            self.sample_size = (sample_size, sample_size)

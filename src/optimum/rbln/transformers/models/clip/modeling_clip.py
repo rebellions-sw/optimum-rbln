@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import torch
 from transformers import CLIPTextConfig, CLIPTextModel, CLIPVisionConfig, CLIPVisionModel
@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, CLIPTextModel, PreTrainedModel
 
-    from ....diffusers.modeling_diffusers import RBLNDiffusionMixin
+    from ....diffusers.modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 
 
 class _TextEncoder(torch.nn.Module):
@@ -49,7 +49,9 @@ class RBLNCLIPTextModel(RBLNModel):
         return _TextEncoder(model).eval()
 
     @classmethod
-    def update_rbln_config_using_pipe(cls, pipe: "RBLNDiffusionMixin", rbln_config: Dict[str, Any]) -> Dict[str, Any]:
+    def update_rbln_config_using_pipe(
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_config: str
+    ) -> "RBLNDiffusionMixinConfig":
         return rbln_config
 
     @classmethod
@@ -103,7 +105,9 @@ class RBLNCLIPVisionModel(RBLNModel):
         return _VisionEncoder(model).eval()
 
     @classmethod
-    def update_rbln_config_using_pipe(cls, pipe: "RBLNDiffusionMixin", rbln_config: Dict[str, Any]) -> Dict[str, Any]:
+    def update_rbln_config_using_pipe(
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
+    ) -> "RBLNDiffusionMixinConfig":
         return rbln_config
 
     @classmethod

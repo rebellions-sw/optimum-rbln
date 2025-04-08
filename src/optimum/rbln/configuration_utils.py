@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import importlib
+import inspect
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -240,6 +241,19 @@ class RBLNModelConfig:
             rbln_config_cls = getattr(importlib.import_module("optimum.rbln"), cls_name)
             value = rbln_config_cls(**value)
 
+        # Forbid setting keyword-only arguments
+        # keyword-only arguments should be translated to other attributes, not set directly
+        _keyword_only_args = set()
+        init_signature = inspect.signature(self.__class__.__init__)
+        for param_name, param in init_signature.parameters.items():
+            if param.kind == inspect.Parameter.KEYWORD_ONLY:
+                _keyword_only_args.add(param_name)
+
+        if key in _keyword_only_args:
+            raise AttributeError(
+                f"Cannot set attribute '{key}'. This is an internal error. Please report it to the developers."
+            )
+
         super().__setattr__(key, value)
 
     def __init__(
@@ -290,7 +304,7 @@ class RBLNModelConfig:
 
     @property
     def rbln_model_cls_name(self) -> str:
-        return self.cls_name[:-6]
+        return self.__class__.__name__[:-6]
 
     @property
     def rbln_model_cls(self) -> Type:

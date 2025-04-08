@@ -36,6 +36,10 @@ _import_structure = {
         "RBLNStableDiffusionXLImg2ImgPipelineConfig",
         "RBLNStableDiffusionXLInpaintPipelineConfig",
         "RBLNStableDiffusionXLPipelineConfig",
+        "RBLNStableDiffusion3PipelineConfig",
+        "RBLNStableDiffusion3Img2ImgPipelineConfig",
+        "RBLNStableDiffusion3InpaintPipelineConfig",
+        "RBLNSD3Transformer2DModelConfig",
         "RBLNUNet2DConditionModelConfig",
     ],
     "pipelines": [
@@ -78,6 +82,10 @@ if TYPE_CHECKING:
     from .configurations import (
         RBLNAutoencoderKLConfig,
         RBLNControlNetModelConfig,
+        RBLNSD3Transformer2DModelConfig,
+        RBLNStableDiffusion3Img2ImgPipelineConfig,
+        RBLNStableDiffusion3InpaintPipelineConfig,
+        RBLNStableDiffusion3PipelineConfig,
         RBLNStableDiffusionControlNetPipelineConfig,
         RBLNStableDiffusionImg2ImgControlNetPipelineConfig,
         RBLNStableDiffusionImg2ImgPipelineConfig,

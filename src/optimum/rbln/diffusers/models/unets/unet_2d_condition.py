@@ -172,9 +172,11 @@ class RBLNUNet2DConditionModel(RBLNModel):
 
     @classmethod
     def get_unet_sample_size(
-        cls, pipe: RBLNDiffusionMixin, rbln_config: RBLNUNet2DConditionModelConfig
+        cls,
+        pipe: RBLNDiffusionMixin,
+        rbln_config: RBLNUNet2DConditionModelConfig,
+        image_size: Optional[Tuple[int, int]] = None,
     ) -> Tuple[int, int]:
-        image_size = rbln_config.image_size
         scale_factor = pipe.movq_scale_factor if hasattr(pipe, "movq_scale_factor") else pipe.vae_scale_factor
 
         if image_size is None:
@@ -206,7 +208,7 @@ class RBLNUNet2DConditionModel(RBLNModel):
 
     @classmethod
     def update_rbln_config_using_pipe(
-        cls, pipe: RBLNDiffusionMixin, rbln_config: "RBLNDiffusionMixinConfig"
+        cls, pipe: RBLNDiffusionMixin, rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
     ) -> "RBLNDiffusionMixinConfig":
         rbln_config.unet.text_model_hidden_size = (
             pipe.text_encoder_2.config.hidden_size if hasattr(pipe, "text_encoder_2") else None
@@ -217,7 +219,9 @@ class RBLNUNet2DConditionModel(RBLNModel):
             pipe.text_encoder.config.max_position_embeddings if hasattr(pipe, "text_encoder") else None
         )
 
-        rbln_config.unet.sample_size = cls.get_unet_sample_size(pipe, rbln_config.unet)
+        rbln_config.unet.sample_size = cls.get_unet_sample_size(
+            pipe, rbln_config.unet, image_size=rbln_config.image_size
+        )
         rbln_config.unet.use_additional_residuals = "controlnet" in pipe.config.keys()
 
         return rbln_config

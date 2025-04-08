@@ -86,7 +86,9 @@ class RBLNPriorTransformer(RBLNModel):
         return _PriorTransformer(model).eval()
 
     @classmethod
-    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
+    def update_rbln_config_using_pipe(
+        cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any], submodule_name: str
+    ) -> Dict[str, Any]:
         batch_size = rbln_config.get("batch_size")
         if not batch_size:
             do_classifier_free_guidance = rbln_config.get("guidance_scale", 5.0) > 1.0

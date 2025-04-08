@@ -15,30 +15,32 @@
 from typing import Optional, Tuple
 
 from ....configuration_utils import RBLNModelConfig
-from ....transformers import RBLNCLIPTextModelConfig, RBLNCLIPTextModelWithProjectionConfig
+from ....transformers import RBLNCLIPTextModelWithProjectionConfig, RBLNT5EncoderModelConfig
 from ....utils.logging import get_logger
-from ..models import RBLNAutoencoderKLConfig, RBLNUNet2DConditionModelConfig
+from ..models import RBLNAutoencoderKLConfig, RBLNSD3Transformer2DModelConfig
 
 
 logger = get_logger(__name__)
 
 
-class _RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
-    submodules = ["text_encoder", "text_encoder_2", "unet", "vae"]
+class _RBLNStableDiffusion3PipelineBaseConfig(RBLNModelConfig):
+    submodules = ["transformer", "text_encoder", "text_encoder_2", "text_encoder_3", "vae"]
     _vae_uses_encoder = False
 
     def __init__(
         self,
+        transformer: Optional[RBLNModelConfig] = None,
         text_encoder: Optional[RBLNModelConfig] = None,
         text_encoder_2: Optional[RBLNModelConfig] = None,
-        unet: Optional[RBLNModelConfig] = None,
+        text_encoder_3: Optional[RBLNModelConfig] = None,
         vae: Optional[RBLNModelConfig] = None,
         *,
+        max_seq_len: Optional[int] = None,
+        sample_size: Optional[Tuple[int, int]] = None,
+        image_size: Optional[Tuple[int, int]] = None,
         batch_size: Optional[int] = None,
         img_height: Optional[int] = None,
         img_width: Optional[int] = None,
-        sample_size: Optional[Tuple[int, int]] = None,
-        image_size: Optional[Tuple[int, int]] = None,
         guidance_scale: Optional[float] = None,
         **kwargs,
     ):
@@ -49,13 +51,23 @@ class _RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
         if img_height is not None and img_width is not None:
             image_size = (img_height, img_width)
 
-        self.text_encoder = self.init_submodule_config(RBLNCLIPTextModelConfig, text_encoder, batch_size=batch_size)
+        max_seq_len = max_seq_len or 256
+
+        self.text_encoder = self.init_submodule_config(
+            RBLNCLIPTextModelWithProjectionConfig, text_encoder, batch_size=batch_size
+        )
         self.text_encoder_2 = self.init_submodule_config(
             RBLNCLIPTextModelWithProjectionConfig, text_encoder_2, batch_size=batch_size
         )
-        self.unet = self.init_submodule_config(
-            RBLNUNet2DConditionModelConfig,
-            unet,
+        self.text_encoder_3 = self.init_submodule_config(
+            RBLNT5EncoderModelConfig,
+            text_encoder_3,
+            batch_size=batch_size,
+            max_seq_len=max_seq_len,
+        )
+        self.transformer = self.init_submodule_config(
+            RBLNSD3Transformer2DModelConfig,
+            transformer,
             batch_size=batch_size,
             sample_size=sample_size,
         )
@@ -64,14 +76,18 @@ class _RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
             vae,
             batch_size=batch_size,
             uses_encoder=self.__class__._vae_uses_encoder,
-            sample_size=image_size,  # image size is equal to sample size in vae
+            sample_size=image_size,
         )
 
         if guidance_scale is not None:
             logger.warning("Specifying `guidance_scale` is deprecated. It will be removed in a future version.")
             do_classifier_free_guidance = guidance_scale > 1.0
             if do_classifier_free_guidance:
-                self.unet.batch_size = batch_size * 2
+                self.transformer.batch_size = self.batch_size * 2
+
+    @property
+    def max_seq_len(self):
+        return self.text_encoder_3.max_seq_len
 
     @property
     def batch_size(self):
@@ -79,20 +95,20 @@ class _RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
 
     @property
     def sample_size(self):
-        return self.unet.sample_size
+        return self.transformer.sample_size
 
     @property
     def image_size(self):
         return self.vae.sample_size
 
 
-class RBLNStableDiffusionXLPipelineConfig(_RBLNStableDiffusionXLPipelineBaseConfig):
+class RBLNStableDiffusion3PipelineConfig(_RBLNStableDiffusion3PipelineBaseConfig):
     _vae_uses_encoder = False
 
 
-class RBLNStableDiffusionXLImg2ImgPipelineConfig(_RBLNStableDiffusionXLPipelineBaseConfig):
+class RBLNStableDiffusion3Img2ImgPipelineConfig(_RBLNStableDiffusion3PipelineBaseConfig):
     _vae_uses_encoder = True
 
 
-class RBLNStableDiffusionXLInpaintPipelineConfig(_RBLNStableDiffusionXLPipelineBaseConfig):
+class RBLNStableDiffusion3InpaintPipelineConfig(_RBLNStableDiffusion3PipelineBaseConfig):
     _vae_uses_encoder = True

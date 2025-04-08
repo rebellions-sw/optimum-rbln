@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Optional, Tuple
 
 from ....configuration_utils import RBLNModelConfig
 from ....transformers import RBLNCLIPTextModelConfig, RBLNCLIPTextModelWithProjectionConfig
@@ -29,34 +29,39 @@ class _RBLNStableDiffusionControlNetPipelineBaseConfig(RBLNModelConfig):
 
     def __init__(
         self,
-        batch_size: Optional[int] = None,
         text_encoder: Optional[RBLNModelConfig] = None,
         unet: Optional[RBLNModelConfig] = None,
         vae: Optional[RBLNModelConfig] = None,
         controlnet: Optional[RBLNModelConfig] = None,
-        guidance_scale: Optional[float] = None,
-        vae_uses_encoder: Optional[bool] = None,
         *,
+        batch_size: Optional[int] = None,
         img_height: Optional[int] = None,
         img_width: Optional[int] = None,
+        sample_size: Optional[Tuple[int, int]] = None,
+        image_size: Optional[Tuple[int, int]] = None,
+        guidance_scale: Optional[float] = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.batch_size = batch_size or 1
-        if not isinstance(self.batch_size, int) or self.batch_size < 0:
-            raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
+        if image_size is not None and (img_height is not None or img_width is not None):
+            raise ValueError("image_size and img_height/img_width cannot both be provided")
+
+        if img_height is not None and img_width is not None:
+            image_size = (img_height, img_width)
 
         self.text_encoder = self.init_submodule_config(RBLNCLIPTextModelConfig, text_encoder, batch_size=batch_size)
         self.unet = self.init_submodule_config(
-            RBLNUNet2DConditionModelConfig, unet, batch_size=batch_size, img_height=img_height, img_width=img_width
+            RBLNUNet2DConditionModelConfig,
+            unet,
+            batch_size=batch_size,
+            sample_size=sample_size,
         )
         self.vae = self.init_submodule_config(
             RBLNAutoencoderKLConfig,
             vae,
             batch_size=batch_size,
-            uses_encoder=vae_uses_encoder or self.__class__._vae_uses_encoder,
-            img_height=img_height,
-            img_width=img_width,
+            uses_encoder=self.__class__._vae_uses_encoder,
+            sample_size=image_size,  # image size is equal to sample size in vae
         )
         self.controlnet = self.init_submodule_config(RBLNControlNetModelConfig, controlnet, batch_size=batch_size)
 
@@ -64,7 +69,19 @@ class _RBLNStableDiffusionControlNetPipelineBaseConfig(RBLNModelConfig):
             logger.warning("Specifying `guidance_scale` is deprecated. It will be removed in a future version.")
             do_classifier_free_guidance = guidance_scale > 1.0
             if do_classifier_free_guidance:
-                self.unet.batch_size = self.batch_size * 2
+                self.unet.batch_size = batch_size * 2
+
+    @property
+    def batch_size(self):
+        return self.vae.batch_size
+
+    @property
+    def sample_size(self):
+        return self.unet.sample_size
+
+    @property
+    def image_size(self):
+        return self.vae.sample_size
 
 
 class RBLNStableDiffusionControlNetPipelineConfig(_RBLNStableDiffusionControlNetPipelineBaseConfig):
@@ -81,38 +98,44 @@ class _RBLNStableDiffusionXLControlNetPipelineBaseConfig(RBLNModelConfig):
 
     def __init__(
         self,
-        batch_size: Optional[int] = None,
         text_encoder: Optional[RBLNModelConfig] = None,
         text_encoder_2: Optional[RBLNModelConfig] = None,
         unet: Optional[RBLNModelConfig] = None,
         vae: Optional[RBLNModelConfig] = None,
         controlnet: Optional[RBLNModelConfig] = None,
-        guidance_scale: Optional[float] = None,
-        vae_uses_encoder: Optional[bool] = None,
         *,
+        batch_size: Optional[int] = None,
         img_height: Optional[int] = None,
         img_width: Optional[int] = None,
+        sample_size: Optional[Tuple[int, int]] = None,
+        image_size: Optional[Tuple[int, int]] = None,
+        guidance_scale: Optional[float] = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.batch_size = batch_size or 1
-        if not isinstance(self.batch_size, int) or self.batch_size < 0:
-            raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
+        if image_size is not None and (img_height is not None or img_width is not None):
+            raise ValueError("image_size and img_height/img_width cannot both be provided")
+
+        if img_height is not None and img_width is not None:
+            image_size = (img_height, img_width)
 
         self.text_encoder = self.init_submodule_config(RBLNCLIPTextModelConfig, text_encoder, batch_size=batch_size)
         self.text_encoder_2 = self.init_submodule_config(
             RBLNCLIPTextModelWithProjectionConfig, text_encoder_2, batch_size=batch_size
         )
         self.unet = self.init_submodule_config(
-            RBLNUNet2DConditionModelConfig, unet, batch_size=batch_size, img_height=img_height, img_width=img_width
+            RBLNUNet2DConditionModelConfig,
+            unet,
+            batch_size=batch_size,
+            image_size=image_size,
+            sample_size=sample_size,
         )
         self.vae = self.init_submodule_config(
             RBLNAutoencoderKLConfig,
             vae,
             batch_size=batch_size,
-            uses_encoder=vae_uses_encoder or self.__class__._vae_uses_encoder,
-            img_height=img_height,
-            img_width=img_width,
+            uses_encoder=self.__class__._vae_uses_encoder,
+            sample_size=image_size,  # image size is equal to sample size in vae
         )
         self.controlnet = self.init_submodule_config(RBLNControlNetModelConfig, controlnet, batch_size=batch_size)
 
@@ -120,7 +143,19 @@ class _RBLNStableDiffusionXLControlNetPipelineBaseConfig(RBLNModelConfig):
             logger.warning("Specifying `guidance_scale` is deprecated. It will be removed in a future version.")
             do_classifier_free_guidance = guidance_scale > 1.0
             if do_classifier_free_guidance:
-                self.unet.batch_size = self.batch_size * 2
+                self.unet.batch_size = batch_size * 2
+
+    @property
+    def batch_size(self):
+        return self.vae.batch_size
+
+    @property
+    def sample_size(self):
+        return self.unet.sample_size
+
+    @property
+    def image_size(self):
+        return self.vae.sample_size
 
 
 class RBLNStableDiffusionXLControlNetPipelineConfig(_RBLNStableDiffusionXLControlNetPipelineBaseConfig):

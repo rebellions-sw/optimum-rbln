@@ -85,24 +85,6 @@ class RBLNDiffusionMixin:
     def is_inpaint_pipeline(cls):
         return "Inpaint" in cls.__name__
 
-    @classmethod
-    def get_submodule_rbln_config(
-        cls, model: torch.nn.Module, submodule_name: str, rbln_config: RBLNDiffusionMixinConfig
-    ) -> RBLNModelConfig:
-        submodule = getattr(model, submodule_name)
-        submodule_class_name = submodule.__class__.__name__
-        if isinstance(submodule, torch.nn.Module):
-            if submodule_class_name == "MultiControlNetModel":
-                submodule_class_name = "ControlNetModel"
-
-            submodule_cls: RBLNModel = getattr(importlib.import_module("optimum.rbln"), f"RBLN{submodule_class_name}")
-            submodule_config = getattr(rbln_config, submodule_name)
-            submodule_config = submodule_cls.update_rbln_config_using_pipe(model, submodule_config)
-
-        else:
-            raise ValueError(f"submodule {submodule_name} isn't supported")
-        return submodule_config
-
     @staticmethod
     def _maybe_apply_and_fuse_lora(
         model: torch.nn.Module,
@@ -322,7 +304,7 @@ class RBLNDiffusionMixin:
                 raise ValueError(f"RBLN config for submodule {submodule_name} is not provided.")
 
             submodule_rbln_cls: Type[RBLNModel] = getattr(rbln_config, submodule_name).rbln_model_cls
-            rbln_config = submodule_rbln_cls.update_rbln_config_using_pipe(model, rbln_config)
+            rbln_config = submodule_rbln_cls.update_rbln_config_using_pipe(model, rbln_config, submodule_name)
 
             if submodule is None:
                 raise ValueError(f"submodule ({submodule_name}) cannot be accessed since it is not provided.")

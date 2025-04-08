@@ -62,7 +62,9 @@ class RBLNVQModel(RBLNModel):
         return {"encoder": enc_compiled_model, "decoder": dec_compiled_model}
 
     @classmethod
-    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
+    def update_rbln_config_using_pipe(
+        cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any], submodule_name: str
+    ) -> Dict[str, Any]:
         batch_size = rbln_config.get("batch_size")
         if batch_size is None:
             batch_size = 1

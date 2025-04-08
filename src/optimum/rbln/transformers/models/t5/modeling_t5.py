@@ -27,7 +27,7 @@ from .t5_architecture import T5Wrapper
 if TYPE_CHECKING:
     from transformers import PreTrainedModel
 
-    from ....diffusers.modeling_diffusers import RBLNDiffusionMixin
+    from ....diffusers.modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 
 
 class T5EncoderWrapper(torch.nn.Module):
@@ -50,10 +50,14 @@ class RBLNT5EncoderModel(RBLNTransformerEncoderForFeatureExtraction):
 
     @classmethod
     def update_rbln_config_using_pipe(
-        cls, pipe: "RBLNDiffusionMixin", rbln_config: RBLNT5EncoderModelConfig
-    ) -> RBLNT5EncoderModelConfig:
-        rbln_config.max_seq_len = rbln_config.max_seq_len or 256
-        rbln_config.model_input_names = ["input_ids"]
+        cls,
+        pipe: "RBLNDiffusionMixin",
+        rbln_config: "RBLNDiffusionMixinConfig",
+        submodule_name: str,
+    ) -> "RBLNDiffusionMixinConfig":
+        submodule_config = getattr(rbln_config, submodule_name)
+        submodule_config.max_seq_len = rbln_config.max_seq_len or 256
+        submodule_config.model_input_names = ["input_ids"]
         return rbln_config
 
 

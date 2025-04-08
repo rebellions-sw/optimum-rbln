@@ -102,7 +102,7 @@ class RBLNAutoencoderKL(RBLNModel):
 
     @classmethod
     def update_rbln_config_using_pipe(
-        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig"
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
     ) -> "RBLNDiffusionMixinConfig":
         rbln_config.vae.sample_size, rbln_config.vae.vae_scale_factor = cls.get_vae_sample_size(
             pipe, rbln_config.vae, return_vae_scale_factor=True

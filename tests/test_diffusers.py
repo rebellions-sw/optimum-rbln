@@ -168,11 +168,11 @@ class TestSD3Model(BaseTest.TestModel):
     }
     RBLN_CLASS_KWARGS = {
         "rbln_config": {
-            "text_encoder": {"rbln_device": 0},
-            "text_encoder_2": {"rbln_device": 0},
-            "text_encoder_3": {"rbln_device": -1},
-            "transformer": {"rbln_device": 0},
-            "vae": {"rbln_device": 0},
+            "text_encoder": {"device": 0},
+            "text_encoder_2": {"device": 0},
+            "text_encoder_3": {"device": -1},
+            "transformer": {"device": 0},
+            "vae": {"device": 0},
         },
     }
 
@@ -190,11 +190,11 @@ class TestSD3Img2ImgModel(BaseTest.TestModel):
         "rbln_img_width": 64,
         "rbln_img_height": 64,
         "rbln_config": {
-            "text_encoder": {"rbln_device": 0},
-            "text_encoder_2": {"rbln_device": 0},
-            "text_encoder_3": {"rbln_device": -1},
-            "transformer": {"rbln_device": 0},
-            "vae": {"rbln_device": 0},
+            "text_encoder": {"device": 0},
+            "text_encoder_2": {"device": 0},
+            "text_encoder_3": {"device": -1},
+            "transformer": {"device": 0},
+            "vae": {"device": 0},
         },
     }
 
