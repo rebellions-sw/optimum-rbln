@@ -306,6 +306,18 @@ class _VAECogVideoXDecoder(torch.nn.Module):
                 # assert (cache_flatten.shape[-1] == conv_cache_flatten.shape[-1])
                 # dummy_out = torch.ops.rbln_custom_ops.rbln_cache_update(cache_flatten, conv_cache_flatten, batch_dim, batch_axis)
                 
+                # n, c, d, h, w = cache.shape
+                # cache_conversion = cache.reshape(n, c, d*h*w).transpose(1,2).reshape(n, d, h, w, c) # (n, d, h, w, c) # pair with rbln_decorator in compile i2v
+                # conv_cache_conversion = conv_cache.reshape(n, c, d*h*w).transpose(1,2).reshape(n, d, h, w, c)
+                
+                # cache_conversion = cache.permute(0,2,3,4,1) # (n, d, h, w, c) # pair with rbln_decorator in compile i2v
+                # conv_cache_conversion = conv_cache.permute(0,2,3,4,1)
+                
+                # assert (cache_conversion.shape[-1] == conv_cache_conversion.shape[-1])
+                # dummy_out = torch.ops.rbln_custom_ops.rbln_cache_update(cache_conversion, conv_cache_conversion, batch_dim, batch_axis)
+                
+                conv_cache = conv_cache.permute(0,2,3,4,1) # (b, cdhw) # pair with rbln_decorator in compile i2v
+                
                 dummy_out = torch.ops.rbln_custom_ops.rbln_cache_update(cache, conv_cache, batch_dim, batch_axis)
                 dummy_outs.append(dummy_out)
             
@@ -324,6 +336,8 @@ class _VAECogVideoXDecoder(torch.nn.Module):
                 # conv_cache_flatten = conv_cache.reshape(conv_cache.shape[0], -1) # (b, cdhw) # pair with rbln_decorator in compile t2v
                 # assert (cache_flatten.shape[-1] == conv_cache_flatten.shape[-1])
                 # dummy_out = torch.ops.rbln_custom_ops.rbln_cache_update(cache_flatten, conv_cache_flatten, batch_dim, batch_axis)
+                
+                conv_cache = conv_cache.permute(0,2,3,4,1) # (b, cdhw) # pair with rbln_decorator in compile i2v
                 
                 dummy_out = torch.ops.rbln_custom_ops.rbln_cache_update(cache, conv_cache, batch_dim, batch_axis)
                 dummy_outs.append(dummy_out)

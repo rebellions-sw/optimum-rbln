@@ -81,20 +81,28 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
         def compile_txt2vid():
             def rbln_decorator(func):
                 def wrapper(*args, **kwargs):
-                    b, c, d, h, w = args[0].shape # z
+                    # b, c, d, h, w = args[0].shape # z
                     conv_cache = kwargs.get("conv_cache") # None
                     if conv_cache is not None :
                         if len(conv_cache) < 3:
-                            conv_cache = conv_cache.view(b, c, 2, h, w)
+                            # conv_cache = conv_cache.view(b, c, 2, h, w)
+                            conv_cache = conv_cache.permute(0,4,1,2,3)
                     elif len(args) > 1 :
                         if args[-1] is not None and len(args[-1]) < 3:
-                            conv_cache = args[-1].view(b, c, 2, h, w)
+                            # conv_cache = args[-1].view(b, c, 2, h, w)
+                            conv_cache = args[-1].permute(0,4,1,2,3)
                     
                     result = func(args[0], conv_cache=conv_cache) # todo(si) 일반화? 고도화? functionality 검증?
                     return result
                 return wrapper
             
-            decoder_model_0 = _VAECogVideoXDecoder(model)
+            # for rbln cache update
+            for m in model.modules():
+                from diffusers.models.autoencoders.autoencoder_kl_cogvideox import CogVideoXCausalConv3d
+                if isinstance(m, CogVideoXCausalConv3d):
+                    m.fake_context_parallel_forward = rbln_decorator(m.fake_context_parallel_forward)
+            decoder_model_0 = _VAECogVideoXDecoder(model)        
+            decoder_model_1 = _VAECogVideoXDecoder(model)
             # decoder_model_0 = _VAECogVideoXDecoder(model)
             # decoder_model_1 = _VAECogVideoXDecoder(model)
 
@@ -123,14 +131,6 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
                 example_inputs=enc_example_inputs,
                 compile_context=context,
             )
-            
-            # # for rbln cache update
-            # for m in model.modules():
-            #     from diffusers.models.autoencoders.autoencoder_kl_cogvideox import CogVideoXCausalConv3d
-            #     if isinstance(m, CogVideoXCausalConv3d):
-            #         m.fake_context_parallel_forward = rbln_decorator(m.fake_context_parallel_forward)
-                    
-            decoder_model_1 = _VAECogVideoXDecoder(model)
 
             dec_compiled_model_1 = cls.compile(
                 decoder_model_1.eval(),
@@ -312,6 +312,8 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
 
         for k, v in CONV_CACHE.items():
             if "norm" not in k :
+                n,c,d,h,w = v
+                v = (n,d,h,w,c)
                 _input_info = (k, list(v), "float32")
                 vae_dec_input_info_0.extend([_input_info])
                 vae_dec_input_info_1.extend([_input_info])

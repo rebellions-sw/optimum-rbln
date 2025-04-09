@@ -86,7 +86,7 @@ class _VAECogVideoXDecoder(torch.nn.Module):
         self.cog_video_x = cog_video_x
         # self.keys = None
         self.keys = self.get_conv_cache_key()
-        self.conv_out = torch.nn.Conv3d(512,3,3,padding=1,bias=False)
+        self.conv_out = torch.nn.Conv3d(256,3,3,padding=1,bias=False)
 
     def _to_tuple(self, conv_cache):
         conv_cache_list = []
@@ -94,10 +94,10 @@ class _VAECogVideoXDecoder(torch.nn.Module):
         def isdict(obj, names):
             if isinstance(obj, dict):
                 for _k, _v in obj.items():
-                    isdict(_v, names+f"_{_k}")
+                    isdict(_v, names+f".{_k}")
             else :
-                # if "norm" not in names:
-                if "norm" not in names and "up_block_1" not in names and "up_block_2" not in names and "up_block_3" not in names and "conv_out" not in names:
+                if "norm" not in names:
+                # if "norm" not in names and "up_block_2" not in names and "up_block_3" not in names and "conv_out" not in names:
                     conv_cache_list.append(obj)
                     keys.append(names)
                 # if names in set(self.keys):
@@ -126,8 +126,8 @@ class _VAECogVideoXDecoder(torch.nn.Module):
     def get_conv_cache_key(self):
         keys = []
         for k in CONV_CACHE.keys():
-            # if "norm" not in k:
-            if "norm" not in k and "up_block_1" not in k and "up_block_2" not in k and "up_block_3" not in k and "conv_out" not in k:
+            if "norm" not in k and k in CONV_CACHE_mod:
+            # if "norm" not in k and "up_block_2" not in k and "up_block_3" not in k and "conv_out" not in k:
                 keys.append(k)
         return keys
         
@@ -137,18 +137,21 @@ class _VAECogVideoXDecoder(torch.nn.Module):
 
         if enc :
             cov_video_dec_out, conv_cache = self.cog_video_x.decoder(z)
-            # temp
-            cov_video_dec_out = self.conv_out(cov_video_dec_out)
+            # # temp
+            # cov_video_dec_out = self.conv_out(cov_video_dec_out)
             conv_cache_list, _ = self._to_tuple(conv_cache)
             
             for cache, conv_cache in zip(args, conv_cache_list):
                 batch_dim = torch.tensor(0, dtype=torch.int16)
                 batch_axis = torch.tensor(0, dtype=torch.int16)
                 
-                cache_flatten = cache.reshape(cache.shape[0], -1)
-                conv_cache_flatten = conv_cache.reshape(conv_cache.shape[0], -1) # (b, cdhw) # pair with rbln_decorator in compile i2v
-                assert (cache_flatten.shape[-1] == conv_cache_flatten.shape[-1])
-                dummy_out = torch.ops.rbln_custom_ops.rbln_cache_update(cache_flatten, conv_cache_flatten, batch_dim, batch_axis)
+                # cache_flatten = cache.reshape(cache.shape[0], -1)
+                # conv_cache_flatten = conv_cache.reshape(conv_cache.shape[0], -1) # (b, cdhw) # pair with rbln_decorator in compile i2v
+                # n, c, d, h, w = conv_cache.shape
+                conv_cache_flatten = conv_cache.permute(0,2,3,4,1) # (b, cdhw) # pair with rbln_decorator in compile i2v
+                # import pdb; pdb.set_trace()
+                assert (cache.shape == conv_cache_flatten.shape)
+                dummy_out = torch.ops.rbln_custom_ops.rbln_cache_update(cache, conv_cache_flatten, batch_dim, batch_axis)
                 dummy_outs.append(dummy_out)
             
             return cov_video_dec_out, torch.stack(tuple(dummy_outs))
@@ -157,24 +160,27 @@ class _VAECogVideoXDecoder(torch.nn.Module):
             conv_cache_dict = self._to_nested_dict(args, self.keys)
             
             cov_video_dec_out, conv_cache = self.cog_video_x.decoder(z, conv_cache=conv_cache_dict)
-            # temp
-            cov_video_dec_out = self.conv_out(cov_video_dec_out)
+            # # temp
+            # cov_video_dec_out = self.conv_out(cov_video_dec_out)
             conv_cache_list, _ = self._to_tuple(conv_cache)
             
             for cache, conv_cache in zip(args, conv_cache_list):
                 batch_dim = torch.tensor(0, dtype=torch.int16)
                 batch_axis = torch.tensor(0, dtype=torch.int16)
                 
-                cache_flatten = cache.reshape(cache.shape[0], -1)
-                conv_cache_flatten = conv_cache.reshape(conv_cache.shape[0], -1) # (b, cdhw) # pair with rbln_decorator in compile t2v
-                assert (cache_flatten.shape[-1] == conv_cache_flatten.shape[-1])
-                dummy_out = torch.ops.rbln_custom_ops.rbln_cache_update(cache_flatten, conv_cache_flatten, batch_dim, batch_axis)
+                # cache_flatten = cache.reshape(cache.shape[0], -1)
+                # conv_cache_flatten = conv_cache.reshape(conv_cache.shape[0], -1) # (b, cdhw) # pair with rbln_decorator in compile t2v
+                # assert (cache_flatten.shape[-1] == conv_cache_flatten.shape[-1])
+                conv_cache_flatten = conv_cache.permute(0,2,3,4,1) # (b, cdhw) # pair with rbln_decorator in compile i2v
+                # import pdb; pdb.set_trace()
+                assert (cache.shape == conv_cache_flatten.shape)
+                dummy_out = torch.ops.rbln_custom_ops.rbln_cache_update(cache, conv_cache_flatten, batch_dim, batch_axis)
                 dummy_outs.append(dummy_out)
             
         # return cov_video_dec_out, conv_cache_list, torch.stack(tuple(dummy_outs))
-        return cov_video_dec_out
+        # return cov_video_dec_out
         
-        # return cov_video_dec_out, torch.stack(tuple(dummy_outs))
+        return cov_video_dec_out, torch.stack(tuple(dummy_outs))
 
 class RBLNAutoencoderKLCogVideoX(RBLNModel):
     auto_model_class = AutoencoderKLCogVideoX
@@ -207,19 +213,18 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
 
         def compile_txt2vid():
             def rbln_decorator(func):
-                def wrapper(*args, **kwargs):
+                def wrapper(*args, **kwargs):                    
                     b, c, d, h, w = args[0].shape # z.shape
                     conv_cache = kwargs.get("conv_cache") # None
                     if conv_cache is not None :
                         if len(conv_cache) < 3:
-                            import pdb; pdb.set_trace()
                             conv_cache = conv_cache.view(b, c, 2, h, w)
                     elif len(args) > 1 :
                         if args[-1] is not None and len(args[-1]) < 3:
                             conv_cache = args[-1].view(b, c, 2, h, w)
                             # import pdb; pdb.set_trace()
                     
-                    result = func(args[0], conv_cache=conv_cache) # todo(si) 일반화? 고도화? functionality 검증?
+                    result = func(args[0], conv_cache=conv_cache)
                     return result
                 return wrapper
             
@@ -350,8 +355,8 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
                     [
                         rbln_batch_size,
                         model_config.latent_channels,
-                        # num_latent_frames_batch_size + num_frames%num_latent_frames_batch_size,
-                        num_latent_frames_batch_size,
+                        num_latent_frames_batch_size + num_frames%num_latent_frames_batch_size,
+                        # num_latent_frames_batch_size,
                         dec_shape[0],
                         dec_shape[1],
                     ],
@@ -373,11 +378,22 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
             ]
 
         for k, v in CONV_CACHE.items():
-            if "norm" not in k and "up_block_1" not in k and "up_block_2" not in k and "up_block_3" not in k and "conv_out" not in k:
-                print(k)
-                _input_info = (k, list(v), "float32")
-                vae_dec_input_info_0.extend([_input_info])
-                vae_dec_input_info_1.extend([_input_info])
+            # import pdb; pdb.set_trace()
+            if "norm" not in k and k in CONV_CACHE_mod:
+                # vs = 1
+                # for v_ in v[1:]:
+                #     vs *= v_ 
+                # shape_flattened = [v[0], vs]
+                # print(k, shape_flattened)
+                # _input_info_0 = (k, list(v), "float32")
+                # _input_info_1 = (k, shape_flattened, "float32")
+                n, c, d, h, w = v
+                
+                _input_info_1 = (k, [n, d, h, w, c],  "float32")
+                
+                vae_dec_input_info_0.extend([_input_info_1])
+                vae_dec_input_info_1.extend([_input_info_1])
+                
         
         dec_0_rbln_compile_config = RBLNCompileConfig(compiled_model_name="decoder_0", input_info=vae_dec_input_info_0)
         dec_1_rbln_compile_config = RBLNCompileConfig(compiled_model_name="decoder_1", input_info=vae_dec_input_info_1)
@@ -426,10 +442,16 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
 
 if __name__ == "__main__":
     model_id = "THUDM/CogVideoX-2b"
-    # model = AutoencoderKLCogVideoX.from_pretrained(pretrained_model_name_or_path=model_id)
-    from diffusers import CogVideoXPipeline
-    pipe = CogVideoXPipeline.from_pretrained(pretrained_model_name_or_path=model_id)
-    model = pipe.vae
+    
+    config = AutoencoderKLCogVideoX.load_config(model_id, subfolder="vae")
+    config['layers_per_block']=1
+    
+    # model = AutoencoderKLCogVideoX.from_pretrained(model_id, subfolder="vae")
+    model = AutoencoderKLCogVideoX.from_config(config)
+    # import pdb; pdb.set_trace()
+    # from diffusers import CogVideoXPipeline
+    # pipe = CogVideoXPipeline.from_pretrained(pretrained_model_name_or_path=model_id)
+    # model = pipe.vae
     
     class identity_model(torch.nn.Module):
         def __init__(self,):
@@ -438,12 +460,16 @@ if __name__ == "__main__":
         def forward(self, x, *args, **kwargs):
             return x, torch.randn(256)
         
-    model.decoder.up_blocks = model.decoder.up_blocks[:1]
-    model.decoder.norm_out = identity_model()
+    # model.decoder.up_blocks = model.decoder.up_blocks[:1]
+    # model.decoder.up_blocks = model.decoder.up_blocks[:2]
+    # model.decoder.norm_out = identity_model()
     # model.decoder.conv_act = identity_model()
-    model.decoder.conv_out = identity_model()
+    # model.decoder.conv_out = identity_model()
     
     input = torch.randn(1,16,3,60,90)
+    
+    output, cache = model.decoder(input)
+    _, CONV_CACHE_mod = _VAECogVideoXDecoder._to_tuple(model, cache)
     
     rbln_model = RBLNAutoencoderKLCogVideoX.from_model(
         model=model,
