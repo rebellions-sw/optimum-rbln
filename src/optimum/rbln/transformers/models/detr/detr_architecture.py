@@ -230,8 +230,6 @@ class DetrDecoder(nn.Module):
         # in DETR, the decoder uses layernorm after the last decoder layer output
         self.layernorm = self._original_model.layernorm
 
-        self.gradient_checkpointing = False
-
     def forward(
         self,
         inputs_embeds=None,
@@ -317,10 +315,6 @@ class DetrDecoder(nn.Module):
             # add LayerDrop (see https://arxiv.org/abs/1909.11556 for description)
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
-            if self.training:
-                dropout_probability = torch.rand([])
-                if dropout_probability < self.layerdrop:
-                    continue
 
             layer_outputs = decoder_layer(
                 hidden_states,
