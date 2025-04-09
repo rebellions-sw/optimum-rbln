@@ -155,9 +155,9 @@ class RBLNSD3Transformer2DModel(RBLNModel):
             sample_batch_size * 2 == compiled_batch_size or sample_batch_size == compiled_batch_size * 2
         ):
             raise ValueError(
-                f"Mismatch between Transformers' runtime batch size ({sample_batch_size}) and compiled batch size ({compiled_batch_size}). "
+                f"Mismatch between transformer's runtime batch size ({sample_batch_size}) and compiled batch size ({compiled_batch_size}). "
                 "This may be caused by the 'guidance scale' parameter, which doubles the runtime batch size in Stable Diffusion. "
-                "Adjust the batch size during compilation or modify the 'guidance scale' to match the compiled batch size.\n\n"
+                "Adjust the batch size of transformer during compilation.\n\n"
                 "For details, see: https://docs.rbln.ai/software/optimum/model_api.html#stable-diffusion"
             )
 

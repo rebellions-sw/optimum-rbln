@@ -343,7 +343,7 @@ class RBLNUNet2DConditionModel(RBLNModel):
             raise ValueError(
                 f"Mismatch between UNet's runtime batch size ({sample_batch_size}) and compiled batch size ({compiled_batch_size}). "
                 "This may be caused by the 'guidance scale' parameter, which doubles the runtime batch size of UNet in Stable Diffusion. "
-                "Adjust the batch size during compilation to match the compiled batch size.\n\n"
+                "Adjust the batch size of UNet during compilation to match the runtime batch size.\n\n"
                 "For details, see: https://docs.rbln.ai/software/optimum/model_api.html#stable-diffusion"
             )
 
