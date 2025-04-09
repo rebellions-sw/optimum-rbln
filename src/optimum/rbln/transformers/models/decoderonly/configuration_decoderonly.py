@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import rebel
 
@@ -37,6 +37,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         quantization: Optional[Dict[str, Any]] = None,
         prefill_chunk_size: Optional[int] = None,
         kvcache_num_blocks: Optional[int] = None,
+        decoder_batch_sizes: Optional[List[int]] = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -68,3 +69,25 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
             raise ValueError("`prefill_chunk_size` must be a positive integer divisible by 64.")
 
         self.kvcache_num_blocks = kvcache_num_blocks
+        self.decoder_batch_sizes = decoder_batch_sizes
+        if self.decoder_batch_sizes is None:
+            self.decoder_batch_sizes = [self.batch_size]
+
+        if self.use_multiple_decoder:
+            if max(self.decoder_batch_sizes) > self.batch_size:
+                raise ValueError(
+                    f"Decoder batch size ({max(self.decoder_batch_sizes)}) must be less than or equal to the runtime batch size ({self.batch_size})."
+                )
+            if max(self.decoder_batch_sizes) < self.batch_size:
+                logger.warning(
+                    f"Maximum decoder batch size ({max(self.decoder_batch_sizes)}) is less than the model's batch size ({self.batch_size}). "
+                    "Appending the model's batch size to the decoder batch size."
+                )
+                self.decoder_batch_sizes.append(self.batch_size)
+
+            # Larger batch size should be at the beginning of the list.
+            self.decoder_batch_sizes.sort(reverse=True)
+
+    @property
+    def use_multiple_decoder(self):
+        return isinstance(self.decoder_batch_sizes, list) and len(self.decoder_batch_sizes) > 1
