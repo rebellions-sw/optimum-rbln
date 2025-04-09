@@ -12,6 +12,17 @@ class RBLNTimeSeriesTransformerForPredictionConfig(RBLNModelConfig):
         num_parallel_samples: Optional[int] = None,
         **kwargs,
     ):
+        """
+        Args:
+            batch_size (Optional[int]): The batch size for inference. Defaults to 1.
+            enc_max_seq_len (Optional[int]): Maximum sequence length for the encoder.
+            dec_max_seq_len (Optional[int]): Maximum sequence length for the decoder.
+            num_parallel_samples (Optional[int]): Number of samples to generate in parallel during prediction.
+            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+
+        Raises:
+            ValueError: If batch_size is not a positive integer.
+        """
         super().__init__(**kwargs)
 
         self.batch_size = batch_size or 1

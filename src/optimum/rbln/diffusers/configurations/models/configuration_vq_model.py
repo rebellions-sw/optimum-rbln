@@ -27,6 +27,20 @@ class RBLNVQModelConfig(RBLNModelConfig):
         latent_channels: Optional[int] = None,
         **kwargs,
     ):
+        """
+        Args:
+            batch_size (Optional[int]): The batch size for inference. Defaults to 1.
+            sample_size (Optional[Tuple[int, int]]): The spatial dimensions (height, width) of the input/output images.
+                If an integer is provided, it's used for both height and width.
+            vqmodel_scale_factor (Optional[float]): The scaling factor between pixel space and latent space.
+                Determines the downsampling ratio between original images and latent representations.
+            in_channels (Optional[int]): Number of input channels for the model.
+            latent_channels (Optional[int]): Number of channels in the latent space.
+            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+
+        Raises:
+            ValueError: If batch_size is not a positive integer.
+        """
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
         if not isinstance(self.batch_size, int) or self.batch_size < 0:

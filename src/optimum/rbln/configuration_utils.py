@@ -270,6 +270,25 @@ class RBLNModelConfig:
         _compile_cfgs: List[RBLNCompileConfig] = [],
         **kwargs,
     ):
+        """
+        Initialize a RBLN model configuration with runtime options and compile configurations.
+
+        Args:
+            cls_name (Optional[str]): The class name of the configuration. Defaults to the current class name.
+            create_runtimes (Optional[bool]): Whether to create RBLN runtimes. Defaults to True if an NPU is available.
+            optimize_host_memory (Optional[bool]): Whether to optimize host memory usage. Defaults to True.
+            device (Optional[Union[int, List[int]]]): The device(s) to load the model onto. Can be a single device ID or a list.
+            device_map (Optional[Dict[str, Union[int, List[int]]]]): Mapping from compiled model names to device IDs.
+            activate_profiler (Optional[bool]): Whether to activate the profiler for performance analysis.
+            npu (Optional[str]): The NPU device name to use for compilation.
+            tensor_parallel_size (Optional[int]): Size for tensor parallelism to distribute the model across devices.
+            optimum_rbln_version (Optional[str]): The optimum-rbln version used for this configuration.
+            _compile_cfgs (List[RBLNCompileConfig]): List of compilation configurations for the model.
+            **kwargs: Additional keyword arguments.
+
+        Raises:
+            ValueError: If unexpected keyword arguments are provided.
+        """
         self._attributes_map = {}
         self._frozen = False
 

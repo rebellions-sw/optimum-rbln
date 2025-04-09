@@ -27,6 +27,22 @@ class RBLNControlNetModelConfig(RBLNModelConfig):
         text_model_hidden_size: Optional[int] = None,
         **kwargs,
     ):
+        """
+        Args:
+            batch_size (Optional[int]): The batch size for inference. Defaults to 1.
+            max_seq_len (Optional[int]): Maximum sequence length for text inputs when used
+                with cross-attention.
+            unet_sample_size (Optional[Tuple[int, int]]): The spatial dimensions (height, width)
+                of the UNet output samples.
+            vae_sample_size (Optional[Tuple[int, int]]): The spatial dimensions (height, width)
+                of the VAE input/output images.
+            text_model_hidden_size (Optional[int]): Hidden size of the text encoder model used
+                for conditioning.
+            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+
+        Raises:
+            ValueError: If batch_size is not a positive integer.
+        """
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
