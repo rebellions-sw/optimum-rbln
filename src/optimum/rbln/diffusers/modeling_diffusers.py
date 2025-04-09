@@ -218,16 +218,12 @@ class RBLNDiffusionMixin:
         rbln_config: "RBLNDiffusionMixinConfig",
     ) -> Dict[str, RBLNModel]:
         compiled_submodules = {}
-        # pipe_global_config = {k: v for k, v in rbln_config.items() if k not in cls._connected_classes.keys()}
         for connected_pipe_name, connected_pipe_cls in cls._connected_classes.items():
             connected_pipe_submodules = {}
             prefix = cls._prefix.get(connected_pipe_name, "")
             for submodule_name in connected_pipe_cls._submodules:
                 connected_pipe_submodules[submodule_name] = passed_submodules.get(prefix + submodule_name, None)
             connected_pipe = getattr(model, connected_pipe_name)
-            # connected_pipe_config = {}
-            # connected_pipe_config.update(pipe_global_config)
-            # connected_pipe_config.update(rbln_config[connected_pipe_name])
             connected_pipe_compiled_submodules = connected_pipe_cls._compile_submodules(
                 connected_pipe,
                 connected_pipe_submodules,
@@ -386,9 +382,9 @@ class RBLNDiffusionMixin:
                 kwargs["height"] = compiled_image_size[0]
                 kwargs["width"] = compiled_image_size[1]
 
-            compiled_num_frames = self.unet.rbln_config.model_cfg.get("num_frames", None)
+            compiled_num_frames = self.unet.rbln_config.num_frames
             if compiled_num_frames is not None:
-                kwargs["num_frames"] = self.unet.rbln_config.model_cfg.get("num_frames")
+                kwargs["num_frames"] = compiled_num_frames
             return kwargs
             ```
         """
