@@ -88,7 +88,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             **kwargs,
         )
 
-        return logits[:, : -pad_len, :] if pad_len is not None else logits
+        return logits[:, :-pad_len, :] if pad_len is not None else logits
+
 
 class T5EncoderWrapper(torch.nn.Module):
     def __init__(self, model: "T5EncoderModel") -> None:
