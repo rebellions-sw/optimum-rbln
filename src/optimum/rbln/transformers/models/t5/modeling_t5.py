@@ -60,12 +60,12 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         if input_len > self.max_seq_len:
             raise ValueError(f"Error input_len({input_len}) exceed max_seq_len({self.max_seq_len}).")
         elif input_len < self.max_seq_len and input_len > 0:
+            pad_len = self.max_seq_len - input_len
             logger.warning(
                 f"Warning: Input length ({input_len}) is shorter than the model's max sequence length ({self.max_seq_len}). "
                 f"The input was padded with {pad_len} tokens to meet the compiled model's requirements. "
                 "For optimal performance, consider recompiling with a shorter 'rbln_max_seq_len'."
             )
-            pad_len = self.max_seq_len - input_len
             input_ids = torch.nn.functional.pad(input_ids, (0, pad_len))
             attention_mask = torch.nn.functional.pad(attention_mask, (0, pad_len), value=0)
 
