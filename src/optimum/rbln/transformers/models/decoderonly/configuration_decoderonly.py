@@ -54,6 +54,13 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
             prefill_chunk_size (Optional[int]): The chunk size for prefilling the KV cache. Defaults to 128,
                 and must be a positive integer divisible by 64.
             kvcache_num_blocks (Optional[int]): The number of blocks in the KV cache.
+            decoder_batch_sizes (Optional[List[int]]): A list of batch sizes for which separate decoder models will be compiled.
+                This allows the model to handle varying batch sizes efficiently during generation. If not specified,
+                defaults to a list containing only the model's main batch size. When specifying multiple batch sizes:
+                1) All values must be less than or equal to the main batch size.
+                2) The list will be sorted in descending order (larger batch sizes first).
+                3) If using multiple decoders, at least one batch size should match the main batch size.
+
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
