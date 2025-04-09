@@ -26,6 +26,14 @@ _import_structure = {
     "configurations": [
         "RBLNAutoencoderKLConfig",
         "RBLNControlNetModelConfig",
+        "RBLNKandinskyV22CombinedPipelineConfig",
+        "RBLNKandinskyV22Img2ImgCombinedPipelineConfig",
+        "RBLNKandinskyV22Img2ImgPipelineConfig",
+        "RBLNKandinskyV22InpaintCombinedPipelineConfig",
+        "RBLNKandinskyV22InpaintPipelineConfig",
+        "RBLNKandinskyV22PipelineConfig",
+        "RBLNKandinskyV22PriorPipelineConfig",
+        "RBLNPriorTransformerConfig",
         "RBLNStableDiffusionControlNetPipelineConfig",
         "RBLNStableDiffusionImg2ImgControlNetPipelineConfig",
         "RBLNStableDiffusionImg2ImgPipelineConfig",
@@ -41,6 +49,7 @@ _import_structure = {
         "RBLNStableDiffusion3InpaintPipelineConfig",
         "RBLNSD3Transformer2DModelConfig",
         "RBLNUNet2DConditionModelConfig",
+        "RBLNVQModelConfig",
     ],
     "pipelines": [
         "RBLNKandinskyV22CombinedPipeline",
@@ -82,6 +91,14 @@ if TYPE_CHECKING:
     from .configurations import (
         RBLNAutoencoderKLConfig,
         RBLNControlNetModelConfig,
+        RBLNKandinskyV22CombinedPipelineConfig,
+        RBLNKandinskyV22Img2ImgCombinedPipelineConfig,
+        RBLNKandinskyV22Img2ImgPipelineConfig,
+        RBLNKandinskyV22InpaintCombinedPipelineConfig,
+        RBLNKandinskyV22InpaintPipelineConfig,
+        RBLNKandinskyV22PipelineConfig,
+        RBLNKandinskyV22PriorPipelineConfig,
+        RBLNPriorTransformerConfig,
         RBLNSD3Transformer2DModelConfig,
         RBLNStableDiffusion3Img2ImgPipelineConfig,
         RBLNStableDiffusion3InpaintPipelineConfig,
@@ -97,6 +114,7 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLInpaintPipelineConfig,
         RBLNStableDiffusionXLPipelineConfig,
         RBLNUNet2DConditionModelConfig,
+        RBLNVQModelConfig,
     )
     from .modeling_diffusers import RBLNDiffusionMixin
     from .models import (

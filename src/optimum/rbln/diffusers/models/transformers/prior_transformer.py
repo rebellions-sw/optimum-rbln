@@ -13,18 +13,21 @@
 # limitations under the License.
 
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import torch
 from diffusers.models.transformers.prior_transformer import PriorTransformer, PriorTransformerOutput
-from transformers import PretrainedConfig, PreTrainedModel
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
-from ...modeling_diffusers import RBLNDiffusionMixin
+from ...configurations.models import RBLNPriorTransformerConfig
+from ...modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 
+
+if TYPE_CHECKING:
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig, PreTrainedModel
 
 logger = get_logger(__name__)
 
@@ -87,39 +90,13 @@ class RBLNPriorTransformer(RBLNModel):
 
     @classmethod
     def update_rbln_config_using_pipe(
-        cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any], submodule_name: str
-    ) -> Dict[str, Any]:
-        batch_size = rbln_config.get("batch_size")
-        if not batch_size:
-            do_classifier_free_guidance = rbln_config.get("guidance_scale", 5.0) > 1.0
-            batch_size = 2 if do_classifier_free_guidance else 1
-        else:
-            if rbln_config.get("guidance_scale"):
-                logger.warning(
-                    "guidance_scale is ignored because batch size is explicitly specified. "
-                    "To ensure consistent behavior, consider removing the guidance scale or "
-                    "adjusting the batch size configuration as needed."
-                )
-        embedding_dim = rbln_config.get("embedding_dim", pipe.prior.config.embedding_dim)
-        num_embeddings = rbln_config.get("num_embeddings", pipe.prior.config.num_embeddings)
-
-        rbln_config.update(
-            {
-                "batch_size": batch_size,
-                "embedding_dim": embedding_dim,
-                "num_embeddings": num_embeddings,
-            }
-        )
-
+        cls, pipe: RBLNDiffusionMixin, rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
+    ) -> "RBLNDiffusionMixinConfig":
         return rbln_config
 
     @classmethod
     def save_torch_artifacts(
-        cls,
-        model: "PreTrainedModel",
-        save_dir_path: Path,
-        subfolder: str,
-        rbln_config: RBLNModelConfig,
+        cls, model: "PreTrainedModel", save_dir_path: Path, subfolder: str, rbln_config: RBLNModelConfig
     ):
         save_dict = {}
         save_dict["clip_mean"] = model.clip_mean
@@ -129,28 +106,28 @@ class RBLNPriorTransformer(RBLNModel):
     @classmethod
     def _update_rbln_config(
         cls,
-        preprocessors,
-        model_config: PretrainedConfig,
-        rbln_kwargs,
-    ) -> RBLNModelConfig:
-        batch_size = rbln_kwargs.get("batch_size") or 1
-        embedding_dim = rbln_kwargs.get("embedding_dim") or model_config.embedding_dim
-        num_embeddings = rbln_kwargs.get("num_embeddings") or model_config.num_embeddings
+        preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
+        model: "PreTrainedModel",
+        model_config: "PretrainedConfig",
+        rbln_config: RBLNPriorTransformerConfig,
+    ) -> RBLNPriorTransformerConfig:
+        rbln_config.embedding_dim = rbln_config.embedding_dim or model_config.embedding_dim
+        rbln_config.num_embeddings = rbln_config.num_embeddings or model_config.num_embeddings
 
         input_info = [
-            ("hidden_states", [batch_size, embedding_dim], "float32"),
+            ("hidden_states", [rbln_config.batch_size, rbln_config.embedding_dim], "float32"),
             ("timestep", [], "float32"),
-            ("proj_embedding", [batch_size, embedding_dim], "float32"),
-            ("encoder_hidden_states", [batch_size, num_embeddings, embedding_dim], "float32"),
-            ("attention_mask", [batch_size, num_embeddings], "float32"),
+            ("proj_embedding", [rbln_config.batch_size, rbln_config.embedding_dim], "float32"),
+            (
+                "encoder_hidden_states",
+                [rbln_config.batch_size, rbln_config.num_embeddings, rbln_config.embedding_dim],
+                "float32",
+            ),
+            ("attention_mask", [rbln_config.batch_size, rbln_config.num_embeddings], "float32"),
         ]
 
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
-        rbln_config = RBLNModelConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[rbln_compile_config],
-            rbln_kwargs=rbln_kwargs,
-        )
+        rbln_config.set_compile_cfgs([rbln_compile_config])
         return rbln_config
 
     def forward(

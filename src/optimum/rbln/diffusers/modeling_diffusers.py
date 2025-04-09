@@ -210,51 +210,30 @@ class RBLNDiffusionMixin:
         return cls._construct_pipe(model, compiled_submodules, model_save_dir, rbln_config)
 
     @classmethod
-    def _prepare_rbln_config(
-        cls,
-        rbln_config,
-    ) -> Dict[str, Any]:
-        prepared_config = {}
-        for connected_pipe_name, connected_pipe_cls in cls._connected_classes.items():
-            connected_pipe_config = rbln_config.pop(connected_pipe_name, {})
-            prefix = cls._prefix.get(connected_pipe_name, "")
-            guidance_scale = rbln_config.pop(f"{prefix}guidance_scale", None)
-            if "guidance_scale" not in connected_pipe_config and guidance_scale is not None:
-                connected_pipe_config["guidance_scale"] = guidance_scale
-            for submodule_name in connected_pipe_cls._submodules:
-                submodule_config = rbln_config.pop(prefix + submodule_name, {})
-                if submodule_name not in connected_pipe_config:
-                    connected_pipe_config[submodule_name] = {}
-                connected_pipe_config[submodule_name].update(
-                    {k: v for k, v in submodule_config.items() if k not in connected_pipe_config[submodule_name]}
-                )
-            prepared_config[connected_pipe_name] = connected_pipe_config
-        prepared_config.update(rbln_config)
-        return prepared_config
-
-    @classmethod
     def _compile_pipelines(
         cls,
         model: torch.nn.Module,
         passed_submodules: Dict[str, RBLNModel],
         model_save_dir: Optional[PathLike],
-        rbln_config: Dict[str, Any],
+        rbln_config: "RBLNDiffusionMixinConfig",
     ) -> Dict[str, RBLNModel]:
         compiled_submodules = {}
-
-        rbln_config = cls._prepare_rbln_config(rbln_config)
-        pipe_global_config = {k: v for k, v in rbln_config.items() if k not in cls._connected_classes.keys()}
+        # pipe_global_config = {k: v for k, v in rbln_config.items() if k not in cls._connected_classes.keys()}
         for connected_pipe_name, connected_pipe_cls in cls._connected_classes.items():
             connected_pipe_submodules = {}
             prefix = cls._prefix.get(connected_pipe_name, "")
             for submodule_name in connected_pipe_cls._submodules:
                 connected_pipe_submodules[submodule_name] = passed_submodules.get(prefix + submodule_name, None)
             connected_pipe = getattr(model, connected_pipe_name)
-            connected_pipe_config = {}
-            connected_pipe_config.update(pipe_global_config)
-            connected_pipe_config.update(rbln_config[connected_pipe_name])
+            # connected_pipe_config = {}
+            # connected_pipe_config.update(pipe_global_config)
+            # connected_pipe_config.update(rbln_config[connected_pipe_name])
             connected_pipe_compiled_submodules = connected_pipe_cls._compile_submodules(
-                connected_pipe, connected_pipe_submodules, model_save_dir, connected_pipe_config, prefix
+                connected_pipe,
+                connected_pipe_submodules,
+                model_save_dir,
+                getattr(rbln_config, connected_pipe_name),
+                prefix,
             )
             for submodule_name, compiled_submodule in connected_pipe_compiled_submodules.items():
                 compiled_submodules[prefix + submodule_name] = compiled_submodule

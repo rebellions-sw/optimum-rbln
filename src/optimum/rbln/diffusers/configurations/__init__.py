@@ -1,10 +1,19 @@
 from .models import (
     RBLNAutoencoderKLConfig,
     RBLNControlNetModelConfig,
+    RBLNPriorTransformerConfig,
     RBLNSD3Transformer2DModelConfig,
     RBLNUNet2DConditionModelConfig,
+    RBLNVQModelConfig,
 )
 from .pipelines import (
+    RBLNKandinskyV22CombinedPipelineConfig,
+    RBLNKandinskyV22Img2ImgCombinedPipelineConfig,
+    RBLNKandinskyV22Img2ImgPipelineConfig,
+    RBLNKandinskyV22InpaintCombinedPipelineConfig,
+    RBLNKandinskyV22InpaintPipelineConfig,
+    RBLNKandinskyV22PipelineConfig,
+    RBLNKandinskyV22PriorPipelineConfig,
     RBLNStableDiffusion3Img2ImgPipelineConfig,
     RBLNStableDiffusion3InpaintPipelineConfig,
     RBLNStableDiffusion3PipelineConfig,

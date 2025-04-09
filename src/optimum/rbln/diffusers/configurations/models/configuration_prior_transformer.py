@@ -12,20 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Tuple
+from typing import Optional
 
 from ....configuration_utils import RBLNModelConfig
 
 
-class RBLNAutoencoderKLConfig(RBLNModelConfig):
+class RBLNPriorTransformerConfig(RBLNModelConfig):
     def __init__(
         self,
         batch_size: Optional[int] = None,
-        sample_size: Optional[Tuple[int, int]] = None,
-        uses_encoder: Optional[bool] = None,
-        vae_scale_factor: Optional[float] = None,  # TODO: rename to scaling_factor
-        in_channels: Optional[int] = None,
-        latent_channels: Optional[int] = None,
+        embedding_dim: Optional[int] = None,
+        num_embeddings: Optional[int] = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -33,18 +30,5 @@ class RBLNAutoencoderKLConfig(RBLNModelConfig):
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
-        self.uses_encoder = uses_encoder
-        self.vae_scale_factor = vae_scale_factor
-        self.in_channels = in_channels
-        self.latent_channels = latent_channels
-        self.sample_size = sample_size
-        if isinstance(sample_size, int):
-            self.sample_size = (sample_size, sample_size)
-
-    @property
-    def image_size(self):
-        return self.sample_size
-
-    @property
-    def latent_sample_size(self):
-        return (self.image_size[0] // self.vae_scale_factor, self.image_size[1] // self.vae_scale_factor)
+        self.embedding_dim = embedding_dim
+        self.num_embeddings = num_embeddings

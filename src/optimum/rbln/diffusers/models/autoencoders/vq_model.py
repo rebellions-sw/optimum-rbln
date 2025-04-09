@@ -12,24 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Union
 
 import rebel
 import torch
 from diffusers import VQModel
 from diffusers.models.autoencoders.vae import DecoderOutput
 from diffusers.models.autoencoders.vq_model import VQEncoderOutput
-from transformers import PretrainedConfig
 
 from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from ...modeling_diffusers import RBLNDiffusionMixin
+from ...configurations.models.configuration_vq_model import RBLNVQModelConfig
+from ...modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 from .vae import RBLNRuntimeVQDecoder, RBLNRuntimeVQEncoder, _VQDecoder, _VQEncoder
 
 
 if TYPE_CHECKING:
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig, PreTrainedModel
 
 logger = get_logger(__name__)
 
@@ -45,9 +45,7 @@ class RBLNVQModel(RBLNModel):
         self.encoder = RBLNRuntimeVQEncoder(runtime=self.model[0], main_input_name="x")
         self.decoder = RBLNRuntimeVQDecoder(runtime=self.model[1], main_input_name="z")
         self.decoder.lookup_from_codebook = self.config.lookup_from_codebook
-        height = self.rbln_config.model_cfg.get("img_height", 512)
-        width = self.rbln_config.model_cfg.get("img_width", 512)
-        self.image_size = [height, width]
+        self.image_size = self.rbln_config.image_size
 
     @classmethod
     def get_compiled_model(cls, model, rbln_config: RBLNModelConfig):
@@ -63,67 +61,38 @@ class RBLNVQModel(RBLNModel):
 
     @classmethod
     def update_rbln_config_using_pipe(
-        cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any], submodule_name: str
-    ) -> Dict[str, Any]:
-        batch_size = rbln_config.get("batch_size")
-        if batch_size is None:
-            batch_size = 1
-        img_height = rbln_config.get("img_height")
-        if img_height is None:
-            img_height = 512
-        img_width = rbln_config.get("img_width")
-        if img_width is None:
-            img_width = 512
-
-        rbln_config.update(
-            {
-                "batch_size": batch_size,
-                "img_height": img_height,
-                "img_width": img_width,
-            }
-        )
-
+        cls, pipe: RBLNDiffusionMixin, rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
+    ) -> "RBLNDiffusionMixinConfig":
         return rbln_config
 
     @classmethod
     def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
+        model: "PreTrainedModel",
         model_config: "PretrainedConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNModelConfig:
-        batch_size = rbln_kwargs.get("batch_size")
-        if batch_size is None:
-            batch_size = 1
-
-        height = rbln_kwargs.get("img_height")
-        if height is None:
-            height = 512
-
-        width = rbln_kwargs.get("img_width")
-        if width is None:
-            width = 512
-
+        rbln_config: RBLNVQModelConfig,
+    ) -> RBLNVQModelConfig:
         if hasattr(model_config, "block_out_channels"):
-            scale_factor = 2 ** (len(model_config.block_out_channels) - 1)
+            rbln_config.vqmodel_scale_factor = 2 ** (len(model_config.block_out_channels) - 1)
         else:
             # image processor default value 8 (int)
-            scale_factor = 8
+            rbln_config.vqmodel_scale_factor = 8
 
-        enc_shape = (height, width)
-        dec_shape = (height // scale_factor, width // scale_factor)
+        enc_shape = rbln_config.image_size
+        dec_shape = rbln_config.latent_sample_size
 
         enc_input_info = [
             (
                 "x",
-                [batch_size, model_config.in_channels, enc_shape[0], enc_shape[1]],
+                [rbln_config.batch_size, model_config.in_channels, enc_shape[0], enc_shape[1]],
                 "float32",
             )
         ]
         dec_input_info = [
             (
                 "h",
-                [batch_size, model_config.latent_channels, dec_shape[0], dec_shape[1]],
+                [rbln_config.batch_size, model_config.latent_channels, dec_shape[0], dec_shape[1]],
                 "float32",
             )
         ]
@@ -132,11 +101,7 @@ class RBLNVQModel(RBLNModel):
         dec_rbln_compile_config = RBLNCompileConfig(compiled_model_name="decoder", input_info=dec_input_info)
 
         compile_cfgs = [enc_rbln_compile_config, dec_rbln_compile_config]
-        rbln_config = RBLNModelConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=compile_cfgs,
-            rbln_kwargs=rbln_kwargs,
-        )
+        rbln_config.set_compile_cfgs(compile_cfgs)
         return rbln_config
 
     @classmethod

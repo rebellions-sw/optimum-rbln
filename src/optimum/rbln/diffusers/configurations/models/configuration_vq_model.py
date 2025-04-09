@@ -17,13 +17,12 @@ from typing import Optional, Tuple
 from ....configuration_utils import RBLNModelConfig
 
 
-class RBLNAutoencoderKLConfig(RBLNModelConfig):
+class RBLNVQModelConfig(RBLNModelConfig):
     def __init__(
         self,
         batch_size: Optional[int] = None,
         sample_size: Optional[Tuple[int, int]] = None,
-        uses_encoder: Optional[bool] = None,
-        vae_scale_factor: Optional[float] = None,  # TODO: rename to scaling_factor
+        vqmodel_scale_factor: Optional[float] = None,  # TODO: rename to scaling_factor
         in_channels: Optional[int] = None,
         latent_channels: Optional[int] = None,
         **kwargs,
@@ -33,13 +32,13 @@ class RBLNAutoencoderKLConfig(RBLNModelConfig):
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
-        self.uses_encoder = uses_encoder
-        self.vae_scale_factor = vae_scale_factor
+        self.sample_size = sample_size
+        if isinstance(self.sample_size, int):
+            self.sample_size = (self.sample_size, self.sample_size)
+
+        self.vqmodel_scale_factor = vqmodel_scale_factor
         self.in_channels = in_channels
         self.latent_channels = latent_channels
-        self.sample_size = sample_size
-        if isinstance(sample_size, int):
-            self.sample_size = (sample_size, sample_size)
 
     @property
     def image_size(self):
@@ -47,4 +46,4 @@ class RBLNAutoencoderKLConfig(RBLNModelConfig):
 
     @property
     def latent_sample_size(self):
-        return (self.image_size[0] // self.vae_scale_factor, self.image_size[1] // self.vae_scale_factor)
+        return (self.image_size[0] // self.vqmodel_scale_factor, self.image_size[1] // self.vqmodel_scale_factor)
