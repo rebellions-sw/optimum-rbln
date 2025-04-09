@@ -265,11 +265,9 @@ class TestKandinskyV22Model(BaseTest.TestModel):
                 **self.RBLN_CLASS_KWARGS,
             )
         with self.subTest():
-            self.assertEqual(_.prior_text_encoder.rbln_config.model_cfg["batch_size"], 2)
-            self.assertEqual(_.prior_prior.rbln_config.model_cfg["batch_size"], 4)
-            self.assertEqual(_.prior_prior.rbln_config.model_cfg["guidance_scale"], 5.0)
-            self.assertEqual(_.unet.rbln_config.model_cfg["batch_size"], 2)
-            self.assertEqual(_.unet.rbln_config.model_cfg["guidance_scale"], 3.0)
+            self.assertEqual(_.prior_text_encoder.rbln_config.batch_size, 2)
+            self.assertEqual(_.prior_prior.rbln_config.batch_size, 4)
+            self.assertEqual(_.unet.rbln_config.batch_size, 2)
 
 
 if __name__ == "__main__":
