@@ -20,4 +20,5 @@ this_path = os.path.abspath(__file__)
 local_dir = "/" + os.path.join(*this_path.split("/")[:-1]) + "/hf_hub_cached"
 environ["LOCAL_CACHE_ROOT_CUSTOM_CODE_MIDM"] = local_dir
 
+from .configuration_midm import RBLNMidmForCausalLMConfig
 from .modeling_midm import RBLNMidmLMHeadModel

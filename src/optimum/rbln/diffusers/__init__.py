@@ -23,6 +23,34 @@ ALL_IMPORTABLE_CLASSES.update(LOADABLE_CLASSES["optimum.rbln"])
 
 
 _import_structure = {
+    "configurations": [
+        "RBLNAutoencoderKLConfig",
+        "RBLNControlNetModelConfig",
+        "RBLNKandinskyV22CombinedPipelineConfig",
+        "RBLNKandinskyV22Img2ImgCombinedPipelineConfig",
+        "RBLNKandinskyV22Img2ImgPipelineConfig",
+        "RBLNKandinskyV22InpaintCombinedPipelineConfig",
+        "RBLNKandinskyV22InpaintPipelineConfig",
+        "RBLNKandinskyV22PipelineConfig",
+        "RBLNKandinskyV22PriorPipelineConfig",
+        "RBLNPriorTransformerConfig",
+        "RBLNStableDiffusionControlNetPipelineConfig",
+        "RBLNStableDiffusionImg2ImgControlNetPipelineConfig",
+        "RBLNStableDiffusionImg2ImgPipelineConfig",
+        "RBLNStableDiffusionInpaintPipelineConfig",
+        "RBLNStableDiffusionPipelineConfig",
+        "RBLNStableDiffusionXLControlNetPipelineConfig",
+        "RBLNStableDiffusionXLImg2ImgControlNetPipelineConfig",
+        "RBLNStableDiffusionXLImg2ImgPipelineConfig",
+        "RBLNStableDiffusionXLInpaintPipelineConfig",
+        "RBLNStableDiffusionXLPipelineConfig",
+        "RBLNStableDiffusion3PipelineConfig",
+        "RBLNStableDiffusion3Img2ImgPipelineConfig",
+        "RBLNStableDiffusion3InpaintPipelineConfig",
+        "RBLNSD3Transformer2DModelConfig",
+        "RBLNUNet2DConditionModelConfig",
+        "RBLNVQModelConfig",
+    ],
     "pipelines": [
         "RBLNKandinskyV22CombinedPipeline",
         "RBLNKandinskyV22Img2ImgCombinedPipeline",
@@ -60,6 +88,34 @@ _import_structure = {
 }
 
 if TYPE_CHECKING:
+    from .configurations import (
+        RBLNAutoencoderKLConfig,
+        RBLNControlNetModelConfig,
+        RBLNKandinskyV22CombinedPipelineConfig,
+        RBLNKandinskyV22Img2ImgCombinedPipelineConfig,
+        RBLNKandinskyV22Img2ImgPipelineConfig,
+        RBLNKandinskyV22InpaintCombinedPipelineConfig,
+        RBLNKandinskyV22InpaintPipelineConfig,
+        RBLNKandinskyV22PipelineConfig,
+        RBLNKandinskyV22PriorPipelineConfig,
+        RBLNPriorTransformerConfig,
+        RBLNSD3Transformer2DModelConfig,
+        RBLNStableDiffusion3Img2ImgPipelineConfig,
+        RBLNStableDiffusion3InpaintPipelineConfig,
+        RBLNStableDiffusion3PipelineConfig,
+        RBLNStableDiffusionControlNetPipelineConfig,
+        RBLNStableDiffusionImg2ImgControlNetPipelineConfig,
+        RBLNStableDiffusionImg2ImgPipelineConfig,
+        RBLNStableDiffusionInpaintPipelineConfig,
+        RBLNStableDiffusionPipelineConfig,
+        RBLNStableDiffusionXLControlNetPipelineConfig,
+        RBLNStableDiffusionXLImg2ImgControlNetPipelineConfig,
+        RBLNStableDiffusionXLImg2ImgPipelineConfig,
+        RBLNStableDiffusionXLInpaintPipelineConfig,
+        RBLNStableDiffusionXLPipelineConfig,
+        RBLNUNet2DConditionModelConfig,
+        RBLNVQModelConfig,
+    )
     from .modeling_diffusers import RBLNDiffusionMixin
     from .models import (
         RBLNAutoencoderKL,

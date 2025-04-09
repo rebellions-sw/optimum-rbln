@@ -12,28 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import torch
-from transformers import (
-    CLIPTextConfig,
-    CLIPTextModel,
-    CLIPVisionConfig,
-    CLIPVisionModel,
-)
+from transformers import CLIPTextConfig, CLIPTextModel, CLIPVisionConfig, CLIPVisionModel
 from transformers.modeling_outputs import BaseModelOutputWithPooling
 from transformers.models.clip.modeling_clip import CLIPTextModelOutput, CLIPVisionModelOutput
 
-from ....diffusers.modeling_diffusers import RBLNDiffusionMixin
+from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
+from .configuration_clip import RBLNCLIPTextModelConfig, RBLNCLIPVisionModelConfig
 
 
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, CLIPTextModel
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, CLIPTextModel, PreTrainedModel
+
+    from ....diffusers.modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 
 
 class _TextEncoder(torch.nn.Module):
@@ -48,44 +45,35 @@ class _TextEncoder(torch.nn.Module):
 
 class RBLNCLIPTextModel(RBLNModel):
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNCLIPTextModelConfig) -> torch.nn.Module:
         return _TextEncoder(model).eval()
 
     @classmethod
-    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
+    def update_rbln_config_using_pipe(
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_config: str
+    ) -> "RBLNDiffusionMixinConfig":
         return rbln_config
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
-        model_config: "CLIPTextConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-        rbln_batch_size: Optional[int] = None,
-    ) -> RBLNConfig:
-        rbln_batch_size = rbln_kwargs.get("batch_size", None)
-        if rbln_batch_size is None:
-            rbln_batch_size = 1
-
-        model_config.return_dict = False
-
+        model: Optional["PreTrainedModel"] = None,
+        model_config: "CLIPTextConfig" = None,
+        rbln_config: Optional[RBLNCLIPTextModelConfig] = None,
+    ) -> RBLNCLIPTextModelConfig:
         input_info = [
             (
                 "input_ids",
                 [
-                    rbln_batch_size,
+                    rbln_config.batch_size,
                     model_config.max_position_embeddings,
                 ],
                 "int64",
             ),
         ]
 
-        rbln_compile_config = RBLNCompileConfig(input_info=input_info)
-        rbln_config = RBLNConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[rbln_compile_config],
-            rbln_kwargs=rbln_kwargs,
-        )
+        rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
         return rbln_config
 
     def forward(self, input_ids: "torch.Tensor", **kwargs):
@@ -113,30 +101,30 @@ class _VisionEncoder(torch.nn.Module):
 
 class RBLNCLIPVisionModel(RBLNModel):
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNCLIPVisionModelConfig) -> torch.nn.Module:
         return _VisionEncoder(model).eval()
 
     @classmethod
-    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
+    def update_rbln_config_using_pipe(
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
+    ) -> "RBLNDiffusionMixinConfig":
         return rbln_config
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
-        model_config: "CLIPVisionConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
-        rbln_batch_size = rbln_kwargs.get("batch_size", 1)
-        rbln_image_size = rbln_kwargs.get("image_size", None)
+        model: Optional["PreTrainedModel"] = None,
+        model_config: "CLIPVisionConfig" = None,
+        rbln_config: Optional[RBLNCLIPVisionModelConfig] = None,
+    ) -> RBLNCLIPVisionModelConfig:
+        if rbln_config.image_size is None:
+            rbln_config.image_size = getattr(model_config, "image_size", None)
 
-        if rbln_image_size is None:
-            rbln_image_size = getattr(model_config, "image_size", None)
+        if isinstance(rbln_config.image_size, int):
+            rbln_config.image_size = (rbln_config.image_size, rbln_config.image_size)
 
-        if isinstance(rbln_image_size, int):
-            rbln_image_size = (rbln_image_size, rbln_image_size)
-
-        if rbln_image_size is None:
+        if rbln_config.image_size is None:
             raise ValueError("`rbln_image_size` should be specified!")
 
         rbln_compile_config = RBLNCompileConfig(
@@ -144,29 +132,17 @@ class RBLNCLIPVisionModel(RBLNModel):
                 (
                     "pixel_values",
                     [
-                        rbln_batch_size,
+                        rbln_config.batch_size,
                         3,
-                        rbln_image_size[0],
-                        rbln_image_size[1],
+                        rbln_config.image_height,
+                        rbln_config.image_width,
                     ],
                     "float32",
                 )
             ]
         )
 
-        rbln_config = RBLNConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[rbln_compile_config],
-            rbln_kwargs=rbln_kwargs,
-        )
-
-        rbln_config.model_cfg.update(
-            {
-                "batch_size": rbln_batch_size,
-                "image_size": rbln_image_size,
-            }
-        )
-
+        rbln_config.set_compile_cfgs([rbln_compile_config])
         return rbln_config
 
     def forward(
