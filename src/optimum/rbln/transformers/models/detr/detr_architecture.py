@@ -63,7 +63,7 @@ class DetrSinePositionEmbedding(nn.Module):
             scale = 2 * math.pi
         self.scale = scale
 
-        # RBLN moves from DetrSinePositionEmbedding.forward
+        # RBLN moved dim_t from DetrSinePositionEmbedding.forward to DetrSinePositionEmbedding.__init__
         dim_t = torch.arange(self.embedding_dim, dtype=torch.int64, device="cpu").float()
         self.dim_t = self.temperature ** (2 * torch.div(dim_t, 2, rounding_mode="floor") / self.embedding_dim)
 
@@ -98,6 +98,8 @@ def build_position_encoding(config):
 
 
 # https://github.com/huggingface/transformers/blob/794fde7b1c3d041519fc28ea3e1461b0cfcad4e7/src/transformers/models/detr/modeling_detr.py#L874
+# Wrap the original DetrEncoder to ensure custom components (like _prepare_4d_attention_mask)
+# and specific logic required for RBLN tracing are correctly used.
 class DetrEncoder(nn.Module):
     """
     Transformer encoder consisting of *config.encoder_layers* self attention layers. Each layer is a
@@ -202,6 +204,8 @@ class DetrEncoder(nn.Module):
 
 
 # ref: https://github.com/huggingface/transformers/blob/794fde7b1c3d041519fc28ea3e1461b0cfcad4e7/src/transformers/models/detr/modeling_detr.py#L988
+# Wrap the original DetrDecoder to ensure custom components (like _prepare_4d_attention_mask)
+# and specific logic required for RBLN tracing are correctly used.
 class DetrDecoder(nn.Module):
     """
     Transformer decoder consisting of *config.decoder_layers* layers. Each layer is a [`DetrDecoderLayer`].
@@ -365,6 +369,8 @@ class DetrDecoder(nn.Module):
 
 
 # ref: https://github.com/huggingface/transformers/blob/794fde7b1c3d041519fc28ea3e1461b0cfcad4e7/src/transformers/models/detr/modeling_detr.py#L391
+# Wrap the original DetrConvModel to ensure custom components (like position embedding)
+# and specific logic required for RBLN tracing are correctly used.
 class DetrConvModel(nn.Module):
     """
     This module adds 2D position embeddings to all intermediate feature maps of the convolutional encoder.

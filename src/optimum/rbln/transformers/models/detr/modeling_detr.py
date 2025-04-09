@@ -97,6 +97,7 @@ class RBLNDetrForObjectDetection(RBLNModel):
     def forward(self, *args, **kwargs):
         outputs = super().forward(*args, **kwargs)
 
+        # Assumes fixed order and presence of outputs.
         logits = outputs[0]
         pred_boxes = outputs[1]
         last_hidden_state = outputs[2]
