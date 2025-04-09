@@ -71,7 +71,7 @@ class _RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
             logger.warning("Specifying `guidance_scale` is deprecated. It will be removed in a future version.")
             do_classifier_free_guidance = guidance_scale > 1.0
             if do_classifier_free_guidance:
-                self.unet.batch_size = batch_size * 2
+                self.unet.batch_size = self.text_encoder.batch_size * 2
 
     @property
     def batch_size(self):
