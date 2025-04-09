@@ -29,11 +29,11 @@ class _RBLNStableDiffusion3PipelineBaseConfig(RBLNModelConfig):
 
     def __init__(
         self,
-        transformer: Optional[RBLNModelConfig] = None,
-        text_encoder: Optional[RBLNModelConfig] = None,
-        text_encoder_2: Optional[RBLNModelConfig] = None,
-        text_encoder_3: Optional[RBLNModelConfig] = None,
-        vae: Optional[RBLNModelConfig] = None,
+        transformer: Optional[RBLNSD3Transformer2DModelConfig] = None,
+        text_encoder: Optional[RBLNCLIPTextModelWithProjectionConfig] = None,
+        text_encoder_2: Optional[RBLNCLIPTextModelWithProjectionConfig] = None,
+        text_encoder_3: Optional[RBLNT5EncoderModelConfig] = None,
+        vae: Optional[RBLNAutoencoderKLConfig] = None,
         *,
         max_seq_len: Optional[int] = None,
         sample_size: Optional[Tuple[int, int]] = None,
@@ -44,6 +44,35 @@ class _RBLNStableDiffusion3PipelineBaseConfig(RBLNModelConfig):
         guidance_scale: Optional[float] = None,
         **kwargs,
     ):
+        """
+        Args:
+            transformer (Optional[RBLNSD3Transformer2DModelConfig]): Configuration for the transformer model component.
+                Initialized as RBLNSD3Transformer2DModelConfig if not provided.
+            text_encoder (Optional[RBLNCLIPTextModelWithProjectionConfig]): Configuration for the primary text encoder.
+                Initialized as RBLNCLIPTextModelWithProjectionConfig if not provided.
+            text_encoder_2 (Optional[RBLNCLIPTextModelWithProjectionConfig]): Configuration for the secondary text encoder.
+                Initialized as RBLNCLIPTextModelWithProjectionConfig if not provided.
+            text_encoder_3 (Optional[RBLNT5EncoderModelConfig]): Configuration for the tertiary text encoder.
+                Initialized as RBLNT5EncoderModelConfig if not provided.
+            vae (Optional[RBLNAutoencoderKLConfig]): Configuration for the VAE model component.
+                Initialized as RBLNAutoencoderKLConfig if not provided.
+            max_seq_len (Optional[int]): Maximum sequence length for text inputs. Defaults to 256.
+            sample_size (Optional[Tuple[int, int]]): Spatial dimensions for the transformer model.
+            image_size (Optional[Tuple[int, int]]): Dimensions for the generated images.
+                Cannot be used together with img_height/img_width.
+            batch_size (Optional[int]): Batch size for inference, applied to all submodules.
+            img_height (Optional[int]): Height of the generated images.
+            img_width (Optional[int]): Width of the generated images.
+            guidance_scale (Optional[float]): Scale for classifier-free guidance. Deprecated parameter.
+            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+
+        Raises:
+            ValueError: If both image_size and img_height/img_width are provided.
+
+        Note:
+            When guidance_scale > 1.0, the transformer batch size is automatically doubled to
+            accommodate classifier-free guidance.
+        """
         super().__init__(**kwargs)
         if image_size is not None and (img_height is not None or img_width is not None):
             raise ValueError("image_size and img_height/img_width cannot both be provided")

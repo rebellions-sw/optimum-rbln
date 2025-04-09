@@ -25,6 +25,18 @@ class RBLNSD3Transformer2DModelConfig(RBLNModelConfig):
         prompt_embed_length: Optional[int] = None,
         **kwargs,
     ):
+        """
+        Args:
+            batch_size (Optional[int]): The batch size for inference. Defaults to 1.
+            sample_size (Optional[Union[int, Tuple[int, int]]]): The spatial dimensions (height, width)
+                of the generated samples. If an integer is provided, it's used for both height and width.
+            prompt_embed_length (Optional[int]): The length of the embedded prompt vectors that
+                will be used to condition the transformer model.
+            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+
+        Raises:
+            ValueError: If batch_size is not a positive integer.
+        """
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
         if not isinstance(self.batch_size, int) or self.batch_size < 0:

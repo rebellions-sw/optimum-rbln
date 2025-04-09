@@ -29,10 +29,10 @@ class _RBLNStableDiffusionControlNetPipelineBaseConfig(RBLNModelConfig):
 
     def __init__(
         self,
-        text_encoder: Optional[RBLNModelConfig] = None,
-        unet: Optional[RBLNModelConfig] = None,
-        vae: Optional[RBLNModelConfig] = None,
-        controlnet: Optional[RBLNModelConfig] = None,
+        text_encoder: Optional[RBLNCLIPTextModelConfig] = None,
+        unet: Optional[RBLNUNet2DConditionModelConfig] = None,
+        vae: Optional[RBLNAutoencoderKLConfig] = None,
+        controlnet: Optional[RBLNControlNetModelConfig] = None,
         *,
         batch_size: Optional[int] = None,
         img_height: Optional[int] = None,
@@ -42,6 +42,32 @@ class _RBLNStableDiffusionControlNetPipelineBaseConfig(RBLNModelConfig):
         guidance_scale: Optional[float] = None,
         **kwargs,
     ):
+        """
+        Args:
+            text_encoder (Optional[RBLNCLIPTextModelConfig]): Configuration for the text encoder component.
+                Initialized as RBLNCLIPTextModelConfig if not provided.
+            unet (Optional[RBLNUNet2DConditionModelConfig]): Configuration for the UNet model component.
+                Initialized as RBLNUNet2DConditionModelConfig if not provided.
+            vae (Optional[RBLNAutoencoderKLConfig]): Configuration for the VAE model component.
+                Initialized as RBLNAutoencoderKLConfig if not provided.
+            controlnet (Optional[RBLNControlNetModelConfig]): Configuration for the ControlNet model component.
+                Initialized as RBLNControlNetModelConfig if not provided.
+            batch_size (Optional[int]): Batch size for inference, applied to all submodules.
+            img_height (Optional[int]): Height of the generated images.
+            img_width (Optional[int]): Width of the generated images.
+            sample_size (Optional[Tuple[int, int]]): Spatial dimensions for the UNet model.
+            image_size (Optional[Tuple[int, int]]): Alternative way to specify image dimensions.
+                Cannot be used together with img_height/img_width.
+            guidance_scale (Optional[float]): Scale for classifier-free guidance. Deprecated parameter.
+            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+
+        Raises:
+            ValueError: If both image_size and img_height/img_width are provided.
+
+        Note:
+            When guidance_scale > 1.0, the UNet batch size is automatically doubled to
+            accommodate classifier-free guidance.
+        """
         super().__init__(**kwargs)
         if image_size is not None and (img_height is not None or img_width is not None):
             raise ValueError("image_size and img_height/img_width cannot both be provided")
@@ -98,11 +124,11 @@ class _RBLNStableDiffusionXLControlNetPipelineBaseConfig(RBLNModelConfig):
 
     def __init__(
         self,
-        text_encoder: Optional[RBLNModelConfig] = None,
-        text_encoder_2: Optional[RBLNModelConfig] = None,
-        unet: Optional[RBLNModelConfig] = None,
-        vae: Optional[RBLNModelConfig] = None,
-        controlnet: Optional[RBLNModelConfig] = None,
+        text_encoder: Optional[RBLNCLIPTextModelConfig] = None,
+        text_encoder_2: Optional[RBLNCLIPTextModelWithProjectionConfig] = None,
+        unet: Optional[RBLNUNet2DConditionModelConfig] = None,
+        vae: Optional[RBLNAutoencoderKLConfig] = None,
+        controlnet: Optional[RBLNControlNetModelConfig] = None,
         *,
         batch_size: Optional[int] = None,
         img_height: Optional[int] = None,
@@ -112,6 +138,34 @@ class _RBLNStableDiffusionXLControlNetPipelineBaseConfig(RBLNModelConfig):
         guidance_scale: Optional[float] = None,
         **kwargs,
     ):
+        """
+        Args:
+            text_encoder (Optional[RBLNCLIPTextModelConfig]): Configuration for the primary text encoder.
+                Initialized as RBLNCLIPTextModelConfig if not provided.
+            text_encoder_2 (Optional[RBLNCLIPTextModelWithProjectionConfig]): Configuration for the secondary text encoder.
+                Initialized as RBLNCLIPTextModelWithProjectionConfig if not provided.
+            unet (Optional[RBLNUNet2DConditionModelConfig]): Configuration for the UNet model component.
+                Initialized as RBLNUNet2DConditionModelConfig if not provided.
+            vae (Optional[RBLNAutoencoderKLConfig]): Configuration for the VAE model component.
+                Initialized as RBLNAutoencoderKLConfig if not provided.
+            controlnet (Optional[RBLNControlNetModelConfig]): Configuration for the ControlNet model component.
+                Initialized as RBLNControlNetModelConfig if not provided.
+            batch_size (Optional[int]): Batch size for inference, applied to all submodules.
+            img_height (Optional[int]): Height of the generated images.
+            img_width (Optional[int]): Width of the generated images.
+            sample_size (Optional[Tuple[int, int]]): Spatial dimensions for the UNet model.
+            image_size (Optional[Tuple[int, int]]): Alternative way to specify image dimensions.
+                Cannot be used together with img_height/img_width.
+            guidance_scale (Optional[float]): Scale for classifier-free guidance. Deprecated parameter.
+            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+
+        Raises:
+            ValueError: If both image_size and img_height/img_width are provided.
+
+        Note:
+            When guidance_scale > 1.0, the UNet batch size is automatically doubled to
+            accommodate classifier-free guidance.
+        """
         super().__init__(**kwargs)
         if image_size is not None and (img_height is not None or img_width is not None):
             raise ValueError("image_size and img_height/img_width cannot both be provided")

@@ -39,6 +39,26 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         kvcache_num_blocks: Optional[int] = None,
         **kwargs,
     ):
+        """
+        Args:
+            batch_size (Optional[int]): The batch size for inference. Defaults to 1.
+            max_seq_len (Optional[int]): The maximum sequence length supported by the model.
+            use_inputs_embeds (Optional[bool]): Whether to use input embeddings directly. Defaults to False.
+            use_attention_mask (Optional[bool]): Whether to use attention masks. This is automatically set to True
+                for RBLN-CA02 devices.
+            attn_impl (Optional[str]): The attention implementation to use.
+            kvcache_partition_len (Optional[int]): The length of each KV cache partition.
+            kvcache_block_size (Optional[int]): The block size for KV cache.
+            quantization (Optional[Dict[str, Any]]): Configuration for model quantization.
+            prefill_chunk_size (Optional[int]): The chunk size for prefilling the KV cache. Defaults to 128,
+                and must be a positive integer divisible by 64.
+            kvcache_num_blocks (Optional[int]): The number of blocks in the KV cache.
+            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+
+        Raises:
+            ValueError: If batch_size is not a positive integer or if prefill_chunk_size is not
+                a positive integer divisible by 64.
+        """
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
         if not isinstance(self.batch_size, int) or self.batch_size < 0:

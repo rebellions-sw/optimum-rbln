@@ -19,6 +19,14 @@ from ....configuration_utils import RBLNModelConfig
 
 class RBLNCLIPTextModelConfig(RBLNModelConfig):
     def __init__(self, batch_size: Optional[int] = None, **kwargs):
+        """
+        Args:
+            batch_size (Optional[int]): The batch size for text processing. Defaults to 1.
+            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+
+        Raises:
+            ValueError: If batch_size is not a positive integer.
+        """
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
@@ -31,6 +39,16 @@ class RBLNCLIPTextModelWithProjectionConfig(RBLNCLIPTextModelConfig):
 
 class RBLNCLIPVisionModelConfig(RBLNModelConfig):
     def __init__(self, batch_size: Optional[int] = None, image_size: Optional[int] = None, **kwargs):
+        """
+        Args:
+            batch_size (Optional[int]): The batch size for image processing. Defaults to 1.
+            image_size (Optional[int]): The size of input images. Can be an integer for square images,
+                a tuple/list (height, width), or a dictionary with 'height' and 'width' keys.
+            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+
+        Raises:
+            ValueError: If batch_size is not a positive integer.
+        """
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
         if not isinstance(self.batch_size, int) or self.batch_size < 0:

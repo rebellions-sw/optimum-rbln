@@ -27,6 +27,17 @@ class _RBLNTransformerEncoderConfig(RBLNModelConfig):
         model_input_names: Optional[List[str]] = None,
         **kwargs,
     ):
+        """
+        Args:
+            max_seq_len (Optional[int]): Maximum sequence length supported by the model.
+            batch_size (Optional[int]): The batch size for inference. Defaults to 1.
+            model_input_names (Optional[List[str]]): Names of the input tensors for the model.
+                Defaults to class-specific rbln_model_input_names if not provided.
+            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+
+        Raises:
+            ValueError: If batch_size is not a positive integer.
+        """
         super().__init__(**kwargs)
         self.max_seq_len = max_seq_len
         self.batch_size = batch_size or 1
@@ -40,6 +51,16 @@ class _RBLNImageModelConfig(RBLNModelConfig):
     def __init__(
         self, image_size: Optional[Union[int, Tuple[int, int]]] = None, batch_size: Optional[int] = None, **kwargs
     ):
+        """
+        Args:
+            image_size (Optional[Union[int, Tuple[int, int]]]): The size of input images.
+                Can be an integer for square images or a tuple (height, width).
+            batch_size (Optional[int]): The batch size for inference. Defaults to 1.
+            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+
+        Raises:
+            ValueError: If batch_size is not a positive integer.
+        """
         super().__init__(**kwargs)
         self.image_size = image_size
         self.batch_size = batch_size or 1
@@ -102,6 +123,16 @@ class RBLNModelForAudioClassificationConfig(RBLNModelConfig):
         num_mel_bins: Optional[int] = None,
         **kwargs,
     ):
+        """
+        Args:
+            batch_size (Optional[int]): The batch size for inference. Defaults to 1.
+            max_length (Optional[int]): Maximum length of the audio input in time dimension.
+            num_mel_bins (Optional[int]): Number of Mel frequency bins for audio processing.
+            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+
+        Raises:
+            ValueError: If batch_size is not a positive integer.
+        """
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
         if not isinstance(self.batch_size, int) or self.batch_size < 0:

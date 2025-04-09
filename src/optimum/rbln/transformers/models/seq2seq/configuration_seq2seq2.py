@@ -33,6 +33,19 @@ class RBLNModelForSeq2SeqLMConfig(RBLNModelConfig):
         pad_token_id: Optional[int] = None,
         **kwargs,
     ):
+        """
+        Args:
+            batch_size (Optional[int]): The batch size for inference. Defaults to 1.
+            enc_max_seq_len (Optional[int]): Maximum sequence length for the encoder.
+            dec_max_seq_len (Optional[int]): Maximum sequence length for the decoder.
+            use_attention_mask (Optional[bool]): Whether to use attention masks during inference.
+                This is automatically set to True for RBLN-CA02 devices.
+            pad_token_id (Optional[int]): The ID of the padding token in the vocabulary.
+            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+
+        Raises:
+            ValueError: If batch_size is not a positive integer.
+        """
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
         if not isinstance(self.batch_size, int) or self.batch_size < 0:

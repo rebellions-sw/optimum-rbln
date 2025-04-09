@@ -40,6 +40,28 @@ class _RBLNKandinskyV22PipelineBaseConfig(RBLNModelConfig):
         img_width: Optional[int] = None,
         **kwargs,
     ):
+        """
+        Args:
+            unet (Optional[RBLNUNet2DConditionModelConfig]): Configuration for the UNet model component.
+                Initialized as RBLNUNet2DConditionModelConfig if not provided.
+            movq (Optional[RBLNVQModelConfig]): Configuration for the MoVQ (VQ-GAN) model component.
+                Initialized as RBLNVQModelConfig if not provided.
+            sample_size (Optional[Tuple[int, int]]): Spatial dimensions for the UNet model.
+            batch_size (Optional[int]): Batch size for inference, applied to all submodules.
+            guidance_scale (Optional[float]): Scale for classifier-free guidance. Deprecated parameter.
+            image_size (Optional[Tuple[int, int]]): Dimensions for the generated images.
+                Cannot be used together with img_height/img_width.
+            img_height (Optional[int]): Height of the generated images.
+            img_width (Optional[int]): Width of the generated images.
+            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+
+        Raises:
+            ValueError: If both image_size and img_height/img_width are provided.
+
+        Note:
+            When guidance_scale > 1.0, the UNet batch size is automatically doubled to
+            accommodate classifier-free guidance.
+        """
         super().__init__(**kwargs)
         if image_size is not None and (img_height is not None or img_width is not None):
             raise ValueError("image_size and img_height/img_width cannot both be provided")
@@ -97,6 +119,28 @@ class RBLNKandinskyV22PriorPipelineConfig(RBLNModelConfig):
         guidance_scale: Optional[float] = None,
         **kwargs,
     ):
+        """
+        Initialize a configuration for Kandinsky 2.2 prior pipeline optimized for RBLN NPU.
+
+        This configuration sets up the prior components of the Kandinsky 2.2 architecture, which includes
+        text and image encoders along with a prior transformer that maps text/image embeddings to
+        latent representations used to condition the diffusion process.
+
+        Args:
+            text_encoder (Optional[RBLNCLIPTextModelWithProjectionConfig]): Configuration for the text encoder component.
+                Initialized as RBLNCLIPTextModelWithProjectionConfig if not provided.
+            image_encoder (Optional[RBLNCLIPVisionModelWithProjectionConfig]): Configuration for the image encoder component.
+                Initialized as RBLNCLIPVisionModelWithProjectionConfig if not provided.
+            prior (Optional[RBLNPriorTransformerConfig]): Configuration for the prior transformer component.
+                Initialized as RBLNPriorTransformerConfig if not provided.
+            batch_size (Optional[int]): Batch size for inference, applied to all submodules.
+            guidance_scale (Optional[float]): Scale for classifier-free guidance. Deprecated parameter.
+            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+
+        Note:
+            When guidance_scale > 1.0, the prior batch size is automatically doubled to
+            accommodate classifier-free guidance.
+        """
         super().__init__(**kwargs)
         self.text_encoder = self.init_submodule_config(
             RBLNCLIPTextModelWithProjectionConfig, text_encoder, batch_size=batch_size
@@ -143,6 +187,37 @@ class _RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
         movq: Optional[RBLNVQModelConfig] = None,
         **kwargs,
     ):
+        """
+        Initialize a configuration for combined Kandinsky 2.2 pipelines optimized for RBLN NPU.
+
+        This configuration integrates both the prior and decoder components of Kandinsky 2.2 into
+        a unified pipeline, allowing for end-to-end text-to-image generation in a single model.
+        It combines the text/image encoding, prior mapping, and diffusion steps together.
+
+        Args:
+            prior_pipe (Optional[RBLNKandinskyV22PriorPipelineConfig]): Configuration for the prior pipeline.
+                Initialized as RBLNKandinskyV22PriorPipelineConfig if not provided.
+            decoder_pipe (Optional[RBLNKandinskyV22PipelineConfig]): Configuration for the decoder pipeline.
+                Initialized as RBLNKandinskyV22PipelineConfig if not provided.
+            sample_size (Optional[Tuple[int, int]]): Spatial dimensions for the UNet model.
+            image_size (Optional[Tuple[int, int]]): Dimensions for the generated images.
+                Cannot be used together with img_height/img_width.
+            batch_size (Optional[int]): Batch size for inference, applied to all submodules.
+            img_height (Optional[int]): Height of the generated images.
+            img_width (Optional[int]): Width of the generated images.
+            guidance_scale (Optional[float]): Scale for classifier-free guidance. Deprecated parameter.
+            prior_prior (Optional[RBLNPriorTransformerConfig]): Direct configuration for the prior transformer.
+                Used if prior_pipe is not provided.
+            prior_image_encoder (Optional[RBLNCLIPVisionModelWithProjectionConfig]): Direct configuration for the image encoder.
+                Used if prior_pipe is not provided.
+            prior_text_encoder (Optional[RBLNCLIPTextModelWithProjectionConfig]): Direct configuration for the text encoder.
+                Used if prior_pipe is not provided.
+            unet (Optional[RBLNUNet2DConditionModelConfig]): Direct configuration for the UNet.
+                Used if decoder_pipe is not provided.
+            movq (Optional[RBLNVQModelConfig]): Direct configuration for the MoVQ (VQ-GAN) model.
+                Used if decoder_pipe is not provided.
+            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+        """
         super().__init__(**kwargs)
         self.prior_pipe = self.init_submodule_config(
             RBLNKandinskyV22PriorPipelineConfig,
