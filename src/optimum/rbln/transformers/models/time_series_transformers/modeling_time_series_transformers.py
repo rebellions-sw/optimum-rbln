@@ -25,7 +25,7 @@ import inspect
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 
 import rebel
 import torch
@@ -311,18 +311,21 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
     def _create_runtimes(
         cls,
         compiled_models: List[rebel.RBLNCompiledModel],
-        rbln_device_map: Dict[str, int],
-        activate_profiler: Optional[bool] = None,
+        rbln_config: RBLNTimeSeriesTransformerForPredictionConfig,
     ) -> List[rebel.Runtime]:
-        if any(model_name not in rbln_device_map for model_name in ["encoder", "decoder"]):
+        if any(model_name not in rbln_config.device_map for model_name in ["encoder", "decoder"]):
             cls._raise_missing_compiled_file_error(["encoder", "decoder"])
 
         return [
             compiled_models[0].create_runtime(
-                tensor_type="pt", device=rbln_device_map["encoder"], activate_profiler=activate_profiler
+                tensor_type="pt",
+                device=rbln_config.device_map["encoder"],
+                activate_profiler=rbln_config.activate_profiler,
             ),
             compiled_models[1].create_runtime(
-                tensor_type="pt", device=rbln_device_map["decoder"], activate_profiler=activate_profiler
+                tensor_type="pt",
+                device=rbln_config.device_map["decoder"],
+                activate_profiler=rbln_config.activate_profiler,
             ),
         ]
 

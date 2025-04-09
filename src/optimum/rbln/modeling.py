@@ -210,15 +210,17 @@ class RBLNModel(RBLNBaseModel):
     def _create_runtimes(
         cls,
         compiled_models: List[rebel.RBLNCompiledModel],
-        rbln_device_map: Dict[str, int],
-        activate_profiler: Optional[bool] = None,
+        rbln_config: RBLNModelConfig,
     ) -> List[rebel.Runtime]:
-        if DEFAULT_COMPILED_MODEL_NAME not in rbln_device_map:
+        if DEFAULT_COMPILED_MODEL_NAME not in rbln_config.device_map:
             cls._raise_missing_compiled_file_error([DEFAULT_COMPILED_MODEL_NAME])
 
-        device = rbln_device_map[DEFAULT_COMPILED_MODEL_NAME]
         return [
-            compiled_model.create_runtime(tensor_type="pt", device=device, activate_profiler=activate_profiler)
+            compiled_model.create_runtime(
+                tensor_type="pt",
+                device=rbln_config.device_map[DEFAULT_COMPILED_MODEL_NAME],
+                activate_profiler=rbln_config.activate_profiler,
+            )
             for compiled_model in compiled_models
         ]
 

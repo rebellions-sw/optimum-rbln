@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Dict, List, Tuple, Union
 
 import rebel
 import torch
@@ -173,8 +173,7 @@ class RBLNAutoencoderKL(RBLNModel):
     def _create_runtimes(
         cls,
         compiled_models: List[rebel.RBLNCompiledModel],
-        rbln_device_map: Dict[str, int],
-        activate_profiler: Optional[bool] = None,
+        rbln_config: RBLNAutoencoderKLConfig,
     ) -> List[rebel.Runtime]:
         if len(compiled_models) == 1:
             # decoder
@@ -183,12 +182,14 @@ class RBLNAutoencoderKL(RBLNModel):
             # encoder, decoder
             expected_models = ["encoder", "decoder"]
 
-        if any(model_name not in rbln_device_map for model_name in expected_models):
+        if any(model_name not in rbln_config.device_map for model_name in expected_models):
             cls._raise_missing_compiled_file_error(expected_models)
 
-        device_vals = [rbln_device_map[model_name] for model_name in expected_models]
+        device_vals = [rbln_config.device_map[model_name] for model_name in expected_models]
         return [
-            compiled_model.create_runtime(tensor_type="pt", device=device_val, activate_profiler=activate_profiler)
+            compiled_model.create_runtime(
+                tensor_type="pt", device=device_val, activate_profiler=rbln_config.activate_profiler
+            )
             for compiled_model, device_val in zip(compiled_models, device_vals)
         ]
 

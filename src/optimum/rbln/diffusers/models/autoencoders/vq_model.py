@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, List, Union
 
 import rebel
 import torch
@@ -108,20 +108,21 @@ class RBLNVQModel(RBLNModel):
     def _create_runtimes(
         cls,
         compiled_models: List[rebel.RBLNCompiledModel],
-        rbln_device_map: Dict[str, int],
-        activate_profiler: Optional[bool] = None,
+        rbln_config: RBLNVQModelConfig,
     ) -> List[rebel.Runtime]:
         if len(compiled_models) == 1:
-            device_val = rbln_device_map[DEFAULT_COMPILED_MODEL_NAME]
+            device_val = rbln_config.device_map[DEFAULT_COMPILED_MODEL_NAME]
             return [
                 compiled_models[0].create_runtime(
-                    tensor_type="pt", device=device_val, activate_profiler=activate_profiler
+                    tensor_type="pt", device=device_val, activate_profiler=rbln_config.activate_profiler
                 )
             ]
 
-        device_vals = [rbln_device_map["encoder"], rbln_device_map["decoder"]]
+        device_vals = [rbln_config.device_map["encoder"], rbln_config.device_map["decoder"]]
         return [
-            compiled_model.create_runtime(tensor_type="pt", device=device_val, activate_profiler=activate_profiler)
+            compiled_model.create_runtime(
+                tensor_type="pt", device=device_val, activate_profiler=rbln_config.activate_profiler
+            )
             for compiled_model, device_val in zip(compiled_models, device_vals)
         ]
 
