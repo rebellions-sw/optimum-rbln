@@ -49,23 +49,27 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
     ) -> None:
         super().__init__(runtime, **kwargs)
         self.max_seq_len = max_seq_len
-        self.pad_len = None
 
-    def validate_inputs(
+    def _prepare_inputs(
         self,
         input_ids: torch.LongTensor,
         attention_mask: torch.LongTensor,
     ):
         input_len = input_ids.shape[-1]
+        pad_len = None
         if input_len > self.max_seq_len:
             raise ValueError(f"Error input_len({input_len}) exceed max_seq_len({self.max_seq_len}).")
         elif input_len < self.max_seq_len and input_len > 0:
+            logger.warning(
+                f"Warning: Input length ({input_len}) exceeds the model's max sequence length ({self.max_seq_len}). "
+                f"The input was padded with {pad_len} tokens to match the compiled model's requirements. "
+                "For optimal performance, consider recompiling with a shorter 'rbln_max_seq_len'."
+            )
             pad_len = self.max_seq_len - input_len
             input_ids = torch.nn.functional.pad(input_ids, (0, pad_len))
             attention_mask = torch.nn.functional.pad(attention_mask, (0, pad_len), value=0)
-            self.pad_len = pad_len
 
-        return input_ids, attention_mask
+        return input_ids, attention_mask, pad_len
 
     def forward(
         self,
@@ -75,7 +79,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         inputs_embeds: torch.FloatTensor,
         **kwargs,
     ):
-        input_ids, attention_mask = self.validate_inputs(input_ids, attention_mask)
+        input_ids, attention_mask, pad_len = self._prepare_inputs(input_ids, attention_mask)
         logits = super().forward(
             input_ids,
             attention_mask,
@@ -84,8 +88,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             **kwargs,
         )
 
-        return logits[:, : -self.pad_len, :] if self.pad_len is not None else logits
-
+        return logits[:, : -pad_len, :] if pad_len is not None else logits
 
 class T5EncoderWrapper(torch.nn.Module):
     def __init__(self, model: "T5EncoderModel") -> None:
@@ -102,8 +105,8 @@ class RBLNT5EncoderModel(RBLNModel):
     rbln_model_input_names = ["input_ids", "attention_mask"]
 
     def __post_init__(self, **kwargs):
-        self.max_seq_len = self.rbln_config.model_cfg["max_seq_len"]
-        self.model = RBLNRuntimeModel(runtime=self.model[0], max_seq_len=self.max_seq_len)
+        max_seq_len = self.rbln_config.model_cfg["max_seq_len"]
+        self.model = RBLNRuntimeModel(runtime=self.model[0], max_seq_len=max_seq_len)
 
     @classmethod
     def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: "RBLNConfig"):
