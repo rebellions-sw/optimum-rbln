@@ -16,7 +16,8 @@ import copy
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
+from typing_extensions import TypeAlias
 
 import rebel
 import torch
@@ -27,6 +28,8 @@ from .utils.runtime_utils import ContextRblnConfig
 
 DEFAULT_COMPILED_MODEL_NAME = "compiled_model"
 DEFAULT_MOD_NAME = "default"
+
+InputItem: TypeAlias = Tuple[str, Tuple[int], Optional[str]]
 
 
 @dataclass
@@ -45,7 +48,7 @@ class RBLNCompileConfig:
 
     compiled_model_name: str = DEFAULT_COMPILED_MODEL_NAME
     mod_name: str = DEFAULT_MOD_NAME
-    input_info: List[Tuple[str, Tuple[int], Optional[str]]] = None
+    input_info: Union[List[List[InputItem]], List[InputItem]] = None
     fusion: Optional[bool] = None
     npu: Optional[str] = None
     tensor_parallel_size: Optional[int] = None
@@ -71,7 +74,16 @@ class RBLNCompileConfig:
             return dtype
 
     def __post_init__(self):
-        self.input_info = [(i[0], i[1], RBLNCompileConfig.normalize_dtype(i[2]) or "float32") for i in self.input_info]
+        # Tmp Fix
+        if isinstance(self.input_info[0][0], str):
+            self.input_info = [
+                (i[0], i[1], RBLNCompileConfig.normalize_dtype(i[2]) or "float32") for i in self.input_info
+            ]
+        else:
+            self.input_info = [
+                [(i[0], i[1], RBLNCompileConfig.normalize_dtype(i[2]) or "float32") for i in input_info]
+                for input_info in self.input_info
+            ]
 
     def update(self, kwargs: Dict[str, Any]):
         self.compiled_model_name = kwargs.get("compiled_model_name", self.compiled_model_name)
