@@ -216,7 +216,8 @@ class RBLNModel(RBLNBaseModel):
             cls._raise_missing_compiled_file_error([DEFAULT_COMPILED_MODEL_NAME])
 
         return [
-            compiled_model.create_runtime(
+            rebel.Runtime(
+                compiled_model,
                 tensor_type="pt",
                 device=rbln_config.device_map[DEFAULT_COMPILED_MODEL_NAME],
                 activate_profiler=rbln_config.activate_profiler,

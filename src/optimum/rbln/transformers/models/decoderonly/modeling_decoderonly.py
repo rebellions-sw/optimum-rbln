@@ -794,12 +794,14 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             cls._raise_missing_compiled_file_error(["prefill", "decoder"])
 
         return [
-            compiled_models[0].create_runtime(
+            rebel.Runtime(
+                compiled_models[0],
                 tensor_type="pt",
                 device=rbln_config.device_map["prefill"],
                 activate_profiler=rbln_config.activate_profiler,
             ),
-            compiled_models[1].create_runtime(
+            rebel.Runtime(
+                compiled_models[1],
                 tensor_type="pt",
                 device=rbln_config.device_map["decoder"],
                 activate_profiler=rbln_config.activate_profiler,

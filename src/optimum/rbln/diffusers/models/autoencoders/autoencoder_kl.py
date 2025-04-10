@@ -187,8 +187,11 @@ class RBLNAutoencoderKL(RBLNModel):
 
         device_vals = [rbln_config.device_map[model_name] for model_name in expected_models]
         return [
-            compiled_model.create_runtime(
-                tensor_type="pt", device=device_val, activate_profiler=rbln_config.activate_profiler
+            rebel.Runtime(
+                compiled_model,
+                tensor_type="pt",
+                device=device_val,
+                activate_profiler=rbln_config.activate_profiler,
             )
             for compiled_model, device_val in zip(compiled_models, device_vals)
         ]
