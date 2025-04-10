@@ -32,6 +32,7 @@ logger = get_logger(__name__)
 
 DEFAULT_COMPILED_MODEL_NAME = "compiled_model"
 DEFAULT_MOD_NAME = "default"
+TypeInputInfo = List[Tuple[str, Tuple[int], str]]
 
 
 @dataclass
@@ -42,7 +43,7 @@ class RBLNCompileConfig:
     Attributes:
         compiled_model_name (str): Name of the compiled model.
         mod_name (str): Name of the RBLN module.
-        input_info (List[Tuple[str, Tuple[int], Optional[str]]]): Information about input tensors.
+        input_info (Union[List[TypeInputInfo], TypeInputInfo]): Information about input tensors.
         fusion (Optional[bool]): Whether to use fusion optimization.
         npu (Optional[str]): NPU configuration.
         tensor_parallel_size (Optional[int]): Size for tensor parallelism.
@@ -50,7 +51,7 @@ class RBLNCompileConfig:
 
     compiled_model_name: str = DEFAULT_COMPILED_MODEL_NAME
     mod_name: str = DEFAULT_MOD_NAME
-    input_info: List[Tuple[str, Tuple[int], Optional[str]]] = None
+    input_info: Union[List[TypeInputInfo], TypeInputInfo] = None
     fusion: Optional[bool] = None
     npu: Optional[str] = None
     tensor_parallel_size: Optional[int] = None
@@ -75,8 +76,33 @@ class RBLNCompileConfig:
                 dtype = dtype[:-2]
             return dtype
 
+    @property
+    def is_multiple_input_info(self) -> bool:
+        def is_valid_input_info(input_info):
+            if not isinstance(input_info, list):
+                return False
+            return all(
+                isinstance(item, (tuple, list))
+                and len(item) == 3
+                and isinstance(item[0], str)  # name
+                and isinstance(item[1], (tuple, list))  # shape
+                and all(isinstance(x, int) for x in item[1])
+                and isinstance(item[2], str)  # dtype
+                for item in input_info
+            )
+
+        if isinstance(self.input_info, list) and len(self.input_info) > 1:
+            return all(is_valid_input_info(info) for info in self.input_info)
+        return False
+
     def __post_init__(self):
-        self.input_info = [(i[0], i[1], RBLNCompileConfig.normalize_dtype(i[2]) or "float32") for i in self.input_info]
+        def normalize_input_info(input_info):
+            return [(i[0], i[1], RBLNCompileConfig.normalize_dtype(i[2]) or "float32") for i in input_info]
+
+        if self.is_multiple_input_info:
+            self.input_info = [normalize_input_info(info) for info in self.input_info]
+        else:
+            self.input_info = normalize_input_info(self.input_info)
 
     def update(self, kwargs: Dict[str, Any]):
         self.compiled_model_name = kwargs.get("compiled_model_name", self.compiled_model_name)
