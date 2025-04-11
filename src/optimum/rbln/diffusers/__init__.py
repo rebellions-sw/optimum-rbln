@@ -45,12 +45,16 @@ _import_structure = {
         "RBLNStableDiffusion3Pipeline",
         "RBLNStableDiffusion3Img2ImgPipeline",
         "RBLNStableDiffusion3InpaintPipeline",
+        "RBLNStableVideoDiffusionPipeline",
     ],
     "models": [
         "RBLNAutoencoderKL",
         "RBLNUNet2DConditionModel",
+        "RBLNUNetSpatioTemporalConditionModel",
         "RBLNControlNetModel",
         "RBLNSD3Transformer2DModel",
+        "RBLNAutoencoderKLTemporalDecoder",
+        "RBLNUNetSpatioTemporalConditionModel",
         "RBLNPriorTransformer",
         "RBLNVQModel",
     ],
@@ -63,10 +67,12 @@ if TYPE_CHECKING:
     from .modeling_diffusers import RBLNDiffusionMixin
     from .models import (
         RBLNAutoencoderKL,
+        RBLNAutoencoderKLTemporalDecoder,
         RBLNControlNetModel,
         RBLNPriorTransformer,
         RBLNSD3Transformer2DModel,
         RBLNUNet2DConditionModel,
+        RBLNUNetSpatioTemporalConditionModel,
         RBLNVQModel,
     )
     from .pipelines import (
@@ -91,6 +97,7 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLImg2ImgPipeline,
         RBLNStableDiffusionXLInpaintPipeline,
         RBLNStableDiffusionXLPipeline,
+        RBLNStableVideoDiffusionPipeline,
     )
 else:
     import sys
