@@ -94,11 +94,12 @@ class RBLNBartModel(RBLNModel):
             for model_input_name in rbln_model_input_names
         ]
 
-        rbln_compile_config = RBLNCompileConfig(input_info=input_info)
+        enc_compile_config = RBLNCompileConfig(input_info=input_info, compiled_model_name="encoder")
+        dec_compile_config = RBLNCompileConfig(input_info=input_info, compiled_model_name="decoder")
 
         rbln_config = RBLNConfig(
             rbln_cls=cls.__name__,
-            compile_cfgs=[rbln_compile_config],
+            compile_cfgs=[enc_compile_config, dec_compile_config],
             rbln_kwargs=rbln_kwargs,
         )
 

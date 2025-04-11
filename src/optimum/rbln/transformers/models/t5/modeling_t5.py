@@ -36,55 +36,25 @@ from .t5_architecture import T5Wrapper
 logger = get_logger()
 
 if TYPE_CHECKING:
-    from rebel import Runtime
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PreTrainedModel
 
 
 class RBLNRuntimeModel(RBLNPytorchRuntime):
-    def __init__(
-        self,
-        runtime: "Runtime",
-        max_seq_len: int,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(runtime, **kwargs)
-        self.max_seq_len = max_seq_len
-        self.pad_len = None
-
-    def validate_inputs(
-        self,
-        input_ids: torch.LongTensor,
-        attention_mask: torch.LongTensor,
-    ):
-        input_len = input_ids.shape[-1]
-        if input_len > self.max_seq_len:
-            raise ValueError(f"Error input_len({input_len}) exceed max_seq_len({self.max_seq_len}).")
-        elif input_len < self.max_seq_len and input_len > 0:
-            pad_len = self.max_seq_len - input_len
-            input_ids = torch.nn.functional.pad(input_ids, (0, pad_len))
-            attention_mask = torch.nn.functional.pad(attention_mask, (0, pad_len), value=0)
-            self.pad_len = pad_len
-
-        return input_ids, attention_mask
-
     def forward(
         self,
         input_ids: torch.LongTensor,
-        attention_mask: torch.LongTensor,
+        attention_mask: torch.FloatTensor,
         head_mask: torch.FloatTensor,
         inputs_embeds: torch.FloatTensor,
         **kwargs,
     ):
-        input_ids, attention_mask = self.validate_inputs(input_ids, attention_mask)
-        logits = super().forward(
+        return super().forward(
             input_ids,
             attention_mask,
             head_mask,
             inputs_embeds,
             **kwargs,
         )
-
-        return logits[:, : -self.pad_len, :] if self.pad_len is not None else logits
 
 
 class T5EncoderWrapper(torch.nn.Module):
@@ -102,8 +72,7 @@ class RBLNT5EncoderModel(RBLNModel):
     rbln_model_input_names = ["input_ids", "attention_mask"]
 
     def __post_init__(self, **kwargs):
-        self.max_seq_len = self.rbln_config.model_cfg["max_seq_len"]
-        self.model = RBLNRuntimeModel(runtime=self.model[0], max_seq_len=self.max_seq_len)
+        self.model = RBLNRuntimeModel(runtime=self.model[0])
 
     @classmethod
     def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: "RBLNConfig"):
