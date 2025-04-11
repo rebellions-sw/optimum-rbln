@@ -57,9 +57,6 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
         vae_scale_factor_spatial = pipe.vae_scale_factor_spatial
 
         num_frames = rbln_config.get("num_frames")
-        if num_frames is None:
-            num_frames = pipe.transformer.sample_frames
-
         img_width = rbln_config.get("img_width", None)
         img_height = rbln_config.get("img_height", None)
 
@@ -107,7 +104,10 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
             # NOTE(si): From diffusers >= v0.32.0, pipe.transformer.config.sample_height and pipe.transformer.config.sample_width is used explicitly.
             sample_size = model_config.sample_height, model_config.sample_width
             rbln_kwargs["sample_size"] = sample_size
-
+        
+        if num_frames is None:
+            num_frames = model_config.sample_frames
+        
         vae_scale_factor_temporal = rbln_kwargs.get("vae_scale_factor_temporal", None)
 
         rbln_max_seqeunce_length = rbln_kwargs.get("max_sequence_length")
@@ -147,6 +147,7 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
         )
 
         rbln_config.model_cfg.update({"batch_size": rbln_batch_size})
+        rbln_config.model_cfg.update({"num_frames": num_frames})
 
         return rbln_config
     
