@@ -803,7 +803,7 @@ class RBLNIdefics3ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         - To fit the format of that sequence, `input_ids`, `input_embeds`, `attention_mask` are all 3 adapted to insert the image hidden states.
         """
         num_images, _, vision_hidden_size = image_hidden_states.shape
-        special_image_token_mask = input_ids == self.image_token_id
+        special_image_token_mask = input_ids == self.config.image_token_id
         #  Fixes RuntimeError: a leaf Variable that requires grad is being used in an in-place operation.
         new_inputs_embeds = inputs_embeds.clone()
         reshaped_image_hidden_states = image_hidden_states.view(-1, vision_hidden_size)
