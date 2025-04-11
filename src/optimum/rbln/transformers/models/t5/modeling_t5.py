@@ -49,18 +49,28 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
     ) -> None:
         super().__init__(runtime, **kwargs)
         self.max_seq_len = max_seq_len
+<<<<<<< HEAD
 
     def _prepare_inputs(
+=======
+        self.pad_len = None
+
+    def validate_inputs(
+>>>>>>> parent of 82f9d76 (Revert "xMerge remote-tracking branch 'origin/t5_encoder' into t5_connection")
         self,
         input_ids: torch.LongTensor,
         attention_mask: torch.LongTensor,
     ):
         input_len = input_ids.shape[-1]
+<<<<<<< HEAD
         pad_len = None
+=======
+>>>>>>> parent of 82f9d76 (Revert "xMerge remote-tracking branch 'origin/t5_encoder' into t5_connection")
         if input_len > self.max_seq_len:
             raise ValueError(f"Error input_len({input_len}) exceed max_seq_len({self.max_seq_len}).")
         elif input_len < self.max_seq_len and input_len > 0:
             pad_len = self.max_seq_len - input_len
+<<<<<<< HEAD
             logger.warning(
                 f"Warning: The input was padded with {pad_len} tokens to meet the compiled model's requirements. "
                 "For optimal performance, consider recompiling with a shorter 'rbln_max_seq_len'."
@@ -69,6 +79,13 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             attention_mask = torch.nn.functional.pad(attention_mask, (0, pad_len), value=0)
 
         return input_ids, attention_mask, pad_len
+=======
+            input_ids = torch.nn.functional.pad(input_ids, (0, pad_len))
+            attention_mask = torch.nn.functional.pad(attention_mask, (0, pad_len), value=0)
+            self.pad_len = pad_len
+
+        return input_ids, attention_mask
+>>>>>>> parent of 82f9d76 (Revert "xMerge remote-tracking branch 'origin/t5_encoder' into t5_connection")
 
     def forward(
         self,
@@ -78,7 +95,11 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         inputs_embeds: torch.FloatTensor,
         **kwargs,
     ):
+<<<<<<< HEAD
         input_ids, attention_mask, pad_len = self._prepare_inputs(input_ids, attention_mask)
+=======
+        input_ids, attention_mask = self.validate_inputs(input_ids, attention_mask)
+>>>>>>> parent of 82f9d76 (Revert "xMerge remote-tracking branch 'origin/t5_encoder' into t5_connection")
         logits = super().forward(
             input_ids,
             attention_mask,
@@ -87,7 +108,11 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             **kwargs,
         )
 
+<<<<<<< HEAD
         return logits[:, :-pad_len, :] if pad_len is not None else logits
+=======
+        return logits[:, : -self.pad_len, :] if self.pad_len is not None else logits
+>>>>>>> parent of 82f9d76 (Revert "xMerge remote-tracking branch 'origin/t5_encoder' into t5_connection")
 
 
 class T5EncoderWrapper(torch.nn.Module):
@@ -105,8 +130,13 @@ class RBLNT5EncoderModel(RBLNModel):
     rbln_model_input_names = ["input_ids", "attention_mask"]
 
     def __post_init__(self, **kwargs):
+<<<<<<< HEAD
         max_seq_len = self.rbln_config.model_cfg["max_seq_len"]
         self.model = RBLNRuntimeModel(runtime=self.model[0], max_seq_len=max_seq_len)
+=======
+        self.max_seq_len = self.rbln_config.model_cfg["max_seq_len"]
+        self.model = RBLNRuntimeModel(runtime=self.model[0], max_seq_len=self.max_seq_len)
+>>>>>>> parent of 82f9d76 (Revert "xMerge remote-tracking branch 'origin/t5_encoder' into t5_connection")
 
     @classmethod
     def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: "RBLNConfig"):

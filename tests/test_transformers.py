@@ -7,12 +7,14 @@ from transformers import T5EncoderModel
 
 from optimum.rbln import (
     RBLNASTForAudioClassification,
+    RBLNBartModel,
     RBLNBertForMaskedLM,
     RBLNBertForQuestionAnswering,
     RBLNCLIPTextModel,
     RBLNDPTForDepthEstimation,
     RBLNResNetForImageClassification,
     RBLNT5EncoderModel,
+    RBLNTimeSeriesTransformerForPrediction,
     RBLNWav2Vec2ForCTC,
     RBLNWhisperForConditionalGeneration,
     RBLNXLMRobertaForSequenceClassification,
@@ -353,7 +355,10 @@ class TestTimeSeriesTransformerForPrediction(BaseTest.TestModel):
         "future_time_features": torch.randn(1, 24, 2),
     }
     RBLN_CLASS_KWARGS = {"rbln_batch_size": 1, "rbln_num_parallel_samples": 100}
+<<<<<<< HEAD
     DEVICE = 0
+=======
+>>>>>>> parent of 82f9d76 (Revert "xMerge remote-tracking branch 'origin/t5_encoder' into t5_connection")
 
     def test_generate(self):
         inputs = self.get_inputs()
