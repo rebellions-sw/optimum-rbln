@@ -55,7 +55,9 @@ class SubModulesMixin:
         rbln_submodules = []
         for submodule in cls._rbln_submodules:
             submodule_name = submodule["name"]
-            torch_submodule: "PreTrainedModel" = getattr(model, submodule["name"])
+            torch_submodule: PreTrainedModel = model
+            for part in submodule_name.split("."):
+                torch_submodule = getattr(torch_submodule, part)
             cls_name = torch_submodule.__class__.__name__
             submodule_cls: "RBLNBaseModel" = getattr(importlib.import_module("optimum.rbln"), f"RBLN{cls_name}")
 
