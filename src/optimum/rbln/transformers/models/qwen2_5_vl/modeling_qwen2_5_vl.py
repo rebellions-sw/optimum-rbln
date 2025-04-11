@@ -677,6 +677,8 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
     ) -> Dict[str, Any]:
         # update generate_idx
         model_kwargs["generate_idx"] = outputs.generate_idx
+        
+        return model_kwargs
 
     def _get_position_embeddings(self, hidden_states, position_ids):
         cos, sin = self.rotary_emb(hidden_states, position_ids)
@@ -763,16 +765,12 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             logits = torch.cat(logits, dim=0)
         else:
             batch_size, seq_length, _ = inputs_embeds.shape
-            delta = (
-                (cache_position[0] + self.rope_deltas).to(inputs_embeds.device) if cache_position is not None else 0
-            )
+            delta = cache_position[0] + self.rope_deltas
             position_ids = torch.arange(seq_length, device=inputs_embeds.device)
-            position_ids = position_ids.view(1, -1).expand(batch_size, -1)
-            if cache_position is not None:  # otherwise `deltas` is an int `0`
-                delta = delta.repeat_interleave(batch_size // delta.shape[0], dim=0)
+            position_ids = position_ids.view(1, -1).expand(batch_size, -1) # otherwise `deltas` is an int `0`
+            delta = delta.repeat_interleave(batch_size // delta.shape[0], dim=0)
             position_ids = position_ids.add(delta)
             position_ids = position_ids.unsqueeze(0).expand(3, -1, -1)
-
             position_embed = self._get_position_embeddings(inputs_embeds, position_ids)
 
             logits = self.decoder(
@@ -782,7 +780,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 position_embed=position_embed,
             )
 
-        return RBLNDecoderOnlyOutput(
+        return RBLNQwen2_5_VLOutput(
             logits=logits,
             rope_deltas=self.rope_deltas,
             generate_idx=generate_idx,
