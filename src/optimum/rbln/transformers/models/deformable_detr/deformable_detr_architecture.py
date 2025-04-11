@@ -26,7 +26,6 @@ from transformers.models.deformable_detr.configuration_deformable_detr import De
 from transformers.models.deformable_detr.modeling_deformable_detr import (
     DeformableDetrConvModel,
     DeformableDetrDecoderOutput,
-    DeformableDetrEncoderLayer,
     DeformableDetrForObjectDetection,
     DeformableDetrLearnedPositionEmbedding,
     DeformableDetrModelOutput,
