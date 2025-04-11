@@ -74,6 +74,7 @@ _import_structure = {
         "RBLNViTForImageClassification",
         "RBLNBertForMaskedLM",
         "RBLNTimeSeriesTransformerForPrediction",
+        "RBLNDeformableDetrForObjectDetection",
     ],
     "diffusers": [
         "RBLNAutoencoderKL",
@@ -155,6 +156,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForDepthEstimation,
         RBLNAutoModelForImageClassification,
         RBLNAutoModelForMaskedLM,
+        RBLNAutoModelForObjectDetection,
         RBLNAutoModelForQuestionAnswering,
         RBLNAutoModelForSeq2SeqLM,
         RBLNAutoModelForSequenceClassification,
@@ -169,6 +171,7 @@ if TYPE_CHECKING:
         RBLNCLIPTextModelWithProjection,
         RBLNCLIPVisionModel,
         RBLNCLIPVisionModelWithProjection,
+        RBLNDeformableDetrForObjectDetection,
         RBLNDistilBertForQuestionAnswering,
         RBLNDPTForDepthEstimation,
         RBLNExaoneForCausalLM,

@@ -55,6 +55,7 @@ _import_structure = {
     "wav2vec2": ["RBLNWav2Vec2ForCTC"],
     "whisper": ["RBLNWhisperForConditionalGeneration"],
     "xlm_roberta": ["RBLNXLMRobertaModel"],
+    "deformable_detr": ["RBLNDeformableDetrForObjectDetection"],
 }
 
 if TYPE_CHECKING:
@@ -66,6 +67,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForDepthEstimation,
         RBLNAutoModelForImageClassification,
         RBLNAutoModelForMaskedLM,
+        RBLNAutoModelForObjectDetection,
         RBLNAutoModelForQuestionAnswering,
         RBLNAutoModelForSeq2SeqLM,
         RBLNAutoModelForSequenceClassification,
@@ -80,6 +82,7 @@ if TYPE_CHECKING:
         RBLNCLIPVisionModel,
         RBLNCLIPVisionModelWithProjection,
     )
+    from .deformable_detr import RBLNDeformableDetrForObjectDetection
     from .dpt import RBLNDPTForDepthEstimation
     from .exaone import RBLNExaoneForCausalLM
     from .gemma import RBLNGemmaForCausalLM
