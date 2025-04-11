@@ -5,7 +5,7 @@ import fire
 from transformers.image_utils import load_image
 from transformers import AutoProcessor, AutoModelForVision2Seq
 from transformers import Idefics3VisionTransformer
-from optimum.rbln import RBLNIdefics3VisionTransformer
+from optimum.rbln import RBLNIdefics3VisionTransformer, RBLNIdefics3ForConditionalGeneration, RBLNIdefics3Model
 # from optimum.rbln import RBLNIdefics3ForConditionalGeneration, RBLNIdefics3VisionTransformer
 
 
@@ -19,26 +19,25 @@ def main(
     num_text_only: typing.Optional[int] = None,
 ):
     processor = AutoProcessor.from_pretrained(model_id)
-    base_model = AutoModelForVision2Seq.from_pretrained(model_id)
-    # vision_model = Idefics3VisionTransformer._from_config(base_model.config.vision_config)
+    # base_model = AutoModelForVision2Seq.from_pretrained(model_id)
+    # # vision_model = Idefics3VisionTransformer._from_config(base_model.config.vision_config)
+    # tmp_model = RBLNIdefics3Connector.from_model(
+    #     base_model.model
+    # )
+    # import pdb; pdb.set_trace()
     if from_transformers:
-        model = RBLNIdefics3VisionTransformer.from_model(
-            base_model.model.vision_model,
+        model = RBLNIdefics3ForConditionalGeneration.from_pretrained(
+            model_id,
             export=True,
-            # rbln_config={
-            #     "language_model": {
-            #         "tensor_parallel_size": tensor_parallel_size,
-            #         "max_seq_len": max_seq_len,
-            #         "use_inputs_embeds": True,
-            #         "batch_size": batch_size,
-            #     },
-            # },
+            rbln_attn_impl="flash_attn",
+            rbln_max_seq_len=131072,
+            rbln_use_inputs_embeds=True,
+            rbln_tensor_parallel_size=4,
         )
         model.save_pretrained(os.path.basename(model_id))
-        exit()
     else:
-        model = RBLNIdefics3VisionTransformer.from_pretrained(
-            os.path.basename("Idefics3-8B-Llama3"),
+        model = RBLNIdefics3ForConditionalGeneration.from_pretrained(
+            os.path.basename(model_id),
             export=False,
         )
 
@@ -73,24 +72,26 @@ def main(
     inputs = processor(text=prompt, images=[image1, image2], return_tensors="pt")
     inputs = {k: v for k, v in inputs.items()}
     
-    vision_out = base_model.model.vision_model(inputs['pixel_values'].squeeze(0))
-    print(vision_out.last_hidden_state)
-    print('=============')
-    rbln_out = model(inputs['pixel_values'].squeeze(0))
-    print(rbln_out.last_hidden_state)
-
-    # compare
-    import numpy as np
-    from scipy import stats
-    golden = vision_out.last_hidden_state.detach().numpy()
-    rbln = rbln_out.last_hidden_state.detach().numpy()
-    print(f"max l1 diff : {np.abs(golden - rbln).max()}")
-    print(f"pearsonr : {stats.pearsonr(golden.flatten(), rbln.flatten()).statistic}")
     
-    # generated_ids = model.generate(**inputs, max_new_tokens=500)
-    # generated_texts = processor.batch_decode(generated_ids, skip_special_tokens=True)
+    # for vision
+    # vision_out = base_model.model.vision_model(inputs['pixel_values'].squeeze(0))
+    # print(vision_out.last_hidden_state)
+    # print('=============')
+    # rbln_out = model(inputs['pixel_values'].squeeze(0))
+    # print(rbln_out.last_hidden_state)
 
-    # print(generated_texts)
+    # # compare
+    # import numpy as np
+    # from scipy import stats
+    # golden = vision_out.last_hidden_state.detach().numpy()
+    # rbln = rbln_out.last_hidden_state.detach().numpy()
+    # print(f"max l1 diff : {np.abs(golden - rbln).max()}")
+    # print(f"pearsonr : {stats.pearsonr(golden.flatten(), rbln.flatten()).statistic}")
+    
+    generated_ids = model.generate(**inputs, max_new_tokens=500)
+    generated_texts = processor.batch_decode(generated_ids, skip_special_tokens=True)
+
+    print(generated_texts)
     # output = model.generate(**inputs, max_new_tokens=200)
 
     # for i in range(batch_size):

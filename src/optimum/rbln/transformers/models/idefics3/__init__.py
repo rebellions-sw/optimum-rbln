@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .modeling_idefics3 import RBLNIdefics3VisionTransformer
+from .modeling_idefics3 import RBLNIdefics3VisionTransformer, RBLNIdefics3ForConditionalGeneration, RBLNIdefics3Model
