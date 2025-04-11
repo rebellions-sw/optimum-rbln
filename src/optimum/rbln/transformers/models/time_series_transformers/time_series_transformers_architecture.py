@@ -25,16 +25,9 @@ from typing import Optional, Tuple, Union
 
 import torch
 from torch import nn
-from transformers.modeling_attn_mask_utils import (
-    _prepare_4d_causal_attention_mask,
-)
-from transformers.modeling_outputs import (
-    BaseModelOutput,
-    Seq2SeqLMOutput,
-)
+from transformers.modeling_attn_mask_utils import _prepare_4d_causal_attention_mask
+from transformers.modeling_outputs import BaseModelOutput, Seq2SeqLMOutput
 from transformers.utils import logging
-
-from ....ops import register_rbln_custom_cache_update, register_rbln_custom_paged_add_softmax_attention
 
 
 logger = logging.get_logger(__name__)
@@ -42,8 +35,6 @@ logger = logging.get_logger(__name__)
 
 class TimeSeriesTransformersWrapper:
     def __init__(self, model, num_parallel_samples):
-        register_rbln_custom_cache_update()
-        register_rbln_custom_paged_add_softmax_attention()
         self.encoder = TimeSeriesTransformersEncoderWrapper(model)
         self.decoder = TimeSeriesTransformersDecoderWrapper(model, num_parallel_samples)
 
@@ -181,7 +172,6 @@ class TimeSeriesTransformersDecoder(nn.Module):
             hidden_states = decoder_layer(
                 hidden_states,
                 attention_mask=attention_mask,
-                # encoder_attention_mask=encoder_attention_mask,
                 self_past_key_value=self_past_key_value,
                 cross_past_key_value=cross_past_key_value,
                 cache_position=cache_position,
@@ -285,16 +275,16 @@ class TimeSeriesTransformersSelfAttention(TimeSeriesTransformersAttention):
 
         block_size = past_key_value[0].shape[-2]
         attn_output = torch.ops.rbln_custom_ops.paged_add_softmax_attn_decode(
-            query_states,
-            key_states,
-            value_states,
-            attention_mask.unsqueeze(2),
-            past_key_value[0].view(1, bsz * self.num_heads, 1, -1, self.head_dim),
-            past_key_value[1].view(1, bsz * self.num_heads, 1, -1, self.head_dim),
-            cache_position.expand(bsz, 1),
-            torch.tensor(1.0, dtype=torch.float32),  # scale
-            block_tables,
-            block_size,
+            q=query_states,
+            k=key_states,
+            v=value_states,
+            mask=attention_mask.unsqueeze(2),
+            kcache=past_key_value[0].view(1, bsz * self.num_heads, 1, -1, self.head_dim),
+            vcache=past_key_value[1].view(1, bsz * self.num_heads, 1, -1, self.head_dim),
+            seq=cache_position.expand(bsz, 1),
+            scale=torch.tensor(1.0, dtype=torch.float32),  # scale
+            block_table=block_tables,
+            block_size=block_size,
         )
 
         attn_output = attn_output.view(bsz, self.num_heads, tgt_len, self.head_dim)

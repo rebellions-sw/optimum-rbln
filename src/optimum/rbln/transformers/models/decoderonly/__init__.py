@@ -12,4 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ....ops import (
+    paged_attn_decode,
+    paged_attn_prefill,
+    paged_causal_attn_decode,
+    paged_causal_attn_prefill,
+    paged_flash_attn_decode,
+    paged_flash_attn_prefill,
+    paged_flash_causal_attn_decode,
+    paged_flash_causal_attn_prefill,
+)
 from .modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM
