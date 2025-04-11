@@ -222,6 +222,7 @@ class RBLNModel(RBLNBaseModel):
             cls._raise_missing_compiled_file_error([DEFAULT_COMPILED_MODEL_NAME])
 
         device = rbln_device_map[DEFAULT_COMPILED_MODEL_NAME]
+
         return [
             compiled_model.create_runtime(tensor_type="pt", device=device, activate_profiler=activate_profiler)
             for compiled_model in compiled_models

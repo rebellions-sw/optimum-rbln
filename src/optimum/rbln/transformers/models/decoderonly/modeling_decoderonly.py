@@ -161,6 +161,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         attention_mask: Optional[torch.Tensor] = None,
         batch_idx: Optional[int] = None,
         block_tables: Optional[torch.Tensor] = None,
+        position_embed: Optional[torch.Tensor] = None,
     ):
         if input_ids is None and inputs_embeds is None:
             raise ValueError("Either `input_ids` or `inputs_embeds` must be provided.")
@@ -185,9 +186,12 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 block_tables,
                 is_external_block_tables,
                 attention_mask=attention_mask,
+                position_embed=position_embed,
             )
         else:
-            return self.prefill_forward(inputs, cache_position, attention_mask, batch_idx, block_tables)
+            return self.prefill_forward(
+                inputs, cache_position, attention_mask, batch_idx, block_tables, position_embed=position_embed
+            )
 
     def decode_forward(
         self,
@@ -196,6 +200,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         block_tables: torch.Tensor = None,
         is_external_block_tables: bool = None,
         attention_mask: Optional[torch.Tensor] = None,
+        position_embed: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         batch_size = inputs.shape[0]
         if batch_size != self.batch_size:
@@ -227,6 +232,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             cache_position,
             attention_mask if self.use_attention_mask else None,
             block_tables,
+            position_embed,
         )
 
         return logits
@@ -239,6 +245,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         batch_idx: int = None,
         block_tables: torch.Tensor = None,
         is_external_block_tables: bool = None,
+        position_embed: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         """
         Performs chunked prefill for efficient KV-cache updates and memory optimization.
@@ -293,9 +300,14 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     dim=-1,
                 )
 
+                if position_embed is not None:
+                    position_embed = torch.nn.functional.pad(position_embed, (0, 0, 0, padding_size))
+
             # Extract the current chunk of inputs and cache positions
             input_chunk = inputs[:, step : step + self.prefill_chunk_size]
             cache_pos_chunk = cache_position[:, step : step + self.prefill_chunk_size]
+            if position_embed is not None:
+                position_embed_chunk = position_embed[:, :, :, step : step + self.prefill_chunk_size, :]
 
             if self.use_attention_mask:
                 # Update attention mask to ensure proper causal behavior
@@ -313,6 +325,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 chunked_attention_mask if self.use_attention_mask else None,
                 query_position,
                 block_tables,
+                position_embed_chunk if position_embed is not None else None,
                 out=out_buffers,
             )
 
@@ -520,7 +533,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
     @classmethod
     @torch.inference_mode()
     def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNConfig):
-        wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
+        wrapped_model = cls.wrap_model_if_needed(model=model, rbln_config=rbln_config)
 
         rbln_compile_configs = rbln_config.compile_cfgs
         prefill_compile_config = rbln_compile_configs[0]

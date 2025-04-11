@@ -1,12 +1,27 @@
 import math
-from typing import Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Tuple
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+
+from ....utils import logging
+from ..decoderonly.decoderonly_architecture import (
+    DecoderOnlyWrapper,
+    apply_rotary_pos_emb,
+)
+
+
+logger = logging.get_logger(__name__)
+
+DEFAULT_FLASH_ATTN_PARTITION_LENGTH = 16_384
+DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH = 32_768
+MIN_FLASH_ATTN_MAX_SEQ_LEN = 8_192
+MIN_FLASH_ATTN_PARTITION_LENGTH = 4_096
+MAX_FLASH_ATTN_PARTITION_LENGTH = 32_768
+
 
 if TYPE_CHECKING:
-    import rebel
+    pass
 
 
 class Qwen2_5_VisionTransformerWrapper(nn.Module):
@@ -79,24 +94,6 @@ class Qwen2_5_VLVisionBlock(torch.nn.Module):
         return hidden_states
 
 
-def rotate_half(x):
-    """Rotates half the hidden dims of the input."""
-    x1 = x[..., : x.shape[-1] // 2]
-    x2 = x[..., x.shape[-1] // 2 :]
-    return torch.cat((-x2, x1), dim=-1)
-
-
-def apply_rotary_pos_emb_vision(
-    q: torch.Tensor, k: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    # tensor_a.shape: (8, 1, 64, 80)
-    # tenosr_b.shape: (8, 16, 64, 80)
-    q_embed = (q * cos) + (rotate_half(q) * sin)
-    k_embed = (k * cos) + (rotate_half(k) * sin)
-
-    return q_embed, k_embed
-
-
 class Qwen2_5_VLVisionFullAttention(nn.Module):
     def __init__(self, model: nn.Module) -> None:
         super().__init__()
@@ -123,7 +120,7 @@ class Qwen2_5_VLVisionFullAttention(nn.Module):
         v = self._shape(qkv[2])
 
         cos, sin = position_embeddings
-        q, k = apply_rotary_pos_emb_vision(q, k, cos, sin)
+        q, k = apply_rotary_pos_emb(q, k, cos, sin)
 
         attn_weights = torch.matmul(q, k.transpose(2, 3)) / math.sqrt(self.head_dim)
         attn_weights = attn_weights + attn_masks
@@ -173,11 +170,10 @@ class Qwen2_5_VLVisionWindowAttention(nn.Module):
         cos, sin = position_embeddings
         cos = cos.reshape(batch_size, 1, seq_length // batch_size, -1)
         sin = sin.reshape(batch_size, 1, seq_length // batch_size, -1)
-        q, k = apply_rotary_pos_emb_vision(q, k, cos, sin)
+        q, k = apply_rotary_pos_emb(q, k, cos, sin)
 
         attn_weights = torch.matmul(q, k.transpose(2, 3)) / math.sqrt(self.head_dim)
 
-        # breakpoint()
         attn_weights = attn_weights + attn_masks
         attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32)
         attn_output = torch.matmul(attn_weights, v)
@@ -186,3 +182,88 @@ class Qwen2_5_VLVisionWindowAttention(nn.Module):
         attn_output = self.proj(attn_output).squeeze(0)
 
         return attn_output
+
+
+class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
+    def forward(self, *args):
+        if self.phase == "decode":
+            if self.use_attention_mask:
+                (
+                    input_ids_or_inputs_embeds,
+                    cache_position,
+                    attention_mask,
+                    block_tables,
+                    position_emb,
+                    *past_key_values,
+                ) = args
+            else:
+                (
+                    input_ids_or_inputs_embeds,
+                    cache_position,
+                    block_tables,
+                    position_emb,
+                    *past_key_values,
+                ) = args
+                attention_mask = None
+            query_position = None
+        elif self.phase == "prefill":
+            if self.use_attention_mask:
+                (
+                    input_ids_or_inputs_embeds,
+                    cache_position,
+                    attention_mask,
+                    query_position,
+                    block_tables,
+                    position_emb,
+                    *past_key_values,
+                ) = args
+            else:
+                (
+                    input_ids_or_inputs_embeds,
+                    cache_position,
+                    query_position,
+                    block_tables,
+                    position_emb,
+                    *past_key_values,
+                ) = args
+                attention_mask = None
+
+        else:
+            raise ValueError(f"Unknown phase: {self.phase}")
+
+        if input_ids_or_inputs_embeds.ndim == 2:
+            input_ids = input_ids_or_inputs_embeds
+            inputs_embeds = None
+        elif input_ids_or_inputs_embeds.ndim == 3:
+            input_ids = None
+            inputs_embeds = input_ids_or_inputs_embeds
+        else:
+            raise NotImplementedError(f"Unknown ndim of input : {input_ids_or_inputs_embeds.ndim}")
+
+        if len(past_key_values) != 2 * self.num_hidden_layers:
+            raise ValueError(
+                f"Different past_key_values to model's config. {len(past_key_values)} != {2 * self.num_hidden_layers}"
+            )
+
+        # [key, value] * n_layer -> ( (key, value) ) * n_layer
+        # cache shape : batch, n_heads, 1, max_seq_len, head_dim
+        _past_key_values = []
+        for i in range(self.config.num_hidden_layers):
+            key_states = past_key_values[i * 2]
+            value_states = past_key_values[i * 2 + 1]
+            past_key_value = [key_states, value_states]
+            _past_key_values.append(past_key_value)
+        past_key_values = _past_key_values
+
+        logit = self.causal_lm(
+            input_ids=input_ids,
+            inputs_embeds=inputs_embeds,
+            attention_mask=attention_mask,
+            cache_position=cache_position,
+            query_position=query_position,
+            past_key_values=past_key_values,
+            rotary_emb=position_emb,
+            block_tables=block_tables,
+        )
+
+        return logit

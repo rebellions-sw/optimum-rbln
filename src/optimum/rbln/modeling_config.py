@@ -17,10 +17,10 @@ import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
-from typing_extensions import TypeAlias
 
 import rebel
 import torch
+from typing_extensions import TypeAlias
 
 from .__version__ import __version__
 from .utils.runtime_utils import ContextRblnConfig

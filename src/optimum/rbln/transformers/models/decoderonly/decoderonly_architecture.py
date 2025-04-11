@@ -148,6 +148,7 @@ class DecoderOnlyWrapper(nn.Module):
         use_attention_mask: bool,
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
+        lm_head: Optional[nn.Module] = None,
     ):
         super().__init__()
         self.config = causal_lm.config
@@ -181,7 +182,8 @@ class DecoderOnlyWrapper(nn.Module):
                 f" or equal to max_seq_len({max_seq_len})!"
             )
 
-        self.causal_lm = self.convert_to_rbln_causal_lm(causal_lm, max_seq_len)
+        args = (causal_lm, max_seq_len, lm_head) if lm_head is not None else (causal_lm, max_seq_len)
+        self.causal_lm = self.convert_to_rbln_causal_lm(*args)
 
         self.num_hidden_layers = getattr(self.config, "num_hidden_layers", None) or getattr(self.config, "n_layer")
         self._phase = "prefill"
@@ -189,7 +191,9 @@ class DecoderOnlyWrapper(nn.Module):
     def get_rotary_emb(self, max_seq_len):
         return RotaryEmbedding(config=self.config, max_seq_len_cached=max_seq_len)
 
-    def convert_to_rbln_causal_lm(self, causal_lm: PreTrainedModel, max_seq_len: int):
+    def convert_to_rbln_causal_lm(
+        self, causal_lm: PreTrainedModel, max_seq_len: int, lm_head: Optional[nn.Module] = None
+    ):
         new_layers = []
         for layer in causal_lm.model.layers:
             if self.attn_impl == "eager":
@@ -215,7 +219,7 @@ class DecoderOnlyWrapper(nn.Module):
             max_seq_len=max_seq_len,
             kvcache_block_size=self.kvcache_block_size,
         )
-        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
+        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model, lm_head)
         return new_causal_lm
 
     @property
@@ -329,12 +333,13 @@ class DecoderOnlyForCausalLM(nn.Module):
         _phase: Current processing phase ("prefill" or "decode")
     """
 
-    def __init__(self, causal_lm: PreTrainedModel, model):
+    def __init__(self, causal_lm: PreTrainedModel, model: nn.Module, lm_head: Optional[nn.Module] = None):
         super().__init__()
         self.config = causal_lm.config
         self._original_mod = causal_lm
         self.model = model
         self._phase = "prefill"
+        self.lm_head = self._original_mod.lm_head if lm_head is None else lm_head
 
     @property
     def phase(self):
@@ -370,7 +375,7 @@ class DecoderOnlyForCausalLM(nn.Module):
         if self.phase == "prefill":
             hidden_states = hidden_states[:, query_position.to(torch.int).unsqueeze(0)]
 
-        logits = self._original_mod.lm_head(hidden_states)
+        logits = self.lm_head(hidden_states)
         return logits
 
 
@@ -462,8 +467,12 @@ class DecoderOnlyModel(nn.Module):
 
         # get cos,sin vector if needed
         if rotary_emb is not None:
-            cos, sin = rotary_emb(hidden_states, self.max_seq_len)  # dtype carrier, max_seq_len
-            cos, sin = slice_and_unsqueeze_cos_sin(cos, sin, cache_position)
+            if isinstance(rotary_emb, torch.Tensor):
+                cos = rotary_emb[0]
+                sin = rotary_emb[1]
+            else:
+                cos, sin = rotary_emb(hidden_states, self.max_seq_len)  # dtype carrier, max_seq_len
+                cos, sin = slice_and_unsqueeze_cos_sin(cos, sin, cache_position)
         else:
             batch_size = inputs_embeds.shape[0]
             if cache_position.shape[0] > 1:
@@ -840,7 +849,6 @@ def rotate_half(x):
 
 def apply_rotary_pos_emb(q, k, cos, sin):
     """Applies Rotary Position Embedding to the query and key tensors."""
-
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
     return q_embed, k_embed
