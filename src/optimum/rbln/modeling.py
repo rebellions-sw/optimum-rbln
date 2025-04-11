@@ -119,7 +119,7 @@ class RBLNModel(RBLNBaseModel):
         if config is None:
             config = model.config
             # remote_config
-            if hasattr(config, "auto_map") and "AutoConfig" in config.auto_map:
+            if hasattr(config, "auto_map") and "AutoConfig" in config.auto_map and config._name_or_path is not None:
                 config = AutoConfig.from_pretrained(config._name_or_path, **kwargs)
 
         if hasattr(model, "can_generate") and model.can_generate():
