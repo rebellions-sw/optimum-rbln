@@ -661,19 +661,19 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             max_seq_len=rbln_config.max_seq_len,
         )
 
-        rbln_config.kvcache_num_blocks = (
-            rbln_config.max_seq_len // rbln_config.kvcache_block_size
-        ) * rbln_config.batch_size
+        required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
+        max_num_blocks = required_num_blocks
 
         if rbln_config.attn_impl == "flash_attn":
-            max_num_blocks, _ = cls.get_maximum_num_blocks(
+            estimated_max_num_blocks, _ = cls.get_maximum_num_blocks(
                 config=model_config,
                 tensor_parallel_size=rbln_config.tensor_parallel_size or 1,
                 kvcache_block_size=rbln_config.kvcache_block_size,
                 nbits_per_param=16 if rbln_config.quantization is None else 4,  # TODO(jongho): FIX Ad-hoc
                 n_model_params=sum(p.numel() for p in model.parameters()),
             )
-            rbln_config.kvcache_num_blocks = min(rbln_config.kvcache_num_blocks, max_num_blocks)
+
+            max_num_blocks = min(max_num_blocks, estimated_max_num_blocks)
 
             required_blocks = rbln_config.max_seq_len // rbln_config.kvcache_block_size + 1
             if rbln_config.kvcache_num_blocks < required_blocks:
@@ -686,6 +686,15 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     f"Batch size ({rbln_config.batch_size}) exceeds available KV cache blocks ({rbln_config.kvcache_num_blocks}). "
                     "Ensure the number of blocks is at least equal to the batch size."
                 )
+
+        if rbln_config.kvcache_num_blocks is None:
+            rbln_config.kvcache_num_blocks = max_num_blocks
+        elif rbln_config.kvcache_num_blocks > max_num_blocks:
+            logger.warning(
+                f"The set `kvcache_num_blocks` ({rbln_config.kvcache_num_blocks}) is greater"
+                f" than the estimated maximum number of blocks ({max_num_blocks})."
+                "This can cause a failure during model compilation."
+            )
 
         num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
         num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
