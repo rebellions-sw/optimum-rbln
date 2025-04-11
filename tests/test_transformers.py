@@ -146,16 +146,17 @@ class TestWhisperModel(BaseTest.TestModel):
     RBLN_AUTO_CLASS = RBLNAutoModelForSpeechSeq2Seq
     RBLN_CLASS = RBLNWhisperForConditionalGeneration
     HF_MODEL_ID = "openai/whisper-tiny"
+    DEVICE = 0
 
     GENERATION_KWARGS = {
         "input_features": torch.randint(
-            low=0, high=50, size=(2, 80, 3000), generator=torch.manual_seed(42), dtype=torch.float32
+            low=-1, high=1, size=(2, 80, 3000), generator=torch.manual_seed(42), dtype=torch.float32
         ),
         "max_new_tokens": 10,
     }
     HF_CONFIG_KWARGS = {
-        "num_hidden_layers": 1,
-        "encoder_layers": 1,
+        "num_hidden_layers": 4,
+        "encoder_layers": 4,
         "decoder_layers": 4,
     }
     RBLN_CLASS_KWARGS = {
@@ -164,28 +165,50 @@ class TestWhisperModel(BaseTest.TestModel):
     }
 
     def test_generate(self):
+        from datasets import load_dataset
+        from transformers import AutoProcessor
+
+        processor = AutoProcessor.from_pretrained(self.HF_MODEL_ID)
+        ds = load_dataset(
+            "hf-internal-testing/librispeech_asr_dummy", "clean", split="validation", trust_remote_code=True
+        )
+        input_features_list = []
+
+        for i in range(2):
+            input_features = processor(
+                ds[i]["audio"]["array"],
+                sampling_rate=ds[i]["audio"]["sampling_rate"],
+                truncation=False,
+                return_tensors="pt",
+            ).input_features
+            input_features_list.append(input_features)
+        input_features = torch.cat(input_features_list, dim=0)
+        output = self.model.generate(input_features=input_features, max_new_tokens=10)
+        self.EXPECTED_OUTPUT = output[:, :5]
+
+        # test_generate_language
+        output = self.model.generate(input_features=input_features, max_new_tokens=10, language="en")[:, :5]
+        self.assertTrue(torch.all(output == self.EXPECTED_OUTPUT))
+
+        # test_generate_language_auto_detect
+        output = self.model.generate(input_features=input_features, max_new_tokens=10, language=None)[:, :5]
+        self.assertTrue(torch.all(output == self.EXPECTED_OUTPUT))
+
+    def test_long_form_language_auto_detect_generate(self):
         inputs = self.get_inputs()
-        output = self.model.generate(**inputs)
 
-        if self.EXPECTED_OUTPUT is not None:
-            self.assertEqual(output, self.EXPECTED_OUTPUT)
-        else:
-            self.EXPECTED_OUTPUT = output
+        inputs["input_features"] = torch.randint(
+            low=-1, high=1, size=(2, 80, 3001), generator=torch.manual_seed(42), dtype=torch.float32
+        )
+        inputs["attention_mask"] = torch.ones(2, 3002, dtype=torch.int64)
 
-    def test_generate_language(self):
-        inputs = self.get_inputs()
-        output = self.model.generate(**inputs, language="en")
-
-        if self.EXPECTED_OUTPUT is not None:
-            self.assertEqual(output, self.EXPECTED_OUTPUT)
-        else:
-            self.EXPECTED_OUTPUT = output
+        _ = self.model.generate(**inputs, temperature=0.0, language=None, return_timestamps=True)
 
     def test_long_form_generate(self):
         inputs = self.get_inputs()
 
         inputs["input_features"] = torch.randint(
-            low=0, high=50, size=(2, 80, 3001), generator=torch.manual_seed(42), dtype=torch.float32
+            low=-1, high=1, size=(2, 80, 3001), generator=torch.manual_seed(42), dtype=torch.float32
         )
         inputs["attention_mask"] = torch.ones(2, 3002, dtype=torch.int64)
 
@@ -231,6 +254,7 @@ class TestWhisperModel_TokenTimestamps(BaseTest.TestModel):
         "max_new_tokens": 1,
         "return_token_timestamps": True,
         "return_timestamps": True,
+        "generation_config": None,
     }
 
     HF_CONFIG_KWARGS = {
@@ -314,6 +338,38 @@ class TestWav2VecModel(BaseTest.TestModel):
     HF_MODEL_ID = "hf-internal-testing/tiny-random-Wav2Vec2ForCTC"
     GENERATION_KWARGS = {"input_values": RANDOM_AUDIO}
     RBLN_CLASS_KWARGS = {"rbln_max_seq_len": 160005}
+
+
+class TestTimeSeriesTransformerForPrediction(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = None
+    RBLN_CLASS = RBLNTimeSeriesTransformerForPrediction
+    HF_MODEL_ID = "huggingface/time-series-transformer-tourism-monthly"
+    GENERATION_KWARGS = {
+        "static_categorical_features": torch.ones(1, 1, dtype=torch.long),
+        "static_real_features": torch.ones(1, 1, dtype=torch.float),
+        "past_time_features": torch.randn(1, 61, 2),
+        "past_values": torch.randn(1, 61),
+        "past_observed_mask": torch.ones(1, 61, dtype=torch.long),
+        "future_time_features": torch.randn(1, 24, 2),
+    }
+    RBLN_CLASS_KWARGS = {"rbln_batch_size": 1, "rbln_num_parallel_samples": 100}
+    DEVICE = 0
+
+    def test_generate(self):
+        inputs = self.get_inputs()
+        _ = self.model.generate(**inputs)
+
+
+class TestRBLNBartModel(BaseTest.TestModel):
+    RBLN_CLASS = RBLNBartModel
+    HF_MODEL_ID = "hf-internal-testing/tiny-random-BartModel"
+    RBLN_CLASS_KWARGS = {"rbln_max_seq_len": 100}
+    GENERATION_KWARGS = {
+        "input_ids": torch.randint(low=0, high=50, size=(1, 100), generator=torch.manual_seed(42), dtype=torch.int64),
+        "attention_mask": torch.randint(
+            low=0, high=2, size=(1, 100), generator=torch.manual_seed(42), dtype=torch.int64
+        ),
+    }
 
 
 if __name__ == "__main__":

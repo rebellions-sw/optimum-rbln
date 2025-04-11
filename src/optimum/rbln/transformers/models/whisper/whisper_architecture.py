@@ -16,27 +16,29 @@ from typing import Optional, Tuple, Union
 
 import torch
 from torch import nn
-from transformers.modeling_attn_mask_utils import (
-    _prepare_4d_causal_attention_mask,
-)
 from transformers.modeling_outputs import (
     BaseModelOutput,
     Seq2SeqLMOutput,
 )
 from transformers.utils import logging
 
-from ....ops import register_rbln_custom_cache_update, register_rbln_custom_paged_add_softmax_attention
+from ....ops import (
+    register_rbln_custom_cache_update,
+    register_rbln_custom_paged_attention,
+    register_rbln_custom_paged_causal_attention,
+)
 
 
 logger = logging.get_logger(__name__)
 
 
 class WhisperWrapper:
-    def __init__(self, model, rbln_token_timestamps):
+    def __init__(self, model, use_attention_mask, rbln_token_timestamps):
         register_rbln_custom_cache_update()
-        register_rbln_custom_paged_add_softmax_attention()
         self.encoder = WhisperEncoderWrapper(model)
-        self.decoder = WhisperDecoderWrapper(model, output_attentions=rbln_token_timestamps)
+        self.decoder = WhisperDecoderWrapper(
+            model, use_attention_mask=use_attention_mask, output_attentions=rbln_token_timestamps
+        )
 
 
 class WhisperEncoderWrapper(torch.nn.Module):
@@ -57,6 +59,7 @@ class WhisperEncoderWrapper(torch.nn.Module):
     def forward(
         self,
         input_features: Optional[torch.LongTensor],
+        b_idx: torch.Tensor,
         cross_key_values: torch.Tensor,
     ) -> Union[Tuple[torch.FloatTensor], BaseModelOutput]:
         # 1. get encoder last_hidden_states
@@ -76,21 +79,34 @@ class WhisperEncoderWrapper(torch.nn.Module):
         cross_kv = torch.stack(cross_kv, dim=0)
 
         # 3. update cross_attention's past_key_value to the device-dram for optimization.
-        bidx = torch.tensor(0, dtype=torch.int16)
-        axis = torch.tensor(1, dtype=torch.int16)
-        enc_output = torch.ops.rbln_custom_ops.rbln_cache_update(cross_key_values, cross_kv, bidx, axis)
+        batch_axis = torch.tensor(1, dtype=torch.int16)
+        enc_output = torch.ops.rbln_custom_ops.rbln_cache_update(cross_key_values, cross_kv, b_idx[0], batch_axis)
 
         return enc_output
 
 
 class WhisperDecoderWrapper(torch.nn.Module):
-    def __init__(self, model, output_attentions: bool = False):
+    def __init__(self, model, use_attention_mask: bool = True, output_attentions: bool = False, **kwargs):
         super().__init__()
         self.config = model.config
-        self.num_layers = self.config.decoder_layers
         self.proj_out = model.proj_out
-        self.decoder = self.convert_to_rbln_conditional_generation(model)
+        self.use_attention_mask = use_attention_mask
         self.output_attentions = output_attentions
+        self.__post_init__(model, **kwargs)
+
+    def __post_init__(self, model: nn.Module, **kwargs):
+        """
+        Post-initialization to extract and configure encoder-related attributes.
+        It is inspired by the BART architecture, but it is designed to be flexible and can be overridden
+        by subclasses to modify or add custom attributes as necessary.
+        """
+        if self.use_attention_mask:
+            register_rbln_custom_paged_attention()
+        else:
+            register_rbln_custom_paged_causal_attention()
+
+        self.num_layers = self.config.decoder_layers
+        self.decoder = self.convert_to_rbln_conditional_generation(model)
 
     def convert_to_rbln_conditional_generation(self, model: nn.Module):
         new_layers = []
@@ -105,13 +121,21 @@ class WhisperDecoderWrapper(torch.nn.Module):
 
     def forward(
         self,
-        decoder_input_ids: torch.Tensor,
-        decoder_attention_mask: torch.Tensor,
-        cache_position: torch.Tensor,
-        block_tables: torch.Tensor,
-        cross_kv_cache: torch.Tensor,
-        *self_kv_cache: torch.Tensor,
+        *args,
     ) -> Union[Tuple[torch.FloatTensor], Seq2SeqLMOutput]:
+        if self.use_attention_mask:
+            (
+                decoder_input_ids,
+                decoder_attention_mask,
+                cache_position,
+                block_tables,
+                cross_kv_cache,
+                *self_kv_cache,
+            ) = args
+        else:
+            decoder_attention_mask = None
+            (decoder_input_ids, cache_position, block_tables, cross_kv_cache, *self_kv_cache) = args
+
         # prepare past_key_values
         self_past_key_values = ()
         cross_past_key_values = ()
@@ -163,11 +187,18 @@ class WhisperDecoder(nn.Module):
 
         # positional embeding
         inputs_embeds = self.embed_tokens(input_ids)
-        positions = self.embed_positions(input_ids, position_ids=cache_position)
-        hidden_states = inputs_embeds + positions
+        all_hiddens = []
+        for i in range(inputs_embeds.shape[0]):
+            position_id = cache_position[i]
+            position = self.embed_positions.weight[position_id]
+            batch_hidden = position + inputs_embeds[i]
+            all_hiddens.append(batch_hidden)
 
-        # prepare casual_attn_mask
-        attention_mask = _prepare_4d_causal_attention_mask(attention_mask, input_shape, inputs_embeds, cache_position)
+        hidden_states = torch.cat(all_hiddens, dim=0).unsqueeze(1)
+
+        # prepare attn mask (normal attention - masked)
+        if attention_mask is not None:
+            attention_mask = attention_mask[:, None, None, :]
 
         cross_attentions = ()
         # iterate decoder_layer
@@ -279,18 +310,22 @@ class WhisperSelfAttention(WhisperAttention):
         value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
         block_size = past_key_value[0].shape[-2]
 
-        attn_output = torch.ops.rbln_custom_ops.paged_add_softmax_attn_decode(
+        args = [
             query_states,
             key_states,
             value_states,
-            attention_mask.unsqueeze(2),
             past_key_value[0].view(bsz, self.num_heads, 1, -1, self.head_dim),
             past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
-            cache_position.expand(bsz, 1),
+            cache_position,
             torch.tensor(1.0, dtype=torch.float32),  # scale
             block_tables,
             block_size,
-        )
+        ]
+        if attention_mask is not None:
+            args.insert(3, attention_mask.unsqueeze(2))
+            attn_output = torch.ops.rbln_custom_ops.paged_attn_decode(*args)
+        else:
+            attn_output = torch.ops.rbln_custom_ops.paged_causal_attn_decode(*args)
 
         attn_output = attn_output.view(bsz, self.num_heads, tgt_len, self.head_dim)
         attn_output = attn_output.transpose(1, 2)
