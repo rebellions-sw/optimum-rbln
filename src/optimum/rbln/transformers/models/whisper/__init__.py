@@ -12,4 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .configuration_whisper import RBLNWhisperForConditionalGenerationConfig
 from .modeling_whisper import RBLNWhisperForConditionalGeneration

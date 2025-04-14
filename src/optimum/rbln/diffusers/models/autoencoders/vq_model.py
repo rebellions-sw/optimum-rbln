@@ -12,24 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, List, Union
 
 import rebel
 import torch
 from diffusers import VQModel
 from diffusers.models.autoencoders.vae import DecoderOutput
 from diffusers.models.autoencoders.vq_model import VQEncoderOutput
-from transformers import PretrainedConfig
 
+from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
-from ....modeling_config import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
-from ...modeling_diffusers import RBLNDiffusionMixin
+from ...configurations.models.configuration_vq_model import RBLNVQModelConfig
+from ...modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 from .vae import RBLNRuntimeVQDecoder, RBLNRuntimeVQEncoder, _VQDecoder, _VQEncoder
 
 
 if TYPE_CHECKING:
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig, PreTrainedModel
 
 logger = get_logger(__name__)
 
@@ -45,12 +45,10 @@ class RBLNVQModel(RBLNModel):
         self.encoder = RBLNRuntimeVQEncoder(runtime=self.model[0], main_input_name="x")
         self.decoder = RBLNRuntimeVQDecoder(runtime=self.model[1], main_input_name="z")
         self.decoder.lookup_from_codebook = self.config.lookup_from_codebook
-        height = self.rbln_config.model_cfg.get("img_height", 512)
-        width = self.rbln_config.model_cfg.get("img_width", 512)
-        self.image_size = [height, width]
+        self.image_size = self.rbln_config.image_size
 
     @classmethod
-    def get_compiled_model(cls, model, rbln_config: RBLNConfig):
+    def get_compiled_model(cls, model, rbln_config: RBLNModelConfig):
         encoder_model = _VQEncoder(model)
         decoder_model = _VQDecoder(model)
         encoder_model.eval()
@@ -62,66 +60,39 @@ class RBLNVQModel(RBLNModel):
         return {"encoder": enc_compiled_model, "decoder": dec_compiled_model}
 
     @classmethod
-    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
-        batch_size = rbln_config.get("batch_size")
-        if batch_size is None:
-            batch_size = 1
-        img_height = rbln_config.get("img_height")
-        if img_height is None:
-            img_height = 512
-        img_width = rbln_config.get("img_width")
-        if img_width is None:
-            img_width = 512
-
-        rbln_config.update(
-            {
-                "batch_size": batch_size,
-                "img_height": img_height,
-                "img_width": img_width,
-            }
-        )
-
+    def update_rbln_config_using_pipe(
+        cls, pipe: RBLNDiffusionMixin, rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
+    ) -> "RBLNDiffusionMixinConfig":
         return rbln_config
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
+        model: "PreTrainedModel",
         model_config: "PretrainedConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
-        batch_size = rbln_kwargs.get("batch_size")
-        if batch_size is None:
-            batch_size = 1
-
-        height = rbln_kwargs.get("img_height")
-        if height is None:
-            height = 512
-
-        width = rbln_kwargs.get("img_width")
-        if width is None:
-            width = 512
-
+        rbln_config: RBLNVQModelConfig,
+    ) -> RBLNVQModelConfig:
         if hasattr(model_config, "block_out_channels"):
-            scale_factor = 2 ** (len(model_config.block_out_channels) - 1)
+            rbln_config.vqmodel_scale_factor = 2 ** (len(model_config.block_out_channels) - 1)
         else:
             # image processor default value 8 (int)
-            scale_factor = 8
+            rbln_config.vqmodel_scale_factor = 8
 
-        enc_shape = (height, width)
-        dec_shape = (height // scale_factor, width // scale_factor)
+        enc_shape = rbln_config.image_size
+        dec_shape = rbln_config.latent_sample_size
 
         enc_input_info = [
             (
                 "x",
-                [batch_size, model_config.in_channels, enc_shape[0], enc_shape[1]],
+                [rbln_config.batch_size, model_config.in_channels, enc_shape[0], enc_shape[1]],
                 "float32",
             )
         ]
         dec_input_info = [
             (
                 "h",
-                [batch_size, model_config.latent_channels, dec_shape[0], dec_shape[1]],
+                [rbln_config.batch_size, model_config.latent_channels, dec_shape[0], dec_shape[1]],
                 "float32",
             )
         ]
@@ -130,31 +101,31 @@ class RBLNVQModel(RBLNModel):
         dec_rbln_compile_config = RBLNCompileConfig(compiled_model_name="decoder", input_info=dec_input_info)
 
         compile_cfgs = [enc_rbln_compile_config, dec_rbln_compile_config]
-        rbln_config = RBLNConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=compile_cfgs,
-            rbln_kwargs=rbln_kwargs,
-        )
+        rbln_config.set_compile_cfgs(compile_cfgs)
         return rbln_config
 
     @classmethod
     def _create_runtimes(
         cls,
         compiled_models: List[rebel.RBLNCompiledModel],
-        rbln_device_map: Dict[str, int],
-        activate_profiler: Optional[bool] = None,
+        rbln_config: RBLNVQModelConfig,
     ) -> List[rebel.Runtime]:
         if len(compiled_models) == 1:
-            device_val = rbln_device_map[DEFAULT_COMPILED_MODEL_NAME]
+            device_val = rbln_config.device_map[DEFAULT_COMPILED_MODEL_NAME]
             return [
                 compiled_models[0].create_runtime(
-                    tensor_type="pt", device=device_val, activate_profiler=activate_profiler
+                    tensor_type="pt", device=device_val, activate_profiler=rbln_config.activate_profiler
                 )
             ]
 
-        device_vals = [rbln_device_map["encoder"], rbln_device_map["decoder"]]
+        device_vals = [rbln_config.device_map["encoder"], rbln_config.device_map["decoder"]]
         return [
-            compiled_model.create_runtime(tensor_type="pt", device=device_val, activate_profiler=activate_profiler)
+            rebel.Runtime(
+                compiled_model,
+                tensor_type="pt",
+                device=device_val,
+                activate_profiler=rbln_config.activate_profiler,
+            )
             for compiled_model, device_val in zip(compiled_models, device_vals)
         ]
 

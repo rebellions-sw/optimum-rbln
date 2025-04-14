@@ -14,15 +14,15 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Union
 
 import rebel
 import torch
 from huggingface_hub.constants import HUGGINGFACE_HUB_CACHE
 from transformers import AutoConfig, PretrainedConfig
 
+from .configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNModelConfig
 from .modeling_base import RBLNBaseModel
-from .modeling_config import DEFAULT_COMPILED_MODEL_NAME, RBLNConfig, use_rbln_config
 from .utils.logging import get_logger
 
 
@@ -70,7 +70,7 @@ class RBLNModel(RBLNBaseModel):
         model: "PreTrainedModel",
         save_dir_path: Path,
         subfolder: str,
-        rbln_config: RBLNConfig,
+        rbln_config: RBLNModelConfig,
     ):
         """
         If you are unavoidably running on a CPU rather than an RBLN device,
@@ -78,30 +78,29 @@ class RBLNModel(RBLNBaseModel):
         """
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
         # Wrap the model if needed.
         return model
 
     @classmethod
-    def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNConfig):
+    def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
         model = cls.wrap_model_if_needed(model, rbln_config)
         rbln_compile_config = rbln_config.compile_cfgs[0]
         compiled_model = cls.compile(model, rbln_compile_config=rbln_compile_config)
         return compiled_model
 
     @classmethod
-    @use_rbln_config
     def from_model(
         cls,
         model: "PreTrainedModel",
         config: Optional[PretrainedConfig] = None,
-        rbln_config: Dict[str, Any] = {},
+        rbln_config: Optional[RBLNModelConfig] = None,
         model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
         subfolder: str = "",
         **kwargs,
     ):
         preprocessors = kwargs.pop("preprocessors", [])
-        rbln_kwargs = rbln_config
+        rbln_config, kwargs = cls.prepare_rbln_config(rbln_config=rbln_config, **kwargs)
 
         # Directory to save compile artifacts(.rbln) and original configs
         if model_save_dir is None:
@@ -134,14 +133,21 @@ class RBLNModel(RBLNBaseModel):
         for preprocessor in preprocessors:
             preprocessor.save_pretrained(save_dir_path / subfolder)
 
-        # ad-hoc
-        rbln_kwargs["n_model_params"] = sum(p.numel() for p in model.parameters())
+        # Load submodules
+        if len(cls._rbln_submodules) > 0:
+            rbln_submodules = cls._load_submodules(
+                model=model,
+                model_save_dir=save_dir,
+                rbln_config=rbln_config,
+                **kwargs,
+            )
+        else:
+            rbln_submodules = []
 
         # Get compilation arguments (e.g. input_info)
-        rbln_config: RBLNConfig = cls.get_rbln_config(
-            preprocessors=preprocessors, model_config=config, rbln_kwargs=rbln_kwargs
+        rbln_config: RBLNModelConfig = cls.update_rbln_config(
+            preprocessors=preprocessors, model=model, model_config=config, rbln_config=rbln_config
         )
-        # rbln_config.update_runtime_cfg(rbln_kwargs) # This is done in get_rbln_config
 
         compiled_model: Union[rebel.RBLNCompiledModel, Dict[str, rebel.RBLNCompiledModel]] = cls.get_compiled_model(
             model, rbln_config=rbln_config
@@ -159,17 +165,6 @@ class RBLNModel(RBLNBaseModel):
 
         # Save torch artifacts (e.g. embedding matrix if needed.)
         cls.save_torch_artifacts(model, save_dir_path=save_dir_path, subfolder=subfolder, rbln_config=rbln_config)
-
-        # Load submodules
-        if len(cls._rbln_submodules) > 0:
-            rbln_submodules = cls._load_submodules(
-                model=model,
-                model_save_dir=save_dir,
-                rbln_kwargs=rbln_kwargs,
-                **kwargs,
-            )
-        else:
-            rbln_submodules = []
 
         # Instantiate
         return cls._from_pretrained(
@@ -194,8 +189,8 @@ class RBLNModel(RBLNBaseModel):
         subfolder: str = "",
         local_files_only: bool = False,
         trust_remote_code: bool = False,
-        # Some rbln-kwargs should be applied before loading torch module (i.e. quantized llm)
-        rbln_kwargs: Optional[Dict[str, Any]] = None,
+        # Some rbln-config should be applied before loading torch module (i.e. quantized llm)
+        rbln_config: Optional[RBLNModelConfig] = None,
         **kwargs,
     ) -> "PreTrainedModel":
         kwargs = cls.update_kwargs(kwargs)
@@ -215,16 +210,18 @@ class RBLNModel(RBLNBaseModel):
     def _create_runtimes(
         cls,
         compiled_models: List[rebel.RBLNCompiledModel],
-        rbln_device_map: Dict[str, int],
-        activate_profiler: Optional[bool] = None,
+        rbln_config: RBLNModelConfig,
     ) -> List[rebel.Runtime]:
-        if DEFAULT_COMPILED_MODEL_NAME not in rbln_device_map:
+        if DEFAULT_COMPILED_MODEL_NAME not in rbln_config.device_map:
             cls._raise_missing_compiled_file_error([DEFAULT_COMPILED_MODEL_NAME])
 
-        device = rbln_device_map[DEFAULT_COMPILED_MODEL_NAME]
-
         return [
-            compiled_model.create_runtime(tensor_type="pt", device=device, activate_profiler=activate_profiler)
+            rebel.Runtime(
+                compiled_model,
+                tensor_type="pt",
+                device=rbln_config.device_map[DEFAULT_COMPILED_MODEL_NAME],
+                activate_profiler=rbln_config.activate_profiler,
+            )
             for compiled_model in compiled_models
         ]
 

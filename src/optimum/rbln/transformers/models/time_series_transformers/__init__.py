@@ -21,4 +21,5 @@
 # copied, modified, or distributed without prior written permission
 # from Rebellions Inc.
 
+from .configuration_time_series_transformer import RBLNTimeSeriesTransformerForPredictionConfig
 from .modeling_time_series_transformers import RBLNTimeSeriesTransformerForPrediction
