@@ -29,9 +29,7 @@ from transformers import (
 )
 from transformers.modeling_outputs import BaseModelOutput
 from transformers.modeling_utils import no_init_weights
-from transformers.models.idefics3.modeling_idefics3 import (
-    Idefics3CausalLMOutputWithPast,
-)
+from transformers.models.idefics3.modeling_idefics3 import Idefics3CausalLMOutputWithPast, Idefics3VisionEmbeddings
 
 from ....modeling import RBLNModel
 from ....modeling_config import RBLNCompileConfig, RBLNConfig
@@ -59,12 +57,10 @@ class RBLNRuntimeVisionModel(RBLNPytorchRuntime):
     def __init__(
         self,
         runtime: rebel.Runtime,
-        model: Idefics3VisionTransformer,
         config: Idefics3VisionConfig,
         **kwargs: Any,
     ) -> None:
         super().__init__(runtime, **kwargs)
-        self.base_model = model
         self.patch_size = config.patch_size
         # self._use_flash_attention_2 = config.text_config._attn_implementation == "flash_attention_2"
 
@@ -89,9 +85,7 @@ class RBLNRuntimeVisionModel(RBLNPytorchRuntime):
             )
             patch_attention_mask = patch_attention_mask.to(dtype=torch.bool, device=pixel_values.device)
 
-        hidden_states = self.base_model.embeddings(
-            pixel_values=pixel_values, patch_attention_mask=patch_attention_mask
-        )
+        hidden_states = self.embeddings(pixel_values=pixel_values, patch_attention_mask=patch_attention_mask)
         patch_attention_mask = patch_attention_mask.view(batch_size, -1)
 
         if not torch.any(~patch_attention_mask):
@@ -125,10 +119,10 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
     def __post_init__(self, **kwargs):
         artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
         with no_init_weights():
-            self.base_model = Idefics3VisionTransformer._from_config(self.config)
-        self.base_model.embeddings.load_state_dict(artifacts["embeddings"])
+            self.embeddings = Idefics3VisionEmbeddings(self.config)
+        self.embeddings.load_state_dict(artifacts["embeddings"])
         self.model = RBLNRuntimeVisionModel(
-            self.model[0], main_input_name="pixel_values", model=self.base_model, config=self.config
+            self.model[0], main_input_name="pixel_values", config=self.config, embeddings=self.embeddings
         )
 
     @classmethod
@@ -294,7 +288,6 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
         batch_idx: Optional[int] = None,
         **kwargs,
     ) -> Union[Tuple, Idefics3CausalLMOutputWithPast]:
-        # retrieve input_ids and inputs_embeds
         if input_ids is not None:
             batch_size, seq_length = input_ids.shape
         elif inputs_embeds is not None:
@@ -311,7 +304,6 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
             raise ValueError("When first calling the model, if input_embeds are passed, input_ids should not be None.")
 
         if inputs_embeds is None:
-            # inputs_embeds = self.text_model.get_input_embeddings()(input_ids).to(self.device)
             inputs_embeds = self.get_input_embeddings()(input_ids).to(self.device)
 
         # START VISUAL INPUTS INTEGRATION
@@ -367,7 +359,6 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
                 image_hidden_states=image_hidden_states,
             )
 
-        # Prefll
         if cache_position is None:
             logits = []
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
@@ -385,7 +376,6 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
                 logits.append(logit)
 
             logits = torch.cat(logits, dim=0)
-        # Decoder
         else:
             logits = self.text_model.decoder(
                 input_ids=input_ids,
@@ -416,7 +406,6 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
 
         position_ids = kwargs.get("position_ids", None)
         if attention_mask is not None and position_ids is None:
-            # create position_ids on the fly for batch generation
             position_ids = attention_mask.long().cumsum(-1) - 1
             position_ids.masked_fill_(attention_mask == 0, 1)
             if not is_prefill_phase:
