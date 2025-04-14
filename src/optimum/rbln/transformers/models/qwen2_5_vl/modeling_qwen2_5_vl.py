@@ -13,9 +13,9 @@
 # limitations under the License.
 
 import inspect
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
-from dataclasses import dataclass
 
 import rebel
 import torch
@@ -300,7 +300,7 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
         )
         cu_seqlens = torch.nn.functional.pad(cu_seqlens, (1, 0), value=0)
 
-        num_images = len(grid_thw)
+        num_images = len(cu_seqlens) - 1
         cu_window_seqlens = cu_window_seqlens.tolist()
         window_seq_len = (self.window_size // self.patch_size) ** 2
 
@@ -677,7 +677,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
     ) -> Dict[str, Any]:
         # update generate_idx
         model_kwargs["generate_idx"] = outputs.generate_idx
-        
+
         return model_kwargs
 
     def _get_position_embeddings(self, hidden_states, position_ids):
@@ -767,7 +767,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             batch_size, seq_length, _ = inputs_embeds.shape
             delta = cache_position[0] + self.rope_deltas
             position_ids = torch.arange(seq_length, device=inputs_embeds.device)
-            position_ids = position_ids.view(1, -1).expand(batch_size, -1) # otherwise `deltas` is an int `0`
+            position_ids = position_ids.view(1, -1).expand(batch_size, -1)  # otherwise `deltas` is an int `0`
             delta = delta.repeat_interleave(batch_size // delta.shape[0], dim=0)
             position_ids = position_ids.add(delta)
             position_ids = position_ids.unsqueeze(0).expand(3, -1, -1)
