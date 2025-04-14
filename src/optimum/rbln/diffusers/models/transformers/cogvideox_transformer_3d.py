@@ -96,10 +96,14 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
         model_config: "PretrainedConfig",
         rbln_kwargs: Dict[str, Any] = {},
     ) -> RBLNConfig:
-        rbln_batch_size = rbln_kwargs.get("batch_size", None)
+        rbln_batch_size = rbln_kwargs.get("batch_size", 1)
         sample_size = rbln_kwargs.get("sample_size")
         num_frames = rbln_kwargs.get("num_frames")
 
+        if rbln_batch_size is None:
+            rbln_batch_size = 1
+            rbln_kwargs["batch_size"] = rbln_batch_size
+            
         if sample_size is None:
             # NOTE(si): From diffusers >= v0.32.0, pipe.transformer.config.sample_height and pipe.transformer.config.sample_width is used explicitly.
             sample_size = model_config.sample_height, model_config.sample_width
@@ -108,9 +112,13 @@ class RBLNCogVideoXTransformer3DModel(RBLNModel):
         if num_frames is None:
             num_frames = model_config.sample_frames
         
-        vae_scale_factor_temporal = rbln_kwargs.get("vae_scale_factor_temporal", None)
+        vae_scale_factor_temporal = rbln_kwargs.get("vae_scale_factor_temporal")
+        
+        if vae_scale_factor_temporal is None:
+            vae_scale_factor_temporal = 4
 
         rbln_max_seqeunce_length = rbln_kwargs.get("max_sequence_length")
+        
         if rbln_max_seqeunce_length is None:
             rbln_max_sequence_length = model_config.max_text_seq_length
 
