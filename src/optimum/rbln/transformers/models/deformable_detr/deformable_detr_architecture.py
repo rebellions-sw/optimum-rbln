@@ -29,6 +29,7 @@ from transformers.models.deformable_detr.modeling_deformable_detr import (
     DeformableDetrForObjectDetection,
     DeformableDetrLearnedPositionEmbedding,
     DeformableDetrModelOutput,
+    inverse_sigmoid,
 )
 from transformers.models.deformable_detr.modeling_deformable_detr import (
     DeformableDetrDecoder as HFDeformableDetrDecoder,
@@ -53,6 +54,15 @@ from transformers.utils import logging
 
 
 logger = logging.get_logger(__name__)
+
+
+def linspace(start, end, steps, dtype, device):
+    if steps == 1:
+        stop = float(start) + float(steps)
+    else:
+        steps = (float(end) - float(start)) / (float(steps) - 1.0)
+        stop = float(end) + float(steps) / 2.0
+    return torch.arange(start, stop, int(steps), dtype=dtype, device=device)
 
 
 class MultiScaleDeformableAttention(nn.Module):
@@ -602,9 +612,8 @@ class DeformableDetrDecoder(nn.Module):
                 for idx in range(config.decoder_layers)
             ]
         )
-
-        self.bbox_embed = None
-        self.class_embed = None
+        self.bbox_embed = self._original_model.bbox_embed
+        self.class_embed = self._original_model.class_embed
 
     def forward(
         self,
@@ -696,9 +705,20 @@ class DeformableDetrDecoder(nn.Module):
 
             # hack implementation for iterative bounding box refinement
             if self.bbox_embed is not None:
-                raise NotImplementedError(
-                    "RBLNDetrObjectDetection not support to hack implementation for iterative bounding box refinement."
-                )
+                tmp = self.bbox_embed[idx](hidden_states)
+                num_coordinates = reference_points.shape[-1]
+                if num_coordinates == 4:
+                    new_reference_points = tmp + inverse_sigmoid(reference_points)
+                    new_reference_points = new_reference_points.sigmoid()
+                elif num_coordinates == 2:
+                    new_reference_points = tmp
+                    new_reference_points[..., :2] = tmp[..., :2] + inverse_sigmoid(reference_points)
+                    new_reference_points = new_reference_points.sigmoid()
+                else:
+                    raise ValueError(
+                        f"Last dim of reference_points must be 2 or 4, but got {reference_points.shape[-1]}"
+                    )
+                reference_points = new_reference_points.detach()
 
             intermediate += (hidden_states,)
             intermediate_reference_points += (reference_points,)
@@ -788,6 +808,79 @@ class DeformableDetrModel(nn.Module):
         valid_ratio = torch.stack([valid_ratio_width, valid_ratio_height], -1)
         return valid_ratio
 
+    def get_proposal_pos_embed(self, proposals):
+        """Get the position embedding of the proposals."""
+
+        num_pos_feats = self.config.d_model // 2
+        temperature = 10000
+        scale = 2 * math.pi
+
+        dim_t = torch.arange(num_pos_feats, dtype=proposals.dtype, device=proposals.device)
+        dim_t = temperature ** (2 * torch.div(dim_t, 2, rounding_mode="floor") / num_pos_feats)
+        # batch_size, num_queries, 4
+        proposals = proposals.sigmoid() * scale
+        # batch_size, num_queries, 4, 128
+        pos = proposals[:, :, :, None] / dim_t
+        # batch_size, num_queries, 4, 64, 2 -> batch_size, num_queries, 512
+        pos = torch.stack((pos[:, :, :, 0::2].sin(), pos[:, :, :, 1::2].cos()), dim=4).flatten(2)
+        return pos
+
+    def gen_encoder_output_proposals(self, enc_output, padding_mask, spatial_shapes):
+        """Generate the encoder output proposals from encoded enc_output.
+
+        Args:
+            enc_output (Tensor[batch_size, sequence_length, hidden_size]): Output of the encoder.
+            padding_mask (Tensor[batch_size, sequence_length]): Padding mask for `enc_output`.
+            spatial_shapes (List[Tuple[int, int]]): Spatial shapes of the feature maps.
+
+        Returns:
+            `tuple(torch.FloatTensor)`: A tuple of feature map and bbox prediction.
+                - object_query (Tensor[batch_size, sequence_length, hidden_size]): Object query features. Later used to
+                  directly predict a bounding box. (without the need of a decoder)
+                - output_proposals (Tensor[batch_size, sequence_length, 4]): Normalized proposals, after an inverse
+                  sigmoid.
+        """
+
+        batch_size = enc_output.shape[0]
+        proposals = []
+        _cur = 0
+        for level, (height, width) in enumerate(spatial_shapes):
+            mask_flatten_ = padding_mask[:, _cur : (_cur + height * width)].view(batch_size, height, width, 1)
+            valid_height = torch.sum(~mask_flatten_[:, :, 0, 0], 1)
+            valid_width = torch.sum(~mask_flatten_[:, 0, :, 0], 1)
+
+            grid_y, grid_x = meshgrid(
+                linspace(0, height - 1, height, dtype=enc_output.dtype, device=enc_output.device),
+                linspace(0, width - 1, width, dtype=enc_output.dtype, device=enc_output.device),
+                indexing="ij",
+            )
+            grid = torch.cat([grid_x.unsqueeze(-1), grid_y.unsqueeze(-1)], -1)
+
+            scale = torch.cat([valid_width.unsqueeze(-1), valid_height.unsqueeze(-1)], 1).view(batch_size, 1, 1, 2)
+            grid = (grid.unsqueeze(0).expand(batch_size, -1, -1, -1) + 0.5) / scale
+            width_heigth = torch.ones_like(grid) * 0.05 * (2.0**level)
+            proposal = torch.cat((grid, width_heigth), -1).view(batch_size, -1, 4)
+            proposals.append(proposal)
+            _cur += height * width
+        output_proposals = torch.cat(proposals, 1)
+        output_proposals_valid = ((output_proposals > 0.01) & (output_proposals < 0.99)).all(-1, keepdim=True)
+        output_proposals = torch.log(output_proposals / (1 - output_proposals))  # inverse sigmoid
+        # output_proposals = output_proposals.masked_fill(padding_mask.unsqueeze(-1), float("inf"))
+        mask = padding_mask.unsqueeze(-1)
+        max_float = torch.finfo(output_proposals.dtype).max
+        output_proposals = output_proposals * ~mask + max_float * mask
+        # output_proposals = output_proposals.masked_fill(~output_proposals_valid, float("inf"))
+        output_proposals = output_proposals * output_proposals_valid + ~output_proposals_valid * max_float
+
+        # assign each pixel as an object query
+        object_query = enc_output
+        # object_query = object_query.masked_fill(padding_mask.unsqueeze(-1), float(0))
+        object_query = object_query * ~padding_mask.unsqueeze(-1)
+        # object_query = object_query.masked_fill(~output_proposals_valid, float(0))
+        object_query = object_query * output_proposals_valid
+        object_query = self.enc_output_norm(self.enc_output(object_query))
+        return object_query, output_proposals
+
     @staticmethod
     def get_reference_points(spatial_shapes, valid_ratios, device):
         """
@@ -804,20 +897,11 @@ class DeformableDetrModel(nn.Module):
             `torch.FloatTensor` of shape `(batch_size, num_queries, num_feature_levels, 2)`
         """
 
-        # RBLN changes linspace to arange
-        def linspace_to_arange(start, end, steps, dtype, device):
-            if steps == 1:
-                stop = float(start) + float(steps)
-            else:
-                steps = (float(end) - float(start)) / (float(steps) - 1.0)
-                stop = float(end) + float(steps) / 2.0
-            return torch.arange(start, stop, int(steps), dtype=dtype, device=device)
-
         reference_points_list = []
         for level, (height, width) in enumerate(spatial_shapes):
             ref_y, ref_x = meshgrid(
-                linspace_to_arange(0.5, height - 0.5, height, dtype=valid_ratios.dtype, device=device),
-                linspace_to_arange(0.5, width - 0.5, width, dtype=valid_ratios.dtype, device=device),
+                linspace(0.5, height - 0.5, height, dtype=valid_ratios.dtype, device=device),
+                linspace(0.5, width - 0.5, width, dtype=valid_ratios.dtype, device=device),
                 indexing="ij",
             )
             # TODO: valid_ratios could be useless here. check https://github.com/fundamentalvision/Deformable-DETR/issues/36
@@ -964,7 +1048,32 @@ class DeformableDetrModel(nn.Module):
         enc_outputs_class = None
         enc_outputs_coord_logits = None
         if self.config.two_stage:
-            raise NotImplementedError("The two-stage mode is not supported in RBLNDetrObjectDetection.")
+            object_query_embedding, output_proposals = self.gen_encoder_output_proposals(
+                encoder_outputs[0], ~mask_flatten, spatial_shapes
+            )
+
+            # hack implementation for two-stage Deformable DETR
+            # apply a detection head to each pixel (A.4 in paper)
+            # linear projection for bounding box binary classification (i.e. foreground and background)
+            enc_outputs_class = self.decoder.class_embed[-1](object_query_embedding)
+            # 3-layer FFN to predict bounding boxes coordinates (bbox regression branch)
+            delta_bbox = self.decoder.bbox_embed[-1](object_query_embedding)
+            enc_outputs_coord_logits = delta_bbox + output_proposals
+
+            # only keep top scoring `config.two_stage_num_proposals` proposals
+            topk = self.config.two_stage_num_proposals
+            topk_proposals = torch.topk(enc_outputs_class[..., 0], topk, dim=1)[1]
+            topk_coords_logits = torch.gather(
+                enc_outputs_coord_logits,
+                1,
+                topk_proposals.unsqueeze(-1).repeat(1, 1, 4),
+            )
+
+            topk_coords_logits = topk_coords_logits.detach()
+            reference_points = topk_coords_logits.sigmoid()
+            init_reference_points = reference_points
+            pos_trans_out = self.pos_trans_norm(self.pos_trans(self.get_proposal_pos_embed(topk_coords_logits)))
+            query_embed, target = torch.split(pos_trans_out, num_channels, dim=2)
         else:
             query_embed, target = torch.split(query_embeds, num_channels, dim=1)
             query_embed = query_embed.unsqueeze(0).expand(batch_size, -1, -1)
