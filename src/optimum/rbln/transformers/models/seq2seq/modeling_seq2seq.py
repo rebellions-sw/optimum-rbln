@@ -238,19 +238,23 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
         enc_input_info = [
             ("input_ids", [1, rbln_config.enc_max_seq_len], "int64"),
             ("attention_mask", [1, rbln_config.enc_max_seq_len], "float32"),
-            (
-                "cross_key_value_states",
-                [
-                    n_layer * 2,
-                    rbln_config.batch_size,
-                    n_head,
-                    rbln_config.enc_max_seq_len,
-                    d_kv,
-                ],
-                "float32",
-            ),
             ("block_tables", [1], "int16"),
         ]
+        enc_input_info.extend(
+            [
+                (
+                    f"cross_key_value_states_{i}",
+                    [
+                        rbln_config.batch_size,
+                        n_head,
+                        rbln_config.enc_max_seq_len,
+                        d_kv,
+                    ],
+                    "float32",
+                )
+                for i in range(n_layer * 2)
+            ]
+        )
 
         dec_input_info = [
             ("input_ids", [rbln_config.batch_size, 1], "int64"),
@@ -265,9 +269,8 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
         dec_input_info.extend(
             [
                 (
-                    "cross_key_value_states",
+                    f"cross_key_value_states_{i}",
                     [
-                        n_layer * 2,
                         rbln_config.batch_size,
                         n_head,
                         rbln_config.enc_max_seq_len,
@@ -275,6 +278,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
                     ],
                     "float32",
                 )
+                for i in range(n_layer * 2)
             ]
         )
         dec_input_info.extend(
