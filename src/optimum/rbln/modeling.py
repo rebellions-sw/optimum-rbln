@@ -136,11 +136,10 @@ class RBLNModel(RBLNBaseModel):
                 config_path = save_dir_path / subfolder / "generation_config.json"
                 config_path.write_text(
                     json.dumps(
-                        {**json.loads(config_path.read_text(encoding="utf-8")),
-                        "transformers_version": "4.36.0.dev0"},
-                        indent=2
+                        {**json.loads(config_path.read_text(encoding="utf-8")), "transformers_version": "4.36.0.dev0"},
+                        indent=2,
                     ),
-                    encoding="utf-8"
+                    encoding="utf-8",
                 )
 
         if not isinstance(config, PretrainedConfig):  # diffusers config
