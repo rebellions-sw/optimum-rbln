@@ -197,10 +197,10 @@ class DeformableDetrMultiscaleDeformableAttention(nn.Module):
         self.n_heads = num_heads
         self.n_points = n_points
 
-        self.sampling_offsets = model.sampling_offsets  #  nn.Linear
-        self.attention_weights = model.attention_weights  #  nn.Linear
-        self.value_proj = model.value_proj  #  nn.Linear
-        self.output_proj = model.output_proj  #  nn.Linear
+        self.sampling_offsets = self._original_model.sampling_offsets  #  nn.Linear
+        self.attention_weights = self._original_model.attention_weights  #  nn.Linear
+        self.value_proj = self._original_model.value_proj  #  nn.Linear
+        self.output_proj = self._original_model.output_proj  #  nn.Linear
 
         self.disable_custom_kernels = config.disable_custom_kernels
 
@@ -368,6 +368,7 @@ class DeformableDetrEncoder(nn.Module):
     The encoder updates the flattened multi-scale feature maps through multiple deformable attention layers.
 
     Args:
+        model: Original Huggingface DeformableDetrEncoder which already loaded pretraiend weight.
         config: DeformableDetrConfig
     """
 
@@ -474,6 +475,7 @@ class DeformableDetrDecoderLayer(nn.Module):
         self.activation_dropout = config.activation_dropout
 
         self.self_attn_layer_norm = self._original_model.self_attn_layer_norm
+
         # cross-attention
         self.encoder_attn = DeformableDetrMultiscaleDeformableAttention(
             self._original_model.encoder_attn,
@@ -482,6 +484,7 @@ class DeformableDetrDecoderLayer(nn.Module):
             n_points=config.decoder_n_points,
         )
         self.encoder_attn_layer_norm = self._original_model.encoder_attn_layer_norm
+
         # feedforward neural networks
         self.fc1 = self._original_model.fc1
         self.fc2 = self._original_model.fc2
@@ -582,6 +585,7 @@ class DeformableDetrDecoder(nn.Module):
     - it also returns a stack of intermediate outputs and reference points from all decoding layers.
 
     Args:
+        model: Original Huggingface DeformableDetrDecoder which already loaded pretraiend weight.
         config: DeformableDetrConfig
     """
 
@@ -593,10 +597,14 @@ class DeformableDetrDecoder(nn.Module):
 
         self.dropout = config.dropout
         self.layers = nn.ModuleList(
-            [DeformableDetrDecoderLayer(model.layers[idx], config) for idx in range(config.decoder_layers)]
+            [
+                DeformableDetrDecoderLayer(self._original_model.layers[idx], config)
+                for idx in range(config.decoder_layers)
+            ]
         )
 
         self.bbox_embed = None
+        self.class_embed = None
 
     def forward(
         self,
@@ -634,7 +642,6 @@ class DeformableDetrDecoder(nn.Module):
                 Indexes for the start of each feature level. In range `[0, sequence_length]`.
             valid_ratios (`torch.FloatTensor` of shape `(batch_size, num_feature_levels, 2)`, *optional*):
                 Ratio of valid area in each feature level.
-
             output_attentions (`bool`, *optional*):
                 Whether or not to return the attentions tensors of all attention layers. See `attentions` under
                 returned tensors for more detail.
@@ -746,23 +753,23 @@ class DeformableDetrModel(nn.Module):
         self.backbone = DeformableDetrConvModel(backbone, position_embeddings)
 
         # Create input projection layers
-        self.input_proj = model.input_proj
+        self.input_proj = self._original_model.input_proj
 
         if not config.two_stage:
-            self.query_position_embeddings = model.query_position_embeddings
+            self.query_position_embeddings = self._original_model.query_position_embeddings
 
-        self.encoder = DeformableDetrEncoder(model.encoder, config)
-        self.decoder = DeformableDetrDecoder(model.decoder, config)
+        self.encoder = DeformableDetrEncoder(self._original_model.encoder, config)
+        self.decoder = DeformableDetrDecoder(self._original_model.decoder, config)
 
-        self.level_embed = model.level_embed
+        self.level_embed = self._original_model.level_embed
 
         if config.two_stage:
-            self.enc_output = model.enc_output
-            self.enc_output_norm = model.enc_output_norm
-            self.pos_trans = model.pos_trans
-            self.pos_trans_norm = model.pos_trans_norm
+            self.enc_output = self._original_model.enc_output
+            self.enc_output_norm = self._original_model.enc_output_norm
+            self.pos_trans = self._original_model.pos_trans
+            self.pos_trans_norm = self._original_model.pos_trans_norm
         else:
-            self.reference_points = model.reference_points
+            self.reference_points = self._original_model.reference_points
 
     def get_encoder(self):
         return self.encoder
@@ -799,9 +806,12 @@ class DeformableDetrModel(nn.Module):
 
         # RBLN changes linspace to arange
         def linspace_to_arange(start, end, steps, dtype, device):
-            assert steps != 1, "linspace_to_arange does not support step 1."
-            step = (float(end) - float(start)) / (float(steps) - 1.0)
-            return torch.arange(start, float(end) + float(step) / 2.0, int(step), dtype=dtype, device=device)
+            if steps == 1:
+                stop = float(start) + float(steps)
+            else:
+                steps = (float(end) - float(start)) / (float(steps) - 1.0)
+                stop = float(end) + float(steps) / 2.0
+            return torch.arange(start, stop, int(steps), dtype=dtype, device=device)
 
         reference_points_list = []
         for level, (height, width) in enumerate(spatial_shapes):
