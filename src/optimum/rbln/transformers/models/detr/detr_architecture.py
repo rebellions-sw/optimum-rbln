@@ -20,10 +20,10 @@ from torch import nn
 from transformers.modeling_outputs import BaseModelOutput
 from transformers.models.detr.configuration_detr import DetrConfig
 from transformers.models.detr.modeling_detr import (
+    DetrConvModel,
     DetrDecoderOutput,
     DetrForObjectDetection,
     DetrLearnedPositionEmbedding,
-    DetrConvModel,
 )
 from transformers.utils import logging
 
