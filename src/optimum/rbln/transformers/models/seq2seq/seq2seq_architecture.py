@@ -114,6 +114,7 @@ class Seq2SeqEncoderWrapper(nn.Module):
 
         return cross_key_values
 
+
 class Seq2SeqDecoderWrapper(nn.Module):
     """
     A wrapper for the decoder component of a Seq2Seq model, designed for RBLN optimization.
