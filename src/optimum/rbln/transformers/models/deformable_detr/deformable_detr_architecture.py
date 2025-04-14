@@ -463,6 +463,7 @@ class DeformableDetrEncoder(nn.Module):
 
         if not return_dict:
             return tuple(v for v in [hidden_states, encoder_states, all_attentions] if v is not None)
+
         return BaseModelOutput(
             last_hidden_state=hidden_states,
             hidden_states=encoder_states,
@@ -863,19 +864,23 @@ class DeformableDetrModel(nn.Module):
         output_proposals = torch.cat(proposals, 1)
         output_proposals_valid = ((output_proposals > 0.01) & (output_proposals < 0.99)).all(-1, keepdim=True)
         output_proposals = torch.log(output_proposals / (1 - output_proposals))  # inverse sigmoid
+
+        # RBLN replace masked_fill to arithmetic operations and replace infinite value to float32 max real value.
         # output_proposals = output_proposals.masked_fill(padding_mask.unsqueeze(-1), float("inf"))
-        mask = padding_mask.unsqueeze(-1)
-        max_float = torch.finfo(output_proposals.dtype).max
-        output_proposals = output_proposals * ~mask + max_float * mask
         # output_proposals = output_proposals.masked_fill(~output_proposals_valid, float("inf"))
+        max_float = torch.finfo(output_proposals.dtype).max
+        output_proposals = output_proposals * ~padding_mask.unsqueeze(-1) + max_float * padding_mask.unsqueeze(-1)
         output_proposals = output_proposals * output_proposals_valid + ~output_proposals_valid * max_float
 
         # assign each pixel as an object query
         object_query = enc_output
+
+        # RBLN replace masked_fill to arithmetic operations.
         # object_query = object_query.masked_fill(padding_mask.unsqueeze(-1), float(0))
-        object_query = object_query * ~padding_mask.unsqueeze(-1)
         # object_query = object_query.masked_fill(~output_proposals_valid, float(0))
+        object_query = object_query * ~padding_mask.unsqueeze(-1)
         object_query = object_query * output_proposals_valid
+
         object_query = self.enc_output_norm(self.enc_output(object_query))
         return object_query, output_proposals
 
