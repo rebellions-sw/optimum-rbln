@@ -439,6 +439,5 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
             encoder_kwargs["input_ids"] = inputs_tensor[b].unsqueeze(0)
             encoder_kwargs["attention_mask"] = model_kwargs["attention_mask"][b].unsqueeze(0).to(torch.float32)
             model_kwargs["encoder_outputs"] = encoder(**encoder_kwargs, block_tables=block_tables)
-            # break
 
         return model_kwargs
