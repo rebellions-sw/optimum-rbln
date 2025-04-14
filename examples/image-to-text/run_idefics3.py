@@ -5,7 +5,7 @@ import fire
 from transformers.image_utils import load_image
 from transformers import AutoProcessor, AutoModelForVision2Seq
 from transformers import Idefics3VisionTransformer
-from optimum.rbln import RBLNIdefics3VisionTransformer, RBLNIdefics3ForConditionalGeneration, RBLNIdefics3Model
+from optimum.rbln import RBLNIdefics3VisionTransformer, RBLNIdefics3ForConditionalGeneration
 # from optimum.rbln import RBLNIdefics3ForConditionalGeneration, RBLNIdefics3VisionTransformer
 
 
@@ -29,10 +29,14 @@ def main(
         model = RBLNIdefics3ForConditionalGeneration.from_pretrained(
             model_id,
             export=True,
-            rbln_attn_impl="flash_attn",
-            rbln_max_seq_len=131072,
-            rbln_use_inputs_embeds=True,
-            rbln_tensor_parallel_size=4,
+            rbln_config={
+                "model.text_model": {
+                    "attn_impl": "flash_attn",
+                    "max_seq_len" : 131072,
+                    "use_inputs_embeds" : True,
+                    "tensor_parallel_size" : 4,
+                }
+            },
         )
         model.save_pretrained(os.path.basename(model_id))
     else:

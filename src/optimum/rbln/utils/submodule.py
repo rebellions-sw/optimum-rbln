@@ -66,6 +66,7 @@ class SubModulesMixin:
 
             rbln_submodule = submodule_cls.from_model(
                 model=torch_submodule,
+                config=torch_submodule.config,
                 subfolder=submodule_name,
                 model_save_dir=model_save_dir,
                 **kwargs,
