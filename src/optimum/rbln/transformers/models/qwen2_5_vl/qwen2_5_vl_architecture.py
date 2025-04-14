@@ -13,12 +13,6 @@ from ..decoderonly.decoderonly_architecture import (
 
 logger = logging.get_logger(__name__)
 
-DEFAULT_FLASH_ATTN_PARTITION_LENGTH = 16_384
-DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH = 32_768
-MIN_FLASH_ATTN_MAX_SEQ_LEN = 8_192
-MIN_FLASH_ATTN_PARTITION_LENGTH = 4_096
-MAX_FLASH_ATTN_PARTITION_LENGTH = 32_768
-
 if TYPE_CHECKING:
     pass
 
@@ -27,23 +21,16 @@ class Qwen2_5_VisionTransformerWrapper(nn.Module):
     def __init__(self, model: torch.nn.Module):
         super().__init__()
         self._origin_model = model
-        self.spatial_merge_size = model.spatial_merge_size
-        self.patch_size = model.patch_size
         self.fullatt_block_indexes = model.fullatt_block_indexes
-        self.window_size = model.window_size
-        self.spatial_merge_unit = self.spatial_merge_size * self.spatial_merge_size
-        self.patch_embed = model.patch_embed
-        # self.rotary_pos_emb = model.rotary_pos_embed
         self.merger = model.merger
+        window_seq_len = (model.window_size // model.patch_size) ** 2
+        self.blocks = self.wrap_vision_blocks(model.blocks, window_seq_len)
 
-        # Wrap blocks
-        self.blocks = self.wrap_vision_blocks(model.blocks)
-
-    def wrap_vision_blocks(self, blocks: torch.nn.ModuleList):
+    def wrap_vision_blocks(self, blocks: torch.nn.ModuleList, window_seq_len: int):
         wrapped_blocks = []
         for i, block in enumerate(blocks):
             is_full_attn = True if i in self.fullatt_block_indexes else False
-            wrapped_blocks.append(Qwen2_5_VLVisionBlock(block, is_full_attn))
+            wrapped_blocks.append(Qwen2_5_VLVisionBlock(block, is_full_attn, window_seq_len))
         return nn.ModuleList(wrapped_blocks)
 
     def forward(
@@ -67,15 +54,16 @@ class Qwen2_5_VisionTransformerWrapper(nn.Module):
 
 
 class Qwen2_5_VLVisionBlock(torch.nn.Module):
-    def __init__(self, model: torch.nn.Module, is_full_attn: bool):
+    def __init__(self, model: torch.nn.Module, is_full_attn: bool, window_seq_len: int):
         super().__init__()
         self._origin_model = model
         self.norm1 = model.norm1
         self.norm2 = model.norm2
+
         if is_full_attn:
             self.attn = Qwen2_5_VLVisionFullAttention(model.attn)
         else:
-            self.attn = Qwen2_5_VLVisionWindowAttention(model.attn)
+            self.attn = Qwen2_5_VLVisionWindowAttention(model.attn, window_seq_len)
         self.mlp = model.mlp
 
     def forward(
@@ -102,9 +90,6 @@ class Qwen2_5_VLVisionFullAttention(nn.Module):
         self.qkv = model.qkv
         self.proj = model.proj
 
-    def _shape(self, tensor: torch.Tensor):
-        return tensor[:, :, :, :].transpose(1, 2)
-
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -113,10 +98,9 @@ class Qwen2_5_VLVisionFullAttention(nn.Module):
     ) -> torch.Tensor:
         seq_length = hidden_states.shape[0]
         hidden_states = hidden_states.unsqueeze(0)
-        qkv = self.qkv(hidden_states).reshape(1, seq_length, 3, self.num_heads, -1).permute(2, 0, 1, 3, 4)
-        q = self._shape(qkv[0])
-        k = self._shape(qkv[1])
-        v = self._shape(qkv[2])
+        q, k, v = (
+            self.qkv(hidden_states).reshape(1, seq_length, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4).unbind(0)
+        )
 
         cos, sin = position_embeddings
         q, k = apply_rotary_pos_emb(q, k, cos, sin)
@@ -133,17 +117,14 @@ class Qwen2_5_VLVisionFullAttention(nn.Module):
 
 
 class Qwen2_5_VLVisionWindowAttention(nn.Module):
-    def __init__(self, model: nn.Module) -> None:
+    def __init__(self, model: nn.Module, window_seq_len: int) -> None:
         super().__init__()
         self._origin_model = model
         self.num_heads = model.num_heads
         self.head_dim = model.head_dim
         self.qkv = model.qkv
         self.proj = model.proj
-        self.window_size = 64
-
-    def _shape(self, tensor: torch.Tensor):
-        return tensor[:, :, :, :].transpose(1, 2)
+        self.window_seq_len = window_seq_len
 
     def forward(
         self,
@@ -152,23 +133,22 @@ class Qwen2_5_VLVisionWindowAttention(nn.Module):
         position_embeddings: Tuple[torch.Tensor, torch.Tensor],
     ) -> torch.Tensor:
         seq_length = hidden_states.shape[0]
+        num_windows = seq_length // self.window_seq_len
 
         window_hidden_states = []
-        for i in range(0, seq_length, self.window_size):
-            window_hidden_states.append(hidden_states[i : i + self.window_size])
+        for i in range(0, seq_length, self.window_seq_len):
+            window_hidden_states.append(hidden_states[i : i + self.window_seq_len])
         hidden_states = torch.stack(window_hidden_states)
-        batch_size = hidden_states.shape[0]
 
-        qkv = (
-            self.qkv(hidden_states).reshape(batch_size, self.window_size, 3, self.num_heads, -1).permute(2, 0, 1, 3, 4)
+        q, k, v = (
+            self.qkv(hidden_states)
+            .reshape(num_windows, self.window_seq_len, 3, self.num_heads, -1)
+            .permute(2, 0, 3, 1, 4)
+            .unbind(0)
         )
-        q = self._shape(qkv[0])
-        k = self._shape(qkv[1])
-        v = self._shape(qkv[2])
-
         cos, sin = position_embeddings
-        cos = cos.reshape(batch_size, 1, seq_length // batch_size, -1)
-        sin = sin.reshape(batch_size, 1, seq_length // batch_size, -1)
+        cos = cos.reshape(num_windows, 1, seq_length // num_windows, -1)
+        sin = sin.reshape(num_windows, 1, seq_length // num_windows, -1)
         q, k = apply_rotary_pos_emb(q, k, cos, sin)
 
         attn_weights = torch.matmul(q, k.transpose(2, 3)) / math.sqrt(self.head_dim)

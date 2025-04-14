@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import inspect
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -29,7 +28,6 @@ from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     Qwen2_5_VisionPatchEmbed,
     Qwen2_5_VisionRotaryEmbedding,
     Qwen2_5_VisionTransformerPretrainedModel,
-    Qwen2_5_VLCausalLMOutputWithPast,
     Qwen2_5_VLRotaryEmbedding,
 )
 
@@ -92,7 +90,6 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
         """
         save_dict = {}
         save_dict["patch_embed"] = model.patch_embed.state_dict()
-
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
     @classmethod
@@ -342,19 +339,13 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
 
         return hidden_states
 
-
-@dataclass
-class RBLNQwen2_5_VLOutput(RBLNDecoderOnlyOutput):
-    rope_deltas: torch.Tensor = None
-
-
 class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
     auto_model_class = AutoModelForVision2Seq
     _rbln_submodules = [
         {"name": "visual"},
     ]
     _decoder_wrapper_cls = Qwen2_5_VL_LanguageModelWrapper
-    _use_rotary_emb = True  # Static rotary emb..
+    _use_rotary_emb = True
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
@@ -378,12 +369,6 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
 
     @classmethod
     def update_kwargs(cls, kwargs):
-        """
-        Update user-given kwargs to get proper pytorch model.
-
-        For example, `torchscript`=True should be set because torch.jit
-        does not support `transformers` output instances as module output;
-        """
         kwargs.update(
             {
                 "_attn_implementation": "eager",
@@ -655,12 +640,11 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         second_per_grid_ts: Optional[torch.Tensor] = None,
         generate_idx: torch.Tensor = None,
         **kwargs,
-    ) -> Qwen2_5_VLCausalLMOutputWithPast:
+    ) -> RBLNDecoderOnlyOutput:
         # Prefll
         if cache_position is None:
             inputs_embeds = self.embed_tokens(input_ids)
             if pixel_values is not None:
-                # pixel_values = pixel_values.type(self.visual.dtype)
                 image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
                 n_image_tokens = (input_ids == self.config.image_token_id).sum().item()
                 n_image_features = image_embeds.shape[0]
@@ -677,7 +661,6 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 inputs_embeds = inputs_embeds.masked_scatter(mask_expanded, image_embeds)
 
             if pixel_values_videos is not None:
-                # pixel_values_videos = pixel_values_videos.type(self.visual.dtype)
                 video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
                 n_video_tokens = (input_ids == self.config.video_token_id).sum().item()
                 n_video_features = video_embeds.shape[0]
@@ -732,8 +715,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 position_embed=position_embed,
             )
 
-        return RBLNQwen2_5_VLOutput(
+        return RBLNDecoderOnlyOutput(
             logits=logits,
-            rope_deltas=self.rope_deltas,
             generate_idx=generate_idx,
         )
