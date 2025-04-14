@@ -76,11 +76,12 @@ class T5DecoderWrapper(Seq2SeqDecoderWrapper):
         encoder_attention_mask,
         cache_position,
         block_tables,
-        cross_kv_cache,
-        *self_kv_cache,
+        *kv_cache,
     ) -> Tuple[torch.FloatTensor, Tuple[torch.FloatTensor]]:
         self_past_key_values = ()
         cross_past_key_values = ()
+        self_kv_cache = kv_cache[self.num_layers * 2 :]
+        cross_kv_cache = kv_cache[: self.num_layers * 2]
 
         for i in range(0, self.num_layers * 2, 2):
             self_past_key_values = self_past_key_values + ((self_kv_cache[i], self_kv_cache[i + 1]),)
