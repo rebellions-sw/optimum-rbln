@@ -126,6 +126,14 @@ class RBLNModel(RBLNBaseModel):
             generation_config = model.generation_config
             generation_config.save_pretrained(save_dir_path / subfolder)
 
+            # Check if the model is a WhisperForConditionalGeneration instance without importing the class.
+            # This block adds the transformers version to the generation_config, ensuring consistency during saving.
+            # Reference: https://github.com/huggingface/transformers/blob/v4.50.3/src/transformers/generation/utils.py#L1595
+            # TODO: Evaluate if version management can be automated instead of hardcoding the transformers version.
+            if model.__class__.__name__ == "WhisperForConditionalGeneration":
+                generation_config.transformers_version = "4.36.0.dev0"
+                generation_config.save_pretrained(save_dir_path / subfolder)
+
         if not isinstance(config, PretrainedConfig):  # diffusers config
             config = PretrainedConfig(**config)
         config.save_pretrained(save_dir_path / subfolder)
