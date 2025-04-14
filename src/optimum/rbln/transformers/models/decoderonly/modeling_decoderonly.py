@@ -578,11 +578,41 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         nbits_per_param: int,
         n_model_params: int,
     ) -> int:
+        """
+        We are finding max_n_blocks(x) that satisfies the following equation:
+
+        available_dram - kernel_size - buffer
+            - num_layers * 2 * tensor_parallel_size
+            * align_2MB(
+                x
+                * block_size
+                * align_64(head_dim)
+                * math.ceil(num_key_value_heads / tensor_parallel_size)
+                * 2
+            ) > 0
+
+        This inequality can be rewritten as follows:
+
+        a - c * align_2MB(b * x) > 0
+        where
+           a = available_dram - kernel_size - buffer
+           b = block_size * align_64(head_dim) * math.ceil(num_key_value_heads / tensor_parallel_size) * 2
+           c = num_layers * 2 * tensor_parallel_size
+
+        We can rewrite the inequality as follows:
+        k > align_2MB(b*x)
+        where
+           k = a / c
+
+        After that, we can derive the following equation:
+        x = floor(2**21 / b * floor((k - 1) / 2**21))
+        """
+
         def align(x: int, nbytes: int) -> int:
             return int(math.ceil(x / nbytes) * nbytes)
 
         def align_2MB(x: int) -> int:
-            return align(x, 2 * 1024 * 1024)
+            return align(x, 2**21)
 
         num_attention_heads = getattr(config, "n_head", None) or getattr(config, "num_attention_heads")
         num_layers = getattr(config, "n_layer", None) or getattr(config, "num_hidden_layers")
@@ -612,27 +642,16 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         available_dram -= kernel_size
 
         # TODO: Accurate buffer estimation
-        buffer = 2**30  # 1GB Buffer
-        if tensor_parallel_size <= 4:
-            buffer /= 4
-
+        buffer_per_core = 2**29  # 500MB per npu
+        buffer = buffer_per_core * tensor_parallel_size
         available_dram -= buffer
 
-        # Estimate nbytes per a single kvcache block
-        nbytes_per_block = (
-            align_2MB(
-                kvcache_block_size
-                * head_dim
-                * math.ceil(num_key_value_heads / tensor_parallel_size)  # Shard
-                * 2  # (fp16)
-            )
-            * num_layers
-            * 2  # (k, v)
-            * tensor_parallel_size
-        )
-        n_blocks = available_dram // nbytes_per_block
+        b = kvcache_block_size * align(head_dim, 64) * math.ceil(num_key_value_heads / tensor_parallel_size) * 2
+        c = num_layers * 2 * tensor_parallel_size
+        k = available_dram / c
+        max_n_blocks = math.floor(2**21 / b * math.floor((k - 1) / 2**21))
 
-        return n_blocks, nbytes_per_block
+        return max_n_blocks
 
     @classmethod
     def _get_rbln_config(
@@ -689,7 +708,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
         rbln_kvcache_num_blocks = (rbln_max_seq_len // rbln_kvcache_block_size) * rbln_batch_size
         if rbln_attn_impl == "flash_attn":
-            max_num_blocks, _ = cls.get_maximum_num_blocks(
+            max_num_blocks = cls.get_maximum_num_blocks(
                 config=model_config,
                 tensor_parallel_size=rbln_kwargs.get("tensor_parallel_size", 1),
                 kvcache_block_size=rbln_kvcache_block_size,

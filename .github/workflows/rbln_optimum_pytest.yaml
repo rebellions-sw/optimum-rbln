@@ -43,7 +43,9 @@ jobs:
         if: ${{ inputs.commit_message == '' }}
         run: |
           COMMIT_MESSAGE=$(git log -1 --pretty=%B)
-          echo "message=$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v3
