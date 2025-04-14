@@ -190,11 +190,11 @@ class WhisperDecoder(nn.Module):
         all_hiddens = []
         for i in range(inputs_embeds.shape[0]):
             position_id = cache_position[i]
-            position = self.embed_positions(input_ids, position_ids=position_id)
+            position = self.embed_positions.weight[position_id]
             batch_hidden = position + inputs_embeds[i]
             all_hiddens.append(batch_hidden)
 
-        hidden_states = torch.stack(all_hiddens, dim=0)
+        hidden_states = torch.cat(all_hiddens, dim=0).unsqueeze(1)
 
         # prepare attn mask (normal attention - masked)
         if attention_mask is not None:
