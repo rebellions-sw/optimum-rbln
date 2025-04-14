@@ -27,6 +27,9 @@ from transformers import (
     PretrainedConfig,
     PreTrainedModel,
 )
+from transformers.modeling_attn_mask_utils import (
+    _prepare_4d_attention_mask,
+)
 from transformers.modeling_outputs import BaseModelOutput
 from transformers.modeling_utils import no_init_weights
 from transformers.models.idefics3.modeling_idefics3 import Idefics3CausalLMOutputWithPast, Idefics3VisionEmbeddings
@@ -62,7 +65,7 @@ class RBLNRuntimeVisionModel(RBLNPytorchRuntime):
     ) -> None:
         super().__init__(runtime, **kwargs)
         self.patch_size = config.patch_size
-        # self._use_flash_attention_2 = config.text_config._attn_implementation == "flash_attention_2"
+        self._use_flash_attention_2 = config._attn_implementation == "flash_attention_2"
 
     def forward(
         self,
@@ -90,8 +93,8 @@ class RBLNRuntimeVisionModel(RBLNPytorchRuntime):
 
         if not torch.any(~patch_attention_mask):
             patch_attention_mask = None
-        # elif not self._use_flash_attention_2:
-        #     patch_attention_mask = _prepare_4d_attention_mask(patch_attention_mask, hidden_states.dtype)
+        elif not self._use_flash_attention_2:
+            patch_attention_mask = _prepare_4d_attention_mask(patch_attention_mask, hidden_states.dtype)
 
         return super().forward(hidden_states.contiguous())
 
