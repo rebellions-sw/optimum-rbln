@@ -131,8 +131,17 @@ class RBLNModel(RBLNBaseModel):
             # Reference: https://github.com/huggingface/transformers/blob/v4.50.3/src/transformers/generation/utils.py#L1595
             # TODO: Evaluate if version management can be automated instead of hardcoding the transformers version.
             if model.__class__.__name__ == "WhisperForConditionalGeneration":
-                generation_config.transformers_version = "4.36.0.dev0"
-                generation_config.save_pretrained(save_dir_path / subfolder)
+                import json
+
+                config_path = save_dir_path / subfolder / "generation_config.json"
+                config_path.write_text(
+                    json.dumps(
+                        {**json.loads(config_path.read_text(encoding="utf-8")),
+                        "transformers_version": "4.36.0.dev0"},
+                        indent=2
+                    ),
+                    encoding="utf-8"
+                )
 
         if not isinstance(config, PretrainedConfig):  # diffusers config
             config = PretrainedConfig(**config)
