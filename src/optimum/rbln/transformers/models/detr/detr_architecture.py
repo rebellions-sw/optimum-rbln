@@ -23,6 +23,7 @@ from transformers.models.detr.modeling_detr import (
     DetrDecoderOutput,
     DetrForObjectDetection,
     DetrLearnedPositionEmbedding,
+    DetrConvModel,
 )
 from transformers.utils import logging
 
@@ -67,7 +68,7 @@ class DetrSinePositionEmbedding(nn.Module):
         dim_t = torch.arange(self.embedding_dim, dtype=torch.int64, device="cpu").float()
         self.dim_t = self.temperature ** (2 * torch.div(dim_t, 2, rounding_mode="floor") / self.embedding_dim)
 
-    def forward(self, pixel_mask):
+    def forward(self, pixel_values, pixel_mask):
         if pixel_mask is None:
             raise ValueError("No pixel mask provided")
         y_embed = pixel_mask.cumsum(1, dtype=torch.float32)
@@ -368,31 +369,6 @@ class DetrDecoder(nn.Module):
         )
 
 
-# ref: https://github.com/huggingface/transformers/blob/794fde7b1c3d041519fc28ea3e1461b0cfcad4e7/src/transformers/models/detr/modeling_detr.py#L391
-# Wrap the original DetrConvModel to ensure custom components (like position embedding)
-# and specific logic required for RBLN tracing are correctly used.
-class DetrConvModel(nn.Module):
-    """
-    This module adds 2D position embeddings to all intermediate feature maps of the convolutional encoder.
-    """
-
-    def __init__(self, model, position_embedding):
-        super().__init__()
-        self._original_model = model
-        self.conv_encoder = self._original_model.conv_encoder
-        self.position_embedding = position_embedding
-
-    def forward(self, pixel_values, pixel_mask):
-        # send pixel_values and pixel_mask through backbone to get list of (feature_map, pixel_mask) tuples
-        out = self.conv_encoder(pixel_values, pixel_mask)
-        pos = []
-        for feature_map, mask in out:
-            # position encoding
-            pos.append(self.position_embedding(mask).to(feature_map.dtype))
-
-        return out, pos
-
-
 class DetrForObjectDetectionWrapper(nn.Module):
     def __init__(self, model: DetrForObjectDetection):
         super().__init__()
@@ -400,7 +376,7 @@ class DetrForObjectDetectionWrapper(nn.Module):
         self.model = model
 
         object_queries = build_position_encoding(self.config)
-        backbone = DetrConvModel(self.model.model.backbone, object_queries)
+        backbone = DetrConvModel(self.model.model.backbone.conv_encoder, object_queries)
         self.model.model.backbone = backbone
 
         self.model.model.encoder = DetrEncoder(self.model.model.encoder, self.config)

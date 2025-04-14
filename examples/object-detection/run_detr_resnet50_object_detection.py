@@ -33,7 +33,7 @@ def main(
                 "width": width_size,
             },
             rbln_batch_size=batch_size,
-            revision="no_timm",
+            revision="no_timm" if "dc5" not in model_id else None,
         )
         model.save_pretrained(os.path.basename(model_id))
     else:
