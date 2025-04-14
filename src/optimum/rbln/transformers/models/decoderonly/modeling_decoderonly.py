@@ -688,7 +688,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 config=model_config,
                 tensor_parallel_size=rbln_config.tensor_parallel_size or 1,
                 kvcache_block_size=rbln_config.kvcache_block_size,
-                nbits_per_param=16 if rbln_config.quantization is None else 4,  # TODO(jongho): FIX Ad-hoc
+                nbits_per_param=16 if not rbln_config.quantization else 4,  # TODO(jongho): FIX Ad-hoc
                 n_model_params=sum(p.numel() for p in model.parameters()),
             )
 
