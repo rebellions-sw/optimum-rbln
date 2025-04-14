@@ -112,13 +112,14 @@ class Seq2SeqEncoderWrapper(nn.Module):
 
         # 3. update the cross_attention's past_key_value direct to the device-dram for optimization.
         batch_axis = torch.tensor(0, dtype=torch.int16)
-        dummy_output = torch.zeros(256, dtype=torch.float)
+        enc_outputs = []
         for i in range(self.n_layer * 2):
-            dummy_output += torch.ops.rbln_custom_ops.rbln_cache_update(
+            enc_output = torch.ops.rbln_custom_ops.rbln_cache_update(
                 cross_key_values[i], cross_kv[i], b_idx[0], batch_axis
             )
+            enc_outputs.append(enc_output)
 
-        return dummy_output
+        return enc_outputs
 
 
 class Seq2SeqDecoderWrapper(nn.Module):
