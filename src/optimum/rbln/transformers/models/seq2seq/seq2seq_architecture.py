@@ -83,8 +83,8 @@ class Seq2SeqEncoderWrapper(nn.Module):
         self,
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
-        cross_key_values: torch.Tensor,
         b_idx: torch.Tensor,
+        *cross_key_values: Tuple[torch.Tensor],
     ) -> Tuple[torch.Tensor]:
         # 1. get encoder last_hidden_states
         encoder_outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
@@ -103,16 +103,16 @@ class Seq2SeqEncoderWrapper(nn.Module):
             cross_kv.append(past_k)
             cross_kv.append(past_v)
 
-        cross_kv = torch.stack(cross_kv, dim=0)
-
         # 3. update the cross_attention's past_key_value direct to the device-dram for optimization.
-        batch_axis = torch.tensor(1, dtype=torch.int16)
-        cross_key_values = torch.ops.rbln_custom_ops.rbln_cache_update(
-            cross_key_values, cross_kv, b_idx[0], batch_axis
-        )
+        batch_axis = torch.tensor(0, dtype=torch.int16)
+        cross_key_values = []
+        for i in range(self.n_layer * 2):
+            cross_key_value = torch.ops.rbln_custom_ops.rbln_cache_update(
+                cross_key_values[i], cross_kv[i], b_idx[0], batch_axis
+            )
+            cross_key_values.append(cross_key_value)
 
         return cross_key_values
-
 
 class Seq2SeqDecoderWrapper(nn.Module):
     """
@@ -166,16 +166,17 @@ class Seq2SeqDecoderWrapper(nn.Module):
                 encoder_attention_mask,
                 cache_position,
                 block_tables,
-                cross_kv_cache,
-                *self_kv_cache,
+                *kv_cache,
             ) = args
 
         else:
             attention_mask = None
-            (input_ids, encoder_attention_mask, cache_position, block_tables, cross_kv_cache, *self_kv_cache) = args
+            (input_ids, encoder_attention_mask, cache_position, block_tables, *kv_cache) = args
 
         self_past_key_values = ()
         cross_past_key_values = ()
+        self_kv_cache = kv_cache[self.num_layers * 2 :]
+        cross_kv_cache = kv_cache[: self.num_layers * 2]
         for i in range(0, self.num_layers * 2, 2):
             self_past_key_values = self_past_key_values + ((self_kv_cache[i], self_kv_cache[i + 1]),)
             cross_past_key_values = cross_past_key_values + ((cross_kv_cache[i], cross_kv_cache[i + 1]),)
