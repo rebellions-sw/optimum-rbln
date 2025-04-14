@@ -18,7 +18,6 @@ import torch
 from torch import nn
 from transformers.utils import logging
 
-from ....ops import register_rbln_custom_paged_add_softmax_attention
 from ..seq2seq.seq2seq_architecture import (
     Seq2SeqDecoder,
     Seq2SeqDecoderLayer,
@@ -55,7 +54,6 @@ class T5EncoderWrapper(Seq2SeqEncoderWrapper):
 
 class T5DecoderWrapper(Seq2SeqDecoderWrapper):
     def __post_init__(self, model, dec_max_seq_len: int = None):
-        register_rbln_custom_paged_add_softmax_attention()
         self.num_layers = self.config.num_layers
         self.conditional_generation = self.convert_to_rbln_conditional_generation(model, dec_max_seq_len)
 
@@ -78,11 +76,12 @@ class T5DecoderWrapper(Seq2SeqDecoderWrapper):
         encoder_attention_mask,
         cache_position,
         block_tables,
-        cross_kv_cache,
-        *self_kv_cache,
+        *kv_cache,
     ) -> Tuple[torch.FloatTensor, Tuple[torch.FloatTensor]]:
         self_past_key_values = ()
         cross_past_key_values = ()
+        self_kv_cache = kv_cache[self.num_layers * 2 :]
+        cross_kv_cache = kv_cache[: self.num_layers * 2]
 
         for i in range(0, self.num_layers * 2, 2):
             self_past_key_values = self_past_key_values + ((self_kv_cache[i], self_kv_cache[i + 1]),)
