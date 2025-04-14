@@ -41,7 +41,7 @@ MAX_FLASH_ATTN_PARTITION_LENGTH = 32_768
 class ModelProxy:
     def __init__(self, obj):
         self._obj = obj
-    
+
     def __getattr__(self, name):
         return getattr(self._obj, name)
 
@@ -193,17 +193,19 @@ class DecoderOnlyWrapper(nn.Module):
         if not hasattr(causal_lm, "model"):
             causal_lm.model = ModelProxy(causal_lm)
 
-        self.causal_lm = self.convert_to_rbln_causal_lm(causal_lm, lm_head, max_seq_len)        
-        
+        self.causal_lm = self.convert_to_rbln_causal_lm(causal_lm, lm_head, max_seq_len)
+
         self.num_hidden_layers = getattr(self.config, "num_hidden_layers", None) or getattr(self.config, "n_layer")
         self._phase = "prefill"
 
     def get_rotary_emb(self, max_seq_len):
         return RotaryEmbedding(config=self.config, max_seq_len_cached=max_seq_len)
 
-    def convert_to_rbln_causal_lm(self, causal_lm: PreTrainedModel, lm_head: Optional[PreTrainedModel] = None, max_seq_len: Optional[int] = None):
+    def convert_to_rbln_causal_lm(
+        self, causal_lm: PreTrainedModel, lm_head: Optional[PreTrainedModel] = None, max_seq_len: Optional[int] = None
+    ):
         new_layers = []
-        
+
         for layer in causal_lm.model.layers:
             if self.attn_impl == "eager":
                 new_self_attn = DecoderOnlyAttention(
@@ -221,7 +223,7 @@ class DecoderOnlyWrapper(nn.Module):
 
             new_layer = DecoderOnlyLayer(layer, new_self_attn)
             new_layers.append(new_layer)
-        
+
         new_model = DecoderOnlyModel(
             causal_lm.model,
             new_layers,
@@ -343,7 +345,7 @@ class DecoderOnlyForCausalLM(nn.Module):
         _phase: Current processing phase ("prefill" or "decode")
     """
 
-    def __init__(self, causal_lm: PreTrainedModel, lm_head: PreTrainedModel = None, model = None):
+    def __init__(self, causal_lm: PreTrainedModel, lm_head: PreTrainedModel = None, model=None):
         super().__init__()
         self.config = causal_lm.config
         self._original_mod = causal_lm
