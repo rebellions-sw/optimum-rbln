@@ -151,7 +151,7 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
             ]
             input_infos.append(input_info)
 
-        rbln_compile_config = RBLNCompileConfig(input_info=input_infos)
+        rbln_compile_config = RBLNCompileConfig(input_info=input_infos if len(input_infos) > 1 else input_infos[0])
         rbln_config.set_compile_cfgs([rbln_compile_config])
 
         return rbln_config

@@ -23,6 +23,7 @@ logger = get_logger()
 
 
 class RBLNQwen2_5_VLForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausalLMConfig):
+    submodules = ["visual"]
 
     def __init__(
         self,
@@ -30,7 +31,9 @@ class RBLNQwen2_5_VLForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausal
         **kwargs,
     ):
         super().__init__(**kwargs)
+        self.use_inputs_embeds = True
         self.visual = visual
+
 
 class RBLNQwen2_5_VisionTransformerPretrainedModelConfig(RBLNModelConfig):
     def __init__(self, max_seq_lens: Optional[Union[int, List[int]]] = None, **kwargs):
@@ -44,11 +47,9 @@ class RBLNQwen2_5_VisionTransformerPretrainedModelConfig(RBLNModelConfig):
             ValueError: If batch_size is not a positive integer.
         """
         super().__init__(**kwargs)
-        self.use_inputs_embeds = True
         if isinstance(max_seq_lens, int):
             max_seq_lens = [max_seq_lens]
         elif isinstance(max_seq_lens, list):
-            max_seq_lens = max_seq_lens.sort(reverse=True)
+            max_seq_lens.sort(reverse=True)
 
         self.max_seq_lens = max_seq_lens
-
