@@ -56,25 +56,12 @@ _import_structure = {
         "RBLNCLIPVisionModelWithProjection",
         "RBLNCLIPVisionModelWithProjectionConfig",
     ],
-    "dpt": ["RBLNDPTForDepthEstimation"],
-    "exaone": ["RBLNExaoneForCausalLM"],
-    "gemma": ["RBLNGemmaForCausalLM"],
-    "gpt2": ["RBLNGPT2LMHeadModel"],
-    "llama": ["RBLNLlamaForCausalLM"],
-    "llava_next": ["RBLNLlavaNextForConditionalGeneration"],
-    "midm": ["RBLNMidmLMHeadModel"],
-    "mistral": ["RBLNMistralForCausalLM"],
-    "phi": ["RBLNPhiForCausalLM"],
-    "qwen2": ["RBLNQwen2ForCausalLM"],
     "qwen2_5_vl": [
         "RBLNQwen2_5_VisionTransformerPretrainedModel",
+        "RBLNQwen2_5_VisionTransformerPretrainedModelConfig",
         "RBLNQwen2_5_VLForConditionalGeneration",
+        "RBLNQwen2_5_VLForConditionalGenerationConfig",
     ],
-    "time_series_transformers": ["RBLNTimeSeriesTransformerForPrediction"],
-    "t5": ["RBLNT5EncoderModel", "RBLNT5ForConditionalGeneration"],
-    "wav2vec2": ["RBLNWav2Vec2ForCTC"],
-    "whisper": ["RBLNWhisperForConditionalGeneration"],
-    "xlm_roberta": ["RBLNXLMRobertaModel"],
     "decoderonly": [
         "RBLNDecoderOnlyModelForCausalLM",
         "RBLNDecoderOnlyModelForCausalLMConfig",
@@ -163,7 +150,12 @@ if TYPE_CHECKING:
     from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig
     from .phi import RBLNPhiForCausalLM, RBLNPhiForCausalLMConfig
     from .qwen2 import RBLNQwen2ForCausalLM, RBLNQwen2ForCausalLMConfig
-    from .qwen2_5_vl import RBLNQwen2_5_VisionTransformerPretrainedModel, RBLNQwen2_5_VLForConditionalGeneration
+    from .qwen2_5_vl import (
+        RBLNQwen2_5_VisionTransformerPretrainedModel,
+        RBLNQwen2_5_VisionTransformerPretrainedModelConfig,
+        RBLNQwen2_5_VLForConditionalGeneration,
+        RBLNQwen2_5_VLForConditionalGenerationConfig,
+    )
     from .t5 import (
         RBLNT5EncoderModel,
         RBLNT5EncoderModelConfig,
