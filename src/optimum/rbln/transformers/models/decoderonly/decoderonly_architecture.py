@@ -19,12 +19,6 @@ import torch
 from torch import nn
 from transformers import PretrainedConfig, PreTrainedModel
 
-from ....ops import (
-    register_rbln_custom_paged_attention,
-    register_rbln_custom_paged_causal_attention,
-    register_rbln_custom_paged_flash_attention,
-    register_rbln_custom_paged_flash_causal_attention,
-)
 from ....utils import logging
 from ...modeling_rope_utils import ROPE_INIT_FUNCTIONS
 
@@ -171,16 +165,8 @@ class DecoderOnlyWrapper(nn.Module):
         self.use_attention_mask = use_attention_mask
         if self.attn_impl == "flash_attn":
             self.kvcache_partition_len = kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
-            if self.use_attention_mask:
-                register_rbln_custom_paged_flash_attention()
-            else:
-                register_rbln_custom_paged_flash_causal_attention()
         elif self.attn_impl == "eager":
             self.kvcache_partition_len = None
-            if self.use_attention_mask:
-                register_rbln_custom_paged_attention()
-            else:
-                register_rbln_custom_paged_causal_attention()
         else:
             raise ValueError(f"Unknown attn_impl : {self.attn_impl}")
 
@@ -776,55 +762,55 @@ class AttentionOp(nn.Module):
         if self.phase == "decode":
             if self.use_attention_mask:
                 attn_output = torch.ops.rbln_custom_ops.paged_attn_decode(
-                    query_state,
-                    key_state,
-                    value_state,
-                    attn_mask,
-                    past_key_state.unsqueeze(2),
-                    past_value_state.unsqueeze(2),
-                    seq_position,
-                    scale,
-                    block_tables,
-                    block_size,
+                    q=query_state,
+                    k=key_state,
+                    v=value_state,
+                    mask=attn_mask,
+                    kcache=past_key_state.unsqueeze(2),
+                    vcache=past_value_state.unsqueeze(2),
+                    seq=seq_position,
+                    scale=scale,
+                    block_table=block_tables,
+                    block_size=block_size,
                 )
             else:
                 attn_output = torch.ops.rbln_custom_ops.paged_causal_attn_decode(
-                    query_state,
-                    key_state,
-                    value_state,
-                    past_key_state.unsqueeze(2),
-                    past_value_state.unsqueeze(2),
-                    seq_position,
-                    scale,
-                    block_tables,
-                    block_size,
+                    q=query_state,
+                    k=key_state,
+                    v=value_state,
+                    kcache=past_key_state.unsqueeze(2),
+                    vcache=past_value_state.unsqueeze(2),
+                    seq=seq_position,
+                    scale=scale,
+                    block_table=block_tables,
+                    block_size=block_size,
                 )
 
         else:
             if self.use_attention_mask:
                 attn_output = torch.ops.rbln_custom_ops.paged_attn_prefill(
-                    query_state,
-                    key_state,
-                    value_state,
-                    attn_mask,
-                    past_key_state.unsqueeze(2),
-                    past_value_state.unsqueeze(2),
-                    seq_position,
-                    scale,
-                    block_tables,
-                    block_size,
+                    q=query_state,
+                    k=key_state,
+                    v=value_state,
+                    mask=attn_mask,
+                    kcache=past_key_state.unsqueeze(2),
+                    vcache=past_value_state.unsqueeze(2),
+                    seq=seq_position,
+                    scale=scale,
+                    block_table=block_tables,
+                    block_size=block_size,
                 )
             else:
                 attn_output = torch.ops.rbln_custom_ops.paged_causal_attn_prefill(
-                    query_state,
-                    key_state,
-                    value_state,
-                    past_key_state.unsqueeze(2),
-                    past_value_state.unsqueeze(2),
-                    seq_position,
-                    scale,
-                    block_tables,
-                    block_size,
+                    q=query_state,
+                    k=key_state,
+                    v=value_state,
+                    kcache=past_key_state.unsqueeze(2),
+                    vcache=past_value_state.unsqueeze(2),
+                    seq=seq_position,
+                    scale=scale,
+                    block_table=block_tables,
+                    block_size=block_size,
                 )
 
         attn_output = attn_output.view(batch_size, self.num_heads, -1, self.head_dim)
@@ -1035,58 +1021,58 @@ class FlashAttentionOp(AttentionOp):
         if self.phase == "decode":
             if self.use_attention_mask:
                 attn_output = torch.ops.rbln_custom_ops.paged_flash_attn_decode(
-                    query_state,
-                    key_state,
-                    value_state,
-                    attn_mask,
-                    past_key_state.unsqueeze(2),
-                    past_value_state.unsqueeze(2),
-                    seq_position,
-                    scale,
-                    block_tables,
-                    kvcache_block_size,
-                    self.kvcache_partition_size,
+                    q=query_state,
+                    k=key_state,
+                    v=value_state,
+                    mask=attn_mask,
+                    kcache=past_key_state.unsqueeze(2),
+                    vcache=past_value_state.unsqueeze(2),
+                    seq=seq_position,
+                    scale=scale,
+                    block_table=block_tables,
+                    block_size=kvcache_block_size,
+                    partition=self.kvcache_partition_size,
                 )
             else:
                 attn_output = torch.ops.rbln_custom_ops.paged_flash_causal_attn_decode(
-                    query_state,
-                    key_state,
-                    value_state,
-                    past_key_state.unsqueeze(2),
-                    past_value_state.unsqueeze(2),
-                    seq_position,
-                    scale,
-                    block_tables,
-                    kvcache_block_size,
-                    self.kvcache_partition_size,
+                    q=query_state,
+                    k=key_state,
+                    v=value_state,
+                    kcache=past_key_state.unsqueeze(2),
+                    vcache=past_value_state.unsqueeze(2),
+                    seq=seq_position,
+                    scale=scale,
+                    block_table=block_tables,
+                    block_size=kvcache_block_size,
+                    partition=self.kvcache_partition_size,
                 )
         else:
             if self.use_attention_mask:
                 attn_output = torch.ops.rbln_custom_ops.paged_flash_attn_prefill(
-                    query_state,
-                    key_state,
-                    value_state,
-                    attn_mask,
-                    past_key_state.unsqueeze(2),
-                    past_value_state.unsqueeze(2),
-                    seq_position,
-                    scale,
-                    block_tables,
-                    kvcache_block_size,
-                    self.kvcache_partition_size,
+                    q=query_state,
+                    k=key_state,
+                    v=value_state,
+                    mask=attn_mask,
+                    kcache=past_key_state.unsqueeze(2),
+                    vcache=past_value_state.unsqueeze(2),
+                    seq=seq_position,
+                    scale=scale,
+                    block_table=block_tables,
+                    block_size=kvcache_block_size,
+                    partition=self.kvcache_partition_size,
                 )
             else:
                 attn_output = torch.ops.rbln_custom_ops.paged_flash_causal_attn_prefill(
-                    query_state,
-                    key_state,
-                    value_state,
-                    past_key_state.unsqueeze(2),
-                    past_value_state.unsqueeze(2),
-                    seq_position,
-                    scale,
-                    block_tables,
-                    kvcache_block_size,
-                    self.kvcache_partition_size,
+                    q=query_state,
+                    k=key_state,
+                    v=value_state,
+                    kcache=past_key_state.unsqueeze(2),
+                    vcache=past_value_state.unsqueeze(2),
+                    seq=seq_position,
+                    scale=scale,
+                    block_table=block_tables,
+                    block_size=kvcache_block_size,
+                    partition=self.kvcache_partition_size,
                 )
 
         # reshape for removing repeat_kv
