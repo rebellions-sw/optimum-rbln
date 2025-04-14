@@ -234,6 +234,10 @@ class TestKandinskyV22Model(BaseTest.TestModel):
     RBLN_CLASS_KWARGS = {
         "rbln_img_width": 64,
         "rbln_img_height": 64,
+        "rbln_config": {
+            "prior_pipe": {"prior": {"batch_size": 2}},
+            "decoder_pipe": {"unet": {"batch_size": 2}},
+        },
     }
 
     def test_complicate_config(self):
@@ -250,15 +254,14 @@ class TestKandinskyV22Model(BaseTest.TestModel):
                 "batch_size": 2,
             },
             "batch_size": 1,
-            "prior_guidance_scale": 5.0,
-            "guidance_scale": 3.0,
         }
+        rbln_class_kwargs_copy = self.RBLN_CLASS_KWARGS.copy()
+        rbln_class_kwargs_copy["rbln_config"] = rbln_config
         with self.subTest():
             _ = self.RBLN_CLASS.from_pretrained(
                 model_id=self.HF_MODEL_ID,
                 export=True,
-                rbln_config=rbln_config,
-                **self.RBLN_CLASS_KWARGS,
+                **rbln_class_kwargs_copy,
             )
         with self.subTest():
             self.assertEqual(_.prior_text_encoder.rbln_config.batch_size, 2)
