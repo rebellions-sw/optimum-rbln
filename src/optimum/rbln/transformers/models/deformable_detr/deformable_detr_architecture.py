@@ -75,7 +75,8 @@ class MultiScaleDeformableAttention(nn.Module):
     ):
         batch_size, _, num_heads, hidden_dim = value.shape
         _, num_queries, num_heads, num_levels, num_points, _ = sampling_locations.shape
-        # RBLN modified
+
+        # RBLN replace torch.split with caculated size to list of sliced tensor value.
         # value_list = value.split([height * width for height, width in value_spatial_shapes], dim=1)
         value_list = []
         index_list = [height * width for height, width in value_spatial_shapes]
@@ -84,6 +85,7 @@ class MultiScaleDeformableAttention(nn.Module):
             end = start + index
             value_list.append(value[:, start:end])
             start = end
+
         sampling_grids = 2 * sampling_locations - 1
         sampling_value_list = []
         for level_id, (height, width) in enumerate(value_spatial_shapes):
@@ -141,6 +143,7 @@ class DeformableDetrSinePositionEmbedding(nn.Module):
             scale = 2 * math.pi
         self.scale = scale
 
+        # RBLN moved dim_t from DeformableDetrSinePositionEmbedding.forward to DeformableDetrSinePositionEmbedding.__init__
         dim_t = torch.arange(self.embedding_dim, dtype=torch.int64, device="cpu")
         self.dim_t = self.temperature ** (2 * torch.div(dim_t, 2, rounding_mode="floor") / self.embedding_dim)
 

@@ -25,9 +25,11 @@ def main(
     image = Image.open(img_path)
 
     if from_transformers:
+        # Compile the RBLN-optimized DeformableDetr Object Detection model (if export=True)
         model = RBLNDeformableDetrForObjectDetection.from_pretrained(
             model_id,
             export=True,
+            # The following arguments are specific to RBLN compilation
             rbln_image_size={
                 "height": height_size,
                 "width": width_size,
@@ -36,23 +38,31 @@ def main(
         )
         model.save_pretrained(os.path.basename(model_id))
     else:
-        model = RBLNDeformableDetrForObjectDetection.from_pretrained(model_id=os.path.basename(model_id), export=False)
+        model = RBLNDeformableDetrForObjectDetection.from_pretrained(
+            model_id=os.path.basename(model_id), export=False
+        )
 
+    # Prepare inputs
     image_processor = DeformableDetrImageProcessor.from_pretrained(model_id)
     inputs = image_processor(
-        [image] * batch_size, size={"width": width_size, "height": height_size}, return_tensors="pt"
+        [image] * batch_size,
+        size={"width": width_size, "height": height_size},
+        return_tensors="pt",
     )
 
-    import pdb
-
-    pdb.set_trace()
+    # Object detect
     outputs = model(**inputs)
 
+    # Post-procssing for scoring results
     target_sizes = torch.tensor([image.size[::-1]] * batch_size)
-    results = image_processor.post_process_object_detection(outputs, target_sizes=target_sizes, threshold=0.7)
+    results = image_processor.post_process_object_detection(
+        outputs, target_sizes=target_sizes, threshold=0.7
+    )
     for i in range(batch_size):
         print(f"====== batch {i} ======")
-        for score, label, box in zip(results[i]["scores"], results[i]["labels"], results[i]["boxes"]):
+        for score, label, box in zip(
+            results[i]["scores"], results[i]["labels"], results[i]["boxes"]
+        ):
             box = [round(i, 2) for i in box.tolist()]
             print(
                 f"Detected {model.config.id2label[label.item()]} with confidence "
