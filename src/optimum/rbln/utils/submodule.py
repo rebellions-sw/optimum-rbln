@@ -88,7 +88,11 @@ class SubModulesMixin:
                 rbln_config=submodule_rbln_config,
                 **kwargs,
             )
+
+            # update submodule's rbln_config since it is updated in the from_pretrained method
+            setattr(rbln_config, submodule_name, rbln_submodule.rbln_config)
             rbln_submodules.append(rbln_submodule)
+
         return rbln_submodules
 
     @classmethod
