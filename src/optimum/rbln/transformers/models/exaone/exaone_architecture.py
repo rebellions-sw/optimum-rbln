@@ -36,7 +36,7 @@ logger = logging.get_logger(__name__)
 class ExaoneForCausalLMWrapper(DecoderOnlyWrapper):
     """A wrapper class for the Exaone model with a language modeling head."""
 
-    def convert_to_rbln_causal_lm(self, causal_lm: "ExaoneForCausalLM", lm_head: nn.Module, max_seq_len: int):
+    def convert_to_rbln_causal_lm(self, causal_lm: "ExaoneForCausalLM", max_seq_len: int):
         new_layers = []
         for layer in causal_lm.transformer.h:
             if self.attn_impl == "eager":
@@ -58,7 +58,7 @@ class ExaoneForCausalLMWrapper(DecoderOnlyWrapper):
         new_model = ExaoneModel(
             causal_lm.transformer, new_layers, partition_len=self.kvcache_partition_len, max_seq_len=max_seq_len
         )
-        new_causal_lm = DecoderOnlyForCausalLM(causal_lm=causal_lm, model=new_model)
+        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm
 
 

@@ -145,11 +145,10 @@ class DecoderOnlyWrapper(nn.Module):
     def __init__(
         self,
         causal_lm: PreTrainedModel,
-        lm_head: Optional[nn.Module] = None,
-        max_seq_len: Optional[int] = None,
-        use_rotary_emb: Optional[bool] = None,
-        attn_impl: Optional[str] = None,
-        use_attention_mask: Optional[bool] = None,
+        max_seq_len: int,
+        use_rotary_emb: bool,
+        attn_impl: str,
+        use_attention_mask: bool,
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
     ):
@@ -180,7 +179,7 @@ class DecoderOnlyWrapper(nn.Module):
         if not hasattr(causal_lm, "model"):
             causal_lm.model = ModelProxy(causal_lm)
 
-        self.causal_lm = self.convert_to_rbln_causal_lm(causal_lm, lm_head, max_seq_len)
+        self.causal_lm = self.convert_to_rbln_causal_lm(causal_lm, max_seq_len)
 
         self.num_hidden_layers = getattr(self.config, "num_hidden_layers", None) or getattr(self.config, "n_layer")
         self._phase = "prefill"
@@ -188,9 +187,7 @@ class DecoderOnlyWrapper(nn.Module):
     def get_rotary_emb(self, max_seq_len):
         return RotaryEmbedding(config=self.config, max_seq_len_cached=max_seq_len)
 
-    def convert_to_rbln_causal_lm(
-        self, causal_lm: PreTrainedModel, lm_head: Optional[nn.Module] = None, max_seq_len: Optional[int] = None
-    ):
+    def convert_to_rbln_causal_lm(self, causal_lm: PreTrainedModel, max_seq_len: int):
         new_layers = []
 
         for layer in causal_lm.model.layers:
@@ -218,7 +215,7 @@ class DecoderOnlyWrapper(nn.Module):
             max_seq_len=max_seq_len,
             kvcache_block_size=self.kvcache_block_size,
         )
-        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, lm_head, new_model)
+        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm
 
     @property
@@ -332,11 +329,10 @@ class DecoderOnlyForCausalLM(nn.Module):
         _phase: Current processing phase ("prefill" or "decode")
     """
 
-    def __init__(self, causal_lm: PreTrainedModel, lm_head: Optional[nn.Module] = None, model=None):
+    def __init__(self, causal_lm: PreTrainedModel, model):
         super().__init__()
         self.config = causal_lm.config
         self._original_mod = causal_lm
-        self.lm_head = lm_head
         self.model = model
         self._phase = "prefill"
 
@@ -374,10 +370,7 @@ class DecoderOnlyForCausalLM(nn.Module):
         if self.phase == "prefill":
             hidden_states = hidden_states[:, query_position.to(torch.int).unsqueeze(0)]
 
-        if self.lm_head is not None:
-            logits = self.lm_head(hidden_states)
-        else:
-            logits = self._original_mod.lm_head(hidden_states)
+        logits = self._original_mod.lm_head(hidden_states)
         return logits
 
 
