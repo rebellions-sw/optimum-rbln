@@ -11,6 +11,7 @@ from optimum.rbln import (
     RBLNBertForMaskedLM,
     RBLNBertForQuestionAnswering,
     RBLNCLIPTextModel,
+    RBLNDeformableDetrForObjectDetection,
     RBLNDPTForDepthEstimation,
     RBLNResNetForImageClassification,
     RBLNT5EncoderModel,
@@ -27,6 +28,7 @@ from optimum.rbln.transformers.models.auto.modeling_auto import (
     RBLNAutoModelForDepthEstimation,
     RBLNAutoModelForImageClassification,
     RBLNAutoModelForMaskedLM,
+    RBLNAutoModelForObjectDetection,
     RBLNAutoModelForQuestionAnswering,
     RBLNAutoModelForSequenceClassification,
     RBLNAutoModelForSpeechSeq2Seq,
@@ -371,6 +373,22 @@ class TestRBLNBartModel(BaseTest.TestModel):
         "attention_mask": torch.randint(
             low=0, high=2, size=(1, 100), generator=torch.manual_seed(42), dtype=torch.int64
         ),
+    }
+
+
+class TestRBLNDeformableDetrObjectDetection(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoModelForObjectDetection
+    RBLN_CLASS = RBLNDeformableDetrForObjectDetection
+    HF_MODEL_ID = "SenseTime/deformable-detr"
+    RBLN_CLASS_KWARGS = {
+        "rbln_image_size": {
+            "height": 224,
+            "width": 224,
+        }
+    }
+    GENERATION_KWARGS = {
+        "pixel_values": torch.randn(1, 3, 224, 224, generator=torch.manual_seed(42), dtype=torch.float32),
+        "pixel_mask": torch.ones([1, 224, 224], dtype=torch.int64),
     }
 
 
