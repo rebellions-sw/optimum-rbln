@@ -20,8 +20,8 @@ from transformers import AutoConfig, PretrainedConfig
 from transformers.dynamic_module_utils import get_class_from_dynamic_module
 from transformers.models.auto.auto_factory import _get_model_class
 
+from optimum.rbln.configuration_utils import RBLNAutoConfig
 from optimum.rbln.modeling_base import RBLNBaseModel
-from optimum.rbln.modeling_config import RBLNConfig
 from optimum.rbln.utils.model_utils import convert_hf_to_rbln_model_name, convert_rbln_to_hf_model_name
 
 
@@ -154,9 +154,9 @@ class _BaseAutoModelClass:
         model_path_subfolder = RBLNBaseModel._load_compiled_model_dir(
             model_id=pretrained_model_name_or_path, **filtered_kwargs
         )
-        rbln_config = RBLNConfig.load(model_path_subfolder)
+        rbln_config = RBLNAutoConfig.load(model_path_subfolder)
 
-        return rbln_config.meta["cls"]
+        return rbln_config.rbln_model_cls_name
 
     @classmethod
     def from_pretrained(

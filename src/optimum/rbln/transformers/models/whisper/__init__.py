@@ -13,4 +13,5 @@
 # limitations under the License.
 
 from ....ops import paged_add_softmax_attn_decode
+from .configuration_whisper import RBLNWhisperForConditionalGenerationConfig
 from .modeling_whisper import RBLNWhisperForConditionalGeneration

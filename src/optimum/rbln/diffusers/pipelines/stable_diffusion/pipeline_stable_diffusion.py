@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 from diffusers import StableDiffusionPipeline
 
 from ...modeling_diffusers import RBLNDiffusionMixin
@@ -19,4 +20,4 @@ from ...modeling_diffusers import RBLNDiffusionMixin
 
 class RBLNStableDiffusionPipeline(RBLNDiffusionMixin, StableDiffusionPipeline):
     original_class = StableDiffusionPipeline
-    _submodules = ["text_encoder", "unet", "vae"]
+    _submodules = ["vae", "text_encoder", "unet"]
