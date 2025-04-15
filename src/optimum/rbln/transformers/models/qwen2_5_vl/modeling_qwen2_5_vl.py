@@ -665,7 +665,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                     attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                     cache_position=cache_position,
                     batch_idx=b_idx,
-                    position_embed=position_embed,
+                    position_embed=position_embed[:, b_idx : b_idx + 1],
                 )
                 logits.append(logit)
             logits = torch.cat(logits, dim=0)
