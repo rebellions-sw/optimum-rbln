@@ -144,7 +144,7 @@ class DecoderOnlyWrapper(nn.Module):
     def __init__(
         self,
         causal_lm: PreTrainedModel,
-        lm_head: Optional[PreTrainedModel] = None,
+        lm_head: Optional[nn.Module] = None,
         max_seq_len: Optional[int] = None,
         use_rotary_emb: Optional[bool] = None,
         attn_impl: Optional[str] = None,
@@ -188,7 +188,7 @@ class DecoderOnlyWrapper(nn.Module):
         return RotaryEmbedding(config=self.config, max_seq_len_cached=max_seq_len)
 
     def convert_to_rbln_causal_lm(
-        self, causal_lm: PreTrainedModel, lm_head: Optional[PreTrainedModel] = None, max_seq_len: Optional[int] = None
+        self, causal_lm: PreTrainedModel, lm_head: Optional[nn.Module] = None, max_seq_len: Optional[int] = None
     ):
         new_layers = []
 
@@ -331,7 +331,7 @@ class DecoderOnlyForCausalLM(nn.Module):
         _phase: Current processing phase ("prefill" or "decode")
     """
 
-    def __init__(self, causal_lm: PreTrainedModel, lm_head: PreTrainedModel = None, model=None):
+    def __init__(self, causal_lm: PreTrainedModel, lm_head: Optional[nn.Module] = None, model=None):
         super().__init__()
         self.config = causal_lm.config
         self._original_mod = causal_lm

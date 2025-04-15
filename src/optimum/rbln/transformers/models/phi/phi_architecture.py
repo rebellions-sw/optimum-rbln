@@ -15,6 +15,7 @@
 from typing import TYPE_CHECKING, Optional, Tuple
 
 import torch
+import torch.nn as nn
 from transformers import PhiForCausalLM
 
 from ..decoderonly.decoderonly_architecture import (
@@ -32,7 +33,7 @@ if TYPE_CHECKING:
 
 
 class PhiWrapper(DecoderOnlyWrapper):
-    def convert_to_rbln_causal_lm(self, causal_lm: "PhiForCausalLM", max_seq_len: int):
+    def convert_to_rbln_causal_lm(self, causal_lm: "PhiForCausalLM", lm_head: nn.Module, max_seq_len: int):
         new_layers = []
         for layer in causal_lm.model.layers:
             if self.attn_impl == "eager":
