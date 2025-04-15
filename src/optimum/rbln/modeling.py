@@ -123,8 +123,15 @@ class RBLNModel(RBLNBaseModel):
                 config = AutoConfig.from_pretrained(config._name_or_path, **kwargs)
 
         if hasattr(model, "can_generate") and model.can_generate():
+            import json
+
             generation_config = model.generation_config
-            generation_config.save_pretrained(save_dir_path / subfolder)
+            generation_config_path = save_dir_path / subfolder / "generation_config.json"
+
+            generation_config.save_pretrained(generation_config_path.parent)
+            local_config = json.loads(generation_config_path.read_text(encoding="utf-8"))
+            local_config["transformers_version"] = generation_config.transformers_version
+            generation_config_path.write_text(json.dumps(local_config, indent=2) + "\n", encoding="utf-8")
 
         if not isinstance(config, PretrainedConfig):  # diffusers config
             config = PretrainedConfig(**config)
