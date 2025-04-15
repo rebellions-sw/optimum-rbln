@@ -19,6 +19,7 @@ from optimum.rbln import (
     RBLNLlamaForCausalLM,
     RBLNLlavaNextForConditionalGeneration,
     RBLNPhiForCausalLM,
+    RBLNQwen2_5_VLForConditionalGeneration,
     RBLNQwen2ForCausalLM,
     RBLNT5ForConditionalGeneration,
 )
@@ -244,6 +245,36 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
         kwargs = {"text_config": text_config}
         cls.HF_CONFIG_KWARGS.update(kwargs)
         return super().setUpClass()
+
+    def get_inputs(self):
+        tokenizer = self.get_tokenizer()
+        img_path = f"{os.path.dirname(__file__)}/../assets/rbln_logo.png"
+        image = Image.open(img_path)
+        inputs = tokenizer(images=[image], text=[self.PROMPT], return_tensors="pt", padding=True)
+        inputs["max_new_tokens"] = 20
+        inputs["do_sample"] = False
+        return inputs
+
+
+class TestQwen2_5_VLForConditionalGeneration(LLMTest.TestLLM):
+    RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
+    RBLN_CLASS = RBLNQwen2_5_VLForConditionalGeneration
+    TEST_LEVEL = TestLevel.FULL
+    HF_MODEL_ID = "Qwen/Qwen2.5-VL-3B-Instruct"  # No tiny model yet.
+    PROMPT = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>Describe this image.<|im_end|>\n<|im_start|>assistant\n"
+    RBLN_CLASS_KWARGS = {
+        "rbln_config": {"visual": {"max_seq_lens": 512}, "tensor_parallel_size": 1, "kvcache_partition_len": 16_384}
+    }
+    EXPECTED_OUTPUT = "讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣"
+    HF_CONFIG_KWARGS = {
+        "num_hidden_layers": 1,
+    }
+
+    @classmethod
+    def get_tokenizer(cls):
+        if cls._tokenizer is None:
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, max_pixels=64 * 14 * 14)
+        return cls._tokenizer
 
     def get_inputs(self):
         tokenizer = self.get_tokenizer()
