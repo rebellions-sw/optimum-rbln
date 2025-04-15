@@ -157,17 +157,13 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model_config: "Idefics3VisionConfig",
         rbln_kwargs: Dict[str, Any] = {},
-        rbln_batch_size: Optional[int] = None,
     ) -> RBLNConfig:
-        rbln_batch_size = rbln_kwargs.get("batch_size", None)
-        if rbln_batch_size is None:
-            rbln_batch_size = 1
-
         input_info = [
             (
                 "hidden_states",
                 [
-                    rbln_batch_size * 30,  # batch_size * num_images
+                    # batch_size * num_patches (dependent on image size) -> compile with 1 and use for loop
+                    1,
                     (model_config.image_size // model_config.patch_size) ** 2,
                     model_config.hidden_size,
                 ],
@@ -191,10 +187,23 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple, BaseModelOutput]:
-        last_hidden_state = self.model(
-            pixel_values, patch_attention_mask, output_attentions, output_hidden_states, return_dict=False
-        )
+        batch_size = pixel_values.shape[0]
+        last_hidden_state = []
+        for i in range(batch_size):
+            if patch_attention_mask is not None:
+                batch_attention_mask = patch_attention_mask[i : i + 1,]
+            else:
+                batch_attention_mask = None
 
+            batch_hidden_state = self.model(
+                pixel_values[i : i + 1,],
+                batch_attention_mask,
+                output_attentions,
+                output_hidden_states,
+                return_dict=False,
+            )
+            last_hidden_state.append(batch_hidden_state)
+        last_hidden_state = torch.cat(last_hidden_state, dim=0)
         return BaseModelOutput(last_hidden_state=last_hidden_state)
 
 
@@ -259,7 +268,8 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
             (
                 "image_hidden_states",
                 [
-                    rbln_batch_size * 30,  # batch_size * num_images
+                    # batch_size * num_patches (dependent on image size) -> compile with 1 and use for loop
+                    1,
                     (model_config.vision_config.image_size // model_config.vision_config.patch_size) ** 2,
                     model_config.vision_config.hidden_size,
                 ],
@@ -301,7 +311,7 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
         if cache_position is None:
             past_seen_tokens = 0
         else:
-            past_seen_tokens = generate_idx - 1
+            past_seen_tokens = cache_position.max().item() - 1
 
         if inputs_embeds is not None and input_ids is None and past_seen_tokens == 0:
             raise ValueError("When first calling the model, if input_embeds are passed, input_ids should not be None.")
@@ -348,7 +358,11 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
             ).last_hidden_state
 
             # Modality projection & resampling
-            image_hidden_states = self.connector(image_hidden_states)
+            # batch_size * num_patches (dependent on image size) -> compile with 1 and use for loop
+            connector_outputs = []
+            for i in range(image_hidden_states.shape[0]):
+                connector_outputs.append(self.connector(image_hidden_states[i : i + 1,]))
+            image_hidden_states = torch.cat(connector_outputs, dim=0)
 
         elif image_hidden_states is not None:
             image_hidden_states = image_hidden_states.to(dtype=self.dtype, device=input_ids.device)
