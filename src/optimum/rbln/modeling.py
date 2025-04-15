@@ -126,12 +126,12 @@ class RBLNModel(RBLNBaseModel):
             import json
 
             generation_config = model.generation_config
-            config_path = save_dir_path / subfolder / "generation_config.json"
+            generation_config_path = save_dir_path / subfolder / "generation_config.json"
 
-            generation_config.save_pretrained(config_path.parent)
-            config_local = json.loads(config_path.read_text(encoding="utf-8"))
-            config_local["transformers_version"] = generation_config.transformers_version
-            config_path.write_text(json.dumps(config_local, indent=2) + "\n", encoding="utf-8")
+            generation_config.save_pretrained(generation_config_path.parent)
+            local_config = json.loads(generation_config_path.read_text(encoding="utf-8"))
+            local_config["transformers_version"] = generation_config.transformers_version
+            generation_config_path.write_text(json.dumps(local_config, indent=2) + "\n", encoding="utf-8")
 
         if not isinstance(config, PretrainedConfig):  # diffusers config
             config = PretrainedConfig(**config)
