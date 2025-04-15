@@ -31,6 +31,7 @@ MIN_FLASH_ATTN_MAX_SEQ_LEN = 8_192
 MIN_FLASH_ATTN_PARTITION_LENGTH = 4_096
 MAX_FLASH_ATTN_PARTITION_LENGTH = 32_768
 
+
 # A proxy class that passes method calls to another object
 class ModelProxy:
     def __init__(self, obj):

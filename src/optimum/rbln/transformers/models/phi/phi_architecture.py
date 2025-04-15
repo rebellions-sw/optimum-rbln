@@ -47,7 +47,7 @@ class PhiWrapper(DecoderOnlyWrapper):
             new_layer = PhiLayer(layer, new_self_attn)
             new_layers.append(new_layer)
         new_model = PhiModel(causal_lm.model, new_layers)
-        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
+        new_causal_lm = DecoderOnlyForCausalLM(causal_lm=causal_lm, model=new_model)
         return new_causal_lm
 
 
