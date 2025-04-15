@@ -53,7 +53,7 @@ def main(
         prompts.append(prompt)
 
     inputs = processor(text=prompts, images=images, return_tensors="pt", padding=True)
-    inputs = {k: v for k, v in inputs.items()}
+    inputs = dict(inputs)
     # Generate
 
     generated_ids = model.generate(**inputs, max_new_tokens=500)

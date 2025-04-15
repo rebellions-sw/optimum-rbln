@@ -85,7 +85,7 @@ if TYPE_CHECKING:
     from .exaone import RBLNExaoneForCausalLM
     from .gemma import RBLNGemmaForCausalLM
     from .gpt2 import RBLNGPT2LMHeadModel
-    from .idefics3 import RBLNIdefics3VisionTransformer, RBLNIdefics3ForConditionalGeneration
+    from .idefics3 import RBLNIdefics3ForConditionalGeneration, RBLNIdefics3VisionTransformer
     from .llama import RBLNLlamaForCausalLM
     from .llava_next import RBLNLlavaNextForConditionalGeneration
     from .midm import RBLNMidmLMHeadModel
