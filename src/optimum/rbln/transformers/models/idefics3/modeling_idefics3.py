@@ -15,7 +15,7 @@
 import importlib
 import inspect
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 
 import rebel
 import torch
@@ -34,8 +34,8 @@ from transformers.modeling_outputs import BaseModelOutput
 from transformers.modeling_utils import no_init_weights
 from transformers.models.idefics3.modeling_idefics3 import Idefics3CausalLMOutputWithPast, Idefics3VisionEmbeddings
 
+from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
 from ..decoderonly.modeling_decoderonly import (
@@ -47,9 +47,6 @@ logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from transformers import (
-        AutoFeatureExtractor,
-        AutoProcessor,
-        AutoTokenizer,
         PretrainedConfig,
     )
 
@@ -134,7 +131,7 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
         model: "PreTrainedModel",
         save_dir_path: Path,
         subfolder: str,
-        rbln_config: RBLNConfig,
+        rbln_config: RBLNModelConfig,
     ):
         """
         If you are unavoidably running on a CPU rather than an RBLN device,
@@ -148,16 +145,16 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
         return self.embeddings
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
         return _Idefics3VisionTransformer(model).eval()
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
-        preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
-        model_config: "Idefics3VisionConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
+        model: Optional["PreTrainedModel"] = None,
+        model_config: Optional["PretrainedConfig"] = None,
+        rbln_config: Optional[RBLNModelConfig] = None,
+    ) -> RBLNModelConfig:
         input_info = [
             (
                 "hidden_states",
@@ -172,11 +169,7 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
         ]
 
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
-        rbln_config = RBLNConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[rbln_compile_config],
-            rbln_kwargs=rbln_kwargs,
-        )
+        rbln_config.set_compile_cfgs([rbln_compile_config])
         return rbln_config
 
     def forward(
@@ -254,16 +247,12 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
         return model.model.connector
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
-        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+        model: Optional["PreTrainedModel"] = None,
         model_config: Optional["PretrainedConfig"] = None,
-        rbln_kwargs={},
-    ) -> RBLNConfig:
-        rbln_batch_size = rbln_kwargs.get("batch_size", None)
-        if rbln_batch_size is None:
-            rbln_batch_size = 1
-
+        rbln_config: Optional[RBLNModelConfig] = None,
+    ) -> RBLNModelConfig:
         input_info = [
             (
                 "image_hidden_states",
@@ -278,11 +267,7 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
         ]
 
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
-        rbln_config = RBLNConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[rbln_compile_config],
-            rbln_kwargs=rbln_kwargs,
-        )
+        rbln_config.set_compile_cfgs([rbln_compile_config])
 
         return rbln_config
 
