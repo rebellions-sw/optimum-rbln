@@ -92,7 +92,10 @@ class TestSDImg2ImgModel(BaseTest.TestModel):
         "rbln_config": {
             "vae": {
                 "sample_size": (64, 64),
-            }
+            },
+            "unet": {
+                "batch_size": 2,
+            },
         },
         "rbln_img_width": 64,
         "rbln_img_height": 64,
@@ -168,12 +171,10 @@ class TestSD3Model(BaseTest.TestModel):
     }
     RBLN_CLASS_KWARGS = {
         "rbln_config": {
-            "text_encoder": {"device": 0},
-            "text_encoder_2": {"device": 0},
-            "text_encoder_3": {"device": -1},
-            "transformer": {"device": 0},
-            "vae": {"device": 0},
-        },
+            "transformer": {
+                "batch_size": 2,
+            }
+        }
     }
 
 
@@ -187,14 +188,9 @@ class TestSD3Img2ImgModel(BaseTest.TestModel):
         "image": torch.randn(1, 3, 64, 64, generator=torch.manual_seed(42)),
     }
     RBLN_CLASS_KWARGS = {
-        "rbln_img_width": 64,
-        "rbln_img_height": 64,
         "rbln_config": {
-            "text_encoder": {"device": 0},
-            "text_encoder_2": {"device": 0},
-            "text_encoder_3": {"device": -1},
-            "transformer": {"device": 0},
-            "vae": {"device": 0},
+            "image_size": (64, 64),
+            "transformer": {"batch_size": 2},
         },
     }
 
@@ -216,6 +212,14 @@ class TestSDMultiControlNetModel(BaseTest.TestModel):
     RBLN_CLASS_KWARGS = {
         "rbln_img_width": 64,
         "rbln_img_height": 64,
+        "rbln_config": {
+            "controlnet": {
+                "batch_size": 2,
+            },
+            "unet": {
+                "batch_size": 2,
+            },
+        },
     }
 
     @classmethod
@@ -238,6 +242,10 @@ class TestKandinskyV22Model(BaseTest.TestModel):
     RBLN_CLASS_KWARGS = {
         "rbln_img_width": 64,
         "rbln_img_height": 64,
+        "rbln_config": {
+            "prior_pipe": {"prior": {"batch_size": 2}},
+            "decoder_pipe": {"unet": {"batch_size": 2}},
+        },
     }
 
     def test_complicate_config(self):
@@ -254,15 +262,14 @@ class TestKandinskyV22Model(BaseTest.TestModel):
                 "batch_size": 2,
             },
             "batch_size": 1,
-            "prior_guidance_scale": 5.0,
-            "guidance_scale": 3.0,
         }
+        rbln_class_kwargs_copy = self.RBLN_CLASS_KWARGS.copy()
+        rbln_class_kwargs_copy["rbln_config"] = rbln_config
         with self.subTest():
             _ = self.RBLN_CLASS.from_pretrained(
                 model_id=self.HF_MODEL_ID,
                 export=True,
-                rbln_config=rbln_config,
-                **self.RBLN_CLASS_KWARGS,
+                **rbln_class_kwargs_copy,
             )
         with self.subTest():
             self.assertEqual(_.prior_text_encoder.rbln_config.batch_size, 2)
