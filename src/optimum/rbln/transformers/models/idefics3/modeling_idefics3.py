@@ -47,6 +47,9 @@ logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from transformers import (
+        AutoFeatureExtractor,
+        AutoProcessor,
+        AutoTokenizer,
         PretrainedConfig,
     )
 
@@ -151,6 +154,7 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
     @classmethod
     def _update_rbln_config(
         cls,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
         model: Optional["PreTrainedModel"] = None,
         model_config: Optional["PretrainedConfig"] = None,
         rbln_config: Optional[RBLNModelConfig] = None,
@@ -249,6 +253,7 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
     @classmethod
     def _update_rbln_config(
         cls,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
         model: Optional["PreTrainedModel"] = None,
         model_config: Optional["PretrainedConfig"] = None,
         rbln_config: Optional[RBLNModelConfig] = None,

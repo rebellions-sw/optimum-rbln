@@ -17,6 +17,10 @@ from typing import Optional
 from ....configuration_utils import RBLNModelConfig
 
 
+class RBLNIdefics3VisionTransformerConfig(RBLNModelConfig):
+    pass
+
+
 class RBLNIdefics3ForConditionalGenerationConfig(RBLNModelConfig):
     submodules = ["model.vision_model", "model.text_model"]
 

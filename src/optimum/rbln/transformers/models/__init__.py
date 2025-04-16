@@ -71,6 +71,7 @@ _import_structure = {
         "RBLNIdefics3VisionTransformer",
         "RBLNIdefics3ForConditionalGeneration",
         "RBLNIdefics3ForConditionalGenerationConfig",
+        "RBLNIdefics3VisionTransformerConfig",
     ],
     "llama": ["RBLNLlamaForCausalLM", "RBLNLlamaForCausalLMConfig"],
     "llava_next": ["RBLNLlavaNextForConditionalGeneration", "RBLNLlavaNextForConditionalGenerationConfig"],
@@ -147,6 +148,7 @@ if TYPE_CHECKING:
         RBLNIdefics3ForConditionalGeneration,
         RBLNIdefics3ForConditionalGenerationConfig,
         RBLNIdefics3VisionTransformer,
+        RBLNIdefics3VisionTransformerConfig,
     )
     from .llama import RBLNLlamaForCausalLM, RBLNLlamaForCausalLMConfig
     from .llava_next import RBLNLlavaNextForConditionalGeneration, RBLNLlavaNextForConditionalGenerationConfig

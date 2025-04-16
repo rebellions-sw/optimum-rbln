@@ -12,5 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .configuration_idefics3 import RBLNIdefics3ForConditionalGenerationConfig
+from .configuration_idefics3 import RBLNIdefics3ForConditionalGenerationConfig, RBLNIdefics3VisionTransformerConfig
 from .modeling_idefics3 import RBLNIdefics3ForConditionalGeneration, RBLNIdefics3VisionTransformer
