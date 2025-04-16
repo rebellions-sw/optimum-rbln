@@ -22,7 +22,7 @@ from ...modeling_diffusers import RBLNDiffusionMixin
 
 class RBLNCosmosPipeline(RBLNDiffusionMixin, CosmosPipeline):
     original_class = CosmosPipeline
-    _submodules = ["text_encoder", "tokenizer", "transformer", "vae", "safety_checker"]
+    _submodules = ["text_encoder", "transformer", "vae", "safety_checker"]
 
     def forward(self, *args, **kwargs):
         param_names = list(signature(super().forward).parameters.keys())
