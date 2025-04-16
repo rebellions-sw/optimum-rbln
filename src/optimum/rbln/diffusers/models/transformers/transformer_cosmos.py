@@ -242,7 +242,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         for timestep, e in zip(timesteps, emb):
             emb_dict[timestep.item()] = e.reshape(1, -1)
 
-        self.register_buffer("_emb_cached", emb_dict, persistent=False)
+        self._emb_cached = emb_dict
 
     def time_embed_table(self, timestep):
         emb = self._emb_cached[timestep[0].item()]
