@@ -29,7 +29,7 @@ from ...modeling_diffusers import RBLNDiffusionMixin
 
 if TYPE_CHECKING:
     import torch
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig, PreTrainedModel
 
 
 class CosmosTransformer3DModelWrapper(torch.nn.Module):
@@ -298,7 +298,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
     @classmethod
     def save_torch_artifacts(
         cls,
-        model: "PretrainedModel",
+        model: "PreTrainedModel",
         save_dir_path: Path,
         subfolder: str,
         rbln_config: RBLNConfig,
