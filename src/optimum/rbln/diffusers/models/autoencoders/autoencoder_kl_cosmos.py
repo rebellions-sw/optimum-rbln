@@ -94,8 +94,8 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
     @classmethod
     def _get_rbln_config(
         cls,
-        preprocessors: Union[AutoFeatureExtractor, AutoProcessor, AutoTokenizer],
-        model_config: PretrainedConfig,
+        preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
+        model_config: "PretrainedConfig",
         rbln_kwargs: Dict[str, Any] = {},
     ) -> RBLNConfig:
         rbln_batch_size = rbln_kwargs.get("batch_size")
