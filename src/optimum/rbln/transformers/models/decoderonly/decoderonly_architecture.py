@@ -32,15 +32,6 @@ MIN_FLASH_ATTN_PARTITION_LENGTH = 4_096
 MAX_FLASH_ATTN_PARTITION_LENGTH = 32_768
 
 
-# A proxy class that passes method calls to another object
-class ModelProxy:
-    def __init__(self, obj):
-        self._obj = obj
-
-    def __getattr__(self, name):
-        return getattr(self._obj, name)
-
-
 def set_default_values(
     attn_impl: Optional[str] = None,
     kvcache_partition_len: Optional[int] = None,
@@ -182,9 +173,6 @@ class DecoderOnlyWrapper(nn.Module):
                 f"kvcache_partition_len({kvcache_partition_len}) should be lower"
                 f" or equal to max_seq_len({max_seq_len})!"
             )
-
-        if not hasattr(causal_lm, "model"):
-            causal_lm.model = ModelProxy(causal_lm)
 
         self.causal_lm = self.convert_to_rbln_causal_lm(causal_lm, max_seq_len)
 
