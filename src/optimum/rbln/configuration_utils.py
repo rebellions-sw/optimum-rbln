@@ -91,7 +91,7 @@ class RBLNCompileConfig:
                 for item in input_info
             )
 
-        if isinstance(self.input_info, list) and len(self.input_info) > 1:
+        if isinstance(self.input_info, list):
             return all(is_valid_input_info(info) for info in self.input_info)
         return False
 
