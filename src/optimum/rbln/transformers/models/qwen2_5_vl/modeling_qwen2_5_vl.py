@@ -59,7 +59,7 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
 
     def __post_init__(self, **kwargs):
         self.transformer = self.model[0]
-        self.max_seq_lens = torch.tensor(self.rbln_config.max_seq_lens)
+        self.max_seq_lens = torch.tensor(sorted(self.rbln_config.max_seq_lens, reverse=False))
         config = self.config
         self.window_size = config.window_size
         self.patch_size = config.spatial_patch_size
