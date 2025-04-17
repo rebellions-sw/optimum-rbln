@@ -91,7 +91,6 @@ _import_structure = {
         "RBLNTimeSeriesTransformerForPrediction",
         "RBLNTimeSeriesTransformerForPredictionConfig",
         "RBLNLlavaNextForConditionalGeneration",
-        "RBLNMidmLMHeadModel",
         "RBLNXLMRobertaModel",
         "RBLNXLMRobertaModelConfig",
     ],
