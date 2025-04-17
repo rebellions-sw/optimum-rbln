@@ -42,9 +42,9 @@ if TYPE_CHECKING:
     )
     from .controlnet import RBLNControlNetModel
     from .transformers import (
+        RBLNCosmosTransformer3DModel,
         RBLNPriorTransformer,
         RBLNSD3Transformer2DModel,
-        RBLNCosmosTransformer3DModel,
     )
     from .unets import (
         RBLNUNet2DConditionModel,
