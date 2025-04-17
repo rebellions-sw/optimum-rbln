@@ -15,7 +15,7 @@
 import importlib
 import inspect
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 
 import rebel
 import torch
@@ -54,7 +54,7 @@ if TYPE_CHECKING:
     )
 
 
-class RBLNRuntimeEmbeddings(RBLNPytorchRuntime):
+class RBLNRuntimeVisionModel(RBLNPytorchRuntime):
     mandatory_members = ["main_input_name"]
 
     def __init__(
@@ -65,13 +65,7 @@ class RBLNRuntimeEmbeddings(RBLNPytorchRuntime):
     ) -> None:
         super().__init__(runtime, **kwargs)
         self.patch_size = config.patch_size
-        self.embed_dim = config.hidden_size
-        self.image_size = config.image_size
-        self.patch_size = config.patch_size
-        
-        self.num_patches_per_side = self.image_size // self.patch_size
-        self.num_patches = self.num_patches_per_side**2
-        self.num_positions = self.num_patches
+        self._use_flash_attention_2 = config._attn_implementation == "flash_attention_2"
 
     def forward(
         self,
@@ -94,67 +88,18 @@ class RBLNRuntimeEmbeddings(RBLNPytorchRuntime):
             )
             patch_attention_mask = patch_attention_mask.to(dtype=torch.bool, device=pixel_values.device)
 
-        batch_size, _, max_im_h, max_im_w = pixel_values.shape
-        patch_embeds = super().forward(pixel_values=pixel_values)
-        embeddings = patch_embeds.flatten(2).transpose(1, 2)
+        hidden_states = self.embeddings(pixel_values=pixel_values, patch_attention_mask=patch_attention_mask)
+        patch_attention_mask = patch_attention_mask.view(batch_size, -1)
 
-        max_nb_patches_h, max_nb_patches_w = max_im_h // self.patch_size, max_im_w // self.patch_size
-        boundaries = torch.arange(1 / self.num_patches_per_side, 1.0, 1 / self.num_patches_per_side)
-        position_ids = torch.full(size=(batch_size, max_nb_patches_h * max_nb_patches_w), fill_value=0)
+        if not torch.any(~patch_attention_mask):
+            patch_attention_mask = None
+        elif not self._use_flash_attention_2:
+            patch_attention_mask = _prepare_4d_attention_mask(patch_attention_mask, hidden_states.dtype)
 
-        for batch_idx, p_attn_mask in enumerate(patch_attention_mask):
-            nb_patches_h = p_attn_mask[:, 0].sum()
-            nb_patches_w = p_attn_mask[0].sum()
-
-            fractional_coords_h = torch.arange(0, 1 - 1e-6, 1 / nb_patches_h)
-            fractional_coords_w = torch.arange(0, 1 - 1e-6, 1 / nb_patches_w)
-
-            bucket_coords_h = torch.bucketize(fractional_coords_h, boundaries, right=True)
-            bucket_coords_w = torch.bucketize(fractional_coords_w, boundaries, right=True)
-
-            pos_ids = (bucket_coords_h[:, None] * self.num_patches_per_side + bucket_coords_w).flatten()
-            position_ids[batch_idx][p_attn_mask.view(-1).cpu()] = pos_ids
-
-        position_ids = position_ids.to(self.position_embedding.weight.device)
-        embeddings = embeddings + self.position_embedding(position_ids)
-
-        return embeddings
+        return super().forward(hidden_states.contiguous())
 
 
-class RBLNRuntimeEncoder(RBLNPytorchRuntime):
-    mandatory_members = ["main_input_name"]
-
-    def __init__(
-        self,
-        runtime: rebel.Runtime,
-        config: Idefics3VisionConfig,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(runtime, **kwargs)
-
-    def forward(
-        self,
-        inputs_embeds,
-        attention_mask: Optional[torch.Tensor] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
-        **kwargs,
-    ):
-        return super().forward(inputs_embeds.contiguous())
-
-
-class _Idefics3VisionEmbeddings(torch.nn.Module):
-    def __init__(self, model: "Idefics3VisionEmbeddings"):
-        super().__init__()
-        self.patch_embedding = model.patch_embedding
-
-    def forward(self, pixel_values: torch.FloatTensor) -> torch.Tensor:
-        patch_embeds = self.patch_embedding(pixel_values)
-        return patch_embeds
-
-
-class _Idefics3Encoder(torch.nn.Module):
+class _Idefics3VisionTransformer(torch.nn.Module):
     def __init__(self, model: "Idefics3VisionTransformer"):
         super().__init__()
         self.encoder = model.encoder
@@ -177,15 +122,11 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
     def __post_init__(self, **kwargs):
         artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
         with no_init_weights():
-            self.position_embedding = Idefics3VisionEmbeddings(self.config).position_embedding
-        self.position_embedding.load_state_dict(artifacts["position_embedding"])
-        # self.model = RBLNRuntimeVisionModel(
-        #     self.model[0], main_input_name="pixel_values", config=self.config, embeddings=self.embeddings
-        # )
-        self._use_flash_attention_2 = self.config._attn_implementation == "flash_attention_2"
-        self.embeddings = RBLNRuntimeEmbeddings(runtime=self.model[0], main_input_name="pixel_values", config=self.config, position_embedding=self.position_embedding)
-        self.encoder = RBLNRuntimeEncoder(runtime=self.model[-1], main_input_name="pixel_values", config=self.config)
-        self.patch_size = self.config.patch_size
+            self.embeddings = Idefics3VisionEmbeddings(self.config)
+        self.embeddings.load_state_dict(artifacts["embeddings"])
+        self.model = RBLNRuntimeVisionModel(
+            self.model[0], main_input_name="pixel_values", config=self.config, embeddings=self.embeddings
+        )
 
     @classmethod
     def save_torch_artifacts(
@@ -200,21 +141,15 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
         store the torch tensor, weight, etc. in this function.
         """
         save_dict = {}
-        save_dict["position_embedding"] = model.get_input_embeddings().position_embedding.state_dict()
+        save_dict["embeddings"] = model.get_input_embeddings().state_dict()
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
     def get_input_embeddings(self):
         return self.embeddings
 
     @classmethod
-    def get_compiled_model(cls, model, rbln_config: RBLNModelConfig) -> Dict[str, rebel.RBLNCompiledModel]:
-        compiled_models = {}
-        embeddings_wrapped_model = _Idefics3VisionEmbeddings(model.embeddings).eval()
-        encoder_wrapped_model = _Idefics3Encoder(model).eval()
-        compiled_models["embeddings"] = cls.compile(embeddings_wrapped_model, rbln_compile_config=rbln_config.compile_cfgs[0])
-        compiled_models["encoder"] = cls.compile(encoder_wrapped_model, rbln_compile_config=rbln_config.compile_cfgs[1])
-
-        return compiled_models
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
+        return _Idefics3VisionTransformer(model).eval()
 
     @classmethod
     def _update_rbln_config(
@@ -224,31 +159,7 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
         model_config: Optional["PretrainedConfig"] = None,
         rbln_config: Optional[RBLNModelConfig] = None,
     ) -> RBLNModelConfig:
-        
-        compile_cfgs = []
-        embeddings_input_info = [
-            (
-                "pixel_values",
-                [
-                    1,
-                    model_config.num_channels,
-                    model_config.image_size,
-                    model_config.image_size,
-                ],
-                "float32",
-            ),
-            # (
-            #     "patch_attention_mask",
-            #     [
-            #         1,
-            #         model_config.image_size // model_config.patch_size,
-            #         model_config.image_size // model_config.patch_size
-            #     ],
-            #     "bool"
-            # )
-        ]
-        
-        encoder_input_info = [
+        input_info = [
             (
                 "hidden_states",
                 [
@@ -260,33 +171,10 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
                 "float32",
             ),
         ]
-        compile_cfgs.append(RBLNCompileConfig(compiled_model_name="embeddings", input_info=embeddings_input_info))
-        compile_cfgs.append(RBLNCompileConfig(compiled_model_name="encoder", input_info=encoder_input_info))
-        rbln_config.set_compile_cfgs(compile_cfgs)
+
+        rbln_compile_config = RBLNCompileConfig(input_info=input_info)
+        rbln_config.set_compile_cfgs([rbln_compile_config])
         return rbln_config
-    
-    @classmethod
-    def _create_runtimes(
-        cls,
-        compiled_models: List[rebel.RBLNCompiledModel],
-        rbln_config: RBLNCompileConfig,
-    ) -> List[rebel.Runtime]:
-        expected_models = ["embeddings", "encoder"]
-
-        if any(model_name not in rbln_config.device_map for model_name in expected_models):
-            cls._raise_missing_compiled_file_error(expected_models)
-
-        device_vals = [rbln_config.device_map[model_name] for model_name in expected_models]
-        return [
-            rebel.Runtime(
-                compiled_model,
-                tensor_type="pt",
-                device=device_val,
-                activate_profiler=rbln_config.activate_profiler,
-            )
-            for compiled_model, device_val in zip(compiled_models, device_vals)
-        ]
-    
 
     def forward(
         self,
@@ -296,46 +184,23 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple, BaseModelOutput]:
-        
         batch_size = pixel_values.shape[0]
-        if patch_attention_mask is None:
-            patch_size = self.patch_size
-            patch_attention_mask = torch.ones(
-                (
-                    batch_size,
-                    pixel_values.size(2) // patch_size,
-                    pixel_values.size(3) // patch_size,
-                )
-            )
-            patch_attention_mask = patch_attention_mask.to(dtype=torch.bool, device=pixel_values.device)
-        
-        hidden_states = []
+        last_hidden_state = []
         for i in range(batch_size):
             if patch_attention_mask is not None:
                 batch_attention_mask = patch_attention_mask[i : i + 1,]
             else:
                 batch_attention_mask = None
-            
-            batch_hidden_states = self.embeddings(
+
+            batch_hidden_state = self.model(
                 pixel_values[i : i + 1,],
                 batch_attention_mask,
+                output_attentions,
+                output_hidden_states,
+                return_dict=False,
             )
-            hidden_states.append(batch_hidden_states)
-        hidden_states = torch.cat(hidden_states, dim=0)
-        
-        if not torch.any(~patch_attention_mask):
-            patch_attention_mask = None
-        elif not self._use_flash_attention_2:
-            patch_attention_mask = _prepare_4d_attention_mask(patch_attention_mask, hidden_states.dtype)
-        
-        last_hidden_state = []
-        for i in range(batch_size):
-            batch_encoder_output = self.encoder(
-                hidden_states[i:i+1,]
-            )
-            last_hidden_state.append(batch_encoder_output)
+            last_hidden_state.append(batch_hidden_state)
         last_hidden_state = torch.cat(last_hidden_state, dim=0)
-        
         return BaseModelOutput(last_hidden_state=last_hidden_state)
 
 
