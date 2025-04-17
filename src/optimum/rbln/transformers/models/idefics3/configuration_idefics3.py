@@ -22,7 +22,7 @@ class RBLNIdefics3VisionTransformerConfig(RBLNModelConfig):
 
 
 class RBLNIdefics3ForConditionalGenerationConfig(RBLNModelConfig):
-    submodules = ["model.vision_model", "model.text_model"]
+    submodules = ["vision_model", "text_model"]
 
     def __init__(
         self,
@@ -41,6 +41,7 @@ class RBLNIdefics3ForConditionalGenerationConfig(RBLNModelConfig):
         Raises:
             ValueError: If batch_size is not a positive integer.
         """
+
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
         if not isinstance(self.batch_size, int) or self.batch_size < 0:

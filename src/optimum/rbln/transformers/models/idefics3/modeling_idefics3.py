@@ -206,7 +206,7 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
 
 class RBLNIdefics3ForConditionalGeneration(RBLNModel):
     auto_model_class = AutoModelForVision2Seq
-    _rbln_submodules = [{"name": "model.vision_model"}, {"name": "model.text_model"}]
+    _rbln_submodules = [{"name": "vision_model"}, {"name": "text_model"}, {"prefix": "model"}]
 
     def __getattr__(self, __name: str) -> Any:
         def redirect(func):

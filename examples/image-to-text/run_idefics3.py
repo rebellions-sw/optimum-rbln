@@ -23,7 +23,7 @@ def main(
             model_id,
             export=True,
             rbln_config={
-                "model.text_model": {
+                "text_model": {
                     "attn_impl": "flash_attn",
                     "max_seq_len": max_seq_len,
                     "use_inputs_embeds": True,
