@@ -60,6 +60,9 @@ class SD3Transformer2DModelWrapper(torch.nn.Module):
 
 class RBLNSD3Transformer2DModel(RBLNModel):
     hf_library_name = "diffusers"
+    auto_model_class = SD3Transformer2DModel
+    output_class = Transformer2DModelOutput
+    output_key = "hidden_states"
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
@@ -161,5 +164,6 @@ class RBLNSD3Transformer2DModel(RBLNModel):
                 "For details, see: https://docs.rbln.ai/software/optimum/model_api.html#stable-diffusion"
             )
 
-        sample = super().forward(hidden_states, encoder_hidden_states, pooled_projections, timestep)
-        return Transformer2DModelOutput(sample=sample)
+        return super().forward(
+            hidden_states, encoder_hidden_states, pooled_projections, timestep, return_dict=return_dict
+        )

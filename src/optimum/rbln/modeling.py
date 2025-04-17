@@ -237,7 +237,10 @@ class RBLNModel(RBLNBaseModel):
         ]
 
     def forward(self, *args, return_dict: Optional[bool] = None, **kwargs):
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        if self.hf_library_name == "transformers":
+            return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        else:
+            return_dict = True if return_dict is None else return_dict
 
         # Get output from the model
         output = self.model[0](*args, **kwargs)
