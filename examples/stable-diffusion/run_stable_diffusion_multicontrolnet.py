@@ -58,14 +58,6 @@ def main(
             controlnet=controlnets,
             rbln_img_width=512,
             rbln_img_height=512,
-            rbln_config={
-                "unet": {
-                    "batch_size": 2,
-                },
-                "controlnet": {
-                    "batch_size": 2,
-                },
-            },
             export=True,
             scheduler=UniPCMultistepScheduler.from_pretrained(diffusion_model_id, subfolder="scheduler"),
         )
