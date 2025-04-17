@@ -84,10 +84,6 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
         subfolder: str,
         rbln_config: RBLNQwen2_5_VisionTransformerPretrainedModelConfig,
     ):
-        """
-        If you are unavoidably running on a CPU rather than an RBLN device,
-        store the torch tensor, weight, etc. in this function.
-        """
         save_dict = {}
         save_dict["patch_embed"] = model.patch_embed.state_dict()
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
