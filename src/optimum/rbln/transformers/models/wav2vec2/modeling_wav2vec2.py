@@ -46,11 +46,9 @@ class RBLNWav2Vec2ForCTC(RBLNModelForMaskedLM):
     main_input_name = "input_values"
     auto_model_class = AutoModelForMaskedLM
     rbln_dtype = "float32"
+    output_class = CausalLMOutput
+    output_key = "logits"
 
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNWav2Vec2ForCTCConfig) -> torch.nn.Module:
         return _Wav2Vec2(model).eval()
-
-    def forward(self, input_values: "torch.Tensor", **kwargs):
-        outputs = super().forward(input_values, **kwargs)
-        return CausalLMOutput(logits=outputs)
