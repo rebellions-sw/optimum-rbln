@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import torch
 from diffusers.models.transformers.prior_transformer import PriorTransformer, PriorTransformerOutput
@@ -116,3 +116,22 @@ class RBLNPriorTransformer(RBLNModel):
     def post_process_latents(self, prior_latents):
         prior_latents = (prior_latents * self.clip_std) + self.clip_mean
         return prior_latents
+
+    def forward(
+        self,
+        hidden_states,
+        timestep: Union[torch.Tensor, float, int],
+        proj_embedding: torch.Tensor,
+        encoder_hidden_states: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        return_dict: bool = True,
+    ):
+        # Convert timestep(long) and attention_mask(bool) to float
+        return super().forward(
+            hidden_states,
+            timestep.float(),
+            proj_embedding,
+            encoder_hidden_states,
+            attention_mask.float(),
+            return_dict=return_dict,
+        )

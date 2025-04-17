@@ -227,31 +227,32 @@ class RBLNControlNetModel(RBLNModel):
 
         added_cond_kwargs = {} if added_cond_kwargs is None else added_cond_kwargs
         if self.use_encoder_hidden_states:
-            output = super().forward(
+            output = self.model[0](
                 sample.contiguous(),
                 timestep.float(),
                 encoder_hidden_states,
                 controlnet_cond,
                 torch.tensor(conditioning_scale),
                 **added_cond_kwargs,
-                return_dict=return_dict,
             )
         else:
-            output = super().forward(
+            output = self.model[0](
                 sample.contiguous(),
                 timestep.float(),
                 controlnet_cond,
                 torch.tensor(conditioning_scale),
                 **added_cond_kwargs,
-                return_dict=return_dict,
             )
 
+        down_block_res_samples = output[:-1]
+        mid_block_res_sample = output[-1]
+        output = (down_block_res_samples, mid_block_res_sample)
         output = self._prepare_output(output, return_dict)
         return output
 
     def _prepare_output(self, output, return_dict):
         if not return_dict:
-            return (output,) if not isinstance(output, tuple) else output
+            return (output,) if not isinstance(output, (tuple, list)) else output
         else:
             return ControlNetOutput(
                 down_block_res_samples=output[:-1],

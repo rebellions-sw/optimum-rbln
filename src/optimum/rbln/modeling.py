@@ -254,7 +254,7 @@ class RBLNModel(RBLNBaseModel):
         This method can be overridden by subclasses to provide task-specific output handling.
         """
         if not return_dict:
-            return (output,) if not isinstance(output, tuple) else output
+            return (output,) if not isinstance(output, (tuple, list)) else output
         else:
             if self.output_class is None:
                 return BaseModelOutput(last_hidden_state=output)

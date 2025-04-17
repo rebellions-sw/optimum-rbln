@@ -86,7 +86,7 @@ class RBLNCLIPTextModel(RBLNModel):
         This method can be overridden by subclasses to provide task-specific output handling.
         """
         if not return_dict:
-            return (output,) if not isinstance(output, tuple) else output
+            return (output,) if not isinstance(output, (tuple, list)) else output
         else:
             return CLIPTextModelOutput(
                 text_embeds=output[0],
@@ -173,7 +173,7 @@ class RBLNCLIPVisionModel(RBLNModel):
         This method can be overridden by subclasses to provide task-specific output handling.
         """
         if not return_dict:
-            return (output,) if not isinstance(output, tuple) else output
+            return (output,) if not isinstance(output, (tuple, list)) else output
         else:
             return CLIPVisionModelOutput(
                 image_embeds=output[0],
