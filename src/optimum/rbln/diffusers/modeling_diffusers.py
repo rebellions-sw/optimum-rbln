@@ -85,6 +85,10 @@ class RBLNDiffusionMixin:
     def is_inpaint_pipeline(cls):
         return "Inpaint" in cls.__name__
 
+    @classmethod
+    def is_video_pipeline(cls):
+        return "Video" in cls.__name__
+
     @staticmethod
     def _maybe_apply_and_fuse_lora(
         model: torch.nn.Module,
