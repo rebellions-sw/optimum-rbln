@@ -411,6 +411,10 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
     def to(self, *args, **kwargs):
         return self
+    
+    def parameters(self):
+        for param in [torch.tensor([1.], dtype=torch.float32, device=torch.device("cpu"))]:
+            yield param
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
