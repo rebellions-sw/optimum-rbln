@@ -355,16 +355,6 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config)
         self.rope_deltas = None
 
-    def __getattr__(self, __name: str) -> Any:
-        def redirect(func):
-            return lambda *pargs, **kwargs: func(self, *pargs, **kwargs)
-
-        val = getattr(Qwen2_5_VLForConditionalGeneration, __name)
-
-        if isinstance(val, Callable) and "self" in set(inspect.signature(val).parameters):
-            return redirect(val)
-        return val
-
     def can_generate(self):
         return True
 
@@ -378,25 +368,8 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         return super().update_kwargs(kwargs)
 
     @classmethod
-    def save_torch_artifacts(
-        cls,
-        model: "Qwen2_5_VLForConditionalGeneration",
-        save_dir_path: Path,
-        subfolder: str,
-        rbln_config: RBLNQwen2_5_VLForConditionalGenerationConfig,
-    ):
-        """
-        If you are unavoidably running on a CPU rather than an RBLN device,
-        store the torch tensor, weight, etc. in this function.
-        """
-        save_dict = {}
-        save_dict["embed_tokens"] = model.model.embed_tokens.state_dict()
-
-        torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
-
-    @classmethod
     def wrap_model_if_needed(
-        cls, model: "PreTrainedModel", rbln_config: "RBLNQwen2_5_VLForConditionalGenerationConfig"
+        cls, model: "Qwen2_5_VLForConditionalGeneration", rbln_config: "RBLNQwen2_5_VLForConditionalGenerationConfig"
     ):
         wrapper_cfg = {
             "max_seq_len": rbln_config.max_seq_len,
@@ -407,10 +380,11 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             "use_attention_mask": rbln_config.use_attention_mask,
         }
 
-        return cls._decoder_wrapper_cls(model, lm_head=model.lm_head, **wrapper_cfg).eval()
+        return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
 
-    @staticmethod
+    @classmethod
     def get_input_info(
+        cls,
         batch_size: int,
         query_length: int,
         use_inputs_embeds: bool,
@@ -420,64 +394,24 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         kvcache_num_blocks: int,
         model_config: PretrainedConfig,
     ):
+        input_info = super().get_input_info(
+            batch_size,
+            query_length,
+            use_inputs_embeds,
+            use_attention_mask,
+            max_seq_len,
+            kvcache_block_size,
+            kvcache_num_blocks,
+            model_config,
+        )
+
         num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
-        num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
-        num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
         hidden_size = getattr(model_config, "n_embd", None) or getattr(model_config, "hidden_size")
         head_dim = getattr(model_config, "head_dim", None) or hidden_size // num_attention_heads
 
-        if use_inputs_embeds:
-            main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
-        else:
-            main_input = ("input_ids", [batch_size, query_length], "int64")
-
-        input_info = [
-            main_input,
-            (
-                "cache_position",
-                [batch_size, query_length],
-                "int32",
-            ),
-        ]
-
-        if use_attention_mask:
-            input_info.extend(
-                [
-                    ("attention_mask", [batch_size, 1, query_length, max_seq_len], "float32"),
-                ]
-            )
-
-        if query_length > 1:
-            input_info.extend(
-                [
-                    ("query_position", [], "int16"),
-                ]
-            )
-
-        max_block_cnt = max_seq_len // kvcache_block_size
-
-        if query_length > 1:
-            input_info.extend([("block_tables", [max_block_cnt], "int16")])
-        else:
-            input_info.extend([("block_tables", [batch_size, max_block_cnt], "int16")])
-
-        input_info.extend([("position_emb", [2, batch_size, 1, query_length, head_dim], "float32")])
-
-        input_info.extend(
-            [
-                (
-                    f"past_key_values_{i}",
-                    [
-                        kvcache_num_blocks,
-                        num_key_value_heads,
-                        kvcache_block_size,
-                        head_dim,
-                    ],
-                    "float32",
-                )
-                for i in range(num_hidden_layers * 2)
-            ]
-        )
+        pos_idx = 5 if query_length > 1 else 4
+        pos_idx = pos_idx if use_attention_mask else pos_idx - 1
+        input_info.insert(pos_idx, ("position_emb", [2, batch_size, 1, query_length, head_dim], "float32"))
 
         return input_info
 
@@ -657,6 +591,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 second_per_grid_ts,
             )
             batch_size = inputs_embeds.shape[0]
+
             logits = []
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)

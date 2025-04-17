@@ -664,8 +664,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
         return max_n_blocks
 
-    @staticmethod
+    @classmethod
     def get_input_info(
+        cls,
         batch_size: int,
         query_length: int,
         use_inputs_embeds: bool,
