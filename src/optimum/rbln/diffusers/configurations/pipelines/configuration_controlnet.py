@@ -96,6 +96,7 @@ class _RBLNStableDiffusionControlNetPipelineBaseConfig(RBLNModelConfig):
             do_classifier_free_guidance = guidance_scale > 1.0
             if do_classifier_free_guidance:
                 self.unet.batch_size = self.text_encoder.batch_size * 2
+                self.controlnet.batch_size = self.text_encoder.batch_size * 2
 
     @property
     def batch_size(self):
@@ -114,7 +115,7 @@ class RBLNStableDiffusionControlNetPipelineConfig(_RBLNStableDiffusionControlNet
     _vae_uses_encoder = False
 
 
-class RBLNStableDiffusionImg2ImgControlNetPipelineConfig(_RBLNStableDiffusionControlNetPipelineBaseConfig):
+class RBLNStableDiffusionControlNetImg2ImgPipelineConfig(_RBLNStableDiffusionControlNetPipelineBaseConfig):
     _vae_uses_encoder = True
 
 
@@ -197,6 +198,7 @@ class _RBLNStableDiffusionXLControlNetPipelineBaseConfig(RBLNModelConfig):
             do_classifier_free_guidance = guidance_scale > 1.0
             if do_classifier_free_guidance:
                 self.unet.batch_size = self.text_encoder.batch_size * 2
+                self.controlnet.batch_size = self.text_encoder.batch_size * 2
 
     @property
     def batch_size(self):
@@ -215,5 +217,5 @@ class RBLNStableDiffusionXLControlNetPipelineConfig(_RBLNStableDiffusionXLContro
     _vae_uses_encoder = False
 
 
-class RBLNStableDiffusionXLImg2ImgControlNetPipelineConfig(_RBLNStableDiffusionXLControlNetPipelineBaseConfig):
+class RBLNStableDiffusionXLControlNetImg2ImgPipelineConfig(_RBLNStableDiffusionXLControlNetPipelineBaseConfig):
     _vae_uses_encoder = True

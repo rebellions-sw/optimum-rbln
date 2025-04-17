@@ -1,8 +1,8 @@
 from .configuration_controlnet import (
+    RBLNStableDiffusionControlNetImg2ImgPipelineConfig,
     RBLNStableDiffusionControlNetPipelineConfig,
-    RBLNStableDiffusionImg2ImgControlNetPipelineConfig,
+    RBLNStableDiffusionXLControlNetImg2ImgPipelineConfig,
     RBLNStableDiffusionXLControlNetPipelineConfig,
-    RBLNStableDiffusionXLImg2ImgControlNetPipelineConfig,
 )
 from .configuration_kandinsky2_2 import (
     RBLNKandinskyV22CombinedPipelineConfig,
