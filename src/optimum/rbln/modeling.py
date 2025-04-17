@@ -234,4 +234,5 @@ class RBLNModel(RBLNBaseModel):
 
     def forward(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
         output = self.model[0](*args, **kwargs)
-        return output
+        return (output,)
+
