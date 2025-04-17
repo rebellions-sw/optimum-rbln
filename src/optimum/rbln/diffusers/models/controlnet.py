@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Dict, Optional, Union
 
 import torch
 from diffusers import ControlNetModel
+from diffusers.models.controlnet import ControlNetOutput
 from transformers import PretrainedConfig
 
 from ...configuration_utils import RBLNCompileConfig, RBLNModelConfig
@@ -99,6 +100,7 @@ class _ControlNetModel_Cross_Attention(torch.nn.Module):
 class RBLNControlNetModel(RBLNModel):
     hf_library_name = "diffusers"
     auto_model_class = ControlNetModel
+    output_class = ControlNetOutput
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
@@ -208,6 +210,7 @@ class RBLNControlNetModel(RBLNModel):
         controlnet_cond: torch.FloatTensor,
         conditioning_scale: torch.Tensor = 1.0,
         added_cond_kwargs: Dict[str, torch.Tensor] = {},
+        return_dict: bool = True,
         **kwargs,
     ):
         sample_batch_size = sample.size()[0]
@@ -231,6 +234,7 @@ class RBLNControlNetModel(RBLNModel):
                 controlnet_cond,
                 torch.tensor(conditioning_scale),
                 **added_cond_kwargs,
+                return_dict=return_dict,
             )
         else:
             output = super().forward(
@@ -239,8 +243,17 @@ class RBLNControlNetModel(RBLNModel):
                 controlnet_cond,
                 torch.tensor(conditioning_scale),
                 **added_cond_kwargs,
+                return_dict=return_dict,
             )
-        down_block_res_samples = output[:-1]
-        mid_block_res_sample = output[-1]
 
-        return down_block_res_samples, mid_block_res_sample
+        output = self._prepare_output(output, return_dict)
+        return output
+
+    def _prepare_output(self, output, return_dict):
+        if not return_dict:
+            return (output,) if not isinstance(output, tuple) else output
+        else:
+            return ControlNetOutput(
+                down_block_res_samples=output[:-1],
+                mid_block_res_sample=output[-1],
+            )
