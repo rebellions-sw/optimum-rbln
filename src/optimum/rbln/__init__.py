@@ -120,9 +120,11 @@ _import_structure = {
     "diffusers": [
         "RBLNAutoencoderKL",
         "RBLNAutoencoderKLConfig",
+        "RBLNAutoencoderKLCosmos",
         "RBLNControlNetModel",
         "RBLNControlNetModelConfig",
         "RBLNDiffusionMixin",
+        "RBLNCosmosPipeline",
         "RBLNKandinskyV22CombinedPipeline",
         "RBLNKandinskyV22CombinedPipelineConfig",
         "RBLNKandinskyV22Img2ImgCombinedPipeline",
@@ -183,9 +185,11 @@ if TYPE_CHECKING:
     from .diffusers import (
         RBLNAutoencoderKL,
         RBLNAutoencoderKLConfig,
+        RBLNAutoencoderKLCosmos,
         RBLNControlNetModel,
         RBLNControlNetModelConfig,
         RBLNDiffusionMixin,
+        RBLNCosmosPipeline,
         RBLNKandinskyV22CombinedPipeline,
         RBLNKandinskyV22CombinedPipelineConfig,
         RBLNKandinskyV22Img2ImgCombinedPipeline,
