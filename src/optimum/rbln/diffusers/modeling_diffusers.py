@@ -69,6 +69,7 @@ class RBLNDiffusionMixin:
     _connected_classes = {}
     _submodules = []
     _prefix = {}
+    _optional_components=[]
 
     @classmethod
     def is_img2img_pipeline(cls):
@@ -328,17 +329,26 @@ class RBLNDiffusionMixin:
                     controlnet_rbln_config=submodule_rbln_config,
                     prefix=prefix,
                 )
-            elif isinstance(submodule, torch.nn.Module):
-                submodule_cls: RBLNModel = getattr(
+            elif isinstance(submodule, torch.nn.Module): # for pretrainedmodel
+                submodule_cls: torch.nn.Module = getattr(
                     importlib.import_module("optimum.rbln"), f"RBLN{submodule.__class__.__name__}"
                 )
-                subfolder = prefix + submodule_name
-                submodule = submodule_cls.from_model(
-                    model=submodule,
-                    subfolder=subfolder,
-                    model_save_dir=model_save_dir,
-                    rbln_config=submodule_rbln_config,
-                )
+                if submodule_name in cls._optional_components:
+                    subfolder = prefix + submodule_name
+                    submodule = cls._compile_submodules(
+                        model=submodule,
+                        subfolder=subfolder,
+                        model_save_dir=model_save_dir,
+                        rbln_config=submodule_rbln_config,
+                    )
+                else:
+                    subfolder = prefix + submodule_name
+                    submodule = submodule_cls.from_model(
+                        model=submodule,
+                        subfolder=subfolder,
+                        model_save_dir=model_save_dir,
+                        rbln_config=submodule_rbln_config,
+                    )
             else:
                 raise ValueError(f"Unknown class of submodule({submodule_name}) : {submodule.__class__.__name__} ")
 

@@ -49,6 +49,9 @@ _import_structure = {
         "RBLNStableDiffusion3Img2ImgPipeline",
         "RBLNStableDiffusion3InpaintPipeline",
     ],
+    "cosmos": [
+        "RBLNCosmosPipeline",
+    ]
 }
 if TYPE_CHECKING:
     from .controlnet import (
@@ -82,6 +85,7 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLInpaintPipeline,
         RBLNStableDiffusionXLPipeline,
     )
+    from .cosmos import RBLNCosmosPipeline
 else:
     import sys
 

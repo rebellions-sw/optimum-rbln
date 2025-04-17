@@ -230,3 +230,259 @@ class RBLNModel(RBLNBaseModel):
     def forward(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
         output = self.model[0](*args, **kwargs)
         return output
+
+
+class RBLNTorchModel(RBLNBaseModel):
+    """
+    A class that inherits from RBLNBaseModel for models consisting of a single `torch.nn.Module`.
+
+    This class supports all the functionality of RBLNBaseModel, including loading and saving models using
+    the `from_pretrained` and `save_pretrained` methods, compiling PyTorch models for execution on RBLN NPU
+    devices.
+
+    Example:
+        ```python
+        model = RBLNModel.from_pretrained("model_id", export=True, rbln_npu="npu_name")
+        outputs = model(**inputs)
+        ```
+    """
+
+    @classmethod
+    def update_kwargs(cls, kwargs):
+        """
+        Update user-given kwargs to get proper pytorch model.
+
+        For example, `torchscript`=True should be set because torch.jit
+        does not support `transformers` output instances as module output;
+        """
+        kwargs.update(
+            {
+                "torchscript": True,
+                "return_dict": False,
+            }
+        )
+        return kwargs
+
+    @classmethod
+    def save_torch_artifacts(
+        cls,
+        model: "PreTrainedModel",
+        save_dir_path: Path,
+        subfolder: str,
+        rbln_config: RBLNConfig,
+    ):
+        """
+        If you are unavoidably running on a CPU rather than an RBLN device,
+        store the torch tensor, weight, etc. in this function.
+        """
+
+    @classmethod
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
+        # Wrap the model if needed.
+        return model
+
+    @classmethod
+    def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNConfig):
+        model = cls.wrap_model_if_needed(model, rbln_config)
+        rbln_compile_config = rbln_config.compile_cfgs[0]
+        compiled_model = cls.compile(model, rbln_compile_config=rbln_compile_config)
+        return compiled_model
+    
+    @classmethod
+    @use_rbln_config
+    def from_model(
+        cls,
+        model: "PreTrainedModel",
+        config: Optional[PretrainedConfig] = None,
+        rbln_config: Dict[str, Any] = {},
+        model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
+        subfolder: str = "",
+        **kwargs,
+    ):
+        preprocessors = kwargs.pop("preprocessors", [])
+        rbln_kwargs = rbln_config
+
+        # Directory to save compile artifacts(.rbln) and original configs
+        if model_save_dir is None:
+            save_dir = TemporaryDirectory()
+            save_dir_path = Path(save_dir.name)
+        else:
+            save_dir = model_save_dir
+            if isinstance(save_dir, TemporaryDirectory):
+                save_dir_path = Path(model_save_dir.name)
+            else:
+                save_dir_path = Path(model_save_dir)
+                save_dir_path.mkdir(exist_ok=True)
+
+        # Save preprocessor
+        for preprocessor in preprocessors:
+            preprocessor.save_pretrained(save_dir_path / subfolder)
+
+        # ad-hoc
+        rbln_kwargs["n_model_params"] = sum(p.numel() for p in model.parameters())
+
+        # Get compilation arguments (e.g. input_info)
+        rbln_config: RBLNConfig = cls.get_rbln_config(
+            preprocessors=preprocessors, model_config=config, rbln_kwargs=rbln_kwargs
+        )
+        # rbln_config.update_runtime_cfg(rbln_kwargs) # This is done in get_rbln_config
+
+        compiled_model: Union[rebel.RBLNCompiledModel, Dict[str, rebel.RBLNCompiledModel]] = cls.get_compiled_model(
+            model, rbln_config=rbln_config
+        )
+
+        # Save compiled models (.rbln)
+        (save_dir_path / subfolder).mkdir(exist_ok=True)
+        if not isinstance(compiled_model, dict):
+            compiled_models = {DEFAULT_COMPILED_MODEL_NAME: compiled_model}
+        else:
+            compiled_models = compiled_model
+        for compiled_model_name, cm in compiled_models.items():
+            cm.save(save_dir_path / subfolder / f"{compiled_model_name}.rbln")
+        rbln_config.save(save_dir_path / subfolder)
+
+        # Save torch artifacts (e.g. embedding matrix if needed.)
+        cls.save_torch_artifacts(model, save_dir_path=save_dir_path, subfolder=subfolder, rbln_config=rbln_config)
+
+        # Load submodules
+        if len(cls._rbln_submodules) > 0:
+            rbln_submodules = cls._load_submodules(
+                model=model,
+                model_save_dir=save_dir,
+                rbln_kwargs=rbln_kwargs,
+                **kwargs,
+            )
+        else:
+            rbln_submodules = []
+
+        # Instantiate
+        return cls._from_pretrained(
+            model_id=save_dir_path,
+            config=config,
+            model_save_dir=save_dir,
+            subfolder=subfolder,
+            rbln_config=rbln_config,
+            rbln_compiled_models=compiled_models,
+            rbln_submodules=rbln_submodules,
+            **kwargs,
+        )
+
+    @classmethod
+    def get_pytorch_model(
+        cls,
+        model_id: str,
+        use_auth_token: Optional[Union[bool, str]] = None,
+        revision: Optional[str] = None,
+        force_download: bool = False,
+        cache_dir: Optional[str] = HUGGINGFACE_HUB_CACHE,
+        subfolder: str = "",
+        local_files_only: bool = False,
+        trust_remote_code: bool = False,
+        # Some rbln-kwargs should be applied before loading torch module (i.e. quantized llm)
+        rbln_kwargs: Optional[Dict[str, Any]] = None,
+        **kwargs,
+    ) -> "PreTrainedModel":
+        kwargs = cls.update_kwargs(kwargs)
+        return cls.get_hf_class().from_pretrained(
+            model_id,
+            subfolder=subfolder,
+            revision=revision,
+            cache_dir=cache_dir,
+            use_auth_token=use_auth_token,
+            local_files_only=local_files_only,
+            force_download=force_download,
+            trust_remote_code=trust_remote_code,
+            **kwargs,
+        )
+
+    @classmethod
+    def _create_runtimes(
+        cls,
+        compiled_models: List[rebel.RBLNCompiledModel],
+        rbln_device_map: Dict[str, int],
+        activate_profiler: Optional[bool] = None,
+    ) -> List[rebel.Runtime]:
+        if DEFAULT_COMPILED_MODEL_NAME not in rbln_device_map:
+            cls._raise_missing_compiled_file_error([DEFAULT_COMPILED_MODEL_NAME])
+
+        device = rbln_device_map[DEFAULT_COMPILED_MODEL_NAME]
+        return [
+            compiled_model.create_runtime(tensor_type="pt", device=device, activate_profiler=activate_profiler)
+            for compiled_model in compiled_models
+        ]
+
+    def forward(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
+        output = self.model[0](*args, **kwargs)
+        return output
+    
+    @classmethod
+    @use_rbln_config
+    def _from_pretrained(
+        cls,
+        model_id: Union[str, Path],
+        config: "PretrainedConfig" = None,
+        use_auth_token: Optional[Union[bool, str]] = None,
+        revision: Optional[str] = None,
+        force_download: bool = False,
+        cache_dir: Optional[str] = None,
+        subfolder: str = "",
+        local_files_only: bool = False,
+        trust_remote_code: bool = False,
+        model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
+        # passed from compile function
+        rbln_config: Optional[RBLNConfig] = None,
+        rbln_compiled_models: Optional[Dict[str, rebel.RBLNCompiledModel]] = None,
+        rbln_submodules: List["RBLNBaseModel"] = [],
+        **kwargs,
+    ) -> "RBLNBaseModel":
+        from_export_method = isinstance(rbln_config, RBLNConfig) and rbln_compiled_models is not None
+
+        if not from_export_method:
+            # from compiled dir
+            rbln_kwargs = rbln_config or {}
+
+            model_path_subfolder = cls._load_compiled_model_dir(
+                model_id=model_id,
+                use_auth_token=use_auth_token,
+                revision=revision,
+                force_download=force_download,
+                cache_dir=cache_dir,
+                subfolder=subfolder,
+                local_files_only=local_files_only,
+            )
+
+            rbln_config = RBLNConfig.load(model_path_subfolder)
+            rbln_config.update_runtime_cfg(rbln_kwargs)
+
+            if rbln_config.meta["cls"] != cls.__name__:
+                raise NameError(
+                    f"Cannot load the model. The model was originally compiled using "
+                    f"{rbln_config.meta['cls']}, but you are trying to load it with {cls.__name__}."
+                    "Please use the same model class that was used during compilation."
+                )
+
+            rbln_compiled_models = cls._load_compiled_models(model_path_subfolder)
+
+            if len(cls._rbln_submodules) > 0:
+                rbln_submodules = cls._load_submodules(
+                    model_save_dir=model_id,
+                    rbln_kwargs=rbln_kwargs,
+                    **kwargs,
+                )
+            else:
+                rbln_submodules = []
+
+            if subfolder != "":
+                model_save_dir = Path(model_path_subfolder).absolute().parent
+            else:
+                model_save_dir = Path(model_path_subfolder).absolute()
+
+        return cls._from_compiled_models(
+            rbln_compiled_models=rbln_compiled_models,
+            rbln_config=rbln_config,
+            config=config,
+            model_save_dir=model_save_dir,
+            subfolder=subfolder,
+            rbln_submodules=rbln_submodules,
+            **kwargs,
+        )

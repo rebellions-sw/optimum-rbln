@@ -556,3 +556,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     @abstractmethod
     def forward(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
         pass
+
+    def parameters(self):
+        for param in [torch.tensor([1], dtype=torch.float32, device=torch.device("cpu"))]:
+            yield param

@@ -104,6 +104,7 @@ _import_structure = {
         "RBLNStableDiffusion3InpaintPipeline",
         "RBLNStableDiffusion3Pipeline",
         "RBLNDiffusionMixin",
+        "RBLNCosmosPipeline",
     ],
 }
 
