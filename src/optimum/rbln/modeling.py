@@ -20,6 +20,7 @@ import rebel
 import torch
 from huggingface_hub.constants import HUGGINGFACE_HUB_CACHE
 from transformers import AutoConfig, PretrainedConfig
+from transformers.modeling_outputs import BaseModelOutput
 
 from .configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNModelConfig
 from .modeling_base import RBLNBaseModel
@@ -47,6 +48,9 @@ class RBLNModel(RBLNBaseModel):
         outputs = model(**inputs)
         ```
     """
+
+    output_class = None
+    output_key = "last_hidden_state"
 
     @classmethod
     def update_kwargs(cls, kwargs):
@@ -232,7 +236,25 @@ class RBLNModel(RBLNBaseModel):
             for compiled_model in compiled_models
         ]
 
-    def forward(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
-        output = self.model[0](*args, **kwargs)
-        return (output,)
+    def forward(self, *args, return_dict: Optional[bool] = None, **kwargs):
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
+        # Get output from the model
+        output = self.model[0](*args, **kwargs)
+
+        # Format output according to task requirements
+        return self._prepare_output(output, return_dict)
+
+    def _prepare_output(self, output, return_dict):
+        """
+        Prepare model output based on return_dict flag.
+        This method can be overridden by subclasses to provide task-specific output handling.
+        """
+        if not return_dict:
+            return (output,) if not isinstance(output, tuple) else output
+        else:
+            if self.output_class is None:
+                return BaseModelOutput(last_hidden_state=output)
+
+            # Create output with the appropriate class and key
+            return self.output_class(**{self.output_key: output})
