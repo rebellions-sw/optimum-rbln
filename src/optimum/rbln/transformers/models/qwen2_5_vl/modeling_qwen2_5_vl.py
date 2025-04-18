@@ -533,18 +533,28 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             mask_expanded = mask_unsqueezed.expand_as(inputs_embeds)
             inputs_embeds = inputs_embeds.masked_scatter(mask_expanded, video_embeds)
 
-        position_ids, rope_deltas = self.get_rope_index(
-            input_ids,
-            image_grid_thw,
-            video_grid_thw,
-            second_per_grid_ts,
-            attention_mask,
-        )
-        self.rope_deltas = rope_deltas
+        max_inputs_len = input_ids.shape[1]
 
-        position_embed = self._get_position_embeddings(inputs_embeds, position_ids)
+        head_dim = getattr(self.config, "head_dim", None) or self.config.hidden_size // self.config.num_attention_heads
+        all_position_embeds = torch.zeros(2, self.rbln_config.batch_size, 1, max_inputs_len, head_dim)
+        all_rope_deltas = []
+        for b_idx in range(self.rbln_config.batch_size):
+            input_id = input_ids[b_idx : b_idx + 1][:, attention_mask[b_idx].bool()]
+            position_ids, rope_deltas = self.get_rope_index(
+                input_id,
+                image_grid_thw[b_idx : b_idx + 1] if image_grid_thw is not None else None,
+                video_grid_thw[b_idx : b_idx + 1] if video_grid_thw is not None else None,
+                second_per_grid_ts[b_idx : b_idx + 1] if second_per_grid_ts is not None else None,
+                # attention_mask,
+            )
+            position_embed = self._get_position_embeddings(inputs_embeds, position_ids)
+            mask_indices = torch.nonzero(attention_mask[b_idx], as_tuple=True)[0]
+            all_position_embeds[:, b_idx : b_idx + 1].index_copy_(dim=-2, index=mask_indices, source=position_embed)
+            all_rope_deltas.append(rope_deltas)
 
-        return inputs_embeds, position_embed
+        self.rope_deltas = torch.cat(all_rope_deltas)
+
+        return inputs_embeds, all_position_embeds
 
     def _preprocess_decoder(
         self,
@@ -552,14 +562,18 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         cache_position: torch.LongTensor = None,
     ):
         inputs_embeds = self.embed_tokens(input_ids)
-        delta = cache_position[0] + self.rope_deltas
-        delta = delta.repeat_interleave(self.rbln_config.batch_size // delta.shape[0], dim=0)
-        position_ids = torch.arange(1).view(1, -1).expand(self.rbln_config.batch_size, -1)
-        position_ids = position_ids.add(delta)
-        position_ids = position_ids.unsqueeze(0).expand(3, -1, -1)
-        position_embed = self._get_position_embeddings(torch.zeros(1, dtype=torch.float32), position_ids)
+        position_embeds = []
+        for b_idx in range(self.rbln_config.batch_size):
+            delta = cache_position[b_idx] + self.rope_deltas[b_idx]
+            position_ids = torch.arange(1).view(1, -1)
+            position_ids = position_ids.add(delta)
+            position_ids = position_ids.unsqueeze(0).expand(3, -1, -1)
+            position_embed = self._get_position_embeddings(torch.zeros(1, dtype=torch.float32), position_ids)
+            position_embeds.append(position_embed)
 
-        return inputs_embeds, position_embed
+        position_embeds = torch.cat(position_embeds, dim=1)
+
+        return inputs_embeds, position_embeds
 
     def forward(
         self,
@@ -591,6 +605,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             logits = []
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
+
                 logit = self.prefill_decoder(
                     inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
                     attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
