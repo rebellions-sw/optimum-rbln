@@ -184,6 +184,7 @@ class DecoderOnlyWrapper(nn.Module):
 
     def convert_to_rbln_causal_lm(self, causal_lm: PreTrainedModel, max_seq_len: int):
         new_layers = []
+
         for layer in causal_lm.model.layers:
             if self.attn_impl == "eager":
                 new_self_attn = DecoderOnlyAttention(
@@ -201,6 +202,7 @@ class DecoderOnlyWrapper(nn.Module):
 
             new_layer = DecoderOnlyLayer(layer, new_self_attn)
             new_layers.append(new_layer)
+
         new_model = DecoderOnlyModel(
             causal_lm.model,
             new_layers,
