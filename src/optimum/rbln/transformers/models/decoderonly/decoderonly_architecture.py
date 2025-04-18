@@ -182,7 +182,11 @@ class DecoderOnlyWrapper(nn.Module):
     def get_rotary_emb(self, max_seq_len):
         return RotaryEmbedding(config=self.config, max_seq_len_cached=max_seq_len)
 
-    def convert_to_rbln_causal_lm(self, causal_lm: PreTrainedModel, max_seq_len: int):
+    def convert_to_rbln_causal_lm(
+        self,
+        causal_lm: PreTrainedModel,
+        max_seq_len: int,
+    ):
         new_layers = []
         for layer in causal_lm.model.layers:
             if self.attn_impl == "eager":
@@ -322,12 +326,13 @@ class DecoderOnlyForCausalLM(nn.Module):
         _phase: Current processing phase ("prefill" or "decode")
     """
 
-    def __init__(self, causal_lm: PreTrainedModel, model):
+    def __init__(self, causal_lm: PreTrainedModel, model: nn.Module):
         super().__init__()
         self.config = causal_lm.config
         self._original_mod = causal_lm
         self.model = model
         self._phase = "prefill"
+        self.lm_head = self._original_mod.lm_head
 
     @property
     def phase(self):
@@ -363,7 +368,7 @@ class DecoderOnlyForCausalLM(nn.Module):
         if self.phase == "prefill":
             hidden_states = hidden_states[:, query_position.to(torch.int).unsqueeze(0)]
 
-        logits = self._original_mod.lm_head(hidden_states)
+        logits = self.lm_head(hidden_states)
         return logits
 
 
@@ -455,8 +460,12 @@ class DecoderOnlyModel(nn.Module):
 
         # get cos,sin vector if needed
         if rotary_emb is not None:
-            cos, sin = rotary_emb(hidden_states, self.max_seq_len)  # dtype carrier, max_seq_len
-            cos, sin = slice_and_unsqueeze_cos_sin(cos, sin, cache_position)
+            if isinstance(rotary_emb, torch.Tensor):
+                cos = rotary_emb[0]
+                sin = rotary_emb[1]
+            else:
+                cos, sin = rotary_emb(hidden_states, self.max_seq_len)  # dtype carrier, max_seq_len
+                cos, sin = slice_and_unsqueeze_cos_sin(cos, sin, cache_position)
         else:
             batch_size = inputs_embeds.shape[0]
             if cache_position.shape[0] > 1:
@@ -833,7 +842,6 @@ def rotate_half(x):
 
 def apply_rotary_pos_emb(q, k, cos, sin):
     """Applies Rotary Position Embedding to the query and key tensors."""
-
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
     return q_embed, k_embed
