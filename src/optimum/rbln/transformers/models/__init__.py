@@ -32,29 +32,60 @@ _import_structure = {
         "RBLNAutoModelForSpeechSeq2Seq",
         "RBLNAutoModelForVision2Seq",
     ],
-    "bart": ["RBLNBartForConditionalGeneration", "RBLNBartModel"],
-    "bert": ["RBLNBertModel", "RBLNBertForQuestionAnswering", "RBLNBertForMaskedLM"],
+    "bart": [
+        "RBLNBartForConditionalGeneration",
+        "RBLNBartModel",
+        "RBLNBartForConditionalGenerationConfig",
+        "RBLNBartModelConfig",
+    ],
+    "bert": [
+        "RBLNBertModel",
+        "RBLNBertModelConfig",
+        "RBLNBertForQuestionAnswering",
+        "RBLNBertForQuestionAnsweringConfig",
+        "RBLNBertForMaskedLM",
+        "RBLNBertForMaskedLMConfig",
+    ],
     "clip": [
         "RBLNCLIPTextModel",
+        "RBLNCLIPTextModelConfig",
         "RBLNCLIPTextModelWithProjection",
+        "RBLNCLIPTextModelWithProjectionConfig",
         "RBLNCLIPVisionModel",
+        "RBLNCLIPVisionModelConfig",
         "RBLNCLIPVisionModelWithProjection",
+        "RBLNCLIPVisionModelWithProjectionConfig",
     ],
-    "dpt": ["RBLNDPTForDepthEstimation"],
-    "exaone": ["RBLNExaoneForCausalLM"],
-    "gemma": ["RBLNGemmaForCausalLM"],
-    "gpt2": ["RBLNGPT2LMHeadModel"],
-    "llama": ["RBLNLlamaForCausalLM"],
-    "llava_next": ["RBLNLlavaNextForConditionalGeneration"],
-    "midm": ["RBLNMidmLMHeadModel"],
-    "mistral": ["RBLNMistralForCausalLM"],
-    "phi": ["RBLNPhiForCausalLM"],
-    "qwen2": ["RBLNQwen2ForCausalLM"],
-    "time_series_transformers": ["RBLNTimeSeriesTransformerForPrediction"],
-    "t5": ["RBLNT5EncoderModel", "RBLNT5ForConditionalGeneration"],
-    "wav2vec2": ["RBLNWav2Vec2ForCTC"],
-    "whisper": ["RBLNWhisperForConditionalGeneration"],
-    "xlm_roberta": ["RBLNXLMRobertaModel"],
+    "decoderonly": [
+        "RBLNDecoderOnlyModelForCausalLM",
+        "RBLNDecoderOnlyModelForCausalLMConfig",
+    ],
+    "dpt": [
+        "RBLNDPTForDepthEstimation",
+        "RBLNDPTForDepthEstimationConfig",
+    ],
+    "exaone": ["RBLNExaoneForCausalLM", "RBLNExaoneForCausalLMConfig"],
+    "gemma": ["RBLNGemmaForCausalLM", "RBLNGemmaForCausalLMConfig"],
+    "gpt2": ["RBLNGPT2LMHeadModel", "RBLNGPT2LMHeadModelConfig"],
+    "llama": ["RBLNLlamaForCausalLM", "RBLNLlamaForCausalLMConfig"],
+    "llava_next": ["RBLNLlavaNextForConditionalGeneration", "RBLNLlavaNextForConditionalGenerationConfig"],
+    "midm": ["RBLNMidmLMHeadModel", "RBLNMidmLMHeadModelConfig"],
+    "mistral": ["RBLNMistralForCausalLM", "RBLNMistralForCausalLMConfig"],
+    "phi": ["RBLNPhiForCausalLM", "RBLNPhiForCausalLMConfig"],
+    "qwen2": ["RBLNQwen2ForCausalLM", "RBLNQwen2ForCausalLMConfig"],
+    "time_series_transformers": [
+        "RBLNTimeSeriesTransformerForPrediction",
+        "RBLNTimeSeriesTransformerForPredictionConfig",
+    ],
+    "t5": [
+        "RBLNT5EncoderModel",
+        "RBLNT5ForConditionalGeneration",
+        "RBLNT5EncoderModelConfig",
+        "RBLNT5ForConditionalGenerationConfig",
+    ],
+    "wav2vec2": ["RBLNWav2Vec2ForCTC", "RBLNWav2Vec2ForCTCConfig"],
+    "whisper": ["RBLNWhisperForConditionalGeneration", "RBLNWhisperForConditionalGenerationConfig"],
+    "xlm_roberta": ["RBLNXLMRobertaModel", "RBLNXLMRobertaModelConfig"],
 }
 
 if TYPE_CHECKING:
@@ -72,29 +103,60 @@ if TYPE_CHECKING:
         RBLNAutoModelForSpeechSeq2Seq,
         RBLNAutoModelForVision2Seq,
     )
-    from .bart import RBLNBartForConditionalGeneration, RBLNBartModel
-    from .bert import RBLNBertForMaskedLM, RBLNBertForQuestionAnswering, RBLNBertModel
+    from .bart import (
+        RBLNBartForConditionalGeneration,
+        RBLNBartForConditionalGenerationConfig,
+        RBLNBartModel,
+        RBLNBartModelConfig,
+    )
+    from .bert import (
+        RBLNBertForMaskedLM,
+        RBLNBertForMaskedLMConfig,
+        RBLNBertForQuestionAnswering,
+        RBLNBertForQuestionAnsweringConfig,
+        RBLNBertModel,
+        RBLNBertModelConfig,
+    )
     from .clip import (
         RBLNCLIPTextModel,
+        RBLNCLIPTextModelConfig,
         RBLNCLIPTextModelWithProjection,
+        RBLNCLIPTextModelWithProjectionConfig,
         RBLNCLIPVisionModel,
+        RBLNCLIPVisionModelConfig,
         RBLNCLIPVisionModelWithProjection,
+        RBLNCLIPVisionModelWithProjectionConfig,
     )
-    from .dpt import RBLNDPTForDepthEstimation
-    from .exaone import RBLNExaoneForCausalLM
-    from .gemma import RBLNGemmaForCausalLM
-    from .gpt2 import RBLNGPT2LMHeadModel
-    from .llama import RBLNLlamaForCausalLM
-    from .llava_next import RBLNLlavaNextForConditionalGeneration
-    from .midm import RBLNMidmLMHeadModel
-    from .mistral import RBLNMistralForCausalLM
-    from .phi import RBLNPhiForCausalLM
-    from .qwen2 import RBLNQwen2ForCausalLM
-    from .t5 import RBLNT5EncoderModel, RBLNT5ForConditionalGeneration
-    from .time_series_transformers import RBLNTimeSeriesTransformerForPrediction
-    from .wav2vec2 import RBLNWav2Vec2ForCTC
-    from .whisper import RBLNWhisperForConditionalGeneration
-    from .xlm_roberta import RBLNXLMRobertaModel
+    from .decoderonly import (
+        RBLNDecoderOnlyModelForCausalLM,
+        RBLNDecoderOnlyModelForCausalLMConfig,
+    )
+    from .dpt import (
+        RBLNDPTForDepthEstimation,
+        RBLNDPTForDepthEstimationConfig,
+    )
+    from .exaone import RBLNExaoneForCausalLM, RBLNExaoneForCausalLMConfig
+    from .gemma import RBLNGemmaForCausalLM, RBLNGemmaForCausalLMConfig
+    from .gpt2 import RBLNGPT2LMHeadModel, RBLNGPT2LMHeadModelConfig
+    from .llama import RBLNLlamaForCausalLM, RBLNLlamaForCausalLMConfig
+    from .llava_next import RBLNLlavaNextForConditionalGeneration, RBLNLlavaNextForConditionalGenerationConfig
+    from .midm import RBLNMidmLMHeadModel, RBLNMidmLMHeadModelConfig
+    from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig
+    from .phi import RBLNPhiForCausalLM, RBLNPhiForCausalLMConfig
+    from .qwen2 import RBLNQwen2ForCausalLM, RBLNQwen2ForCausalLMConfig
+    from .t5 import (
+        RBLNT5EncoderModel,
+        RBLNT5EncoderModelConfig,
+        RBLNT5ForConditionalGeneration,
+        RBLNT5ForConditionalGenerationConfig,
+    )
+    from .time_series_transformers import (
+        RBLNTimeSeriesTransformerForPrediction,
+        RBLNTimeSeriesTransformerForPredictionConfig,
+    )
+    from .wav2vec2 import RBLNWav2Vec2ForCTC, RBLNWav2Vec2ForCTCConfig
+    from .whisper import RBLNWhisperForConditionalGeneration, RBLNWhisperForConditionalGenerationConfig
+    from .xlm_roberta import RBLNXLMRobertaModel, RBLNXLMRobertaModelConfig
 
 else:
     import sys

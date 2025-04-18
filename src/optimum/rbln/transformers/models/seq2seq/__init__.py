@@ -12,4 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .configuration_seq2seq2 import RBLNModelForSeq2SeqLMConfig
 from .modeling_seq2seq import RBLNModelForSeq2SeqLM

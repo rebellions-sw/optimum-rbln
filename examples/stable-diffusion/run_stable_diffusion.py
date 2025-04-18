@@ -16,6 +16,11 @@ def main(
         pipe = RBLNStableDiffusionPipeline.from_pretrained(
             model_id=model_id,
             export=True,
+            rbln_config={
+                "unet": {
+                    "batch_size": 2,
+                }
+            },
         )
         pipe.save_pretrained(os.path.basename(model_id))
     else:

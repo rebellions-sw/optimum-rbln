@@ -12,4 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .configuration_bert import RBLNBertForMaskedLMConfig, RBLNBertForQuestionAnsweringConfig, RBLNBertModelConfig
 from .modeling_bert import RBLNBertForMaskedLM, RBLNBertForQuestionAnswering, RBLNBertModel
