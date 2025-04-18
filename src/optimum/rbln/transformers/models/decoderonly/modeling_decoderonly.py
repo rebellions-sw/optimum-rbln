@@ -259,7 +259,9 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         # If an attention mask is provided, select only the valid (non-masked) inputs
         inputs = inputs[:, attention_mask.bool()] if attention_mask is not None else inputs
         if position_embed is not None:
-            position_embed = position_embed[:,:,:,attention_mask.bool(),:] if attention_mask is not None else position_embed
+            position_embed = (
+                position_embed[:, :, :, attention_mask.bool(), :] if attention_mask is not None else position_embed
+            )
 
         query_length = inputs.shape[1]
         if query_length > self.max_seq_len:
