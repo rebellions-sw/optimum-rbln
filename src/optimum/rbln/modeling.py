@@ -60,12 +60,7 @@ class RBLNModel(RBLNBaseModel):
         For example, `torchscript`=True should be set because torch.jit
         does not support `transformers` output instances as module output;
         """
-        kwargs.update(
-            {
-                "torchscript": True,
-                "return_dict": False,
-            }
-        )
+        kwargs.update({"torchscript": True})
         return kwargs
 
     @classmethod
