@@ -106,6 +106,7 @@ class RBLNMultiControlNetModel(RBLNModel):
                 encoder_hidden_states=encoder_hidden_states,
                 controlnet_cond=image,
                 conditioning_scale=torch.tensor(scale),
+                return_dict=return_dict,
             )
 
             # merge samples

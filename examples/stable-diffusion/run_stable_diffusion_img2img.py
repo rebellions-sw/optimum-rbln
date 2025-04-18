@@ -29,6 +29,11 @@ def main(
             export=True,
             rbln_img_width=img_width,
             rbln_img_height=img_height,
+            rbln_config={
+                "unet": {
+                    "batch_size": 2,
+                },
+            },
         )
         pipe.save_pretrained(os.path.basename(model_id))
     else:

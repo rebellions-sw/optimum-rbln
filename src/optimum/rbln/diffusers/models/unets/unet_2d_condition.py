@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
 
 import torch
-from diffusers.models.unets.unet_2d_condition import UNet2DConditionModel
+from diffusers.models.unets.unet_2d_condition import UNet2DConditionModel, UNet2DConditionOutput
 from transformers import PretrainedConfig
 
 from ....configuration_utils import RBLNCompileConfig
@@ -143,6 +143,8 @@ class RBLNUNet2DConditionModel(RBLNModel):
     hf_library_name = "diffusers"
     auto_model_class = UNet2DConditionModel
     _rbln_config_class = RBLNUNet2DConditionModelConfig
+    output_class = UNet2DConditionOutput
+    output_key = "sample"
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
@@ -334,7 +336,7 @@ class RBLNUNet2DConditionModel(RBLNModel):
         encoder_attention_mask: Optional[torch.Tensor] = None,
         return_dict: bool = True,
         **kwargs,
-    ):
+    ) -> Union[UNet2DConditionOutput, Tuple]:
         sample_batch_size = sample.size()[0]
         compiled_batch_size = self.compiled_batch_size
         if sample_batch_size != compiled_batch_size and (
@@ -351,31 +353,28 @@ class RBLNUNet2DConditionModel(RBLNModel):
 
         if down_block_additional_residuals is not None:
             down_block_additional_residuals = [t.contiguous() for t in down_block_additional_residuals]
-            return (
-                super().forward(
-                    sample.contiguous(),
-                    timestep.float(),
-                    encoder_hidden_states,
-                    *down_block_additional_residuals,
-                    mid_block_additional_residual,
-                    **added_cond_kwargs,
-                ),
-            )
-
-        if "image_embeds" in added_cond_kwargs:
-            return (
-                super().forward(
-                    sample.contiguous(),
-                    timestep.float(),
-                    **added_cond_kwargs,
-                ),
-            )
-
-        return (
-            super().forward(
+            return super().forward(
                 sample.contiguous(),
                 timestep.float(),
                 encoder_hidden_states,
+                *down_block_additional_residuals,
+                mid_block_additional_residual,
                 **added_cond_kwargs,
-            ),
+                return_dict=return_dict,
+            )
+
+        if "image_embeds" in added_cond_kwargs:
+            return super().forward(
+                sample.contiguous(),
+                timestep.float(),
+                **added_cond_kwargs,
+                return_dict=return_dict,
+            )
+
+        return super().forward(
+            sample.contiguous(),
+            timestep.float(),
+            encoder_hidden_states,
+            **added_cond_kwargs,
+            return_dict=return_dict,
         )

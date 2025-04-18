@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import torch
 from transformers import CLIPTextConfig, CLIPTextModel, CLIPVisionConfig, CLIPVisionModel
-from transformers.modeling_outputs import BaseModelOutputWithPooling
 from transformers.models.clip.modeling_clip import CLIPTextModelOutput, CLIPVisionModelOutput
 
 from ....configuration_utils import RBLNCompileConfig
@@ -76,13 +75,24 @@ class RBLNCLIPTextModel(RBLNModel):
         rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
         return rbln_config
 
-    def forward(self, input_ids: "torch.Tensor", **kwargs):
-        text_output = super().forward(input_ids)
-        return CLIPTextModelOutput(
-            text_embeds=text_output[0],
-            last_hidden_state=text_output[1],
-            hidden_states=text_output[2:],
-        )
+    def forward(self, input_ids: torch.LongTensor, return_dict: bool = None, **kwargs) -> torch.FloatTensor:
+        # To ignore using attention_mask, we override forward method.
+        output = super().forward(input_ids, return_dict=return_dict)
+        return output
+
+    def _prepare_output(self, output, return_dict):
+        """
+        Prepare model output based on return_dict flag.
+        This method can be overridden by subclasses to provide task-specific output handling.
+        """
+        if not return_dict:
+            return (output,) if not isinstance(output, (tuple, list)) else output
+        else:
+            return CLIPTextModelOutput(
+                text_embeds=output[0],
+                last_hidden_state=output[1],
+                hidden_states=output[2:],
+            )
 
 
 class RBLNCLIPTextModelWithProjection(RBLNCLIPTextModel):
@@ -148,17 +158,28 @@ class RBLNCLIPVisionModel(RBLNModel):
     def forward(
         self,
         pixel_values: Optional[torch.FloatTensor] = None,
+        return_dict: bool = None,
         **kwargs,
-    ) -> Union[Tuple, BaseModelOutputWithPooling]:
+    ) -> Union[Tuple, CLIPVisionModelOutput]:
         if len(kwargs) > 0 and any(kwargs.values()):
             logger.warning(f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__}.")
 
-        output = super().forward(pixel_values)
-        return BaseModelOutputWithPooling(
-            last_hidden_state=output[0],
-            pooler_output=output[1],
-            hidden_states=output[2:],
-        )
+        output = super().forward(pixel_values, return_dict=return_dict)
+        return output
+
+    def _prepare_output(self, output, return_dict):
+        """
+        Prepare model output based on return_dict flag.
+        This method can be overridden by subclasses to provide task-specific output handling.
+        """
+        if not return_dict:
+            return (output,) if not isinstance(output, (tuple, list)) else output
+        else:
+            return CLIPVisionModelOutput(
+                image_embeds=output[0],
+                last_hidden_state=output[1],
+                hidden_states=output[2:],
+            )
 
 
 class RBLNCLIPVisionModelWithProjection(RBLNCLIPVisionModel):
