@@ -42,9 +42,11 @@ from pytorch_retinaface.data import cfg_re50
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
 from transformers import AutoConfig, PretrainedConfig, SiglipProcessor
 
-from ....modeling import RBLNModel, RBLNBaseModel, RBLNTorchModel
+from ....modeling import RBLNModel, RBLNBaseModel
 from ....modeling_config import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNConfig, use_rbln_config
+from ....utils.hub import validate_files
 from ....utils.logging import get_logger
+from ....utils.runtime_utils import UnavailableRuntime
 from ...modeling_diffusers import RBLNDiffusionMixin
 from ...modeling_pt import RBLNTempModule
 from ....utils.runtime_utils import RBLNPytorchRuntime
@@ -85,59 +87,138 @@ logger = get_logger(__name__)
 
 COSMOS_GUARDRAIL_CHECKPOINT = "nvidia/Cosmos-1.0-Guardrail"   
 
-class RBLNVideoContentSafetyFilter(RBLNTorchModel, VideoContentSafetyFilter):
-    def __post_init__(self, **kwargs):
-        self.encoder = RBLNRuntimeSigLIPEncoder(self.model[0])
-        self.cls_model = RBLNPytorchRuntime(self.model[1])
+class RBLNsimpleModel:
+    def __init__(
+        self,
+        models: List[rebel.Runtime],
+        rbln_config: RBLNConfig,
+        model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
+        rbln_compiled_models: Optional[rebel.RBLNCompiledModel] = None,
+        subfolder: str = "",
+        ):
+        self.model = models
+        self.rbln_config = rbln_config
+        self.compiled_models = rbln_compiled_models
+        self.model_save_dir = model_save_dir
+        self.subfolder = subfolder
     
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config) -> torch.nn.Module:
-        if rbln_config.compiled_model_name == "safety_models_0":
-            return _SiglipVisionModel(model)
-        else :
-            return model.eval()
-        
+    def load_compiled_models(cls, model_id, rbln_config, subfolder=""):
+        return cls._load_compiled_models(model_id=model_id, subfolder=subfolder, rbln_config=rbln_config)
+    
     @classmethod
-    def _get_rbln_config(
-        cls,
-        preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
-        model_config: "PretrainedConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
-        input_info_enc = [("pixel_values", [1, 3, 384, 384], "float32")] # hard coded
-        input_info_cls = [("data", [1, 1152], "float32")]                # hard coded
+    def _load_compiled_models(cls, model_id: str, subfolder: str, rbln_config, rbln_compiled_models=None):
+        model_path = Path(model_id)
         
-        compile_cfgs = []
-        # for safety_models
-        input_infos = [input_info_enc, input_info_cls]
-        for i, input_info in enumerate(input_infos):
-            safetymodel_config = RBLNCompileConfig(
-                compiled_model_name=f"safety_models_{i}",
-                input_info=input_info
+        model_save_dir = model_path / subfolder
+        rbln_files = list(model_save_dir.glob("*.rbln"))
+        rbln_config_filenames = list(model_save_dir.glob("rbln_config.json"))
+        validate_files(rbln_files, rbln_config_filenames, f"directory {model_save_dir}")
+        
+        from_export_method = isinstance(rbln_config, RBLNConfig) and rbln_compiled_models is not None
+        if not from_export_method:
+            rbln_kwargs = rbln_config or {}
+            rbln_config = RBLNConfig.load(model_save_dir)
+            rbln_config.update_runtime_cfg(rbln_kwargs)
+        
+        compiled_models = Path(model_save_dir).glob("*.rbln")
+        rbln_compiled_models = {cm.stem: rebel.RBLNCompiledModel(cm) for cm in compiled_models}
+        return cls._from_compiled_models(rbln_compiled_models, rbln_config, model_path=model_path, subfolder=subfolder)
+    
+    @classmethod
+    def _from_compiled_models(
+        cls,
+        rbln_compiled_models: Dict[str, rebel.RBLNCompiledModel],
+        rbln_config: RBLNConfig,
+        model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
+        subfolder = "",
+        **kwargs,
+    ):
+        compiled_model_names = [cfg.compiled_model_name for cfg in rbln_config.compile_cfgs]
+        rbln_compiled_models = [rbln_compiled_models[cm_name] for cm_name in compiled_model_names]
+        # create runtimes only if `rbln_create_runtimes` is enabled
+        try:
+            models = (
+                cls._create_runtimes(rbln_compiled_models, rbln_config.device_map, rbln_config.activate_profiler)
+                if rbln_config.create_runtimes
+                else UnavailableRuntime()
             )
-            compile_cfgs.append(safetymodel_config)
 
+        except rebel.core.exception.RBLNRuntimeError as e:
+            logger.warning(
+                f"Failed to create the runtime for the model due to a runtime error: {e.__class__.__name__} - {e}"
+            )
+            models = UnavailableRuntime()
+
+        models = [cls.wrap_runtime_if_needed(model) for model in models]
+        
+        return cls(models,
+                   rbln_config=rbln_config,
+                    model_save_dir= model_save_dir,
+                    rbln_compiled_models=rbln_compiled_models,
+                    subfolder=subfolder
+                   )
+    
+    @classmethod
+    def wrap_runtime_if_needed(cls, model):
+        return model
+    
+    @classmethod
+    def wrap_model_if_needed(cls, model):
+        return model
+    
+    @classmethod
+    def compile_model(cls, model, rbln_kwargs, model_save_dir, subfolder=""):
+        rbln_config = cls._get_rbln_config(rbln_kwargs)
+        compiled_model = cls._get_compiled_model(model, rbln_config)
+        
+        # Save compiled models (.rbln)
+        (model_save_dir / subfolder).mkdir(exist_ok=True)
+        if not isinstance(compiled_model, dict):
+            compiled_models = {DEFAULT_COMPILED_MODEL_NAME: compiled_model}
+        else:
+            compiled_models = compiled_model
+        for compiled_model_name, cm in compiled_models.items():
+            cm.save(model_save_dir / subfolder / f"{compiled_model_name}.rbln")
+        
+        rbln_config.save(model_save_dir / subfolder)
+        # Save torch artifacts (e.g. embedding matrix if needed.)
+        # cls.save_torch_artifacts(model, save_dir_path=save_dir_path, subfolder=subfolder, rbln_config=rbln_config)
+        
+        rbln_compiled_models = cls._load_compiled_models(model_id=model_save_dir, subfolder=subfolder, rbln_config=rbln_config, rbln_compiled_models=compiled_models)
+        return rbln_compiled_models
+    
+    @classmethod
+    def _get_rbln_config(cls, rbln_kwargs):
+        pass
+        input_info = [("frames", [1, 1, 1, 1], "float32")]
+        
+        compile_config = RBLNCompileConfig(
+            input_info=input_info
+        )
+        
         rbln_config = RBLNConfig(
             rbln_cls=cls.__name__,
-            compile_cfgs=compile_cfgs,
+            compile_cfgs=[compile_config],
             rbln_kwargs=rbln_kwargs,
         )
         return rbln_config
     
     @classmethod
-    def get_compiled_model(cls, model, rbln_config: RBLNConfig):
-        # SiglipEncoder
-        encoder = cls.wrap_model_if_needed(model.encoder.model, rbln_config.compile_cfgs[0])
-        encoder_compiled_model = cls.compile(encoder, rbln_compile_config=rbln_config.compile_cfgs[0])
+    def _get_compiled_model(cls, model, rbln_config):
+        return cls.compile(cls.wrap_model_if_needed(model), rbln_compile_config=rbln_config.compile_cfgs[0])
 
-        # classifier
-        safetyclassifier = cls.wrap_model_if_needed(model.model.network, rbln_config.compile_cfgs[1])
-        safetyclassifier_compiled_model = cls.compile(safetyclassifier, rbln_compile_config=rbln_config.compile_cfgs[1])
-        
-        return {
-            "safety_models_0": encoder_compiled_model,
-            "safety_models_1": safetyclassifier_compiled_model,
-            }
+    @classmethod
+    def compile(cls, model, rbln_compile_config: Optional[RBLNCompileConfig] = None, **kwargs):
+        compiled_model = rebel.compile_from_torch(
+            model,
+            input_info=rbln_compile_config.input_info,
+            fusion=rbln_compile_config.fusion,
+            npu=rbln_compile_config.npu,
+            tensor_parallel_size=rbln_compile_config.tensor_parallel_size,
+            **kwargs,
+        )
+        return compiled_model
     
     @classmethod
     def _create_runtimes(
@@ -146,121 +227,50 @@ class RBLNVideoContentSafetyFilter(RBLNTorchModel, VideoContentSafetyFilter):
         rbln_device_map: Dict[str, int],
         activate_profiler: Optional[bool] = None,
     ) -> List[rebel.Runtime]:
-        if any(model_name not in rbln_device_map for model_name in ["safety_models_0", "safety_models_1"]):
-            cls._raise_missing_compiled_file_error(["safety_models_0", "safety_models_1"])
+        if DEFAULT_COMPILED_MODEL_NAME not in rbln_device_map:
+            cls._raise_missing_compiled_file_error([DEFAULT_COMPILED_MODEL_NAME])
 
-        device_vals = [rbln_device_map["safety_models_0"], rbln_device_map["safety_models_1"]]
+        device = rbln_device_map[DEFAULT_COMPILED_MODEL_NAME]
         return [
-            compiled_model.create_runtime(tensor_type="pt", device=device_val, activate_profiler=activate_profiler)
-            for compiled_model, device_val in zip(compiled_models, device_vals)
+            compiled_model.create_runtime(tensor_type="pt", device=device, activate_profiler=activate_profiler)
+            for compiled_model in compiled_models
         ]
+    
+    @staticmethod
+    def _raise_missing_compiled_file_error(missing_files: List[str]):
+        """Raises a KeyError with a message indicating missing compiled model files."""
 
-    @torch.inference_mode()
-    def _infer(self, pil_image: PIL.Image.Image) -> int:
-        """Infer the class of the image."""
-        image_embs = self.encoder.encode_image(pil_image)
-        image_embs = image_embs.to(device=torch.device("cpu"), dtype=torch.float32)
-        logits = self.cls_model(image_embs)
-        probabilities = torch.nn.functional.softmax(logits, dim=-1)
-        predicted_class = torch.argmax(probabilities, dim=-1).item()
-        return predicted_class
-
-    def is_safe_file(self, filepath: str) -> bool:
-        """Check if the video file is safe."""
-        video_data = load_video(filepath)
-
-        # Sample frames at 2 FPS
-        sample_rate = 2  # frames per second
-        frame_interval = int(video_data.fps / sample_rate)
-        frame_numbers = list(range(0, int(video_data.fps * video_data.duration), frame_interval))
-
-        is_safe = True
-        frame_scores = []
-
-        for frame_number in frame_numbers:
-            try:
-                frame = video_data.frames[frame_number]
-                pil_image = PIL.Image.fromarray(frame)
-                predicted_class = self._infer(pil_image)
-                class_name = CLASS_IDX_TO_NAME.get(predicted_class, "Unknown")
-                frame_scores.append({"frame_number": frame_number, "class": class_name})
-
-                # If any frame is not "Safe", mark the video as unsafe
-                if predicted_class != 0:
-                    is_safe = False
-                    break
-
-            except Exception as e:
-                logger.warning(
-                    f"Warning: Failed to run safety classifier on frame_number {frame_number}. Exception: {e}"
-                )
-                continue
-
-        # Prepare data for JSON
-        video_data = {
-            "filepath": filepath,
-            "is_safe": is_safe,
-            "video_length": video_data.duration,
-            "fps": video_data.fps,
-            "frame_scores": frame_scores,
-        }
-
-        logger.info(f"Video {filepath} is {'SAFE' if is_safe else 'UNSAFE'}.")
-        logger.debug(f"Video data: {json.dumps(video_data, indent=4)}")
-        return is_safe
-
-    def is_safe_frames(self, frames: Iterable) -> bool:
-        """Check if the video frames are safe."""
-        is_safe = True
-        frame_scores = []
-
-        for frame_number, frame in enumerate(frames):
-            try:
-                pil_image = PIL.Image.fromarray(frame)
-                predicted_class = self._infer(pil_image)
-                class_name = CLASS_IDX_TO_NAME.get(predicted_class, "Unknown")
-                frame_scores.append({"frame_number": frame_number, "class": class_name})
-
-                # If any frame is not "Safe", mark as not safe
-                if predicted_class != 0:
-                    is_safe = False
-                    break
-
-            except Exception as e:
-                logger.warning(
-                    f"Warning: Failed to run safety classifier on frame_number {frame_number}. Exception: {e}"
-                )
-                continue
-
-        video_data = {
-            "is_safe": is_safe,
-            "frame_scores": frame_scores,
-        }
-
-        logger.debug(f"Frames data: {json.dumps(video_data, indent=4)}")
-        return is_safe
-
-class RBLNRetinaFaceFilter(RBLNTorchModel, RetinaFaceFilter):
-    def __post_init__(self, **kwargs):
-        self.net = RBLNPytorchRuntime(self.model[0])
-        self.cfg = cfg_re50
-        self.cfg["pretrain"] = False
-        self.batch_size = 1             # hard coded
-        self.confidence_threshold = 0.7 # hard coded
+        if len(missing_files) == 1:
+            message = f"The rbln model folder is missing the required '{missing_files[0]}.rbln' file. "
+        else:
+            files_str = ", ".join([f"'{f}.rbln'" for f in missing_files])
+            message = (
+                "The rbln model folder is missing required files. "
+                f"Ensure that {files_str} files are present in the folder. "
+            )
+        message += (
+            "These files are necessary for loading the rbln model. "
+            "If these files are missing, please recompile the model using the latest optimum-rbln "
+            "and ensure the compilation completes successfully."
+        )
+        raise KeyError(message)
         
+    def parameters(self):
+        for param in [torch.tensor([1], dtype=torch.float32, device=torch.device("cpu"))]:
+            yield param
+    
+    def __call__(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
+        output = self.model[0](*args, **kwargs)
+        return output
+
+class RBLNRetinaFace(RBLNsimpleModel):
     @classmethod
-    def _get_rbln_config(
-        cls,
-        preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
-        model_config: "PretrainedConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
+    def _get_rbln_config(cls, rbln_kwargs):
         height = rbln_kwargs.get("height", 704)
         width = rbln_kwargs.get("width", 1280)
         input_info = [("frames", [1, 3, height, width], "float32")] # hard coded
         
         postprocessor_config = RBLNCompileConfig(
-            compiled_model_name="postprocessor_0",
             input_info=input_info
         )
         
@@ -270,111 +280,73 @@ class RBLNRetinaFaceFilter(RBLNTorchModel, RetinaFaceFilter):
             rbln_kwargs=rbln_kwargs,
         )
         return rbln_config
+
+class RBLNSafetyClassifier(RBLNsimpleModel):
+    @classmethod
+    def _get_rbln_config(cls, rbln_kwargs):
+        input_info_cls = [("data", [1, 1152], "float32")]                # hard coded
+        cls_config = RBLNCompileConfig(
+            input_info=input_info_cls
+        )
+
+        rbln_config = RBLNConfig(
+            rbln_cls=cls.__name__,
+            compile_cfgs=[cls_config],
+            rbln_kwargs=rbln_kwargs,
+        )
+        return rbln_config
+
+class RBLNVideoSafetyModel:
+    def __init__(self, model):
+        self.network = model
     
-    @classmethod
-    def get_compiled_model(cls, model, rbln_config: RBLNConfig):
-        # RetinaFace
-        postprocessors = model.net
-        postprocessors_compiled_model = cls.compile(postprocessors, rbln_compile_config=rbln_config.compile_cfgs[0])
+    def parameters(self):
+        return self.network.parameters()
 
-        return {"postprocessor_0" : postprocessors_compiled_model}
-                
-    @classmethod
-    def _create_runtimes(
-        cls,
-        compiled_models: List[rebel.RBLNCompiledModel],
-        rbln_device_map: Dict[str, int],
-        activate_profiler: Optional[bool] = None,
-    ) -> List[rebel.Runtime]:
-        if "postprocessor_0" not in rbln_device_map:
-            cls._raise_missing_compiled_file_error(["postprocessor_0"])
+# class RBLNVideoSafetyModel(RBLNsimpleModel):
+#     @classmethod
+#     def _get_rbln_config(cls, rbln_kwargs):
+#         input_info_cls = [("data", [1, 1152], "float32")]                # hard coded
+#         cls_config = RBLNCompileConfig(
+#             input_info=input_info_cls
+#         )
 
-        device = rbln_device_map["postprocessor_0"]
-        return [
-            compiled_model.create_runtime(tensor_type="pt", device=device, activate_profiler=activate_profiler)
-            for compiled_model in compiled_models
-        ]
-        
-    def preprocess_frames(self, frames: np.ndarray) -> torch.Tensor:
-        """Preprocess a sequence of frames for face detection.
+#         rbln_config = RBLNConfig(
+#             rbln_cls=cls.__name__,
+#             compile_cfgs=[cls_config],
+#             rbln_kwargs=rbln_kwargs,
+#         )
+#         return rbln_config
+    
+#     @classmethod
+#     def wrap_model_if_needed(cls, model):
+#         return model.network
+    
+#     def network(self, x):
+#         return self.forward(x)
+    
+#     # def parameters(self):
+#     #     return self.network.parameters()
 
-        Args:
-            frames: Input frames
-
-        Returns:
-            Preprocessed frames tensor
-        """
-        with torch.no_grad():
-            frames_tensor = torch.from_numpy(frames).to(device=torch.device("cpu"), dtype=torch.float32)  # Shape: [T, H, W, C]
-            frames_tensor = frames_tensor.permute(0, 3, 1, 2)  # Shape: [T, C, H, W]
-            frames_tensor = frames_tensor[:, [2, 1, 0], :, :]  # RGB to BGR to match RetinaFace model input
-            means = torch.tensor([104.0, 117.0, 123.0], device=torch.device("cpu"), dtype=torch.float32).view(1, 3, 1, 1)
-            frames_tensor = frames_tensor - means  # Subtract mean BGR values for each channel
-            return frames_tensor
-
-    def postprocess(self, frames: np.ndarray) -> np.ndarray:
-        """Blur faces in a sequence of frames.
-
-        Args:
-            frames: Input frames
-
-        Returns:
-            Processed frames with pixelated faces
-        """
-        # Create dataset and dataloader
-        frames_tensor = self.preprocess_frames(frames)
-        dataset = TensorDataset(frames_tensor)
-        dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=False)
-        processed_frames, processed_batches = [], []
-
-        prior_data, scale = None, None
-        for i, batch in enumerate(dataloader):
-            batch = batch[0]
-            h, w = batch.shape[-2:]  # Batch shape: [C, H, W]
-
-            with torch.no_grad():
-                # Generate priors for the video
-                if prior_data is None:
-                    priorbox = PriorBox(self.cfg, image_size=(h, w))
-                    priors = priorbox.forward()
-                    priors = priors.to(device=torch.device("cpu"), dtype=torch.float32)
-                    prior_data = priors.data
-
-                # Get scale for resizing detections
-                if scale is None:
-                    scale = torch.Tensor([w, h, w, h])
-                    scale = scale.to(device=torch.device("cpu"), dtype=torch.float32)
-
-                batch_loc, batch_conf, _ = self.net(batch)
-
-            # Blur detected faces in each batch of frames
-            start_idx = i * self.batch_size
-            end_idx = min(start_idx + self.batch_size, len(frames))
-            processed_batches.append(
-                self.blur_detected_faces(frames[start_idx:end_idx], batch_loc, batch_conf, prior_data, scale)
-            )
-
-        processed_frames = [frame for batch in processed_batches for frame in batch]
-        return np.array(processed_frames)
-
-class RBLNRuntimeSigLIPEncoder(RBLNPytorchRuntime):
+class RBLNRuntimeSiglipVisionModel(RBLNPytorchRuntime):
     def __init__(self, runtime, **kwargs):
         super().__init__(runtime=runtime, **kwargs)
         self.model = runtime
-        # self.processor = processor
-        checkpoint_dir = COSMOS_GUARDRAIL_CHECKPOINT # snapshot_folder need
-        import pathlib
-        checkpoint_dir = (pathlib.Path(checkpoint_dir) / "video_content_safety_filter").as_posix()
-        self.processor = SiglipProcessor.from_pretrained("google/siglip-so400m-patch14-384", cache_dir=checkpoint_dir)
-
-    # @torch.inference_mode()
-    def encode_image(self, input_img: PIL.Image.Image) -> torch.Tensor:
-        """Encode an image into a feature vector."""
-        with torch.no_grad():
-            inputs = self.processor(images=input_img, return_tensors="pt").to(torch.device("cpu"), dtype=torch.float32)
-            image_features = self.model(**inputs)
-            image_features /= image_features.norm(dim=-1, keepdim=True)
-        return image_features
+        
+    def get_image_features(
+        self,
+        pixel_values: Optional[torch.FloatTensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+        interpolate_pos_encoding: bool = False,
+        ) -> torch.FloatTensor:
+        # Use SiglipModel's config for some fields (if specified) instead of those of vision & text components.
+        vision_outputs = self.model(
+            pixel_values=pixel_values,
+        )
+        pooled_output = vision_outputs[1]
+        return pooled_output
 
 class _SiglipVisionModel(torch.nn.Module):
     def __init__(self, model):
@@ -382,91 +354,271 @@ class _SiglipVisionModel(torch.nn.Module):
         self.model = model
 
     def forward(self, pixel_values):
-        return self.model.get_image_features(
+        return self.model(
             pixel_values=pixel_values,
             return_dict=False,
         )
 
-class RBLNAegis(Aegis): 
+class RBLNSiglipVisionModel(RBLNsimpleModel):
     @classmethod
-    def from_model(
-        cls, 
-        model: torch.nn.Module, 
-        rbln_config: Dict[str, Any] = {},
-        model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
-        subfolder: str = "",
-        **kwargs,):
-        batch_size = rbln_config.get("batch_size", 1)
-        tensor_parallel_size = rbln_config.get("tensor_parallel_size", 4)
-        max_seq_len = rbln_config.get("max_seq_len", 4096)
+    def _get_rbln_config(cls, rbln_kwargs):
+        input_info_enc = [("pixel_values", [1, 3, 384, 384], "float32")] # hard coded
+        enc_config = RBLNCompileConfig(
+            input_info=input_info_enc
+        )
+
+        rbln_config = RBLNConfig(
+            rbln_cls=cls.__name__,
+            compile_cfgs=[enc_config],
+            rbln_kwargs=rbln_kwargs,
+        )
+        return rbln_config
+    
+    @classmethod
+    def wrap_model_if_needed(cls, model):
+        return _SiglipVisionModel(model)
+    
+    @classmethod
+    def wrap_runtime_if_needed(cls, model):
+        return RBLNRuntimeSiglipVisionModel(model)
+
+
+class RBLNLlamaGuard(RBLNLlamaForCausalLM):
+    @classmethod
+    def load_compiled_models(cls, model_id, rbln_config, subfolder=""):
+        text_config = rbln_config.get("text_guardrail", {})
+        model = RBLNLlamaForCausalLM.from_pretrained(
+            model_id=model_id,
+            export=False,
+            rbln_config=text_config,
+        )
+        return model
         
-        # aeigs = cls(model.tokenizer)
-        llama = model.model.merge_and_unload()
+    @classmethod
+    def compile_model(cls, model, rbln_kwargs, model_save_dir, subfolder=""):
+        batch_size = rbln_kwargs.get("batch_size", 1)
+        
+        max_seq_len = rbln_kwargs.get("max_seq_len", 4096)
+        tensor_parallel_size = rbln_kwargs.get("tensor_parallel_size", 4)
+        model = model.merge_and_unload()
         compiled_model = RBLNLlamaForCausalLM.from_model(
-                    llama, 
+                    model, 
                     export=True,
                     rbln_batch_size=batch_size,
                     rbln_max_seq_len=max_seq_len,
                     rbln_tensor_parallel_size=tensor_parallel_size,
                     model_save_dir=model_save_dir,
-                    # subfolder=subfolder
+                    subfolder=subfolder
                     )
-        delattr(model, "model")
-        setattr(model, "model", compiled_model)
-        return model
+        return compiled_model
 
-    
-    def filter_aegis_output(self, prompt: str) -> tuple[bool, str]:
-        """Filter the Aegis model output and return the safety status and message."""
-        full_prompt = self.get_moderation_prompt(prompt)
-        inputs = self.tokenizer([full_prompt], add_special_tokens=False, return_tensors="pt").to(torch.device("cpu"))
-        import pdb; pdb.set_trace()
-        output = self.model.generate(**inputs, max_new_tokens=100, pad_token_id=self.tokenizer.eos_token_id)
-        prompt_len = inputs["input_ids"].shape[-1]
-        moderation_output = self.tokenizer.decode(output[0][prompt_len:], skip_special_tokens=True)
-
-        if "unsafe" in moderation_output.lower():
-            block_msg = self.get_aegis_block_message(moderation_output)
-            return False, block_msg
-        else:
-            return True, ""
-
-import importlib
-class RBLNCosmosSafetyChecker(torch.nn.Module):
+class RBLNCosmosSafetyChecker:
     original_class = CosmosSafetyChecker
-    _submodules = {
-        "text_guardrail": 
-            {
-                "safety_models" : [1]
-                }, 
+    # _submodules = {
+    #     "video_guardrail" : 
+    #         {
+    #             "postprocessors" : {
+    #                 0 : {
+    #                     "net" :RBLNRetinaFace
+    #                     }
+    #                 },
+    #             "safety_models" : {
+    #                 0: {
+    #                     "encoder" : {
+    #                         "model":
+    #                             {
+    #                                 "vision_model": RBLNSiglipVisionModel 
+    #                                 }
+    #                         },
+    #                     "model" : {
+    #                         "network" : RBLNSafetyClassifier
+    #                         }
+    #                     }
+    #                 },
+    #             },
+    #     "text_guardrail": 
+    #         {
+    #             "safety_models" : {
+    #                 1 : {
+    #                     "model" : RBLNLlamaForCausalLM
+    #                     }
+    #                 }
+    #             }, 
+    #     }
+    _submodules_dir = {
         "video_guardrail" : 
-            {
-                "postprocessors" : [0],
-                "safety_models" : [0],
-                },
-        
+                {
+                    "postprocessors": "net",   
+                    "safety_models": {
+                        "encoder": "vision_model", 
+                        "model": "network"
+                        }
+                    },
+        "text_guardrail": "safety_models"
         }
-    # video_guardrail.safety_models[0].encoder.model
+    
     @classmethod
-    def _compile_submodules(cls, model, rbln_config, subfolder="", model_save_dir=""):
+    @use_rbln_config
+    def compile_submodules(cls, model, rbln_config, model_save_dir:str="safety_checker", subfolder:str=""):
+        # model_save_dir = Path(model_save_dir)
+        # model_save_dir.mkdir(exist_ok=True)
+        
+        # Todo Parsing
+        
+        # for guardrail, targets in cls._submodules.items():
+        #     for target, ids in targets.items():
+        #         target_path = Path(model_save_dir/guardrail/target)
+        #         for id, rbln_module in ids.items():
+        #             for module_name, _rbln_module in rbln_module.items():
+        #                 target_model = getattr(getattr(getattr(model, guardrail), target)[id], module_name)
+        #                 module_path = Path(target_path/module_name)
+        #                 os.makedirs(module_path, exist_ok=True)
+                        
+        #                 if isinstance(_rbln_module, dict):
+        #                     for _name, _module in _rbln_module.items():
+        #                         target_model = getattr(target_model, _name)
+        #                         _module_path = Path(module_path/_name)
+        #                         os.makedirs(_module_path, exist_ok=True)
+        #                         if isinstance(_module, dict):
+        #                             for n, m in _module.items():
+        #                                 target_model = getattr(target_model, n)
+        #                                 compiled_model = m.compile_model(
+        #                                     model=target_model,
+        #                                     rbln_kwargs=rbln_config,
+        #                                     model_save_dir=_module_path,
+        #                                     subfolder=n
+        #                                     )
+        #                         else :
+        #                             compiled_model = _rbln_module.compile_model(
+        #                             model=target_model,
+        #                             rbln_kwargs=rbln_config,
+        #                             model_save_dir=_module_path,
+        #                             subfolder=subfolder
+        #                             )
+        #                 else :
+        #                     compiled_model = _rbln_module.compile_model(
+        #                         model=target_model,
+        #                         rbln_kwargs=rbln_config,
+        #                         model_save_dir=module_path,
+        #                         subfolder=subfolder
+        #                         )
+                            
+        
+        
+        
         save_dir_path = Path(model_save_dir)
         save_dir_path.mkdir(exist_ok=True)
-        for guardrail_attr, targets in cls._submodules.items():
-            for target, ids in targets.items():
-                for id in ids:
-                    target_list = getattr(getattr(model, guardrail_attr), target)
-                    compile_target = target_list.pop(id) # aegis
-                    rbln_class = globals()[f"RBLN{compile_target.__class__.__name__}"]
-                    
-                    compiled_model = rbln_class.from_model(compile_target,
-                                                           export=True, 
-                                                           model_save_dir=f'{model_save_dir}/{guardrail_attr}',
-                                                           subfolder=f"{target}",
-                                                           rbln_config=rbln_config)
-                    del compile_target
-                    target_list.insert(id, compiled_model)
+        
+        save_dir_path = Path(model_save_dir+"/video_guardrail/postprocessors")
+        os.makedirs(save_dir_path, exist_ok=True)
+        
+        model_name = "net"
+        _model = model.video_guardrail.postprocessors[0]
+        compile_target = getattr(_model, model_name)
+        compiled_model = RBLNRetinaFace.compile_model(compile_target,
+                                                rbln_kwargs=rbln_config["video_guardrail"],
+                                                model_save_dir=save_dir_path,
+                                                )
+        delattr(_model, model_name)
+        setattr(_model, model_name, compiled_model)
+        
+        save_dir_path = Path(model_save_dir+"/video_guardrail/safety_models")
+        os.makedirs(save_dir_path, exist_ok=True)
+        
+        model_name = "network"
+        _model = model.video_guardrail.safety_models[0].model
+        compile_target = getattr(_model, model_name)
+        compiled_model = RBLNSafetyClassifier.compile_model(compile_target,
+                                                rbln_kwargs=rbln_config["video_guardrail"],
+                                                model_save_dir=save_dir_path,
+                                                subfolder=f"model",
+                                                )
+        delattr(model.video_guardrail.safety_models[0], "model")
+        setattr(model.video_guardrail.safety_models[0], "model", RBLNVideoSafetyModel(compiled_model))
+        
+        # model_name = "model"
+        # _model = model.video_guardrail.safety_models[0]
+        # compile_target = getattr(_model, model_name)
+        # compiled_model = RBLNVideoSafetyModel.compile_model(compile_target,
+        #                                         rbln_kwargs=rbln_config["video_guardrail"],
+        #                                         model_save_dir=save_dir_path,
+        #                                         subfolder=f"model",
+        #                                         )
+        # delattr(_model, model_name)
+        # setattr(_model, model_name, compiled_model)
+        
+        model_name = "vision_model"
+        _model = model.video_guardrail.safety_models[0].encoder.model
+        compile_target = getattr(_model, model_name)
+        compiled_model = RBLNSiglipVisionModel.compile_model(compile_target,
+                                                rbln_kwargs=rbln_config["video_guardrail"],
+                                                model_save_dir=save_dir_path,
+                                                subfolder=f"encoder",
+                                                )
+        delattr(_model, model_name)
+        setattr(_model, model_name, compiled_model)
+        
+        
+        save_dir_path = Path(model_save_dir+"/text_guardrail/safety_models")
+        os.makedirs(save_dir_path, exist_ok=True)
+        
+        model_name = "model"
+        _model = model.text_guardrail.safety_models[1]
+        compile_target = getattr(_model, model_name)
+        compiled_model = RBLNLlamaGuard.compile_model(
+                                                compile_target,
+                                                rbln_kwargs=rbln_config["text_guardrail"],
+                                                model_save_dir=save_dir_path,
+                                                )
+        delattr(_model, model_name)
+        setattr(_model, model_name, compiled_model)
         return model
 
+    @classmethod
+    @use_rbln_config
+    def load_submodules(cls, model, rbln_config, subfolder="", model_save_dir=""):
+        model_name = "net"
+        _model = model.video_guardrail.postprocessors[0]
+        save_dir_path = Path(model_save_dir+"/video_guardrail/postprocessors")
+        compiled_model = RBLNRetinaFace.load_compiled_models(
+            save_dir_path,
+            rbln_config=rbln_config["video_guardrail"],
+            )
+        delattr(_model, model_name)
+        setattr(_model, model_name, compiled_model)
+        
+        model_name = "network"
+        _model = model.video_guardrail.safety_models[0].model
+        save_dir_path = Path(model_save_dir+"/video_guardrail/safety_models")
+        compiled_model = RBLNSafetyClassifier.load_compiled_models(
+            save_dir_path,
+            rbln_config=rbln_config["video_guardrail"],
+            subfolder=f"model",
+            )
+        delattr(model.video_guardrail.safety_models[0], "model")
+        setattr(model.video_guardrail.safety_models[0], "model", RBLNVideoSafetyModel(compiled_model))
+        
+        model_name = "vision_model"
+        _model = model.video_guardrail.safety_models[0].encoder.model
+        compiled_model = RBLNSiglipVisionModel.load_compiled_models(
+            save_dir_path,
+            rbln_config=rbln_config["video_guardrail"],
+            subfolder=f"encoder",
+            )
+        delattr(_model, model_name)
+        setattr(_model, model_name, compiled_model)
+        
+        
+        save_dir_path = Path(model_save_dir+"/text_guardrail/safety_models")
+        model_name = "model"
+        _model = model.text_guardrail.safety_models[1]
+        compiled_model = RBLNLlamaGuard.load_compiled_models(
+            save_dir_path,
+            rbln_config=rbln_config["text_guardrail"],
+        )
+        delattr(_model, model_name)
+        setattr(_model, model_name, compiled_model)
+        return model
 
     def check_text_safety(self, prompt: str) -> bool:
         is_safe, message = self.text_guardrail.run_safety_check(prompt)
