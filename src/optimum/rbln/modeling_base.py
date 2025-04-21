@@ -492,11 +492,6 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             # First copy everything to a temporary directory
             shutil.copytree(real_save_dir, tmp_dir)
 
-            # Save configs to the temporary directory
-            self.config.save_pretrained(tmp_dir)
-            if self.generation_config is not None:
-                self.generation_config.save_pretrained(tmp_dir)
-
             # If everything succeeded, atomically replace the target directory
             if os.path.exists(save_directory_path):
                 shutil.rmtree(save_directory_path)
