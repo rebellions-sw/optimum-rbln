@@ -69,7 +69,7 @@ class RBLNDiffusionMixin:
     _connected_classes = {}
     _submodules = []
     _prefix = {}
-    _optional_components=[]
+    _optional_components = []
 
     @classmethod
     def is_img2img_pipeline(cls):
@@ -329,7 +329,7 @@ class RBLNDiffusionMixin:
                     controlnet_rbln_config=submodule_rbln_config,
                     prefix=prefix,
                 )
-            elif isinstance(submodule, torch.nn.Module): # for pretrainedmodel
+            elif isinstance(submodule, torch.nn.Module):  # for pretrainedmodel
                 submodule_cls: torch.nn.Module = getattr(
                     importlib.import_module("optimum.rbln"), f"RBLN{submodule.__class__.__name__}"
                 )

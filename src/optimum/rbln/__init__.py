@@ -113,6 +113,8 @@ if TYPE_CHECKING:
     from .diffusers import (
         RBLNAutoencoderKL,
         RBLNControlNetModel,
+        RBLNCosmosPipeline,
+        RBLNCosmosSafetyChecker,
         RBLNDiffusionMixin,
         RBLNKandinskyV22CombinedPipeline,
         RBLNKandinskyV22Img2ImgCombinedPipeline,
@@ -139,8 +141,6 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLPipeline,
         RBLNUNet2DConditionModel,
         RBLNVQModel,
-        RBLNCosmosPipeline,
-        RBLNCosmosSafetyChecker,
     )
     from .modeling import (
         RBLNBaseModel,

@@ -12,5 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .pipeline_cosmos import RBLNCosmosPipeline
 from .cosmos_guardrail import RBLNCosmosSafetyChecker
+from .pipeline_cosmos import RBLNCosmosPipeline

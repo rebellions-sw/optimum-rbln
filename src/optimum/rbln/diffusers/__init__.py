@@ -72,6 +72,8 @@ if TYPE_CHECKING:
         RBLNVQModel,
     )
     from .pipelines import (
+        RBLNCosmosPipeline,
+        RBLNCosmosSafetyChecker,
         RBLNKandinskyV22CombinedPipeline,
         RBLNKandinskyV22Img2ImgCombinedPipeline,
         RBLNKandinskyV22Img2ImgPipeline,
@@ -93,8 +95,6 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLImg2ImgPipeline,
         RBLNStableDiffusionXLInpaintPipeline,
         RBLNStableDiffusionXLPipeline,
-        RBLNCosmosPipeline,
-        RBLNCosmosSafetyChecker
     )
 else:
     import sys
