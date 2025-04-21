@@ -333,22 +333,13 @@ class RBLNDiffusionMixin:
                 submodule_cls: torch.nn.Module = getattr(
                     importlib.import_module("optimum.rbln"), f"RBLN{submodule.__class__.__name__}"
                 )
-                if submodule_name in cls._optional_components:
-                    subfolder = prefix + submodule_name
-                    submodule = cls._compile_submodules(
-                        model=submodule,
-                        subfolder=subfolder,
-                        model_save_dir=model_save_dir,
-                        rbln_config=submodule_rbln_config,
-                    )
-                else:
-                    subfolder = prefix + submodule_name
-                    submodule = submodule_cls.from_model(
-                        model=submodule,
-                        subfolder=subfolder,
-                        model_save_dir=model_save_dir,
-                        rbln_config=submodule_rbln_config,
-                    )
+                subfolder = prefix + submodule_name
+                submodule = submodule_cls.from_model(
+                    model=submodule,
+                    subfolder=subfolder,
+                    model_save_dir=model_save_dir,
+                    rbln_config=submodule_rbln_config,
+                )
             else:
                 raise ValueError(f"Unknown class of submodule({submodule_name}) : {submodule.__class__.__name__} ")
 
