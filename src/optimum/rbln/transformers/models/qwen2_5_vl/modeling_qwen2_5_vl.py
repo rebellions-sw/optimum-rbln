@@ -412,36 +412,6 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
 
         return input_info
 
-    @classmethod
-    def _update_rbln_config(
-        cls,
-        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
-        model: Optional["PreTrainedModel"] = None,
-        model_config: Optional["PretrainedConfig"] = None,
-        rbln_config: Optional[RBLNQwen2_5_VLForConditionalGenerationConfig] = None,
-    ) -> RBLNQwen2_5_VLForConditionalGenerationConfig:
-        if rbln_config.max_seq_len is None:
-            max_seq_len = getattr(model_config, "max_position_embeddings", None)
-            attn_impl, kvcache_partition_len, _ = set_default_values(
-                attn_impl=rbln_config.attn_impl,
-                kvcache_partition_len=rbln_config.kvcache_partition_len,
-                kvcache_block_size=rbln_config.kvcache_block_size,
-                max_seq_len=rbln_config.max_seq_len,
-            )
-            # Constraints of flash attention: `max_seq_len` should be multiple of `partition_len`.
-            if attn_impl == "flash_attn":
-                if max_seq_len % kvcache_partition_len > 0:
-                    rbln_config.max_seq_len = max_seq_len - max_seq_len % kvcache_partition_len
-                    logger.warning(
-                        f"max_seq_len ({max_seq_len}) is not a multiple of kvcache_partition_len ({kvcache_partition_len}). "
-                        f"Adjusted to {rbln_config.max_seq_len} to meet Flash Attention requirements. "
-                        f"To avoid this, set max_seq_len to a multiple of kvcache_partition_len in the 'RBLNQwen2_5_VLForConditionalGenerationConfig'."
-                    )
-        rbln_config = super()._update_rbln_config(
-            preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
-        )
-        return rbln_config
-
     def prepare_inputs_for_generation(
         self,
         input_ids: torch.LongTensor,
