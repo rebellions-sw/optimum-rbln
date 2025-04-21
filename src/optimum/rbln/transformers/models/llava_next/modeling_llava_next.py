@@ -26,8 +26,8 @@ from transformers import (
 )
 from transformers.modeling_outputs import BaseModelOutputWithPooling
 
+from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyOutput
 
@@ -134,7 +134,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         model: "LlavaNextForConditionalGeneration",
         save_dir_path: Path,
         subfolder: str,
-        rbln_config: RBLNConfig,
+        rbln_config: RBLNModelConfig,
     ):
         """
         If you are unavoidably running on a CPU rather than an RBLN device,
@@ -161,42 +161,31 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         return self.language_model.get_input_embeddings()
 
     @classmethod
-    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNConfig):
+    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
         return model.multi_modal_projector
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+        model: Optional["PreTrainedModel"] = None,
         model_config: Optional["PretrainedConfig"] = None,
-        rbln_kwargs={},
-    ) -> RBLNConfig:
-        vision_feature_select_strategy = rbln_kwargs.get("vision_feature_select_strategy", None)
-
-        # 1. Multi-modal projection layer
-        batch_size = rbln_kwargs.get("rbln_batch_size", None)
-        if batch_size is None:
-            batch_size = 1
-
+        rbln_config: Optional[RBLNModelConfig] = None,
+    ) -> RBLNModelConfig:
         feature_size = model_config.vision_config.hidden_size
-
-        # See forward function to see more details.
-        vision_feature_select_strategy = (
-            vision_feature_select_strategy
-            if vision_feature_select_strategy is not None
-            else model_config.vision_feature_select_strategy
-        )
 
         # Calculating `num_positions` : See CLIPVisionEmbeddings of transformers for more details.
         num_positions = (model_config.vision_config.image_size // model_config.vision_config.patch_size) ** 2 + 1
-        if vision_feature_select_strategy == "default":
+        if model_config.vision_feature_select_strategy == "default":
             selected_image_feature_dim = num_positions - 1
         else:
             selected_image_feature_dim = num_positions
 
-        input_info = [("image_features", [batch_size, selected_image_feature_dim, feature_size], "float32")]
+        input_info = [
+            ("image_features", [rbln_config.batch_size, selected_image_feature_dim, feature_size], "float32")
+        ]
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
-        rbln_config = RBLNConfig(rbln_cls=cls.__name__, compile_cfgs=[rbln_compile_config], rbln_kwargs=rbln_kwargs)
+        rbln_config.set_compile_cfgs([rbln_compile_config])
         return rbln_config
 
     def prepare_inputs_for_generation(
