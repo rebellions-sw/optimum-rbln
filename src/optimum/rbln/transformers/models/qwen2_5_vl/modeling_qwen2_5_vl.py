@@ -111,13 +111,11 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
         model_config: "PretrainedConfig" = None,
         rbln_config: Optional[RBLNQwen2_5_VisionTransformerPretrainedModelConfig] = None,
     ) -> RBLNQwen2_5_VisionTransformerPretrainedModelConfig:
-        if rbln_config.max_seq_lens is None:
-            rbln_config.max_seq_lens = [20480, 10240, 5120, 2048, 1024]
-
         window_size = getattr(model_config, "window_size")
         patch_size = getattr(model_config, "patch_size")
         hidden_size = getattr(model_config, "hidden_size")
         num_heads = getattr(model_config, "num_heads")
+        head_dim = hidden_size // num_heads
         window_seq_len = (window_size // patch_size) ** 2
 
         input_infos = []
@@ -132,12 +130,12 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
                 ),
                 (
                     "cos",
-                    [1, 1, max_seq_len, hidden_size // num_heads],
+                    [1, 1, max_seq_len, head_dim],
                     "float32",
                 ),
                 (
                     "sin",
-                    [1, 1, max_seq_len, hidden_size // num_heads],
+                    [1, 1, max_seq_len, head_dim],
                     "float32",
                 ),
             ]

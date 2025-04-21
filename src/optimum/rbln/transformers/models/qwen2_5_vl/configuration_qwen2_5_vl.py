@@ -41,7 +41,7 @@ class RBLNQwen2_5_VLForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausal
 
 
 class RBLNQwen2_5_VisionTransformerPretrainedModelConfig(RBLNModelConfig):
-    def __init__(self, max_seq_lens: Optional[Union[int, List[int]]] = None, **kwargs):
+    def __init__(self, max_seq_lens: Union[int, List[int]] = None, **kwargs):
         """
         Args:
             max_seq_lens (Optional[Union[int, List[int]]): The lengths of seq in ViT attention.
@@ -52,9 +52,13 @@ class RBLNQwen2_5_VisionTransformerPretrainedModelConfig(RBLNModelConfig):
             ValueError: If batch_size is not a positive integer.
         """
         super().__init__(**kwargs)
-        if isinstance(max_seq_lens, int):
-            max_seq_lens = [max_seq_lens]
-        elif isinstance(max_seq_lens, list):
-            max_seq_lens.sort(reverse=True)
+
+        if max_seq_lens is not None:
+            if isinstance(max_seq_lens, int):
+                max_seq_lens = [max_seq_lens]
+            elif isinstance(max_seq_lens, list):
+                max_seq_lens.sort(reverse=True)
+        else:
+            raise ValueError("'max_seq_lens' must be specified in the 'visual' configuration.")
 
         self.max_seq_lens = max_seq_lens
