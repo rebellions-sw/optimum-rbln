@@ -48,7 +48,7 @@ class _RBLNKandinskyV22PipelineBaseConfig(RBLNModelConfig):
                 Initialized as RBLNVQModelConfig if not provided.
             sample_size (Optional[Tuple[int, int]]): Spatial dimensions for the UNet model.
             batch_size (Optional[int]): Batch size for inference, applied to all submodules.
-            guidance_scale (Optional[float]): Scale for classifier-free guidance. Deprecated parameter.
+            guidance_scale (Optional[float]): Scale for classifier-free guidance.
             image_size (Optional[Tuple[int, int]]): Dimensions for the generated images.
                 Cannot be used together with img_height/img_width.
             img_height (Optional[int]): Height of the generated images.
@@ -79,8 +79,13 @@ class _RBLNKandinskyV22PipelineBaseConfig(RBLNModelConfig):
             sample_size=image_size,  # image size is equal to sample size in vae
         )
 
-        if guidance_scale is not None:
-            logger.warning("Specifying `guidance_scale` is deprecated. It will be removed in a future version.")
+        # Get default guidance scale from original class to set UNet batch size
+        guidance_scale = (
+            guidance_scale
+            or self.get_default_values_for_original_cls("__call__", ["guidance_scale"])["guidance_scale"]
+        )
+
+        if not self.unet.batch_size_is_specified:
             do_classifier_free_guidance = guidance_scale > 1.0
             if do_classifier_free_guidance:
                 self.unet.batch_size = self.movq.batch_size * 2
@@ -134,7 +139,7 @@ class RBLNKandinskyV22PriorPipelineConfig(RBLNModelConfig):
             prior (Optional[RBLNPriorTransformerConfig]): Configuration for the prior transformer component.
                 Initialized as RBLNPriorTransformerConfig if not provided.
             batch_size (Optional[int]): Batch size for inference, applied to all submodules.
-            guidance_scale (Optional[float]): Scale for classifier-free guidance. Deprecated parameter.
+            guidance_scale (Optional[float]): Scale for classifier-free guidance.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Note:
@@ -151,8 +156,13 @@ class RBLNKandinskyV22PriorPipelineConfig(RBLNModelConfig):
 
         self.prior = self.init_submodule_config(RBLNPriorTransformerConfig, prior, batch_size=batch_size)
 
-        if guidance_scale is not None:
-            logger.warning("Specifying `guidance_scale` is deprecated. It will be removed in a future version.")
+        # Get default guidance scale from original class to set UNet batch size
+        guidance_scale = (
+            guidance_scale
+            or self.get_default_values_for_original_cls("__call__", ["guidance_scale"])["guidance_scale"]
+        )
+
+        if not self.prior.batch_size_is_specified:
             do_classifier_free_guidance = guidance_scale > 1.0
             if do_classifier_free_guidance:
                 self.prior.batch_size = self.text_encoder.batch_size * 2
@@ -205,7 +215,7 @@ class _RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
             batch_size (Optional[int]): Batch size for inference, applied to all submodules.
             img_height (Optional[int]): Height of the generated images.
             img_width (Optional[int]): Width of the generated images.
-            guidance_scale (Optional[float]): Scale for classifier-free guidance. Deprecated parameter.
+            guidance_scale (Optional[float]): Scale for classifier-free guidance.
             prior_prior (Optional[RBLNPriorTransformerConfig]): Direct configuration for the prior transformer.
                 Used if prior_pipe is not provided.
             prior_image_encoder (Optional[RBLNCLIPVisionModelWithProjectionConfig]): Direct configuration for the image encoder.

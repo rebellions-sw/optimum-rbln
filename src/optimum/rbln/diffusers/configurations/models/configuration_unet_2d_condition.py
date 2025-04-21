@@ -18,6 +18,8 @@ from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNUNet2DConditionModelConfig(RBLNModelConfig):
+    subclass_non_save_attributes = ["_batch_size_is_specified"]
+
     def __init__(
         self,
         batch_size: Optional[int] = None,
@@ -49,6 +51,8 @@ class RBLNUNet2DConditionModelConfig(RBLNModelConfig):
             ValueError: If batch_size is not a positive integer.
         """
         super().__init__(**kwargs)
+        self._batch_size_is_specified = batch_size is not None
+
         self.batch_size = batch_size or 1
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
@@ -64,3 +68,7 @@ class RBLNUNet2DConditionModelConfig(RBLNModelConfig):
         self.sample_size = sample_size
         if isinstance(sample_size, int):
             self.sample_size = (sample_size, sample_size)
+
+    @property
+    def batch_size_is_specified(self):
+        return self._batch_size_is_specified

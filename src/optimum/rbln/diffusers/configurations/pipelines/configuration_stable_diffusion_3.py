@@ -63,7 +63,7 @@ class _RBLNStableDiffusion3PipelineBaseConfig(RBLNModelConfig):
             batch_size (Optional[int]): Batch size for inference, applied to all submodules.
             img_height (Optional[int]): Height of the generated images.
             img_width (Optional[int]): Width of the generated images.
-            guidance_scale (Optional[float]): Scale for classifier-free guidance. Deprecated parameter.
+            guidance_scale (Optional[float]): Scale for classifier-free guidance.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -108,8 +108,13 @@ class _RBLNStableDiffusion3PipelineBaseConfig(RBLNModelConfig):
             sample_size=image_size,
         )
 
-        if guidance_scale is not None:
-            logger.warning("Specifying `guidance_scale` is deprecated. It will be removed in a future version.")
+        # Get default guidance scale from original class to set Transformer batch size
+        guidance_scale = (
+            guidance_scale
+            or self.get_default_values_for_original_cls("__call__", ["guidance_scale"])["guidance_scale"]
+        )
+
+        if not self.transformer.batch_size_is_specified:
             do_classifier_free_guidance = guidance_scale > 1.0
             if do_classifier_free_guidance:
                 self.transformer.batch_size = self.text_encoder.batch_size * 2

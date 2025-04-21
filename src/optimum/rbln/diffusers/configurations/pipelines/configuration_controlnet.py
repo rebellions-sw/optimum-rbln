@@ -58,7 +58,7 @@ class _RBLNStableDiffusionControlNetPipelineBaseConfig(RBLNModelConfig):
             sample_size (Optional[Tuple[int, int]]): Spatial dimensions for the UNet model.
             image_size (Optional[Tuple[int, int]]): Alternative way to specify image dimensions.
                 Cannot be used together with img_height/img_width.
-            guidance_scale (Optional[float]): Scale for classifier-free guidance. Deprecated parameter.
+            guidance_scale (Optional[float]): Scale for classifier-free guidance.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -91,8 +91,13 @@ class _RBLNStableDiffusionControlNetPipelineBaseConfig(RBLNModelConfig):
         )
         self.controlnet = self.init_submodule_config(RBLNControlNetModelConfig, controlnet, batch_size=batch_size)
 
+        # Get default guidance scale from original class to set UNet and ControlNet batch size
+        guidance_scale = (
+            guidance_scale
+            or self.get_default_values_for_original_cls("__call__", ["guidance_scale"])["guidance_scale"]
+        )
+
         if guidance_scale is not None:
-            logger.warning("Specifying `guidance_scale` is deprecated. It will be removed in a future version.")
             do_classifier_free_guidance = guidance_scale > 1.0
             if do_classifier_free_guidance:
                 self.unet.batch_size = self.text_encoder.batch_size * 2
@@ -157,7 +162,7 @@ class _RBLNStableDiffusionXLControlNetPipelineBaseConfig(RBLNModelConfig):
             sample_size (Optional[Tuple[int, int]]): Spatial dimensions for the UNet model.
             image_size (Optional[Tuple[int, int]]): Alternative way to specify image dimensions.
                 Cannot be used together with img_height/img_width.
-            guidance_scale (Optional[float]): Scale for classifier-free guidance. Deprecated parameter.
+            guidance_scale (Optional[float]): Scale for classifier-free guidance.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -193,11 +198,17 @@ class _RBLNStableDiffusionXLControlNetPipelineBaseConfig(RBLNModelConfig):
         )
         self.controlnet = self.init_submodule_config(RBLNControlNetModelConfig, controlnet, batch_size=batch_size)
 
-        if guidance_scale is not None:
-            logger.warning("Specifying `guidance_scale` is deprecated. It will be removed in a future version.")
-            do_classifier_free_guidance = guidance_scale > 1.0
-            if do_classifier_free_guidance:
+        # Get default guidance scale from original class to set UNet and ControlNet batch size
+        guidance_scale = (
+            guidance_scale
+            or self.get_default_values_for_original_cls("__call__", ["guidance_scale"])["guidance_scale"]
+        )
+
+        do_classifier_free_guidance = guidance_scale > 1.0
+        if do_classifier_free_guidance:
+            if not self.unet.batch_size_is_specified:
                 self.unet.batch_size = self.text_encoder.batch_size * 2
+            if not self.controlnet.batch_size_is_specified:
                 self.controlnet.batch_size = self.text_encoder.batch_size * 2
 
     @property

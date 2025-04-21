@@ -435,6 +435,7 @@ class RBLNModelConfig:
         "activate_profiler",
     ]
     submodules: List[str] = []
+    subclass_non_save_attributes = []
 
     def init_submodule_config(
         self,
@@ -463,7 +464,11 @@ class RBLNModelConfig:
         return submodule_config
 
     def __setattr__(self, key, value):
-        if key != "_attributes_map" and key not in self.non_save_attributes:
+        if (
+            key != "_attributes_map"
+            and key not in self.non_save_attributes
+            and key not in self.subclass_non_save_attributes
+        ):
             self._attributes_map[key] = value
 
         if hasattr(self, "_frozen") and self._frozen:
@@ -705,6 +710,29 @@ class RBLNModelConfig:
                 setattr(rbln_config, key, value)
 
         return rbln_config, kwargs
+
+    def get_default_values_for_original_cls(self, func_name: str, keys: List[str]) -> Dict[str, Any]:
+        """
+        Get default values for original class attributes from RBLNModelConfig.
+
+        Args:
+            rbln_config (RBLNModelConfig): The RBLN model configuration.
+            func_name (str): The name of the function to get the default values for.
+            keys (List[str]): The keys of the attributes to get.
+
+        Returns:
+            Dict[str, Any]: The default values for the attributes.
+        """
+        model_cls = self.rbln_model_cls.get_hf_class()
+        func = getattr(model_cls, func_name)
+        func_signature = inspect.signature(func)
+        default_values = {}
+        for key in keys:
+            if key in func_signature.parameters:
+                default_values[key] = func_signature.parameters[key].default
+            else:
+                raise ValueError(f"Default value for `{key}` is not set for the model class.")
+        return default_values
 
     @property
     def create_runtimes(self):

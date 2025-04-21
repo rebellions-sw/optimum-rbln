@@ -69,10 +69,9 @@ class TestSDXLModel(BaseTest.TestModel):
     # Fix incorrect tiny-sd-pipe-xl's vae config.json sample_size
     RBLN_CLASS_KWARGS = {
         "rbln_config": {
-            "unet": {"batch_size": 2},
             "vae": {
                 "sample_size": (64, 64),
-            },
+            }
         }
     }
 
@@ -92,10 +91,7 @@ class TestSDImg2ImgModel(BaseTest.TestModel):
         "rbln_config": {
             "vae": {
                 "sample_size": (64, 64),
-            },
-            "unet": {
-                "batch_size": 2,
-            },
+            }
         },
         "rbln_img_width": 64,
         "rbln_img_height": 64,
@@ -114,14 +110,6 @@ class TestSDControlNetModel(BaseTest.TestModel):
     RBLN_CLASS_KWARGS = {
         "rbln_img_width": 64,
         "rbln_img_height": 64,
-        "rbln_config": {
-            "controlnet": {
-                "batch_size": 2,
-            },
-            "unet": {
-                "batch_size": 2,
-            },
-        },
     }
 
     @classmethod
@@ -144,14 +132,6 @@ class TestSDXLControlNetModel(BaseTest.TestModel):
     RBLN_CLASS_KWARGS = {
         "rbln_img_width": 64,
         "rbln_img_height": 64,
-        "rbln_config": {
-            "unet": {
-                "batch_size": 2,
-            },
-            "controlnet": {
-                "batch_size": 2,
-            },
-        },
     }
 
     @classmethod
@@ -171,10 +151,12 @@ class TestSD3Model(BaseTest.TestModel):
     }
     RBLN_CLASS_KWARGS = {
         "rbln_config": {
-            "transformer": {
-                "batch_size": 2,
-            }
-        }
+            "text_encoder": {"rbln_device": 0},
+            "text_encoder_2": {"rbln_device": 0},
+            "text_encoder_3": {"rbln_device": -1},
+            "transformer": {"rbln_device": 0},
+            "vae": {"rbln_device": 0},
+        },
     }
 
 
@@ -188,9 +170,14 @@ class TestSD3Img2ImgModel(BaseTest.TestModel):
         "image": torch.randn(1, 3, 64, 64, generator=torch.manual_seed(42)),
     }
     RBLN_CLASS_KWARGS = {
+        "rbln_img_width": 64,
+        "rbln_img_height": 64,
         "rbln_config": {
-            "image_size": (64, 64),
-            "transformer": {"batch_size": 2},
+            "text_encoder": {"rbln_device": 0},
+            "text_encoder_2": {"rbln_device": 0},
+            "text_encoder_3": {"rbln_device": -1},
+            "transformer": {"rbln_device": 0},
+            "vae": {"rbln_device": 0},
         },
     }
 
@@ -212,14 +199,6 @@ class TestSDMultiControlNetModel(BaseTest.TestModel):
     RBLN_CLASS_KWARGS = {
         "rbln_img_width": 64,
         "rbln_img_height": 64,
-        "rbln_config": {
-            "controlnet": {
-                "batch_size": 2,
-            },
-            "unet": {
-                "batch_size": 2,
-            },
-        },
     }
 
     @classmethod
@@ -242,10 +221,6 @@ class TestKandinskyV22Model(BaseTest.TestModel):
     RBLN_CLASS_KWARGS = {
         "rbln_img_width": 64,
         "rbln_img_height": 64,
-        "rbln_config": {
-            "prior_pipe": {"prior": {"batch_size": 2}},
-            "decoder_pipe": {"unet": {"batch_size": 2}},
-        },
     }
 
     def test_complicate_config(self):
@@ -262,19 +237,22 @@ class TestKandinskyV22Model(BaseTest.TestModel):
                 "batch_size": 2,
             },
             "batch_size": 1,
+            "prior_guidance_scale": 5.0,
+            "guidance_scale": 3.0,
         }
-        rbln_class_kwargs_copy = self.RBLN_CLASS_KWARGS.copy()
-        rbln_class_kwargs_copy["rbln_config"] = rbln_config
         with self.subTest():
             _ = self.RBLN_CLASS.from_pretrained(
                 model_id=self.HF_MODEL_ID,
                 export=True,
-                **rbln_class_kwargs_copy,
+                rbln_config=rbln_config,
+                **self.RBLN_CLASS_KWARGS,
             )
         with self.subTest():
-            self.assertEqual(_.prior_text_encoder.rbln_config.batch_size, 2)
-            self.assertEqual(_.prior_prior.rbln_config.batch_size, 4)
-            self.assertEqual(_.unet.rbln_config.batch_size, 2)
+            self.assertEqual(_.prior_text_encoder.rbln_config.model_cfg["batch_size"], 2)
+            self.assertEqual(_.prior_prior.rbln_config.model_cfg["batch_size"], 4)
+            self.assertEqual(_.prior_prior.rbln_config.model_cfg["guidance_scale"], 5.0)
+            self.assertEqual(_.unet.rbln_config.model_cfg["batch_size"], 2)
+            self.assertEqual(_.unet.rbln_config.model_cfg["guidance_scale"], 3.0)
 
 
 if __name__ == "__main__":
