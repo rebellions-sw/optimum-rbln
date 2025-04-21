@@ -43,15 +43,16 @@ class SubModulesMixin:
         cls, model: "PreTrainedModel", model_save_dir: str, rbln_config: RBLNModelConfig, **kwargs
     ) -> List["RBLNBaseModel"]:
         rbln_submodules = []
-        prefix = next((sm["prefix"] for sm in cls._rbln_submodules if "prefix" in sm), "")
-        cls._rbln_submodules = [sm for sm in cls._rbln_submodules if "prefix" not in sm]
+        submodule_prefix = getattr(cls, "_rbln_submodule_prefix") or None
 
         for submodule in cls._rbln_submodules:
             submodule_name = submodule["name"]
-            prefix_submodule_name = f"{prefix}.{submodule_name}"
-            torch_submodule: PreTrainedModel = model
-            for part in prefix_submodule_name.split("."):
-                torch_submodule = getattr(torch_submodule, part)
+            if submodule_prefix is not None:
+                torch_submodule: PreTrainedModel = getattr(model, submodule_prefix)
+                torch_submodule = getattr(torch_submodule, submodule_name)
+            else:
+                torch_submodule: PreTrainedModel = getattr(model, submodule_name)
+
             cls_name = torch_submodule.__class__.__name__
             submodule_cls: Type["RBLNBaseModel"] = getattr(importlib.import_module("optimum.rbln"), f"RBLN{cls_name}")
             submodule_rbln_config = getattr(rbln_config, submodule_name) or {}
@@ -77,7 +78,6 @@ class SubModulesMixin:
     @classmethod
     def _load_submodules_from_compiled_models(cls, model_save_dir: str, rbln_config: RBLNModelConfig, **kwargs):
         rbln_submodules = []
-        cls._rbln_submodules = [sm for sm in cls._rbln_submodules if "prefix" not in sm]
 
         for submodule in cls._rbln_submodules:
             submodule_name = submodule["name"]
