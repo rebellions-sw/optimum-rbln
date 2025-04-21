@@ -367,21 +367,16 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
         new_inputs_embeds[special_image_token_mask] = reshaped_image_hidden_states
         return new_inputs_embeds
 
-    def forward(
+    def _preprocess_prefill(
         self,
         input_ids: torch.LongTensor = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.LongTensor] = None,
-        past_key_values: Optional[List[torch.FloatTensor]] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
         pixel_values: Optional[torch.FloatTensor] = None,
         pixel_attention_mask: Optional[torch.BoolTensor] = None,
         image_hidden_states: Optional[torch.FloatTensor] = None,
         cache_position: torch.Tensor = None,
-        generate_idx: Optional[torch.Tensor] = None,
-        batch_idx: Optional[int] = None,
         **kwargs,
-    ) -> Union[Tuple, Idefics3CausalLMOutputWithPast]:
+    ):
         if input_ids is not None:
             batch_size, seq_length = input_ids.shape
         elif inputs_embeds is not None:
@@ -457,8 +452,28 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
                 image_hidden_states=image_hidden_states,
             )
 
+        return inputs_embeds
+
+    def forward(
+        self,
+        input_ids: torch.LongTensor = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        past_key_values: Optional[List[torch.FloatTensor]] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        pixel_values: Optional[torch.FloatTensor] = None,
+        pixel_attention_mask: Optional[torch.BoolTensor] = None,
+        image_hidden_states: Optional[torch.FloatTensor] = None,
+        cache_position: torch.Tensor = None,
+        generate_idx: Optional[torch.Tensor] = None,
+        batch_idx: Optional[int] = None,
+        **kwargs,
+    ) -> Union[Tuple, Idefics3CausalLMOutputWithPast]:
         # Prefill
         if cache_position is None:
+            inputs_embeds = self._preprocess_prefill(
+                input_ids, inputs_embeds, pixel_values, pixel_attention_mask, image_hidden_states, cache_position
+            )
             logits = []
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
             batch_size = inputs.shape[0]
