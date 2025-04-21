@@ -78,6 +78,7 @@ class _RBLNKandinskyV22PipelineBaseConfig(RBLNModelConfig):
             movq,
             batch_size=batch_size,
             sample_size=image_size,  # image size is equal to sample size in vae
+            uses_encoder=self._movq_uses_encoder,
         )
 
         if guidance_scale is not None:
