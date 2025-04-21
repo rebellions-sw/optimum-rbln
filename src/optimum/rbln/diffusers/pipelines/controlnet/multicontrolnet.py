@@ -100,15 +100,14 @@ class RBLNMultiControlNetModel(RBLNModel):
         return_dict: bool = True,
     ):
         for i, (image, scale, controlnet) in enumerate(zip(controlnet_cond, conditioning_scale, self.nets)):
-            output = controlnet(
+            down_samples, mid_sample = controlnet(
                 sample=sample.contiguous(),
                 timestep=timestep.float(),
                 encoder_hidden_states=encoder_hidden_states,
                 controlnet_cond=image,
                 conditioning_scale=torch.tensor(scale),
+                return_dict=return_dict,
             )
-
-            down_samples, mid_sample = output[:-1], output[-1]
 
             # merge samples
             if i == 0:

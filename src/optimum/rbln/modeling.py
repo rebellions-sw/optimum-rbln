@@ -20,6 +20,7 @@ import rebel
 import torch
 from huggingface_hub.constants import HUGGINGFACE_HUB_CACHE
 from transformers import AutoConfig, PretrainedConfig
+from transformers.modeling_outputs import BaseModelOutput
 
 from .configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNModelConfig
 from .modeling_base import RBLNBaseModel
@@ -48,6 +49,9 @@ class RBLNModel(RBLNBaseModel):
         ```
     """
 
+    output_class = None
+    output_key = "last_hidden_state"
+
     @classmethod
     def update_kwargs(cls, kwargs):
         """
@@ -56,12 +60,7 @@ class RBLNModel(RBLNBaseModel):
         For example, `torchscript`=True should be set because torch.jit
         does not support `transformers` output instances as module output;
         """
-        kwargs.update(
-            {
-                "torchscript": True,
-                "return_dict": False,
-            }
-        )
+        kwargs.update({"torchscript": True})
         return kwargs
 
     @classmethod
@@ -122,8 +121,15 @@ class RBLNModel(RBLNBaseModel):
                 config = AutoConfig.from_pretrained(config._name_or_path, **kwargs)
 
         if hasattr(model, "can_generate") and model.can_generate():
+            import json
+
             generation_config = model.generation_config
-            generation_config.save_pretrained(save_dir_path / subfolder)
+            generation_config_path = save_dir_path / subfolder / "generation_config.json"
+
+            generation_config.save_pretrained(generation_config_path.parent)
+            local_config = json.loads(generation_config_path.read_text(encoding="utf-8"))
+            local_config["transformers_version"] = generation_config.transformers_version
+            generation_config_path.write_text(json.dumps(local_config, indent=2) + "\n", encoding="utf-8")
 
         if not isinstance(config, PretrainedConfig):  # diffusers config
             config = PretrainedConfig(**config)
@@ -225,6 +231,28 @@ class RBLNModel(RBLNBaseModel):
             for compiled_model in compiled_models
         ]
 
-    def forward(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
+    def forward(self, *args, return_dict: Optional[bool] = None, **kwargs):
+        if self.hf_library_name == "transformers":
+            return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        else:
+            return_dict = True if return_dict is None else return_dict
+
+        # Get output from the model
         output = self.model[0](*args, **kwargs)
-        return output
+
+        # Format output according to task requirements
+        return self._prepare_output(output, return_dict)
+
+    def _prepare_output(self, output, return_dict):
+        """
+        Prepare model output based on return_dict flag.
+        This method can be overridden by subclasses to provide task-specific output handling.
+        """
+        if not return_dict:
+            return (output,) if not isinstance(output, (tuple, list)) else output
+        else:
+            if self.output_class is None:
+                return BaseModelOutput(last_hidden_state=output)
+
+            # Create output with the appropriate class and key
+            return self.output_class(**{self.output_key: output})

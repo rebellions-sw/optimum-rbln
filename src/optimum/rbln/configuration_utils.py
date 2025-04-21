@@ -149,14 +149,19 @@ class RBLNAutoConfig:
         return cls(**kwargs)
 
     @staticmethod
-    def load(path: str, passed_rbln_config: Optional["RBLNModelConfig"] = None, **kwargs) -> "RBLNModelConfig":
+    def load(
+        path: str,
+        passed_rbln_config: Optional["RBLNModelConfig"] = None,
+        kwargs: Optional[Dict[str, Any]] = {},
+        return_unused_kwargs: bool = False,
+    ) -> Union["RBLNModelConfig", Tuple["RBLNModelConfig", Dict[str, Any]]]:
         """
         Load RBLNModelConfig from a path.
         Class name is automatically inferred from the `rbln_config.json` file.
 
         Args:
             path (str): Path to the RBLNModelConfig.
-            passed_rbln_config (Optional["RBLNModelConfig"]): RBLNModelConfig to be passed runtime options.
+            passed_rbln_config (Optional["RBLNModelConfig"]): RBLNModelConfig to pass its runtime options.
 
         Returns:
             RBLNModelConfig: The loaded RBLNModelConfig.
@@ -175,18 +180,223 @@ class RBLNAutoConfig:
         if len(rbln_kwargs) > 0:
             raise ValueError(f"Cannot set the following arguments: {list(rbln_kwargs.keys())}")
 
+        if passed_rbln_config is not None:
+            config_file.update(passed_rbln_config._runtime_options)
+            # TODO(jongho): Reject if the passed_rbln_config has different attributes from the config_file
+
         config_file.update(rbln_runtime_kwargs)
 
-        if passed_rbln_config is not None:
-            for key, value in passed_rbln_config._runtime_options.items():
-                if key in config_file:
-                    raise ValueError(f"Already set runtime option: {key}")
-                config_file[key] = value
-
-        return cls(**config_file)
+        if return_unused_kwargs:
+            return cls(**config_file), kwargs
+        else:
+            return cls(**config_file)
 
 
 class RBLNModelConfig:
+    """Base configuration class for RBLN models that handles compilation settings, runtime options, and submodules.
+
+    This class provides functionality for:
+    1. Managing compilation configurations for RBLN devices
+    2. Configuring runtime behavior such as device placement
+    3. Handling nested configuration objects for complex model architectures
+    4. Serializing and deserializing configurations
+
+    Examples:
+        Using with RBLNModel.from_pretrained():
+        ```python
+        from optimum.rbln import RBLNResNetForImageClassification
+
+        # Method 1: Using rbln_ prefixed arguments (recommended for simple cases)
+        model = RBLNResNetForImageClassification.from_pretrained(
+            "model_id",
+            export=True,  # Compile the model
+            rbln_image_size=224,
+            rbln_batch_size=16,
+            rbln_create_runtimes=True,
+            rbln_device=0
+        )
+
+        # Method 2: Using a config dictionary
+        rbln_config_dict = {
+            "image_size": 224,
+            "batch_size": 16,
+            "create_runtimes": True
+        }
+        model = RBLNResNetForImageClassification.from_pretrained(
+            "model_id",
+            export=True,
+            rbln_config=rbln_config_dict
+        )
+
+        # Method 3: Using a RBLNModelConfig instance
+        from optimum.rbln import RBLNResNetForImageClassificationConfig
+
+        config = RBLNResNetForImageClassificationConfig(
+            image_size=224,
+            batch_size=16,
+            create_runtimes=True
+        )
+
+        model = RBLNResNetForImageClassification.from_pretrained(
+            "model_id",
+            export=True,
+            rbln_config=config
+        )
+
+        # Method 4: Combining a config object with override parameters
+        # (rbln_ prefixed parameters take precedence over rbln_config values)
+        model = RBLNResNetForImageClassification.from_pretrained(
+            "model_id",
+            export=True,
+            rbln_config=config,
+            rbln_image_size=320,  # This overrides the value in config
+            rbln_device=1         # This sets a new value
+        )
+        ```
+
+
+        Save and load configuration:
+        ```python
+        # Save to disk
+        config.save("/path/to/model")
+
+        # Load configuration from disk
+        loaded_config = RBLNModelConfig.load("/path/to/model")
+
+        # Using AutoConfig
+        loaded_config = RBLNAutoConfig.load("/path/to/model")
+        ```
+
+
+        Converting between configuration formats:
+        ```python
+        # Converting a dictionary to a config instance
+        config_dict = {
+            "image_size": 224,
+            "batch_size": 8,
+            "create_runtimes": True
+        }
+        config = RBLNResNetForImageClassificationConfig(**config_dict)
+        ```
+
+        Configuration for language models:
+        ```python
+        from optimum.rbln import RBLNLlamaForCausalLMConfig, RBLNCompileConfig
+
+        # Configure a LLaMA for RBLN
+        config = RBLNLlamaForCausalLMConfig(
+            max_seq_len=4096,
+            device=[0, 1, 2, 3],
+            tensor_parallel_size=4  # For multi-NPU parallel inference
+        )
+        ```
+
+        Working with models that have submodules:
+        ```python
+        from optimum.rbln import RBLNLlavaNextForConditionalGeneration
+
+        # Configuring a model with submodules
+        # LlavaNext has a vision_tower and a language_model submodule
+        model = RBLNLlavaNextForConditionalGeneration.from_pretrained(
+            "llava-hf/llava-v1.6-mistral-7b-hf",
+            export=True,
+            rbln_config={
+                # Main model's (projector, which is not a submodule) configuration
+                "create_runtimes": True,
+                "device": 0,
+
+                # Submodule configurations as nested dictionaries
+                "vision_tower": {
+                    "image_size": 336,
+                },
+                "language_model": {
+                    "tensor_parallel_size": 4,  # Distribute across 4 NPUs
+                    "max_seq_len": 8192,
+                    "use_inputs_embeds": True,
+                    "batch_size": 1,
+                },
+            },
+        )
+        ```
+
+        Advanced multi-device deployment with tensor parallelism:
+        ```python
+        from optimum.rbln import RBLNLlamaForCausalLMConfig
+
+        # Setup a complex multi-device configuration for large language models
+        llm_config = RBLNLlamaForCausalLMConfig(
+            # Split model across 8 NPUs
+            tensor_parallel_size=8,
+
+            # Runtime options
+            device=[8, 9, 10, 11, 12, 13, 14, 15],
+            create_runtimes=True,
+            activate_profiler=True,  # Enable profiling for performance analysis
+
+            # Model-specific parameters for the LLM
+            max_seq_len=131072,
+            batch_size=4,
+            attn_impl="flash_attn",
+        )
+        ```
+
+        Compilation without runtime creation (create_runtimes=False):
+        ```python
+        from optimum.rbln import RBLNLlamaForCausalLM, RBLNLlamaForCausalLMConfig
+
+        # Compile a model on a machine without NPU or for later use
+        config = RBLNLlamaForCausalLMConfig(
+            create_runtimes=False,  # Compile only, don't create runtime
+            npu="RBLN-CA25",  # Specify target NPU for compilation
+            max_seq_len=4096,
+            tensor_parallel_size=4,
+            batch_size=1
+        )
+
+        # Export the model - will compile but not create runtimes
+        model = RBLNLlamaForCausalLM.from_pretrained(
+            "meta-llama/Llama-2-7b-hf",
+            export=True,
+            rbln_config=config
+        )
+
+        # Save the compiled model for later use on NPU
+        model.save_pretrained("./compiled_llama_model")
+
+        # Later, on a machine with the target NPU
+        inference_model = RBLNLlamaForCausalLM.from_pretrained(
+            "./compiled_llama_model",
+            rbln_create_runtimes=True,  # Now create runtimes (Optional)
+        )
+        ```
+
+        Two-stage workflow with separate compilation and runtime:
+        ```python
+        from optimum.rbln import RBLNResNetForImageClassification
+
+        # Stage 1: Model engineer compiles model (can be on any machine)
+        def compile_model():
+            model = RBLNResNetForImageClassification.from_pretrained(
+                "microsoft/resnet-50",
+                export=True,
+                rbln_create_runtimes=False,
+                rbln_npu="RBLN-CA25",
+                rbln_image_size=224
+            )
+            model.save_pretrained("./compiled_model")
+            print("Model compiled and saved, ready for deployment")
+
+        # Stage 2: Deployment engineer loads model on NPU
+        def deploy_model():
+            model = RBLNResNetForImageClassification.from_pretrained(
+                "./compiled_model",
+                rbln_create_runtimes=True,
+            )
+            print("Model loaded and ready for inference")
+            return model
+        ```
+    """
+
     non_save_attributes = [
         "_frozen",
         "_runtime_options",
@@ -288,6 +498,8 @@ class RBLNModelConfig:
 
         Raises:
             ValueError: If unexpected keyword arguments are provided.
+
+
         """
         self._attributes_map = {}
         self._frozen = False
@@ -415,6 +627,23 @@ class RBLNModelConfig:
 
     @classmethod
     def load(cls, path: str, **kwargs) -> "RBLNModelConfig":
+        """
+        Load a RBLNModelConfig from a path.
+
+        Args:
+            path (str): Path to the RBLNModelConfig file or directory containing the config file.
+            **kwargs: Additional keyword arguments to override configuration values.
+                      Keys starting with 'rbln_' will have the prefix removed and be used
+                      to update the configuration.
+
+        Returns:
+            RBLNModelConfig: The loaded configuration instance.
+
+        Note:
+            This method loads the configuration from the specified path and applies any
+            provided overrides. If the loaded configuration class doesn't match the expected
+            class, a warning will be logged.
+        """
         cls_reserved, config_file = load_config(path)
 
         if cls_reserved != cls:

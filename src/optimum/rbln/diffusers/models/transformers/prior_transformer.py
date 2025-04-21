@@ -21,7 +21,6 @@ from diffusers.models.transformers.prior_transformer import PriorTransformer, Pr
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from ....utils.runtime_utils import RBLNPytorchRuntime
 from ...configurations.models import RBLNPriorTransformerConfig
 from ...modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 
@@ -30,23 +29,6 @@ if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig, PreTrainedModel
 
 logger = get_logger(__name__)
-
-
-class RBLNRuntimePriorTransformer(RBLNPytorchRuntime):
-    def forward(
-        self, hidden_states, timestep, proj_embedding, encoder_hidden_states, attention_mask, return_dict: bool = True
-    ):
-        predicted_image_embedding = super().forward(
-            hidden_states,
-            timestep,
-            proj_embedding,
-            encoder_hidden_states,
-            attention_mask,
-        )
-        if return_dict:
-            return PriorTransformerOutput(predicted_image_embedding=predicted_image_embedding)
-        else:
-            return (predicted_image_embedding,)
 
 
 class _PriorTransformer(torch.nn.Module):
@@ -76,10 +58,11 @@ class _PriorTransformer(torch.nn.Module):
 class RBLNPriorTransformer(RBLNModel):
     hf_library_name = "diffusers"
     auto_model_class = PriorTransformer
+    output_class = PriorTransformerOutput
+    output_key = "predicted_image_embedding"
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
-        self.runtime = RBLNRuntimePriorTransformer(runtime=self.model[0])
         artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
         self.clip_mean = artifacts["clip_mean"]
         self.clip_std = artifacts["clip_std"]
@@ -130,24 +113,25 @@ class RBLNPriorTransformer(RBLNModel):
         rbln_config.set_compile_cfgs([rbln_compile_config])
         return rbln_config
 
+    def post_process_latents(self, prior_latents):
+        prior_latents = (prior_latents * self.clip_std) + self.clip_mean
+        return prior_latents
+
     def forward(
         self,
         hidden_states,
         timestep: Union[torch.Tensor, float, int],
         proj_embedding: torch.Tensor,
         encoder_hidden_states: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.BoolTensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
         return_dict: bool = True,
     ):
-        return self.runtime.forward(
-            hidden_states.contiguous(),
+        # Convert timestep(long) and attention_mask(bool) to float
+        return super().forward(
+            hidden_states,
             timestep.float(),
             proj_embedding,
             encoder_hidden_states,
             attention_mask.float(),
-            return_dict,
+            return_dict=return_dict,
         )
-
-    def post_process_latents(self, prior_latents):
-        prior_latents = (prior_latents * self.clip_std) + self.clip_mean
-        return prior_latents

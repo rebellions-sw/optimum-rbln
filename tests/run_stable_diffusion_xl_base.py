@@ -13,6 +13,7 @@ def main(
 ):
     rbln_pipe = RBLNStableDiffusionXLPipeline.from_pretrained(
         model_id=model_id,
+        rbln_config={"unet": {"batch_size": 2}},
         export=True,
     )
     rbln_pipe.save_pretrained(os.path.basename(model_id))

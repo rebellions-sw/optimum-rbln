@@ -34,7 +34,14 @@ from transformers import (
     AutoModelForTextEncoding,
     PretrainedConfig,
 )
-from transformers.modeling_outputs import BaseModelOutput, DepthEstimatorOutput
+from transformers.modeling_outputs import (
+    BaseModelOutput,
+    DepthEstimatorOutput,
+    ImageClassifierOutput,
+    MaskedLMOutput,
+    QuestionAnsweringModelOutput,
+    SequenceClassifierOutput,
+)
 
 from ..configuration_utils import RBLNCompileConfig
 from ..modeling import RBLNModel
@@ -56,6 +63,8 @@ class _RBLNTransformerEncoder(RBLNModel):
     auto_model_class = AutoModel
     rbln_model_input_names = ["input_ids", "attention_mask", "token_type_ids"]
     rbln_dtype = "int64"
+    output_class = BaseModelOutput
+    output_key = "last_hidden_state"
 
     @classmethod
     def _update_rbln_config(
@@ -139,6 +148,8 @@ class _RBLNTransformerEncoder(RBLNModel):
 class _RBLNImageModel(RBLNModel):
     auto_model_class = AutoModel
     main_input_name = "pixel_values"
+    output_class = BaseModelOutput
+    output_key = "last_hidden_state"
 
     @classmethod
     def _update_rbln_config(
@@ -195,16 +206,32 @@ class _RBLNImageModel(RBLNModel):
 class RBLNModelForQuestionAnswering(_RBLNTransformerEncoder):
     auto_model_class = AutoModelForQuestionAnswering
     rbln_model_input_names = ["input_ids", "attention_mask", "token_type_ids"]
+    output_class = QuestionAnsweringModelOutput
+
+    def _prepare_output(self, output, return_dict):
+        """
+        Prepare QuestionAnswering specific output format.
+        """
+        start_logits, end_logits = output
+
+        if not return_dict:
+            return (start_logits, end_logits)
+        else:
+            return QuestionAnsweringModelOutput(start_logits=start_logits, end_logits=end_logits)
 
 
 class RBLNModelForSequenceClassification(_RBLNTransformerEncoder):
     auto_model_class = AutoModelForSequenceClassification
     rbln_model_input_names = ["input_ids", "attention_mask"]
+    output_class = SequenceClassifierOutput
+    output_key = "logits"
 
 
 class RBLNModelForMaskedLM(_RBLNTransformerEncoder):
     auto_model_class = AutoModelForMaskedLM
     rbln_model_input_names = ["input_ids", "attention_mask"]
+    output_class = MaskedLMOutput
+    output_key = "logits"
 
 
 class RBLNModelForTextEncoding(_RBLNTransformerEncoder):
@@ -216,27 +243,20 @@ class RBLNTransformerEncoderForFeatureExtraction(_RBLNTransformerEncoder):
     # TODO: RBLNModel is also for feature extraction.
     auto_model_class = AutoModel
     rbln_model_input_names = ["input_ids", "attention_mask"]
-
-    def forward(self, *args, return_dict: Optional[bool] = None, **kwargs):
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-
-        encoder_outputs = self.model[0](*args, **kwargs)
-        if not return_dict:
-            return (encoder_outputs,)
-        else:
-            return BaseModelOutput(last_hidden_state=encoder_outputs)
+    output_class = BaseModelOutput
+    output_key = "last_hidden_state"
 
 
 class RBLNModelForImageClassification(_RBLNImageModel):
     auto_model_class = AutoModelForImageClassification
+    output_class = ImageClassifierOutput
+    output_key = "logits"
 
 
 class RBLNModelForDepthEstimation(_RBLNImageModel):
     auto_model_class = AutoModelForDepthEstimation
-
-    def forward(self, *args, **kwargs):
-        predicted_depth = super().forward(*args, **kwargs)
-        return DepthEstimatorOutput(predicted_depth=predicted_depth)
+    output_class = DepthEstimatorOutput
+    output_key = "predicted_depth"
 
 
 class RBLNModelForAudioClassification(RBLNModel):
@@ -253,6 +273,8 @@ class RBLNModelForAudioClassification(RBLNModel):
     """
 
     auto_model_class = AutoModelForAudioClassification
+    output_class = SequenceClassifierOutput
+    output_key = "logits"
 
     @classmethod
     def _update_rbln_config(

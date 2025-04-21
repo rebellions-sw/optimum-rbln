@@ -14,7 +14,7 @@ env:
 
 jobs:
   auto-review:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-rbln
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
