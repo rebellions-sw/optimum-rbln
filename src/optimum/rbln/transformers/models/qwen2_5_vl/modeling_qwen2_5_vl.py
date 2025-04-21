@@ -349,7 +349,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         self.visual = self.rbln_submodules[0]
         self.mrope_section = self.config.rope_scaling["mrope_section"]
         self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config)
-        self.rope_deltas = None
+        self.rope_deltas = torch.zeros(self.rbln_config.batch_size)
 
     def can_generate(self):
         return True
@@ -552,9 +552,9 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             all_position_embeds[:, b_idx : b_idx + 1].index_copy_(dim=-2, index=mask_indices, source=position_embed)
             all_rope_deltas.append(rope_deltas)
 
-        self.rope_deltas = torch.cat(all_rope_deltas)
+        rope_deltas = torch.stack(all_rope_deltas)
 
-        return inputs_embeds, all_position_embeds
+        return inputs_embeds, all_position_embeds, rope_deltas
 
     def _preprocess_decoder(
         self,
@@ -591,7 +591,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
     ) -> RBLNDecoderOnlyOutput:
         # Prefill
         if cache_position is None:
-            inputs_embeds, position_embed = self._preprocess_prefill(
+            inputs_embeds, position_embed, rope_deltas = self._preprocess_prefill(
                 input_ids,
                 attention_mask,
                 pixel_values,
@@ -600,6 +600,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 video_grid_thw,
                 second_per_grid_ts,
             )
+            self.rope_deltas = rope_deltas
             batch_size = inputs_embeds.shape[0]
 
             logits = []
