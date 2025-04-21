@@ -138,6 +138,7 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLPipeline,
         RBLNUNet2DConditionModel,
         RBLNVQModel,
+        RBLNCosmosPipeline,
     )
     from .modeling import (
         RBLNBaseModel,

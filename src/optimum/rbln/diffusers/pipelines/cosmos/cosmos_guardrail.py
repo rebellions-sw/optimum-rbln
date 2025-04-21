@@ -11,11 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import json
 import os
-import pathlib
-import re
-import string
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union, Iterable
@@ -24,59 +20,18 @@ import rebel
 import torch  # noqa: I001
 
 import numpy as np
-from abc import ABC, abstractmethod
-import PIL.Image
 from diffusers.pipelines.cosmos.cosmos_guardrail import (
     CosmosSafetyChecker, 
-    RetinaFaceFilter,
-    TensorDataset,
-    DataLoader,
-    PriorBox,
-    GuardrailRunner,
-    VideoContentSafetyFilter,
-    SigLIPEncoder,
-    Aegis)
+)
 
 from optimum.rbln import RBLNLlamaForCausalLM
 from pytorch_retinaface.data import cfg_re50
-from diffusers.models.modeling_outputs import AutoencoderKLOutput
-from transformers import AutoConfig, PretrainedConfig, SiglipProcessor
 
-from ....modeling import RBLNModel, RBLNBaseModel
 from ....modeling_config import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNConfig, use_rbln_config
 from ....utils.hub import validate_files
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import UnavailableRuntime
-from ...modeling_diffusers import RBLNDiffusionMixin
-from ...modeling_pt import RBLNTempModule
 from ....utils.runtime_utils import RBLNPytorchRuntime
-# from .vae import RBLNRuntimeVAEDecoder, RBLNRuntimeVAEEncoder, _VAEDecoder, _VAEEncoder
-
-# from pytorch_retinaface.models.retinaface import RetinaFace
-
-from diffusers.utils import (
-    get_logger,
-    is_better_profanity_available,
-    is_nltk_available,
-    is_peft_available,
-    is_pytorch_retinaface_available,
-    load_video,
-)
-
-from diffusers.pipelines.cosmos.cosmos_utils import (
-    CLASS_IDX_TO_NAME,
-    KEEP_TOP_K,
-    NMS_THRESHOLD,
-    TOP_K,
-    UNSAFE_CATEGORIES,
-    decode_batch,
-    filter_detected_boxes,
-    load_model,
-    pixelate_face,
-    read_keyword_list_from_dir,
-    to_ascii,
-)
-
 
 
 if TYPE_CHECKING:
@@ -182,9 +137,6 @@ class RBLNsimpleModel:
             cm.save(model_save_dir / subfolder / f"{compiled_model_name}.rbln")
         
         rbln_config.save(model_save_dir / subfolder)
-        # Save torch artifacts (e.g. embedding matrix if needed.)
-        # cls.save_torch_artifacts(model, save_dir_path=save_dir_path, subfolder=subfolder, rbln_config=rbln_config)
-        
         rbln_compiled_models = cls._load_compiled_models(model_id=model_save_dir, subfolder=subfolder, rbln_config=rbln_config, rbln_compiled_models=compiled_models)
         return rbln_compiled_models
     
@@ -281,7 +233,7 @@ class RBLNRetinaFace(RBLNsimpleModel):
         )
         return rbln_config
 
-class RBLNSafetyClassifier(RBLNsimpleModel):
+class RBLNVideoSafetyModel(RBLNsimpleModel):
     @classmethod
     def _get_rbln_config(cls, rbln_kwargs):
         input_info_cls = [("data", [1, 1152], "float32")]                # hard coded
@@ -295,38 +247,13 @@ class RBLNSafetyClassifier(RBLNsimpleModel):
             rbln_kwargs=rbln_kwargs,
         )
         return rbln_config
-
-class RBLNVideoSafetyModel:
-    def __init__(self, model):
-        self.network = model
     
-    def parameters(self):
-        return self.network.parameters()
-
-# class RBLNVideoSafetyModel(RBLNsimpleModel):
-#     @classmethod
-#     def _get_rbln_config(cls, rbln_kwargs):
-#         input_info_cls = [("data", [1, 1152], "float32")]                # hard coded
-#         cls_config = RBLNCompileConfig(
-#             input_info=input_info_cls
-#         )
-
-#         rbln_config = RBLNConfig(
-#             rbln_cls=cls.__name__,
-#             compile_cfgs=[cls_config],
-#             rbln_kwargs=rbln_kwargs,
-#         )
-#         return rbln_config
+    @classmethod
+    def wrap_model_if_needed(cls, model):
+        return model.network
     
-#     @classmethod
-#     def wrap_model_if_needed(cls, model):
-#         return model.network
-    
-#     def network(self, x):
-#         return self.forward(x)
-    
-#     # def parameters(self):
-#     #     return self.network.parameters()
+    def network(self, x):
+        return self(x)
 
 class RBLNRuntimeSiglipVisionModel(RBLNPytorchRuntime):
     def __init__(self, runtime, **kwargs):
@@ -386,11 +313,10 @@ class RBLNSiglipVisionModel(RBLNsimpleModel):
 class RBLNLlamaGuard(RBLNLlamaForCausalLM):
     @classmethod
     def load_compiled_models(cls, model_id, rbln_config, subfolder=""):
-        text_config = rbln_config.get("text_guardrail", {})
         model = RBLNLlamaForCausalLM.from_pretrained(
             model_id=model_id,
             export=False,
-            rbln_config=text_config,
+            rbln_config=rbln_config,
         )
         return model
         
@@ -414,210 +340,69 @@ class RBLNLlamaGuard(RBLNLlamaForCausalLM):
 
 class RBLNCosmosSafetyChecker:
     original_class = CosmosSafetyChecker
-    # _submodules = {
-    #     "video_guardrail" : 
-    #         {
-    #             "postprocessors" : {
-    #                 0 : {
-    #                     "net" :RBLNRetinaFace
-    #                     }
-    #                 },
-    #             "safety_models" : {
-    #                 0: {
-    #                     "encoder" : {
-    #                         "model":
-    #                             {
-    #                                 "vision_model": RBLNSiglipVisionModel 
-    #                                 }
-    #                         },
-    #                     "model" : {
-    #                         "network" : RBLNSafetyClassifier
-    #                         }
-    #                     }
-    #                 },
-    #             },
-    #     "text_guardrail": 
-    #         {
-    #             "safety_models" : {
-    #                 1 : {
-    #                     "model" : RBLNLlamaForCausalLM
-    #                     }
-    #                 }
-    #             }, 
-    #     }
-    _submodules_dir = {
-        "video_guardrail" : 
-                {
-                    "postprocessors": "net",   
-                    "safety_models": {
-                        "encoder": "vision_model", 
-                        "model": "network"
-                        }
-                    },
-        "text_guardrail": "safety_models"
-        }
+    _guardrails = ["video_guardrail", "video_guardrail", "video_guardrail", "text_guardrail"]
+    _submodules = ["postprocessors", "safety_models", "safety_models", "safety_models"]
+    _module_ids = [0, 0, 0, 1]
+    _additional_modules = [None, "encoder.model", None, None]
+    _target_model_names = ["net", "vision_model", "model", "model"]
+    _subfolders = ["", "encoder", "model", ""]
+    _rbln_modules = [
+        RBLNRetinaFace,
+        RBLNSiglipVisionModel,
+        RBLNVideoSafetyModel,
+        RBLNLlamaGuard
+    ]
     
     @classmethod
     @use_rbln_config
-    def compile_submodules(cls, model, rbln_config, model_save_dir:str="safety_checker", subfolder:str=""):
-        # model_save_dir = Path(model_save_dir)
-        # model_save_dir.mkdir(exist_ok=True)
-        
-        # Todo Parsing
-        
-        # for guardrail, targets in cls._submodules.items():
-        #     for target, ids in targets.items():
-        #         target_path = Path(model_save_dir/guardrail/target)
-        #         for id, rbln_module in ids.items():
-        #             for module_name, _rbln_module in rbln_module.items():
-        #                 target_model = getattr(getattr(getattr(model, guardrail), target)[id], module_name)
-        #                 module_path = Path(target_path/module_name)
-        #                 os.makedirs(module_path, exist_ok=True)
-                        
-        #                 if isinstance(_rbln_module, dict):
-        #                     for _name, _module in _rbln_module.items():
-        #                         target_model = getattr(target_model, _name)
-        #                         _module_path = Path(module_path/_name)
-        #                         os.makedirs(_module_path, exist_ok=True)
-        #                         if isinstance(_module, dict):
-        #                             for n, m in _module.items():
-        #                                 target_model = getattr(target_model, n)
-        #                                 compiled_model = m.compile_model(
-        #                                     model=target_model,
-        #                                     rbln_kwargs=rbln_config,
-        #                                     model_save_dir=_module_path,
-        #                                     subfolder=n
-        #                                     )
-        #                         else :
-        #                             compiled_model = _rbln_module.compile_model(
-        #                             model=target_model,
-        #                             rbln_kwargs=rbln_config,
-        #                             model_save_dir=_module_path,
-        #                             subfolder=subfolder
-        #                             )
-        #                 else :
-        #                     compiled_model = _rbln_module.compile_model(
-        #                         model=target_model,
-        #                         rbln_kwargs=rbln_config,
-        #                         model_save_dir=module_path,
-        #                         subfolder=subfolder
-        #                         )
-                            
-        
-        
-        
+    def compile_submodules(cls, model, rbln_config, model_save_dir:str="safety_checker"):        
         save_dir_path = Path(model_save_dir)
         save_dir_path.mkdir(exist_ok=True)
-        
-        save_dir_path = Path(model_save_dir+"/video_guardrail/postprocessors")
-        os.makedirs(save_dir_path, exist_ok=True)
-        
-        model_name = "net"
-        _model = model.video_guardrail.postprocessors[0]
-        compile_target = getattr(_model, model_name)
-        compiled_model = RBLNRetinaFace.compile_model(compile_target,
-                                                rbln_kwargs=rbln_config["video_guardrail"],
-                                                model_save_dir=save_dir_path,
-                                                )
-        delattr(_model, model_name)
-        setattr(_model, model_name, compiled_model)
-        
-        save_dir_path = Path(model_save_dir+"/video_guardrail/safety_models")
-        os.makedirs(save_dir_path, exist_ok=True)
-        
-        model_name = "network"
-        _model = model.video_guardrail.safety_models[0].model
-        compile_target = getattr(_model, model_name)
-        compiled_model = RBLNSafetyClassifier.compile_model(compile_target,
-                                                rbln_kwargs=rbln_config["video_guardrail"],
-                                                model_save_dir=save_dir_path,
-                                                subfolder=f"model",
-                                                )
-        delattr(model.video_guardrail.safety_models[0], "model")
-        setattr(model.video_guardrail.safety_models[0], "model", RBLNVideoSafetyModel(compiled_model))
-        
-        # model_name = "model"
-        # _model = model.video_guardrail.safety_models[0]
-        # compile_target = getattr(_model, model_name)
-        # compiled_model = RBLNVideoSafetyModel.compile_model(compile_target,
-        #                                         rbln_kwargs=rbln_config["video_guardrail"],
-        #                                         model_save_dir=save_dir_path,
-        #                                         subfolder=f"model",
-        #                                         )
-        # delattr(_model, model_name)
-        # setattr(_model, model_name, compiled_model)
-        
-        model_name = "vision_model"
-        _model = model.video_guardrail.safety_models[0].encoder.model
-        compile_target = getattr(_model, model_name)
-        compiled_model = RBLNSiglipVisionModel.compile_model(compile_target,
-                                                rbln_kwargs=rbln_config["video_guardrail"],
-                                                model_save_dir=save_dir_path,
-                                                subfolder=f"encoder",
-                                                )
-        delattr(_model, model_name)
-        setattr(_model, model_name, compiled_model)
-        
-        
-        save_dir_path = Path(model_save_dir+"/text_guardrail/safety_models")
-        os.makedirs(save_dir_path, exist_ok=True)
-        
-        model_name = "model"
-        _model = model.text_guardrail.safety_models[1]
-        compile_target = getattr(_model, model_name)
-        compiled_model = RBLNLlamaGuard.compile_model(
-                                                compile_target,
-                                                rbln_kwargs=rbln_config["text_guardrail"],
-                                                model_save_dir=save_dir_path,
-                                                )
-        delattr(_model, model_name)
-        setattr(_model, model_name, compiled_model)
+        for i, target_model_name in enumerate(cls._target_model_names):
+            guardrail = cls._guardrails[i]
+            submodule = cls._submodules[i]
+            additional_module = cls._additional_modules[i]
+            
+            save_dir_path = Path(model_save_dir+f"/{guardrail}/{submodule}")
+            os.makedirs(save_dir_path, exist_ok=True)
+            target_model = getattr(getattr(model, guardrail), submodule)[cls._module_ids[i]]
+            if additional_module is not None :
+                for m in additional_module.split('.'):
+                    target_model = getattr(target_model, m)
+            compile_target = getattr(target_model, cls._target_model_names[i])
+            compiled_model = cls._rbln_modules[i].compile_model(
+                compile_target, 
+                rbln_kwargs=rbln_config[guardrail],
+                model_save_dir=save_dir_path,
+                subfolder=cls._subfolders[i]
+                )
+            delattr(target_model, target_model_name)
+            setattr(target_model, target_model_name, compiled_model)
         return model
 
     @classmethod
     @use_rbln_config
-    def load_submodules(cls, model, rbln_config, subfolder="", model_save_dir=""):
-        model_name = "net"
-        _model = model.video_guardrail.postprocessors[0]
-        save_dir_path = Path(model_save_dir+"/video_guardrail/postprocessors")
-        compiled_model = RBLNRetinaFace.load_compiled_models(
-            save_dir_path,
-            rbln_config=rbln_config["video_guardrail"],
-            )
-        delattr(_model, model_name)
-        setattr(_model, model_name, compiled_model)
-        
-        model_name = "network"
-        _model = model.video_guardrail.safety_models[0].model
-        save_dir_path = Path(model_save_dir+"/video_guardrail/safety_models")
-        compiled_model = RBLNSafetyClassifier.load_compiled_models(
-            save_dir_path,
-            rbln_config=rbln_config["video_guardrail"],
-            subfolder=f"model",
-            )
-        delattr(model.video_guardrail.safety_models[0], "model")
-        setattr(model.video_guardrail.safety_models[0], "model", RBLNVideoSafetyModel(compiled_model))
-        
-        model_name = "vision_model"
-        _model = model.video_guardrail.safety_models[0].encoder.model
-        compiled_model = RBLNSiglipVisionModel.load_compiled_models(
-            save_dir_path,
-            rbln_config=rbln_config["video_guardrail"],
-            subfolder=f"encoder",
-            )
-        delattr(_model, model_name)
-        setattr(_model, model_name, compiled_model)
-        
-        
-        save_dir_path = Path(model_save_dir+"/text_guardrail/safety_models")
-        model_name = "model"
-        _model = model.text_guardrail.safety_models[1]
-        compiled_model = RBLNLlamaGuard.load_compiled_models(
-            save_dir_path,
-            rbln_config=rbln_config["text_guardrail"],
-        )
-        delattr(_model, model_name)
-        setattr(_model, model_name, compiled_model)
+    def load_submodules(cls, model, rbln_config, model_save_dir=""):
+        for i, target_model_name in enumerate(cls._target_model_names):
+            guardrail = cls._guardrails[i]
+            submodule = cls._submodules[i]
+            additional_module = cls._additional_modules[i]
+            rbln_module = cls._rbln_modules[i]
+            
+            save_dir_path = Path(model_save_dir+f"/{guardrail}/{submodule}")
+            
+            target_model = getattr(getattr(model, guardrail), submodule)[cls._module_ids[i]]
+            if additional_module is not None :
+                for m in additional_module.split('.'):
+                    target_model = getattr(target_model, m)
+            
+            compiled_model = rbln_module.load_compiled_models(
+                save_dir_path,
+                rbln_config=rbln_config[guardrail],
+                subfolder=cls._subfolders[i],
+                )
+            delattr(target_model, target_model_name)
+            setattr(target_model, target_model_name, compiled_model)
         return model
 
     def check_text_safety(self, prompt: str) -> bool:
@@ -627,7 +412,6 @@ class RBLNCosmosSafetyChecker:
         return is_safe
 
     def check_video_safety(self, frames: np.ndarray) -> np.ndarray:
-        # for test ; frames = torch.randint(0,255, (121, 1280, 704, 3), dtype=torch.uint8).numpy()
         is_safe, message = self.video_guardrail.run_safety_check(frames)
         if not is_safe:
             logger.critical(f"GUARDRAIL BLOCKED: {message}")
