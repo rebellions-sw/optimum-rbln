@@ -388,7 +388,10 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         max_seq_len: int,
         kvcache_block_size: int,
         kvcache_num_blocks: int,
-        model_config: PretrainedConfig,
+        num_key_value_heads: int,
+        num_hidden_layers: int,
+        hidden_size: int,
+        head_dim: int,
     ):
         input_info = super().get_input_info(
             batch_size,
@@ -398,13 +401,11 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             max_seq_len,
             kvcache_block_size,
             kvcache_num_blocks,
-            model_config,
+            num_key_value_heads,
+            num_hidden_layers,
+            hidden_size,
+            head_dim,
         )
-
-        num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
-        hidden_size = getattr(model_config, "n_embd", None) or getattr(model_config, "hidden_size")
-        head_dim = getattr(model_config, "head_dim", None) or hidden_size // num_attention_heads
-
         pos_idx = 5 if query_length > 1 else 4
         pos_idx = pos_idx if use_attention_mask else pos_idx - 1
         input_info.insert(pos_idx, ("position_emb", [2, batch_size, 1, query_length, head_dim], "float32"))

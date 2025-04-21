@@ -28,10 +28,15 @@ class RBLNQwen2_5_VLForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausal
     def __init__(
         self,
         visual: Optional[RBLNModelConfig] = None,
+        use_inputs_embeds: bool = True,
         **kwargs,
     ):
-        super().__init__(**kwargs)
-        self.use_inputs_embeds = True
+        super().__init__(use_inputs_embeds=use_inputs_embeds, **kwargs)
+        if not self.use_inputs_embeds:
+            raise ValueError(
+                "RBLNQwen2_5_VLForConditionalGenerationConfig does not allow `use_inputs_embeds` to be set to False, "
+                "as RBLNQwen2_5_VLForConditionalGeneration accepts only `inputs_embeds` as input."
+            )
         self.visual = visual
 
 
