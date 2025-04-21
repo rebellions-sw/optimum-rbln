@@ -25,6 +25,9 @@ _import_structure = {
         "RBLNStableDiffusionXLControlNetImg2ImgPipeline",
         "RBLNStableDiffusionXLControlNetPipeline",
     ],
+    "cosmos": [
+        "RBLNCosmosPipeline",
+    ],
     "kandinsky2_2": [
         "RBLNKandinskyV22CombinedPipeline",
         "RBLNKandinskyV22Img2ImgCombinedPipeline",
@@ -52,6 +55,9 @@ _import_structure = {
     "cosmos": ["RBLNCosmosPipeline", "RBLNCosmosSafetyChecker"],
 }
 if TYPE_CHECKING:
+    from .cosmos import (
+        RBLNCosmosPipeline,
+    )
     from .controlnet import (
         RBLNMultiControlNetModel,
         RBLNStableDiffusionControlNetImg2ImgPipeline,

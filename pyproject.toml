@@ -28,11 +28,11 @@ classifiers = [
 ]
 keywords = ["transformers", "diffusers", "inference", "rbln", "atom", "rebel"]
 dependencies = [
-    "torch<=2.5.1",
-    "torchaudio<=2.5.1",
-    "torchvision<=0.20.1",
+    "torch==2.6.0",
+    "torchaudio<=2.6.0",
+    "torchvision<=0.21.0",
     "accelerate>=1.0.1",
-    "transformers==4.48.3",
+    "transformers==4.50.3",
     "diffusers<=0.31.0",
     "packaging>=24.1",
 ]
@@ -53,6 +53,8 @@ tests = [
     "sacremoses>=0.1.1",
     "safetensors>=0.4.2",
     "protobuf>=5.27.2",
+    "soundfile>=0.13.1",
+    "librosa>=0.11.0",
 ]
 quality = [
     "ruff>=0.3.3",
