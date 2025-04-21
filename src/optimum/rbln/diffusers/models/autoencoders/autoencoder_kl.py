@@ -194,6 +194,10 @@ class RBLNAutoencoderKL(RBLNModel):
         )
         return rbln_config
 
+    @property
+    def compiled_batch_size(self):
+        return self.rbln_config.compile_cfgs[0].input_info[0][1][0]
+
     @classmethod
     def _create_runtimes(
         cls,
