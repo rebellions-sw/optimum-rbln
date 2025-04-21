@@ -47,7 +47,7 @@ class RBLNVQModel(RBLNModel):
         else:
             self.encoder = None
 
-        self.decoder = RBLNRuntimeVQDecoder(runtime=self.model[1], main_input_name="z")
+        self.decoder = RBLNRuntimeVQDecoder(runtime=self.model[-1], main_input_name="z")
         self.decoder.lookup_from_codebook = self.config.lookup_from_codebook
         self.image_size = self.rbln_config.image_size
 
