@@ -129,10 +129,14 @@ class RBLNVQModel(RBLNModel):
             for compiled_model, device_val in zip(compiled_models, device_vals)
         ]
 
-    def encode(self, x: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
+    def encode(self, x: torch.FloatTensor, return_dict: bool = True, **kwargs) -> torch.FloatTensor:
         posterior = self.encoder.encode(x)
+        if not return_dict:
+            return (posterior,)
         return VQEncoderOutput(latents=posterior)
 
-    def decode(self, h: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
+    def decode(self, h: torch.FloatTensor, return_dict: bool = True, **kwargs) -> torch.FloatTensor:
         dec, commit_loss = self.decoder.decode(h, **kwargs)
+        if not return_dict:
+            return (dec, commit_loss)
         return DecoderOutput(sample=dec, commit_loss=commit_loss)

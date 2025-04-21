@@ -216,8 +216,15 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             if isinstance(rbln_config, dict):
                 rbln_config_as_kwargs = {f"rbln_{key}": value for key, value in rbln_config.items()}
                 kwargs.update(rbln_config_as_kwargs)
+            elif isinstance(rbln_config, RBLNModelConfig) and rbln_config.rbln_model_cls_name != cls.__name__:
+                raise ValueError(
+                    f"Cannot use the passed rbln_config. Its model class name ({rbln_config.rbln_model_cls_name}) "
+                    f"does not match the expected model class name ({cls.__name__})."
+                )
 
-            rbln_config = RBLNAutoConfig.load(model_path_subfolder, passed_rbln_config=rbln_config, **kwargs)
+            rbln_config, kwargs = RBLNAutoConfig.load(
+                model_path_subfolder, passed_rbln_config=rbln_config, kwargs=kwargs, return_unused_kwargs=True
+            )
 
             if rbln_config.rbln_model_cls_name != cls.__name__:
                 raise NameError(
