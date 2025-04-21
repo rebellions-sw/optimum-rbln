@@ -15,10 +15,7 @@
 from typing import List, Optional, Union
 
 from ....configuration_utils import RBLNModelConfig
-from ....utils.logging import get_logger
 from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
-
-
 
 
 class RBLNQwen2_5_VLForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausalLMConfig):
