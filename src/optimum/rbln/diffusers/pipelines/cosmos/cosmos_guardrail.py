@@ -13,6 +13,7 @@
 # limitations under the License.
 import os
 from pathlib import Path
+from abc import abstractmethod
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union, Iterable
 
@@ -58,11 +59,11 @@ class RBLNsimpleModel:
         self.subfolder = subfolder
     
     @classmethod
-    def load_compiled_models(cls, model_id, rbln_config, subfolder=""):
-        return cls._load_compiled_models(model_id=model_id, subfolder=subfolder, rbln_config=rbln_config)
+    def load_compiled_model(cls, model_id, rbln_config, subfolder=""):
+        return cls._load_compiled_model(model_id=model_id, subfolder=subfolder, rbln_config=rbln_config)
     
     @classmethod
-    def _load_compiled_models(cls, model_id: str, subfolder: str, rbln_config, rbln_compiled_models=None):
+    def _load_compiled_model(cls, model_id: str, subfolder: str, rbln_config, rbln_compiled_models=None):
         model_path = Path(model_id)
         
         model_save_dir = model_path / subfolder
@@ -91,6 +92,7 @@ class RBLNsimpleModel:
     ):
         compiled_model_names = [cfg.compiled_model_name for cfg in rbln_config.compile_cfgs]
         rbln_compiled_models = [rbln_compiled_models[cm_name] for cm_name in compiled_model_names]
+        
         # create runtimes only if `rbln_create_runtimes` is enabled
         try:
             models = (
@@ -137,31 +139,20 @@ class RBLNsimpleModel:
             cm.save(model_save_dir / subfolder / f"{compiled_model_name}.rbln")
         
         rbln_config.save(model_save_dir / subfolder)
-        rbln_compiled_models = cls._load_compiled_models(model_id=model_save_dir, subfolder=subfolder, rbln_config=rbln_config, rbln_compiled_models=compiled_models)
+        rbln_compiled_models = cls._load_compiled_model(model_id=model_save_dir, subfolder=subfolder, rbln_config=rbln_config, rbln_compiled_models=compiled_models)
         return rbln_compiled_models
     
     @classmethod
+    @abstractmethod
     def _get_rbln_config(cls, rbln_kwargs):
         pass
-        input_info = [("frames", [1, 1, 1, 1], "float32")]
-        
-        compile_config = RBLNCompileConfig(
-            input_info=input_info
-        )
-        
-        rbln_config = RBLNConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[compile_config],
-            rbln_kwargs=rbln_kwargs,
-        )
-        return rbln_config
     
     @classmethod
     def _get_compiled_model(cls, model, rbln_config):
-        return cls.compile(cls.wrap_model_if_needed(model), rbln_compile_config=rbln_config.compile_cfgs[0])
+        return cls._compile(cls.wrap_model_if_needed(model), rbln_compile_config=rbln_config.compile_cfgs[0])
 
     @classmethod
-    def compile(cls, model, rbln_compile_config: Optional[RBLNCompileConfig] = None, **kwargs):
+    def _compile(cls, model, rbln_compile_config: Optional[RBLNCompileConfig] = None, **kwargs):
         compiled_model = rebel.compile_from_torch(
             model,
             input_info=rbln_compile_config.input_info,
@@ -211,6 +202,9 @@ class RBLNsimpleModel:
         for param in [torch.tensor([1], dtype=torch.float32, device=torch.device("cpu"))]:
             yield param
     
+    def to(self, device: Union[str, torch.device] = None, dtype: torch.dtype = None):
+        pass
+    
     def __call__(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
         output = self.model[0](*args, **kwargs)
         return output
@@ -236,7 +230,7 @@ class RBLNRetinaFace(RBLNsimpleModel):
 class RBLNVideoSafetyModel(RBLNsimpleModel):
     @classmethod
     def _get_rbln_config(cls, rbln_kwargs):
-        input_info_cls = [("data", [1, 1152], "float32")]                # hard coded
+        input_info_cls = [("data", [1, 1152], "float32")] # hard coded
         cls_config = RBLNCompileConfig(
             input_info=input_info_cls
         )
@@ -312,7 +306,7 @@ class RBLNSiglipVisionModel(RBLNsimpleModel):
 
 class RBLNLlamaGuard(RBLNLlamaForCausalLM):
     @classmethod
-    def load_compiled_models(cls, model_id, rbln_config, subfolder=""):
+    def load_compiled_model(cls, model_id, rbln_config, subfolder=""):
         model = RBLNLlamaForCausalLM.from_pretrained(
             model_id=model_id,
             export=False,
@@ -372,7 +366,7 @@ class RBLNCosmosSafetyChecker:
             compile_target = getattr(target_model, cls._target_model_names[i])
             compiled_model = cls._rbln_modules[i].compile_model(
                 compile_target, 
-                rbln_kwargs=rbln_config[guardrail],
+                rbln_kwargs=rbln_config.get(guardrail, {}),
                 model_save_dir=save_dir_path,
                 subfolder=cls._subfolders[i]
                 )
@@ -396,25 +390,11 @@ class RBLNCosmosSafetyChecker:
                 for m in additional_module.split('.'):
                     target_model = getattr(target_model, m)
             
-            compiled_model = rbln_module.load_compiled_models(
+            compiled_model = rbln_module.load_compiled_model(
                 save_dir_path,
-                rbln_config=rbln_config[guardrail],
+                rbln_config=rbln_config.get(guardrail, {}),
                 subfolder=cls._subfolders[i],
                 )
             delattr(target_model, target_model_name)
             setattr(target_model, target_model_name, compiled_model)
         return model
-
-    def check_text_safety(self, prompt: str) -> bool:
-        is_safe, message = self.text_guardrail.run_safety_check(prompt)
-        if not is_safe:
-            logger.critical(f"GUARDRAIL BLOCKED: {message}")
-        return is_safe
-
-    def check_video_safety(self, frames: np.ndarray) -> np.ndarray:
-        is_safe, message = self.video_guardrail.run_safety_check(frames)
-        if not is_safe:
-            logger.critical(f"GUARDRAIL BLOCKED: {message}")
-            return None
-        frames = self.video_guardrail.postprocess(frames)
-        return frames
