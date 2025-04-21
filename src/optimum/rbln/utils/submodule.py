@@ -43,7 +43,7 @@ class SubModulesMixin:
         cls, model: "PreTrainedModel", model_save_dir: str, rbln_config: RBLNModelConfig, **kwargs
     ) -> List["RBLNBaseModel"]:
         rbln_submodules = []
-        submodule_prefix = getattr(cls, "_rbln_submodule_prefix") or None
+        submodule_prefix = getattr(cls, "_rbln_submodule_prefix", None)
 
         for submodule in cls._rbln_submodules:
             submodule_name = submodule["name"]
