@@ -1,4 +1,3 @@
-
 # Optimum RBLN
 
 <div align="center">
@@ -40,7 +39,15 @@ This library enables seamless integration between the HuggingFace ecosystem and 
 model_id = "stabilityai/stable-diffusion-xl-base-1.0"
 prompt = "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k"
 - pipe = StableDiffusionXLPipeline.from_pretrained(model_id)
-+ pipe = RBLNStableDiffusionXLPipeline.from_pretrained(model_id, export=True)
++ pipe = RBLNStableDiffusionXLPipeline.from_pretrained(
++    model_id,
++    export=True,
++    rbln_config={
++        "unet": {
++            "batch_size": 2,  # Set to 2 for classifier-free guidance
++        }
++    },
++ )
 
 # Generate image
 image = pipe(prompt).images[0]
