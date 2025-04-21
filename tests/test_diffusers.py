@@ -5,6 +5,7 @@ from diffusers import ControlNetModel
 
 from optimum.rbln import (
     RBLNKandinskyV22CombinedPipeline,
+    RBLNKandinskyV22Img2ImgCombinedPipeline,
     RBLNStableDiffusion3Img2ImgPipeline,
     RBLNStableDiffusion3Pipeline,
     RBLNStableDiffusionControlNetPipeline,
@@ -275,6 +276,30 @@ class TestKandinskyV22Model(BaseTest.TestModel):
             self.assertEqual(_.prior_text_encoder.rbln_config.batch_size, 2)
             self.assertEqual(_.prior_prior.rbln_config.batch_size, 4)
             self.assertEqual(_.unet.rbln_config.batch_size, 2)
+
+
+class TestKandinskyV22Img2ImgModel(BaseTest.TestModel):
+    RBLN_CLASS = RBLNKandinskyV22Img2ImgCombinedPipeline
+    HF_MODEL_ID = "hf-internal-testing/tiny-random-kandinsky-v22-decoder"
+
+    from diffusers.utils import load_image
+    img_url = "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/kandinsky/frog.png"
+    image = load_image(img_url).resize([64, 64])
+    GENERATION_KWARGS = {
+        "prompt": "A red cartoon frog, 4k",
+        "generator": torch.manual_seed(42),
+        "prior_num_inference_steps": 10,
+        "num_inference_steps": 10,
+        "image": image,
+    }
+    RBLN_CLASS_KWARGS = {
+        "rbln_img_width": 64,
+        "rbln_img_height": 64,
+        "rbln_config": {
+            "prior_pipe": {"prior": {"batch_size": 2}},
+            "decoder_pipe": {"unet": {"batch_size": 2}},
+        },
+    }
 
 
 if __name__ == "__main__":
