@@ -19,7 +19,6 @@ from ....utils.logging import get_logger
 from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
 
 
-logger = get_logger()
 
 
 class RBLNQwen2_5_VLForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausalLMConfig):
