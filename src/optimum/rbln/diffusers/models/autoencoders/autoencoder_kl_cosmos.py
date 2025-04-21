@@ -55,6 +55,10 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
         else:
             self.decoder = RBLNRuntimeVAEDecoder(runtime=self.model[0], main_input_name="z")
 
+        height = self.rbln_config.model_cfg.get("height")
+        width = self.rbln_config.model_cfg.get("width")
+        self.image_size = [height, width]
+
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
         def replace_forward_func(model):
