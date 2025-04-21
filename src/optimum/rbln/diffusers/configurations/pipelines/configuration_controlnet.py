@@ -16,11 +16,7 @@ from typing import Optional, Tuple
 
 from ....configuration_utils import RBLNModelConfig
 from ....transformers import RBLNCLIPTextModelConfig, RBLNCLIPTextModelWithProjectionConfig
-from ....utils.logging import get_logger
 from ..models import RBLNAutoencoderKLConfig, RBLNControlNetModelConfig, RBLNUNet2DConditionModelConfig
-
-
-logger = get_logger(__name__)
 
 
 class _RBLNStableDiffusionControlNetPipelineBaseConfig(RBLNModelConfig):

@@ -16,12 +16,8 @@ from typing import Optional, Tuple
 
 from ....configuration_utils import RBLNModelConfig
 from ....transformers import RBLNCLIPTextModelWithProjectionConfig, RBLNCLIPVisionModelWithProjectionConfig
-from ....utils.logging import get_logger
 from ..models import RBLNUNet2DConditionModelConfig, RBLNVQModelConfig
 from ..models.configuration_prior_transformer import RBLNPriorTransformerConfig
-
-
-logger = get_logger(__name__)
 
 
 class _RBLNKandinskyV22PipelineBaseConfig(RBLNModelConfig):
