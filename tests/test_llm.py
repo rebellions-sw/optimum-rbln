@@ -16,6 +16,7 @@ from optimum.rbln import (
     RBLNBartForConditionalGeneration,
     RBLNExaoneForCausalLM,
     RBLNGPT2LMHeadModel,
+    RBLNIdefics3ForConditionalGeneration,
     RBLNLlamaForCausalLM,
     RBLNLlavaNextForConditionalGeneration,
     RBLNPhiForCausalLM,
@@ -250,6 +251,41 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
         img_path = f"{os.path.dirname(__file__)}/../assets/rbln_logo.png"
         image = Image.open(img_path)
         inputs = tokenizer(images=[image], text=[self.PROMPT], return_tensors="pt", padding=True)
+        inputs["max_new_tokens"] = 20
+        inputs["do_sample"] = False
+        return inputs
+
+
+class TestIdefics3ForConditionalGeneration(LLMTest.TestLLM):
+    RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
+    RBLN_CLASS = RBLNIdefics3ForConditionalGeneration
+    TEST_LEVEL = TestLevel.FULL
+    HF_MODEL_ID = "hf-internal-testing/tiny-random-Idefics3ForConditionalGeneration"
+    PROMPT = [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": "Describe this image."}]}]
+    RBLN_CLASS_KWARGS = {"rbln_config": {"text_model": {"use_inputs_embeds": True, "attn_impl": "flash_attn"}}}
+
+    @classmethod
+    def get_tokenizer(cls):
+        if cls._tokenizer is None:
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
+        return cls._tokenizer
+
+    # override
+    @classmethod
+    def setUpClass(cls):
+        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
+        text_config = json.loads(config.text_config.to_json_string())
+        text_config["num_hidden_layers"] = 1
+        kwargs = {"text_config": text_config}
+        cls.HF_CONFIG_KWARGS.update(kwargs)
+        return super().setUpClass()
+
+    def get_inputs(self):
+        tokenizer = self.get_tokenizer()
+        img_path = f"{os.path.dirname(__file__)}/../assets/rbln_logo.png"
+        image = Image.open(img_path)
+        text = tokenizer.apply_chat_template(self.PROMPT, add_generation_prompt=True)
+        inputs = tokenizer(images=[image], text=[text], return_tensors="pt", padding=True)
         inputs["max_new_tokens"] = 20
         inputs["do_sample"] = False
         return inputs
