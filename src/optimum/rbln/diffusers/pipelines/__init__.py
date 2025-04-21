@@ -51,6 +51,7 @@ _import_structure = {
     ],
     "cosmos": [
         "RBLNCosmosPipeline",
+        "RBLNCosmosSafetyChecker"
     ]
 }
 if TYPE_CHECKING:
@@ -85,7 +86,7 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLInpaintPipeline,
         RBLNStableDiffusionXLPipeline,
     )
-    from .cosmos import RBLNCosmosPipeline
+    from .cosmos import RBLNCosmosPipeline, RBLNCosmosSafetyChecker
 else:
     import sys
 

@@ -46,6 +46,7 @@ _import_structure = {
         "RBLNStableDiffusion3Img2ImgPipeline",
         "RBLNStableDiffusion3InpaintPipeline",
         "RBLNCosmosPipeline",
+        "RBLNCosmosSafetyChecker",
     ],
     "models": [
         "RBLNAutoencoderKL",
@@ -93,6 +94,7 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLInpaintPipeline,
         RBLNStableDiffusionXLPipeline,
         RBLNCosmosPipeline,
+        RBLNCosmosSafetyChecker
     )
 else:
     import sys

@@ -105,6 +105,7 @@ _import_structure = {
         "RBLNStableDiffusion3Pipeline",
         "RBLNDiffusionMixin",
         "RBLNCosmosPipeline",
+        "RBLNCosmosSafetyChecker",
     ],
 }
 
@@ -139,6 +140,7 @@ if TYPE_CHECKING:
         RBLNUNet2DConditionModel,
         RBLNVQModel,
         RBLNCosmosPipeline,
+        RBLNCosmosSafetyChecker,
     )
     from .modeling import (
         RBLNBaseModel,

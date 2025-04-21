@@ -13,3 +13,4 @@
 # limitations under the License.
 
 from .pipeline_cosmos import RBLNCosmosPipeline
+from .cosmos_guardrail import RBLNCosmosSafetyChecker
