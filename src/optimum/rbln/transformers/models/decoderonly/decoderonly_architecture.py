@@ -182,11 +182,7 @@ class DecoderOnlyWrapper(nn.Module):
     def get_rotary_emb(self, max_seq_len):
         return RotaryEmbedding(config=self.config, max_seq_len_cached=max_seq_len)
 
-    def convert_to_rbln_causal_lm(
-        self,
-        causal_lm: PreTrainedModel,
-        max_seq_len: int,
-    ):
+    def convert_to_rbln_causal_lm(self, causal_lm: PreTrainedModel, max_seq_len: int):
         new_layers = []
         for layer in causal_lm.model.layers:
             if self.attn_impl == "eager":
