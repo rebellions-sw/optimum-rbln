@@ -99,25 +99,6 @@ class RBLNRuntimeVisionModel(RBLNPytorchRuntime):
         return super().forward(hidden_states.contiguous())
 
 
-class _Idefics3VisionTransformer(torch.nn.Module):
-    def __init__(self, model: "Idefics3VisionTransformer"):
-        super().__init__()
-        self.encoder = model.encoder
-        self.post_layernorm = model.post_layernorm
-
-    def forward(self, hidden_states, patch_attention_mask: Optional[torch.BoolTensor] = None):
-        encoder_outputs = self.encoder(
-            inputs_embeds=hidden_states,
-            attention_mask=patch_attention_mask,
-            output_attentions=None,
-            output_hidden_states=None,
-            return_dict=False,
-        )
-        last_hidden_state = encoder_outputs[0]
-        last_hidden_state = self.post_layernorm(last_hidden_state)
-        return last_hidden_state
-
-
 class RBLNIdefics3VisionTransformer(RBLNModel):
     def __post_init__(self, **kwargs):
         artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
@@ -149,7 +130,25 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
 
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
-        return _Idefics3VisionTransformer(model).eval()
+        class Idefics3VisionTransformerWrapper(torch.nn.Module):
+            def __init__(self, model: "Idefics3VisionTransformer"):
+                super().__init__()
+                self.encoder = model.encoder
+                self.post_layernorm = model.post_layernorm
+
+            def forward(self, hidden_states, patch_attention_mask: Optional[torch.BoolTensor] = None):
+                encoder_outputs = self.encoder(
+                    inputs_embeds=hidden_states,
+                    attention_mask=patch_attention_mask,
+                    output_attentions=None,
+                    output_hidden_states=None,
+                    return_dict=False,
+                )
+                last_hidden_state = encoder_outputs[0]
+                last_hidden_state = self.post_layernorm(last_hidden_state)
+                return last_hidden_state
+
+        return Idefics3VisionTransformerWrapper(model).eval()
 
     @classmethod
     def _update_rbln_config(
@@ -277,125 +276,6 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
 
         return rbln_config
 
-    def forward(
-        self,
-        input_ids: torch.LongTensor = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.LongTensor] = None,
-        past_key_values: Optional[List[torch.FloatTensor]] = None,
-        inputs_embeds: Optional[torch.FloatTensor] = None,
-        pixel_values: Optional[torch.FloatTensor] = None,
-        pixel_attention_mask: Optional[torch.BoolTensor] = None,
-        image_hidden_states: Optional[torch.FloatTensor] = None,
-        cache_position: torch.Tensor = None,
-        generate_idx: Optional[torch.Tensor] = None,
-        batch_idx: Optional[int] = None,
-        **kwargs,
-    ) -> Union[Tuple, Idefics3CausalLMOutputWithPast]:
-        if input_ids is not None:
-            batch_size, seq_length = input_ids.shape
-        elif inputs_embeds is not None:
-            batch_size, seq_length, _ = inputs_embeds.shape
-        else:
-            raise ValueError("You have to specify either input_ids or inputs_embeds")
-
-        if cache_position is None:
-            past_seen_tokens = 0
-        else:
-            past_seen_tokens = cache_position.max().item() - 1
-
-        if inputs_embeds is not None and input_ids is None and past_seen_tokens == 0:
-            raise ValueError("When first calling the model, if input_embeds are passed, input_ids should not be None.")
-
-        if inputs_embeds is None:
-            inputs_embeds = self.get_input_embeddings()(input_ids).to(self.device)
-
-        # START VISUAL INPUTS INTEGRATION
-        if pixel_values is not None and image_hidden_states is not None:
-            raise ValueError("You cannot specify both pixel_values and image_hidden_states at the same time")
-        elif pixel_values is not None:
-            batch_size, num_images, num_channels, height, width = pixel_values.shape
-            pixel_values = pixel_values.to(dtype=self.dtype)  # fp16 compatibility
-            pixel_values = pixel_values.view(batch_size * num_images, *pixel_values.shape[2:])
-
-            # Remove padding images - padding images are full 0.
-            nb_values_per_image = pixel_values.shape[1:].numel()
-            real_images_inds = (pixel_values == 0.0).sum(dim=(-1, -2, -3)) != nb_values_per_image
-            pixel_values = pixel_values[real_images_inds].contiguous()
-
-            # Handle the vision attention mask
-            if pixel_attention_mask is None:
-                pixel_attention_mask = torch.ones(
-                    size=(pixel_values.size(0), pixel_values.size(2), pixel_values.size(3)),
-                    dtype=torch.bool,
-                    device=pixel_values.device,
-                )
-            else:
-                # Remove padding images from the mask
-                pixel_attention_mask = pixel_attention_mask.view(
-                    batch_size * num_images, *pixel_attention_mask.shape[2:]
-                )
-                pixel_attention_mask = pixel_attention_mask[real_images_inds].contiguous()
-
-            patch_size = self.config.vision_config.patch_size
-            patches_subgrid = pixel_attention_mask.unfold(dimension=1, size=patch_size, step=patch_size)
-            patches_subgrid = patches_subgrid.unfold(dimension=2, size=patch_size, step=patch_size)
-            patch_attention_mask = (patches_subgrid.sum(dim=(-1, -2)) > 0).bool()
-
-            # Get sequence from the vision encoder
-            image_hidden_states = self.vision_model(
-                pixel_values=pixel_values,
-                patch_attention_mask=patch_attention_mask,
-            ).last_hidden_state
-
-            # Modality projection & resampling
-            # batch_size * num_patches (dependent on image size) -> compile with 1 and use for loop
-            connector_outputs = []
-            for i in range(image_hidden_states.shape[0]):
-                connector_outputs.append(self.connector(image_hidden_states[i : i + 1,]))
-            image_hidden_states = torch.cat(connector_outputs, dim=0)
-
-        elif image_hidden_states is not None:
-            image_hidden_states = image_hidden_states.to(dtype=self.dtype, device=input_ids.device)
-
-        if past_seen_tokens == 0 and inputs_embeds is not None and image_hidden_states is not None:
-            # When we generate, we don't want to replace the potential image_token_id that we generated by images
-            # that simply don't exist
-            inputs_embeds = self.inputs_merger(
-                input_ids=input_ids,
-                inputs_embeds=inputs_embeds,
-                image_hidden_states=image_hidden_states,
-            )
-
-        if cache_position is None:
-            logits = []
-            inputs = inputs_embeds if inputs_embeds is not None else input_ids
-            batch_size = inputs.shape[0]
-
-            for b_idx in range(batch_size):
-                cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
-                logit = self.text_model.prefill_decoder(
-                    input_ids=inputs[b_idx : b_idx + 1] if inputs_embeds is None else None,
-                    inputs_embeds=inputs[b_idx : b_idx + 1] if inputs_embeds is not None else None,
-                    attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
-                    cache_position=cache_position,
-                    batch_idx=b_idx,
-                )
-                logits.append(logit)
-
-            logits = torch.cat(logits, dim=0)
-        else:
-            logits = self.text_model.decoder(
-                input_ids=input_ids,
-                inputs_embeds=inputs_embeds,
-                cache_position=cache_position,
-            )
-
-        return RBLNDecoderOnlyOutput(
-            logits=logits,
-            generate_idx=generate_idx,
-        )
-
     def prepare_inputs_for_generation(
         self,
         input_ids,
@@ -486,3 +366,125 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
         reshaped_image_hidden_states = reshaped_image_hidden_states.to(inputs_embeds.device, inputs_embeds.dtype)
         new_inputs_embeds[special_image_token_mask] = reshaped_image_hidden_states
         return new_inputs_embeds
+
+    def forward(
+        self,
+        input_ids: torch.LongTensor = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        past_key_values: Optional[List[torch.FloatTensor]] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        pixel_values: Optional[torch.FloatTensor] = None,
+        pixel_attention_mask: Optional[torch.BoolTensor] = None,
+        image_hidden_states: Optional[torch.FloatTensor] = None,
+        cache_position: torch.Tensor = None,
+        generate_idx: Optional[torch.Tensor] = None,
+        batch_idx: Optional[int] = None,
+        **kwargs,
+    ) -> Union[Tuple, Idefics3CausalLMOutputWithPast]:
+        if input_ids is not None:
+            batch_size, seq_length = input_ids.shape
+        elif inputs_embeds is not None:
+            batch_size, seq_length, _ = inputs_embeds.shape
+        else:
+            raise ValueError("You have to specify either input_ids or inputs_embeds")
+
+        if cache_position is None:
+            past_seen_tokens = 0
+        else:
+            past_seen_tokens = cache_position.max().item() - 1
+
+        if inputs_embeds is not None and input_ids is None and past_seen_tokens == 0:
+            raise ValueError("When first calling the model, if input_embeds are passed, input_ids should not be None.")
+
+        if inputs_embeds is None:
+            inputs_embeds = self.get_input_embeddings()(input_ids).to(self.device)
+
+        # START VISUAL INPUTS INTEGRATION
+        if pixel_values is not None and image_hidden_states is not None:
+            raise ValueError("You cannot specify both pixel_values and image_hidden_states at the same time")
+        elif pixel_values is not None:
+            batch_size, num_images, num_channels, height, width = pixel_values.shape
+            pixel_values = pixel_values.to(dtype=self.dtype)  # fp16 compatibility
+            pixel_values = pixel_values.view(batch_size * num_images, *pixel_values.shape[2:])
+
+            # Remove padding images - padding images are full 0.
+            nb_values_per_image = pixel_values.shape[1:].numel()
+            real_images_inds = (pixel_values == 0.0).sum(dim=(-1, -2, -3)) != nb_values_per_image
+            pixel_values = pixel_values[real_images_inds].contiguous()
+
+            # Handle the vision attention mask
+            if pixel_attention_mask is None:
+                pixel_attention_mask = torch.ones(
+                    size=(pixel_values.size(0), pixel_values.size(2), pixel_values.size(3)),
+                    dtype=torch.bool,
+                    device=pixel_values.device,
+                )
+            else:
+                # Remove padding images from the mask
+                pixel_attention_mask = pixel_attention_mask.view(
+                    batch_size * num_images, *pixel_attention_mask.shape[2:]
+                )
+                pixel_attention_mask = pixel_attention_mask[real_images_inds].contiguous()
+
+            patch_size = self.config.vision_config.patch_size
+            patches_subgrid = pixel_attention_mask.unfold(dimension=1, size=patch_size, step=patch_size)
+            patches_subgrid = patches_subgrid.unfold(dimension=2, size=patch_size, step=patch_size)
+            patch_attention_mask = (patches_subgrid.sum(dim=(-1, -2)) > 0).bool()
+
+            # Get sequence from the vision encoder
+            image_hidden_states = self.vision_model(
+                pixel_values=pixel_values,
+                patch_attention_mask=patch_attention_mask,
+            ).last_hidden_state
+
+            # Modality projection & resampling
+            # batch_size * num_patches (dependent on image size) -> compile with 1 and use for loop
+            connector_outputs = []
+            for i in range(image_hidden_states.shape[0]):
+                connector_outputs.append(self.connector(image_hidden_states[i : i + 1,]))
+            image_hidden_states = torch.cat(connector_outputs, dim=0)
+
+        elif image_hidden_states is not None:
+            image_hidden_states = image_hidden_states.to(dtype=self.dtype, device=input_ids.device)
+
+        if past_seen_tokens == 0 and inputs_embeds is not None and image_hidden_states is not None:
+            # When we generate, we don't want to replace the potential image_token_id that we generated by images
+            # that simply don't exist
+            inputs_embeds = self.inputs_merger(
+                input_ids=input_ids,
+                inputs_embeds=inputs_embeds,
+                image_hidden_states=image_hidden_states,
+            )
+
+        # Prefill
+        if cache_position is None:
+            logits = []
+            inputs = inputs_embeds if inputs_embeds is not None else input_ids
+            batch_size = inputs.shape[0]
+
+            for b_idx in range(batch_size):
+                cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
+                logit = self.text_model.prefill_decoder(
+                    input_ids=inputs[b_idx : b_idx + 1] if inputs_embeds is None else None,
+                    inputs_embeds=inputs[b_idx : b_idx + 1] if inputs_embeds is not None else None,
+                    attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
+                    cache_position=cache_position,
+                    batch_idx=b_idx,
+                )
+                logits.append(logit)
+
+            logits = torch.cat(logits, dim=0)
+
+        # Decoder
+        else:
+            logits = self.text_model.decoder(
+                input_ids=input_ids,
+                inputs_embeds=inputs_embeds,
+                cache_position=cache_position,
+            )
+
+        return RBLNDecoderOnlyOutput(
+            logits=logits,
+            generate_idx=generate_idx,
+        )
