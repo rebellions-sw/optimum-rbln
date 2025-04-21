@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Dict, List, Tuple, Union
 import rebel
 import torch
 from diffusers import AutoencoderKL
+from diffusers.models.autoencoders.vae import DecoderOutput
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
 from transformers import PretrainedConfig
 
@@ -196,9 +197,14 @@ class RBLNAutoencoderKL(RBLNModel):
             for compiled_model, device_val in zip(compiled_models, device_vals)
         ]
 
-    def encode(self, x: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
+    def encode(self, x: torch.FloatTensor, return_dict: bool = True, **kwargs) -> torch.FloatTensor:
         posterior = self.encoder.encode(x)
+        if not return_dict:
+            return (posterior,)
         return AutoencoderKLOutput(latent_dist=posterior)
 
-    def decode(self, z: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
-        return self.decoder.decode(z)
+    def decode(self, z: torch.FloatTensor, return_dict: bool = True, **kwargs) -> torch.FloatTensor:
+        dec = self.decoder.decode(z)
+        if not return_dict:
+            return (dec,)
+        return DecoderOutput(sample=dec)
