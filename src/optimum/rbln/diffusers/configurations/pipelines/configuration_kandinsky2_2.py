@@ -26,6 +26,7 @@ logger = get_logger(__name__)
 
 class _RBLNKandinskyV22PipelineBaseConfig(RBLNModelConfig):
     submodules = ["unet", "movq"]
+    _movq_uses_encoder = False
 
     def __init__(
         self,
@@ -77,6 +78,7 @@ class _RBLNKandinskyV22PipelineBaseConfig(RBLNModelConfig):
             movq,
             batch_size=batch_size,
             sample_size=image_size,  # image size is equal to sample size in vae
+            uses_encoder=self._movq_uses_encoder,
         )
 
         if guidance_scale is not None:
@@ -95,15 +97,15 @@ class _RBLNKandinskyV22PipelineBaseConfig(RBLNModelConfig):
 
 
 class RBLNKandinskyV22PipelineConfig(_RBLNKandinskyV22PipelineBaseConfig):
-    pass
+    _movq_uses_encoder = False
 
 
 class RBLNKandinskyV22Img2ImgPipelineConfig(_RBLNKandinskyV22PipelineBaseConfig):
-    pass
+    _movq_uses_encoder = True
 
 
 class RBLNKandinskyV22InpaintPipelineConfig(_RBLNKandinskyV22PipelineBaseConfig):
-    pass
+    _movq_uses_encoder = True
 
 
 class RBLNKandinskyV22PriorPipelineConfig(RBLNModelConfig):
@@ -168,6 +170,7 @@ class RBLNKandinskyV22PriorPipelineConfig(RBLNModelConfig):
 
 class _RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
     submodules = ["prior_pipe", "decoder_pipe"]
+    _decoder_pipe_cls = RBLNKandinskyV22PipelineConfig
 
     def __init__(
         self,
@@ -229,7 +232,7 @@ class _RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
             guidance_scale=guidance_scale,
         )
         self.decoder_pipe = self.init_submodule_config(
-            RBLNKandinskyV22PipelineConfig,
+            self._decoder_pipe_cls,
             decoder_pipe,
             unet=unet,
             movq=movq,
@@ -271,12 +274,12 @@ class _RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
 
 
 class RBLNKandinskyV22CombinedPipelineConfig(_RBLNKandinskyV22CombinedPipelineBaseConfig):
-    pass
+    _decoder_pipe_cls = RBLNKandinskyV22PipelineConfig
 
 
 class RBLNKandinskyV22InpaintCombinedPipelineConfig(_RBLNKandinskyV22CombinedPipelineBaseConfig):
-    pass
+    _decoder_pipe_cls = RBLNKandinskyV22InpaintPipelineConfig
 
 
 class RBLNKandinskyV22Img2ImgCombinedPipelineConfig(_RBLNKandinskyV22CombinedPipelineBaseConfig):
-    pass
+    _decoder_pipe_cls = RBLNKandinskyV22Img2ImgPipelineConfig
