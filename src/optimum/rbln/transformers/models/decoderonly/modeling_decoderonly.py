@@ -952,7 +952,14 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             logits = torch.cat(logits, dim=0)
         # Decoder
         else:
-            batch_size = input_ids.shape[0]
+            inputs = inputs_embeds if inputs_embeds is not None else input_ids
+            batch_size = inputs.shape[0]
+            if batch_size not in self.decoders:
+                raise ValueError(
+                    f"No decoder runtime available for batch size {batch_size}. "
+                    f"Available batch sizes are: {list(self.decoders.keys())}. "
+                    f"Please run your model with one of these batch sizes or add support for batch size {batch_size}."
+                )
             logits = self.decoders[batch_size](
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
