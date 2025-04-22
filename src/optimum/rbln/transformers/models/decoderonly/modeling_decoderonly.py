@@ -570,39 +570,52 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         # check if the memory is enough to have additional blocks
         required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
         if rbln_config.kvcache_num_blocks < required_num_blocks:
-            # Get the actual memory allocation of each node by key
-            alloc_memory_per_node_by_key: Dict[str, List[int]] = compiled_models["prefill"].get_alloc_per_node_by_key()
-            alloc_memory_by_key: Dict[str, int] = {
-                key: sum(memory_per_node) for key, memory_per_node in alloc_memory_per_node_by_key.items()
-            }
-            for key, memory_per_node in compiled_models["decoder"].get_alloc_per_node_by_key().items():
-                alloc_memory_by_key[key] += sum(memory_per_node)
-            alloc_memory_by_key.pop("PortRecur")  # kv-cache
-            kernel_size = alloc_memory_by_key.pop("Kernel")  # model weight
-
-            # Get the maximum number of blocks that can be allocated
-            buffer = sum(alloc_memory_by_key.values())
-            max_num_blocks = cls.get_maximum_num_blocks(
-                config=model.config,
-                tensor_parallel_size=rbln_config.tensor_parallel_size,
-                kvcache_block_size=rbln_config.kvcache_block_size,
-                kernel_size=kernel_size,
-                buffer=buffer,
+            cls.maybe_suggest_kvcache_num_blocks(
+                compiled_models=compiled_models,
+                model_config=model.config,
+                rbln_config=rbln_config,
             )
 
-            # Since our estimation logic is not always accurate,
-            # users can set `kvcache_num_blocks` to `max_num_blocks`.
-            # If the memory is not enough, the model will fail to compile.
-            if rbln_config.kvcache_num_blocks < max_num_blocks:
-                logger.warning(
-                    f"Current `kvcache_num_blocks` setting is {rbln_config.kvcache_num_blocks}. "
-                    "Our analysis indicates that additional memory is available for more blocks. "
-                    f"Consider increasing `kvcache_num_blocks` to {max_num_blocks} for potentially improved performance. "
-                    "Please be advised that our memory estimation algorithm has limitations, "
-                    "and increasing this value may not guarantee successful model compilation."
-                )
-
         return compiled_models
+
+    @classmethod
+    def maybe_suggest_kvcache_num_blocks(
+        cls,
+        compiled_models: Dict[str, rebel.RBLNCompiledModel],
+        model_config: PretrainedConfig,
+        rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
+    ) -> None:
+        # Get the actual memory allocation of each node by key
+        alloc_memory_per_node_by_key: Dict[str, List[int]] = compiled_models["prefill"].get_alloc_per_node_by_key()
+        alloc_memory_by_key: Dict[str, int] = {
+            key: sum(memory_per_node) for key, memory_per_node in alloc_memory_per_node_by_key.items()
+        }
+        for key, memory_per_node in compiled_models["decoder"].get_alloc_per_node_by_key().items():
+            alloc_memory_by_key[key] += sum(memory_per_node)
+        alloc_memory_by_key.pop("PortRecur")  # kv-cache
+        kernel_size = alloc_memory_by_key.pop("Kernel")  # model weight
+
+        # Get the maximum number of blocks that can be allocated
+        buffer = sum(alloc_memory_by_key.values())
+        max_num_blocks = cls.get_maximum_num_blocks(
+            config=model_config,
+            tensor_parallel_size=rbln_config.tensor_parallel_size,
+            kvcache_block_size=rbln_config.kvcache_block_size,
+            kernel_size=kernel_size,
+            buffer=buffer,
+        )
+
+        # Since our estimation logic is not always accurate,
+        # users can set `kvcache_num_blocks` to `max_num_blocks`.
+        # If the memory is not enough, the model will fail to compile.
+        if rbln_config.kvcache_num_blocks < max_num_blocks:
+            logger.warning(
+                f"Current `kvcache_num_blocks` setting is {rbln_config.kvcache_num_blocks}. "
+                "Our analysis indicates that additional memory is available for more blocks. "
+                f"Consider increasing `kvcache_num_blocks` to {max_num_blocks} for potentially improved performance. "
+                "Please be advised that our memory estimation algorithm has limitations, "
+                "and increasing this value may not guarantee successful model compilation."
+            )
 
     @classmethod
     def get_maximum_num_blocks(
