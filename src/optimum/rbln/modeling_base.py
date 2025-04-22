@@ -423,6 +423,20 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     def to(self, *args, **kwargs):
         return self
 
+    def parameters(self):
+        """
+        Provides a dummy parameter generator for compatibility.
+
+        This method mimics the interface of torch.nn.Module.parameters()
+        specifically for code that uses `next(model.parameters())` to infer
+        the device or dtype. It yields a single dummy tensor on CPU with float32 dtype.
+
+        Warning:
+            This does NOT yield the actual model parameters used by the RBLN runtime.
+            Code relying on iterating through all model parameters will not work as expected.
+        """
+        yield torch.tensor([1.0], dtype=torch.float32, device=torch.device("cpu"))
+
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
 
