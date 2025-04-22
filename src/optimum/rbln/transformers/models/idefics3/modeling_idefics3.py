@@ -36,21 +36,17 @@ from transformers.models.idefics3.modeling_idefics3 import Idefics3CausalLMOutpu
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
-from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
 from ..decoderonly.modeling_decoderonly import (
     RBLNDecoderOnlyOutput,
 )
 
 
-logger = get_logger(__name__)
-
 if TYPE_CHECKING:
     from transformers import (
         AutoFeatureExtractor,
         AutoProcessor,
         AutoTokenizer,
-        PretrainedConfig,
     )
 
 
@@ -200,7 +196,11 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
             )
             last_hidden_state.append(batch_hidden_state)
         last_hidden_state = torch.cat(last_hidden_state, dim=0)
-        return BaseModelOutput(last_hidden_state=last_hidden_state)
+
+        if not return_dict:
+            return (last_hidden_state,)
+        else:
+            return BaseModelOutput(last_hidden_state=last_hidden_state)
 
 
 class RBLNIdefics3ForConditionalGeneration(RBLNModel):
@@ -308,7 +308,7 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
             model_inputs.update({"input_ids": input_ids})
 
         if inputs_embeds is not None:
-            if self.rbln_config.model_cfg["use_inputs_embeds"]:
+            if self.rbln_config.use_inputs_embeds:
                 model_inputs.update({"inputs_embeds": inputs_embeds})
             else:
                 raise ValueError(
@@ -401,8 +401,7 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
             patch_attention_mask = (patches_subgrid.sum(dim=(-1, -2)) > 0).bool()
 
             image_hidden_states = self.vision_model(
-                pixel_values=pixel_values,
-                patch_attention_mask=patch_attention_mask,
+                pixel_values=pixel_values, patch_attention_mask=patch_attention_mask, return_dict=True
             ).last_hidden_state
 
             connector_outputs = []
