@@ -178,7 +178,7 @@ class BaseTest:
                     output = self.model.generate(**inputs)
                 else:
                     # encoder-only, resnet, etc..
-                    output = self.model(**inputs)
+                    output = self.model(**inputs)[0]
 
             output = self.postprocess(inputs, output)
             if self.EXPECTED_OUTPUT:
