@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 class Qwen2_5_VisionTransformerWrapper(nn.Module):
     def __init__(self, model: torch.nn.Module):
         super().__init__()
-        self._origin_model = model
+        self._original_mod = model
         self.fullatt_block_indexes = model.fullatt_block_indexes
         self.merger = model.merger
         window_seq_len = (model.window_size // model.patch_size) ** 2
