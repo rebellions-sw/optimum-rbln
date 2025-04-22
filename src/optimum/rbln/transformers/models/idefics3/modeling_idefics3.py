@@ -15,7 +15,7 @@
 import importlib
 import inspect
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, Union
 
 import rebel
 import torch
@@ -279,7 +279,6 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
     def prepare_inputs_for_generation(
         self,
         input_ids,
-        past_key_values=None,
         attention_mask=None,
         inputs_embeds=None,
         cache_position=None,
@@ -291,13 +290,6 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
     ):
         is_prefill_phase = generate_idx is None
         model_inputs = {}
-
-        position_ids = kwargs.get("position_ids", None)
-        if attention_mask is not None and position_ids is None:
-            position_ids = attention_mask.long().cumsum(-1) - 1
-            position_ids.masked_fill_(attention_mask == 0, 1)
-            if not is_prefill_phase:
-                position_ids = position_ids[:, -input_ids.shape[1] :]
 
         if is_prefill_phase:
             generate_idx = attention_mask.sum(dim=-1, keepdim=True).int()
@@ -327,7 +319,6 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
 
         model_inputs.update(
             {
-                "position_ids": position_ids,
                 "attention_mask": attention_mask,
                 "pixel_values": pixel_values,
                 "pixel_attention_mask": pixel_attention_mask,
@@ -348,21 +339,10 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
         inputs_embeds: Optional[torch.Tensor],
         image_hidden_states: Optional[torch.Tensor],
     ):
-        """
-        This method aims at merging the token embeddings with the image hidden states into one single sequence of vectors that are fed to the transformer LM.
-        The merging happens as follows:
-        - The text token sequence is: `tok_1 tok_2 tok_3 <fake_token_around_image> <image> <image> ... <image> <fake_token_around_image> tok_4`.
-        - We get the image hidden states for the image through the vision encoder and that hidden state, after a pixel shuffle operation, is then projected into the text embedding space.
-        We thus have a sequence of image hidden states of size (1, image_seq_len, hidden_dim), where 1 is for batch_size of 1 image and hidden_dim is the hidden_dim of the LM transformer.
-        - The merging happens so that we obtain the following sequence: `vector_tok_1 vector_tok_2 vector_tok_3 vector_fake_tok_around_image {sequence of image_seq_len image hidden states} vector_fake_toke_around_image vector_tok_4`. That sequence is fed to the LM.
-        - To fit the format of that sequence, `input_ids`, `input_embeds`, `attention_mask` are all 3 adapted to insert the image hidden states.
-        """
         num_images, _, vision_hidden_size = image_hidden_states.shape
         special_image_token_mask = input_ids == self.config.image_token_id
-        #  Fixes RuntimeError: a leaf Variable that requires grad is being used in an in-place operation.
         new_inputs_embeds = inputs_embeds.clone()
         reshaped_image_hidden_states = image_hidden_states.view(-1, vision_hidden_size)
-        # cast to the dtype of the input_embeds to support quantized models
         reshaped_image_hidden_states = reshaped_image_hidden_states.to(inputs_embeds.device, inputs_embeds.dtype)
         new_inputs_embeds[special_image_token_mask] = reshaped_image_hidden_states
         return new_inputs_embeds
@@ -374,20 +354,16 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
         pixel_values: Optional[torch.FloatTensor] = None,
         pixel_attention_mask: Optional[torch.BoolTensor] = None,
         image_hidden_states: Optional[torch.FloatTensor] = None,
-        cache_position: torch.Tensor = None,
         **kwargs,
     ):
         if input_ids is not None:
-            batch_size, seq_length = input_ids.shape
+            batch_size, _ = input_ids.shape
         elif inputs_embeds is not None:
-            batch_size, seq_length, _ = inputs_embeds.shape
+            batch_size, _, _ = inputs_embeds.shape
         else:
             raise ValueError("You have to specify either input_ids or inputs_embeds")
 
-        if cache_position is None:
-            past_seen_tokens = 0
-        else:
-            past_seen_tokens = cache_position.max().item() - 1
+        past_seen_tokens = 0
 
         if inputs_embeds is not None and input_ids is None and past_seen_tokens == 0:
             raise ValueError("When first calling the model, if input_embeds are passed, input_ids should not be None.")
@@ -395,20 +371,18 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
         if inputs_embeds is None:
             inputs_embeds = self.get_input_embeddings()(input_ids).to(self.device)
 
-        # START VISUAL INPUTS INTEGRATION
         if pixel_values is not None and image_hidden_states is not None:
             raise ValueError("You cannot specify both pixel_values and image_hidden_states at the same time")
+
         elif pixel_values is not None:
             batch_size, num_images, num_channels, height, width = pixel_values.shape
-            pixel_values = pixel_values.to(dtype=self.dtype)  # fp16 compatibility
+            pixel_values = pixel_values.to(dtype=self.dtype)
             pixel_values = pixel_values.view(batch_size * num_images, *pixel_values.shape[2:])
 
-            # Remove padding images - padding images are full 0.
             nb_values_per_image = pixel_values.shape[1:].numel()
             real_images_inds = (pixel_values == 0.0).sum(dim=(-1, -2, -3)) != nb_values_per_image
             pixel_values = pixel_values[real_images_inds].contiguous()
 
-            # Handle the vision attention mask
             if pixel_attention_mask is None:
                 pixel_attention_mask = torch.ones(
                     size=(pixel_values.size(0), pixel_values.size(2), pixel_values.size(3)),
@@ -416,7 +390,6 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
                     device=pixel_values.device,
                 )
             else:
-                # Remove padding images from the mask
                 pixel_attention_mask = pixel_attention_mask.view(
                     batch_size * num_images, *pixel_attention_mask.shape[2:]
                 )
@@ -427,14 +400,11 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
             patches_subgrid = patches_subgrid.unfold(dimension=2, size=patch_size, step=patch_size)
             patch_attention_mask = (patches_subgrid.sum(dim=(-1, -2)) > 0).bool()
 
-            # Get sequence from the vision encoder
             image_hidden_states = self.vision_model(
                 pixel_values=pixel_values,
                 patch_attention_mask=patch_attention_mask,
             ).last_hidden_state
 
-            # Modality projection & resampling
-            # batch_size * num_patches (dependent on image size) -> compile with 1 and use for loop
             connector_outputs = []
             for i in range(image_hidden_states.shape[0]):
                 connector_outputs.append(self.connector(image_hidden_states[i : i + 1,]))
@@ -444,8 +414,6 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
             image_hidden_states = image_hidden_states.to(dtype=self.dtype, device=input_ids.device)
 
         if past_seen_tokens == 0 and inputs_embeds is not None and image_hidden_states is not None:
-            # When we generate, we don't want to replace the potential image_token_id that we generated by images
-            # that simply don't exist
             inputs_embeds = self.inputs_merger(
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
@@ -458,21 +426,18 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
         self,
         input_ids: torch.LongTensor = None,
         attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.LongTensor] = None,
-        past_key_values: Optional[List[torch.FloatTensor]] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
         pixel_values: Optional[torch.FloatTensor] = None,
         pixel_attention_mask: Optional[torch.BoolTensor] = None,
         image_hidden_states: Optional[torch.FloatTensor] = None,
         cache_position: torch.Tensor = None,
         generate_idx: Optional[torch.Tensor] = None,
-        batch_idx: Optional[int] = None,
         **kwargs,
     ) -> Union[Tuple, Idefics3CausalLMOutputWithPast]:
         # Prefill
         if cache_position is None:
             inputs_embeds = self._preprocess_prefill(
-                input_ids, inputs_embeds, pixel_values, pixel_attention_mask, image_hidden_states, cache_position
+                input_ids, inputs_embeds, pixel_values, pixel_attention_mask, image_hidden_states
             )
             logits = []
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
