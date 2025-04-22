@@ -892,7 +892,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 model_inputs.update({"inputs_embeds": inputs_embeds})
             else:
                 raise ValueError(
-                    "The specifying inputs_embedst is only supported when using a compiled RBLN model with 'rbln_use_inputs_embeds' set to True."
+                    "The specifying inputs_embeds is only supported when using a compiled RBLN model with 'rbln_use_inputs_embeds' set to True."
                 )
         else:
             model_inputs.update({"input_ids": input_ids})

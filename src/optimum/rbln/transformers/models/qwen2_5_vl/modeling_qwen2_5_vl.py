@@ -454,7 +454,9 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         video_grid_thw: torch.LongTensor = None,
         second_per_grid_ts: torch.Tensor = None,
     ):
+        batch_size = input_ids.shape[0]
         inputs_embeds = self.embed_tokens(input_ids)
+
         if pixel_values is not None:
             image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
             n_image_tokens = (input_ids == self.config.image_token_id).sum().item()
@@ -488,16 +490,16 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         max_inputs_len = input_ids.shape[1]
 
         head_dim = getattr(self.config, "head_dim", None) or self.config.hidden_size // self.config.num_attention_heads
-        all_position_embeds = torch.zeros(2, self.rbln_config.batch_size, 1, max_inputs_len, head_dim)
+        all_position_embeds = torch.zeros(2, batch_size, 1, max_inputs_len, head_dim)
         all_rope_deltas = []
-        for b_idx in range(self.rbln_config.batch_size):
+
+        for b_idx in range(batch_size):
             input_id = input_ids[b_idx : b_idx + 1][:, attention_mask[b_idx].bool()]
             position_ids, rope_deltas = self.get_rope_index(
                 input_id,
                 image_grid_thw[b_idx : b_idx + 1] if image_grid_thw is not None else None,
                 video_grid_thw[b_idx : b_idx + 1] if video_grid_thw is not None else None,
                 second_per_grid_ts[b_idx : b_idx + 1] if second_per_grid_ts is not None else None,
-                # attention_mask,
             )
             position_embed = self._get_position_embeddings(inputs_embeds, position_ids)
             mask_indices = torch.nonzero(attention_mask[b_idx], as_tuple=True)[0]
@@ -513,6 +515,11 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         input_ids: torch.LongTensor = None,
         cache_position: torch.LongTensor = None,
     ):
+        if self.rbln_config.batch_size != cache_position.shape[0]:
+            raise RuntimeError(
+                f"Cache position size mismatch: got {cache_position.shape[0]}, expected {self.rbln_config.batch_size}."
+            )
+
         inputs_embeds = self.embed_tokens(input_ids)
         position_embeds = []
         for b_idx in range(self.rbln_config.batch_size):
@@ -552,6 +559,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 video_grid_thw,
                 second_per_grid_ts,
             )
+
             self.rope_deltas = rope_deltas
             batch_size = inputs_embeds.shape[0]
 
