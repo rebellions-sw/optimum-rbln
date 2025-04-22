@@ -15,10 +15,10 @@ import os
 from abc import abstractmethod
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 import rebel
-import torch  # noqa: I001
+import torch
 from diffusers.pipelines.cosmos.cosmos_guardrail import (
     CosmosSafetyChecker,
 )
@@ -30,9 +30,6 @@ from ....utils.hub import validate_files
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime, UnavailableRuntime
 
-
-if TYPE_CHECKING:
-    import torch
 
 logger = get_logger(__name__)
 
