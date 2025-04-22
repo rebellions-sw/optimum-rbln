@@ -210,39 +210,12 @@ class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
         else:
             raise ValueError(f"Unknown phase: {self.phase}")
 
-        if input_ids_or_inputs_embeds.ndim == 2:
-            input_ids = input_ids_or_inputs_embeds
-            inputs_embeds = None
-        elif input_ids_or_inputs_embeds.ndim == 3:
-            input_ids = None
-            inputs_embeds = input_ids_or_inputs_embeds
-        else:
-            raise NotImplementedError(f"Unknown ndim of input : {input_ids_or_inputs_embeds.ndim}")
-
-        if len(past_key_values) != 2 * self.num_hidden_layers:
-            raise ValueError(
-                f"Different past_key_values to model's config. {len(past_key_values)} != {2 * self.num_hidden_layers}"
-            )
-
-        # [key, value] * n_layer -> ( (key, value) ) * n_layer
-        # cache shape : batch, n_heads, 1, max_seq_len, head_dim
-        _past_key_values = []
-        for i in range(self.config.num_hidden_layers):
-            key_states = past_key_values[i * 2]
-            value_states = past_key_values[i * 2 + 1]
-            past_key_value = [key_states, value_states]
-            _past_key_values.append(past_key_value)
-        past_key_values = _past_key_values
-
-        logit = self.causal_lm(
-            input_ids=input_ids,
-            inputs_embeds=inputs_embeds,
-            attention_mask=attention_mask,
+        return self.forward_common(
+            input_ids_or_inputs_embeds=input_ids_or_inputs_embeds,
             cache_position=cache_position,
+            attention_mask=attention_mask,
             query_position=query_position,
-            past_key_values=past_key_values,
-            rotary_emb=position_emb,
             block_tables=block_tables,
+            rotary_emb=position_emb,
+            *past_key_values,
         )
-
-        return logit
