@@ -42,12 +42,12 @@ class RBLNsimpleModel:
 
     This class supports compilation and loading models using the `compile_model` and `load_compiled_model` methods.
 
-    The `compile_model` method compile a given model and save into 'model_save_dir/subfolder' directory.
+    The `compile_model` method compiles a given model and save to 'model_save_dir/subfolder' directory.
 
-    The `load_compiled_model` method load a saved compiled model from given 'model_save_dir/subfolder' directory.
+    The `load_compiled_model` method loads a pre-compiled model from given 'model_save_dir/subfolder' directory.
 
-    `rbln_config` containes various kwargs required for compilation and runtime. For example, `rbln_device`
-    specifies the device to be used at runtime. If not specified, device 0 is used.
+    `rbln_config` contains various kwargs required for compilation and runtime. For example, `rbln_device`
+    specifies the device to be used at runtime. If not specified, defaults to device 0.
 
     `RBLNModel`, `RBLNModelFor*`, etc. are all child classes of RBLNsimpleModel.
 
