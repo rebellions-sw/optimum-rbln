@@ -37,6 +37,25 @@ COSMOS_GUARDRAIL_CHECKPOINT = "nvidia/Cosmos-1.0-Guardrail"
 
 
 class RBLNsimpleModel:
+    """
+    An abstract class for compiling, loading, and saving PyTorch models to run on RBLN NPU devices.
+
+    This class supports compilation and loading models using the `compile_model` and `load_compiled_model` methods.
+
+    The `compile_model` method compile a given model and save into 'model_save_dir/subfolder' directory.
+
+    The `load_compiled_model` method load a saved compiled model from given 'model_save_dir/subfolder' directory.
+
+    `rbln_config` containes various kwargs required for compilation and runtime. For example, `rbln_device`
+    specifies the device to be used at runtime. If not specified, device 0 is used.
+
+    `RBLNModel`, `RBLNModelFor*`, etc. are all child classes of RBLNsimpleModel.
+
+    RBLNsimpleModel is a class for models consisting of an arbitrary number of `torch.nn.Module`s, and
+    therefore is an abstract class without explicit implementations of `forward` or `export` functions.
+    To inherit from this class, `forward`, `export`, etc. must be implemented.
+    """
+
     def __init__(
         self,
         models: List[rebel.Runtime],
@@ -195,8 +214,7 @@ class RBLNsimpleModel:
         raise KeyError(message)
 
     def parameters(self):
-        for param in [torch.tensor([1], dtype=torch.float32, device=torch.device("cpu"))]:
-            yield param
+        yield torch.tensor([1], dtype=torch.float32, device=torch.device("cpu"))
 
     def to(self, device: Union[str, torch.device] = None, dtype: torch.dtype = None):
         pass
