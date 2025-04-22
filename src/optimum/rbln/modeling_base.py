@@ -314,10 +314,15 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             )
 
         except rebel.core.exception.RBLNRuntimeError as e:
-            logger.warning(
-                f"Failed to create the runtime for the model due to a runtime error: {e.__class__.__name__} - {e}"
+            error_msg = (
+                f"\nFailed to create RBLN runtime: {str(e)}\n\n"
+                f"If you only need to compile the model without loading it to NPU, you can use:\n"
+                f"  from_pretrained(..., rbln_create_runtimes=False) or\n"
+                f"  from_pretrained(..., rbln_config={{..., 'create_runtimes': False}})\n\n"
+                f"To check your NPU status, run the 'rbln-stat' command in your terminal.\n"
+                f"Make sure your NPU is properly installed and operational."
             )
-            models = UnavailableRuntime()
+            raise rebel.core.exception.RBLNRuntimeError(error_msg) from e
 
         return cls(
             models,
