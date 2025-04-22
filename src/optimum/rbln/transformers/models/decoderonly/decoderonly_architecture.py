@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import math
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 import torch
 from torch import nn
@@ -222,13 +222,13 @@ class DecoderOnlyWrapper(nn.Module):
 
     def forward_common(
         self,
-        input_ids_or_inputs_embeds: Optional[torch.Tensor] = None,
-        cache_position: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        query_position: Optional[torch.Tensor] = None,
-        block_tables: Optional[torch.Tensor] = None,
-        rotary_emb: Optional[nn.Module] = None,
-        *past_key_values: torch.Tensor,
+        input_ids_or_inputs_embeds: torch.Tensor,
+        cache_position: torch.Tensor,
+        attention_mask: torch.Tensor,
+        query_position: torch.Tensor,
+        block_tables: torch.Tensor,
+        rotary_emb: Union[nn.Module, torch.Tensor],
+        *past_key_values: List[torch.Tensor],
     ):
         if input_ids_or_inputs_embeds.ndim == 2:
             input_ids = input_ids_or_inputs_embeds
@@ -310,12 +310,12 @@ class DecoderOnlyWrapper(nn.Module):
             raise ValueError(f"Unknown phase: {self.phase}")
 
         return self.forward_common(
-            input_ids_or_inputs_embeds=input_ids_or_inputs_embeds,
-            cache_position=cache_position,
-            attention_mask=attention_mask,
-            query_position=query_position,
-            block_tables=block_tables,
-            rotary_emb=self.rotary_emb,
+            input_ids_or_inputs_embeds,
+            cache_position,
+            attention_mask,
+            query_position,
+            block_tables,
+            self.rotary_emb,
             *past_key_values,
         )
 

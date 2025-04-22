@@ -1,20 +1,13 @@
 import math
-from typing import TYPE_CHECKING, Tuple
+from typing import Tuple
 
 import torch
 import torch.nn as nn
 
-from ....utils import logging
 from ..decoderonly.decoderonly_architecture import (
     DecoderOnlyWrapper,
     apply_rotary_pos_emb,
 )
-
-
-logger = logging.get_logger(__name__)
-
-if TYPE_CHECKING:
-    pass
 
 
 class Qwen2_5_VisionTransformerWrapper(nn.Module):
@@ -211,11 +204,11 @@ class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
             raise ValueError(f"Unknown phase: {self.phase}")
 
         return self.forward_common(
-            input_ids_or_inputs_embeds=input_ids_or_inputs_embeds,
-            cache_position=cache_position,
-            attention_mask=attention_mask,
-            query_position=query_position,
-            block_tables=block_tables,
-            rotary_emb=position_emb,
+            input_ids_or_inputs_embeds,
+            cache_position,
+            attention_mask,
+            query_position,
+            block_tables,
+            position_emb,
             *past_key_values,
         )

@@ -263,7 +263,12 @@ class TestQwen2_5_VLForConditionalGeneration(LLMTest.TestLLM):
     HF_MODEL_ID = "Qwen/Qwen2.5-VL-3B-Instruct"  # No tiny model yet.
     PROMPT = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>Describe this image.<|im_end|>\n<|im_start|>assistant\n"
     RBLN_CLASS_KWARGS = {
-        "rbln_config": {"visual": {"max_seq_lens": 512}, "tensor_parallel_size": 1, "kvcache_partition_len": 16_384}
+        "rbln_config": {
+            "visual": {"max_seq_lens": 512},
+            "tensor_parallel_size": 1,
+            "kvcache_partition_len": 16_384,
+            "max_seq_len": 32_768,
+        }
     }
     EXPECTED_OUTPUT = "讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣"
     HF_CONFIG_KWARGS = {

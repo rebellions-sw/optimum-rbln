@@ -55,6 +55,6 @@ class RBLNQwen2_5_VisionTransformerPretrainedModelConfig(RBLNModelConfig):
             elif isinstance(max_seq_lens, list):
                 max_seq_lens.sort(reverse=True)
         else:
-            raise ValueError("'max_seq_lens' must be specified in the 'visual' configuration.")
+            raise ValueError("'max_seq_lens' must be specified.")
 
         self.max_seq_lens = max_seq_lens

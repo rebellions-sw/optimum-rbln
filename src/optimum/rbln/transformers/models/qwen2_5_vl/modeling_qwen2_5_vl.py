@@ -37,7 +37,6 @@ from ....utils.logging import get_logger
 from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyOutput
 from .configuration_qwen2_5_vl import (
     RBLNQwen2_5_VisionTransformerPretrainedModelConfig,
-    RBLNQwen2_5_VLForConditionalGenerationConfig,
 )
 from .qwen2_5_vl_architecture import Qwen2_5_VisionTransformerWrapper, Qwen2_5_VL_LanguageModelWrapper
 
@@ -339,7 +338,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         {"name": "visual"},
     ]
     _decoder_wrapper_cls = Qwen2_5_VL_LanguageModelWrapper
-    _use_rotary_emb = True
+    _use_rotary_emb = False
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
@@ -359,21 +358,6 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             }
         )
         return super().update_kwargs(kwargs)
-
-    @classmethod
-    def wrap_model_if_needed(
-        cls, model: "Qwen2_5_VLForConditionalGeneration", rbln_config: "RBLNQwen2_5_VLForConditionalGenerationConfig"
-    ):
-        wrapper_cfg = {
-            "max_seq_len": rbln_config.max_seq_len,
-            "attn_impl": rbln_config.attn_impl,
-            "kvcache_partition_len": rbln_config.kvcache_partition_len,
-            "kvcache_block_size": rbln_config.kvcache_block_size,
-            "use_rotary_emb": cls._use_rotary_emb,
-            "use_attention_mask": rbln_config.use_attention_mask,
-        }
-
-        return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
 
     @classmethod
     def get_input_info(
