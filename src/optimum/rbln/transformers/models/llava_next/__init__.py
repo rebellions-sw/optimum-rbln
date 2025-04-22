@@ -12,4 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .configuration_llava_next import RBLNLlavaNextForConditionalGenerationConfig
 from .modeling_llava_next import RBLNLlavaNextForConditionalGeneration
