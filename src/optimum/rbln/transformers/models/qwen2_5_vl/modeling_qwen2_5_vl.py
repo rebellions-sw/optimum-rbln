@@ -493,14 +493,26 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         all_position_embeds = torch.zeros(2, batch_size, 1, max_inputs_len, head_dim)
         all_rope_deltas = []
 
+        image_token_id = self.config.image_token_id
+        video_token_id = self.config.video_token_id
+        vision_start_token_id = self.config.vision_start_token_id
+        image_idx, video_idx = 0, 0
+
         for b_idx in range(batch_size):
             input_id = input_ids[b_idx : b_idx + 1][:, attention_mask[b_idx].bool()]
+            vision_start_indices = torch.argwhere(input_id == vision_start_token_id).squeeze(1)
+            vision_tokens = input_id[0][vision_start_indices + 1]
+            image_nums = (vision_tokens == image_token_id).sum()
+            video_nums = (vision_tokens == video_token_id).sum()
             position_ids, rope_deltas = self.get_rope_index(
                 input_id,
-                image_grid_thw[b_idx : b_idx + 1] if image_grid_thw is not None else None,
-                video_grid_thw[b_idx : b_idx + 1] if video_grid_thw is not None else None,
-                second_per_grid_ts[b_idx : b_idx + 1] if second_per_grid_ts is not None else None,
+                image_grid_thw[image_idx : image_idx + image_nums] if image_grid_thw is not None else None,
+                video_grid_thw[video_idx : video_idx + video_nums] if video_grid_thw is not None else None,
+                second_per_grid_ts[video_idx : video_idx + video_nums] if second_per_grid_ts is not None else None,
             )
+            image_idx += image_nums
+            video_idx += video_nums
+
             position_embed = self._get_position_embeddings(inputs_embeds, position_ids)
             mask_indices = torch.nonzero(attention_mask[b_idx], as_tuple=True)[0]
             all_position_embeds[:, b_idx : b_idx + 1].index_copy_(dim=-2, index=mask_indices, source=position_embed)
