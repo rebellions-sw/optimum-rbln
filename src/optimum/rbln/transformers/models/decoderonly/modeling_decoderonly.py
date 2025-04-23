@@ -163,6 +163,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         attention_mask: Optional[torch.Tensor] = None,
         batch_idx: Optional[int] = None,
         block_tables: Optional[torch.Tensor] = None,
+        position_embed: Optional[torch.Tensor] = None,
     ):
         if input_ids is None and inputs_embeds is None:
             raise ValueError("Either `input_ids` or `inputs_embeds` must be provided.")
@@ -187,9 +188,12 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 block_tables,
                 is_external_block_tables,
                 attention_mask=attention_mask,
+                position_embed=position_embed,
             )
         else:
-            return self.prefill_forward(inputs, cache_position, attention_mask, batch_idx, block_tables)
+            return self.prefill_forward(
+                inputs, cache_position, attention_mask, batch_idx, block_tables, position_embed=position_embed
+            )
 
     def decode_forward(
         self,
@@ -198,6 +202,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         block_tables: torch.Tensor = None,
         is_external_block_tables: bool = None,
         attention_mask: Optional[torch.Tensor] = None,
+        position_embed: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         batch_size = inputs.shape[0]
         if batch_size != self.batch_size:
@@ -229,6 +234,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             cache_position,
             attention_mask if self.use_attention_mask else None,
             block_tables,
+            position_embed,
         )
 
         return logits
@@ -241,6 +247,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         batch_idx: int = None,
         block_tables: torch.Tensor = None,
         is_external_block_tables: bool = None,
+        position_embed: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         """
         Performs chunked prefill for efficient KV-cache updates and memory optimization.
@@ -251,6 +258,10 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         # Handle continuous batching in a compiled graph by extracting valid inputs
         # If an attention mask is provided, select only the valid (non-masked) inputs
         inputs = inputs[:, attention_mask.bool()] if attention_mask is not None else inputs
+        if position_embed is not None:
+            position_embed = (
+                position_embed[:, :, :, attention_mask.bool(), :] if attention_mask is not None else position_embed
+            )
 
         query_length = inputs.shape[1]
         if query_length > self.max_seq_len:
@@ -295,9 +306,14 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     dim=-1,
                 )
 
+                if position_embed is not None:
+                    position_embed = torch.nn.functional.pad(position_embed, (0, 0, 0, padding_size))
+
             # Extract the current chunk of inputs and cache positions
             input_chunk = inputs[:, step : step + self.prefill_chunk_size]
             cache_pos_chunk = cache_position[:, step : step + self.prefill_chunk_size]
+            if position_embed is not None:
+                position_embed_chunk = position_embed[:, :, :, step : step + self.prefill_chunk_size, :]
 
             if self.use_attention_mask:
                 # Update attention mask to ensure proper causal behavior
@@ -315,6 +331,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 chunked_attention_mask if self.use_attention_mask else None,
                 query_position,
                 block_tables,
+                position_embed_chunk if position_embed is not None else None,
                 out=out_buffers,
             )
 
@@ -710,6 +727,74 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         return max_n_blocks
 
     @classmethod
+    def get_input_info(
+        cls,
+        batch_size: int,
+        query_length: int,
+        use_inputs_embeds: bool,
+        use_attention_mask: bool,
+        max_seq_len: int,
+        kvcache_block_size: int,
+        kvcache_num_blocks: int,
+        num_key_value_heads: int,
+        num_hidden_layers: int,
+        hidden_size: int,
+        head_dim: int,
+    ):
+        if use_inputs_embeds:
+            main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
+        else:
+            main_input = ("input_ids", [batch_size, query_length], "int64")
+
+        input_info = [
+            main_input,
+            (
+                "cache_position",
+                [batch_size, query_length],
+                "int32",
+            ),
+        ]
+
+        if use_attention_mask:
+            input_info.extend(
+                [
+                    ("attention_mask", [batch_size, 1, query_length, max_seq_len], "float32"),
+                ]
+            )
+
+        if query_length > 1:
+            input_info.extend(
+                [
+                    ("query_position", [], "int16"),
+                ]
+            )
+
+        max_block_cnt = max_seq_len // kvcache_block_size
+
+        if query_length > 1:
+            input_info.extend([("block_tables", [max_block_cnt], "int16")])
+        else:
+            input_info.extend([("block_tables", [batch_size, max_block_cnt], "int16")])
+
+        input_info.extend(
+            [
+                (
+                    f"past_key_values_{i}",
+                    [
+                        kvcache_num_blocks,
+                        num_key_value_heads,
+                        kvcache_block_size,
+                        head_dim,
+                    ],
+                    "float32",
+                )
+                for i in range(num_hidden_layers * 2)
+            ]
+        )
+
+        return input_info
+
+    @classmethod
     def _update_rbln_config(
         cls,
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
@@ -774,91 +859,34 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
         num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
         num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
-        head_dim = getattr(model_config, "head_dim", None) or model_config.hidden_size // num_attention_heads
         hidden_size = getattr(model_config, "n_embd", None) or getattr(model_config, "hidden_size")
+        head_dim = getattr(model_config, "head_dim", None) or hidden_size // num_attention_heads
 
-        def get_input_info(
-            batch_size,
-            query_length,
-            use_inputs_embeds,
-            hidden_size,
-            use_attention_mask,
-            max_seq_len,
-            kvcache_block_size,
-            kvcache_num_blocks,
-        ):
-            if use_inputs_embeds:
-                main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
-            else:
-                main_input = ("input_ids", [batch_size, query_length], "int64")
-
-            input_info = [
-                main_input,
-                (
-                    "cache_position",
-                    [batch_size, query_length],
-                    "int32",
-                ),
-            ]
-
-            if use_attention_mask:
-                input_info.extend(
-                    [
-                        ("attention_mask", [batch_size, 1, query_length, max_seq_len], "float32"),
-                    ]
-                )
-
-            if query_length > 1:
-                input_info.extend(
-                    [
-                        ("query_position", [], "int16"),
-                    ]
-                )
-
-            max_block_cnt = max_seq_len // kvcache_block_size
-
-            if query_length > 1:
-                input_info.extend([("block_tables", [max_block_cnt], "int16")])
-            else:
-                input_info.extend([("block_tables", [batch_size, max_block_cnt], "int16")])
-
-            input_info.extend(
-                [
-                    (
-                        f"past_key_values_{i}",
-                        [
-                            kvcache_num_blocks,
-                            num_key_value_heads,
-                            kvcache_block_size,
-                            head_dim,
-                        ],
-                        "float32",
-                    )
-                    for i in range(num_hidden_layers * 2)
-                ]
-            )
-
-            return input_info
-
-        prefill_input_info = get_input_info(
+        prefill_input_info = cls.get_input_info(
             batch_size=1,
             query_length=rbln_config.prefill_chunk_size,
             use_inputs_embeds=rbln_config.use_inputs_embeds,
-            hidden_size=hidden_size,
             use_attention_mask=rbln_config.use_attention_mask,
             max_seq_len=rbln_config.max_seq_len,
             kvcache_block_size=rbln_config.kvcache_block_size,
             kvcache_num_blocks=rbln_config.kvcache_num_blocks,
+            num_key_value_heads=num_key_value_heads,
+            num_hidden_layers=num_hidden_layers,
+            hidden_size=hidden_size,
+            head_dim=head_dim,
         )
-        dec_input_info = get_input_info(
+        dec_input_info = cls.get_input_info(
             batch_size=rbln_config.batch_size,
             query_length=1,
             use_inputs_embeds=rbln_config.use_inputs_embeds,
-            hidden_size=hidden_size,
             use_attention_mask=rbln_config.use_attention_mask,
             max_seq_len=rbln_config.max_seq_len,
             kvcache_block_size=rbln_config.kvcache_block_size,
             kvcache_num_blocks=rbln_config.kvcache_num_blocks,
+            num_key_value_heads=num_key_value_heads,
+            num_hidden_layers=num_hidden_layers,
+            hidden_size=hidden_size,
+            head_dim=head_dim,
         )
 
         prefill_compile_config = RBLNCompileConfig(compiled_model_name="prefill", input_info=prefill_input_info)
@@ -929,7 +957,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 model_inputs.update({"inputs_embeds": inputs_embeds})
             else:
                 raise ValueError(
-                    "The specifying inputs_embedst is only supported when using a compiled RBLN model with 'rbln_use_inputs_embeds' set to True."
+                    "The specifying inputs_embeds is only supported when using a compiled RBLN model with 'rbln_use_inputs_embeds' set to True."
                 )
         else:
             model_inputs.update({"input_ids": input_ids})
