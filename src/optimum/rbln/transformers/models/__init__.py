@@ -73,6 +73,12 @@ _import_structure = {
     "exaone": ["RBLNExaoneForCausalLM", "RBLNExaoneForCausalLMConfig"],
     "gemma": ["RBLNGemmaForCausalLM", "RBLNGemmaForCausalLMConfig"],
     "gpt2": ["RBLNGPT2LMHeadModel", "RBLNGPT2LMHeadModelConfig"],
+    "idefics3": [
+        "RBLNIdefics3VisionTransformer",
+        "RBLNIdefics3ForConditionalGeneration",
+        "RBLNIdefics3ForConditionalGenerationConfig",
+        "RBLNIdefics3VisionTransformerConfig",
+    ],
     "llama": ["RBLNLlamaForCausalLM", "RBLNLlamaForCausalLMConfig"],
     "llava_next": ["RBLNLlavaNextForConditionalGeneration", "RBLNLlavaNextForConditionalGenerationConfig"],
     "midm": ["RBLNMidmLMHeadModel", "RBLNMidmLMHeadModelConfig"],
@@ -144,6 +150,12 @@ if TYPE_CHECKING:
     from .exaone import RBLNExaoneForCausalLM, RBLNExaoneForCausalLMConfig
     from .gemma import RBLNGemmaForCausalLM, RBLNGemmaForCausalLMConfig
     from .gpt2 import RBLNGPT2LMHeadModel, RBLNGPT2LMHeadModelConfig
+    from .idefics3 import (
+        RBLNIdefics3ForConditionalGeneration,
+        RBLNIdefics3ForConditionalGenerationConfig,
+        RBLNIdefics3VisionTransformer,
+        RBLNIdefics3VisionTransformerConfig,
+    )
     from .llama import RBLNLlamaForCausalLM, RBLNLlamaForCausalLMConfig
     from .llava_next import RBLNLlavaNextForConditionalGeneration, RBLNLlavaNextForConditionalGenerationConfig
     from .midm import RBLNMidmLMHeadModel, RBLNMidmLMHeadModelConfig
