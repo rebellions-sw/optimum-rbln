@@ -330,9 +330,10 @@ class RBLNLlamaGuard(RBLNLlamaForCausalLM):
     @classmethod
     def compile_model(cls, model, rbln_kwargs, model_save_dir, subfolder=""):
         batch_size = rbln_kwargs.get("batch_size", 1)
-
         max_seq_len = rbln_kwargs.get("max_seq_len", 4096)
         tensor_parallel_size = rbln_kwargs.get("tensor_parallel_size", 4)
+        rbln_device = rbln_kwargs.get("device", [0, 1, 2, 3])
+
         model = model.merge_and_unload()
         compiled_model = RBLNLlamaForCausalLM.from_model(
             model,
@@ -341,6 +342,7 @@ class RBLNLlamaGuard(RBLNLlamaForCausalLM):
             rbln_max_seq_len=max_seq_len,
             rbln_tensor_parallel_size=tensor_parallel_size,
             model_save_dir=model_save_dir,
+            rbln_device=rbln_device,
             subfolder=subfolder,
         )
         return compiled_model
