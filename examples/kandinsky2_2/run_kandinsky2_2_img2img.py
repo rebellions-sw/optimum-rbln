@@ -20,6 +20,7 @@ def main(
         prior_pipe = RBLNKandinskyV22PriorPipeline.from_pretrained(
             model_id=prior_model_id,
             export=True,
+            rbln_config={"prior": {"batch_size": 2}},
         )
         prior_pipe.save_pretrained(os.path.basename(prior_model_id))
 
@@ -28,6 +29,7 @@ def main(
             export=True,
             rbln_img_height=768,
             rbln_img_width=768,
+            rbln_config={"unet": {"batch_size": 2}},
         )
         pipe.save_pretrained(os.path.basename(inpaint_model_id))
     else:

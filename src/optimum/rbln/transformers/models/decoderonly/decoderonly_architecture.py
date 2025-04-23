@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import math
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 import torch
 from torch import nn
@@ -222,6 +222,53 @@ class DecoderOnlyWrapper(nn.Module):
         self._phase = phase
         self.causal_lm.phase = phase
 
+    def forward_common(
+        self,
+        input_ids_or_inputs_embeds: torch.Tensor,
+        cache_position: torch.Tensor,
+        attention_mask: torch.Tensor,
+        query_position: torch.Tensor,
+        block_tables: torch.Tensor,
+        rotary_emb: Union[nn.Module, torch.Tensor],
+        *past_key_values: List[torch.Tensor],
+    ):
+        if input_ids_or_inputs_embeds.ndim == 2:
+            input_ids = input_ids_or_inputs_embeds
+            inputs_embeds = None
+        elif input_ids_or_inputs_embeds.ndim == 3:
+            input_ids = None
+            inputs_embeds = input_ids_or_inputs_embeds
+        else:
+            raise NotImplementedError(f"Unknown ndim of input : {input_ids_or_inputs_embeds.ndim}")
+
+        if len(past_key_values) != 2 * self.num_hidden_layers:
+            raise ValueError(
+                f"Different past_key_values to model's config. {len(past_key_values)} != {2 * self.num_hidden_layers}"
+            )
+
+        # [key, value] * n_layer -> ( (key, value) ) * n_layer
+        # cache shape : batch, n_heads, 1, max_seq_len, head_dim
+        _past_key_values = []
+        for i in range(self.config.num_hidden_layers):
+            key_states = past_key_values[i * 2]
+            value_states = past_key_values[i * 2 + 1]
+            past_key_value = [key_states, value_states]
+            _past_key_values.append(past_key_value)
+        past_key_values = _past_key_values
+
+        logit = self.causal_lm(
+            input_ids=input_ids,
+            inputs_embeds=inputs_embeds,
+            attention_mask=attention_mask,
+            cache_position=cache_position,
+            query_position=query_position,
+            past_key_values=past_key_values,
+            rotary_emb=rotary_emb,
+            block_tables=block_tables,
+        )
+
+        return logit
+
     def forward(self, *args):
         if self.phase == "decode":
             if self.use_attention_mask:
@@ -264,42 +311,15 @@ class DecoderOnlyWrapper(nn.Module):
         else:
             raise ValueError(f"Unknown phase: {self.phase}")
 
-        if input_ids_or_inputs_embeds.ndim == 2:
-            input_ids = input_ids_or_inputs_embeds
-            inputs_embeds = None
-        elif input_ids_or_inputs_embeds.ndim == 3:
-            input_ids = None
-            inputs_embeds = input_ids_or_inputs_embeds
-        else:
-            raise NotImplementedError(f"Unknown ndim of input : {input_ids_or_inputs_embeds.ndim}")
-
-        if len(past_key_values) != 2 * self.num_hidden_layers:
-            raise ValueError(
-                f"Different past_key_values to model's config. {len(past_key_values)} != {2 * self.num_hidden_layers}"
-            )
-
-        # [key, value] * n_layer -> ( (key, value) ) * n_layer
-        # cache shape : batch, n_heads, 1, max_seq_len, head_dim
-        _past_key_values = []
-        for i in range(self.config.num_hidden_layers):
-            key_states = past_key_values[i * 2]
-            value_states = past_key_values[i * 2 + 1]
-            past_key_value = [key_states, value_states]
-            _past_key_values.append(past_key_value)
-        past_key_values = _past_key_values
-
-        logit = self.causal_lm(
-            input_ids=input_ids,
-            inputs_embeds=inputs_embeds,
-            attention_mask=attention_mask,
-            cache_position=cache_position,
-            query_position=query_position,
-            past_key_values=past_key_values,
-            rotary_emb=self.rotary_emb,
-            block_tables=block_tables,
+        return self.forward_common(
+            input_ids_or_inputs_embeds,
+            cache_position,
+            attention_mask,
+            query_position,
+            block_tables,
+            self.rotary_emb,
+            *past_key_values,
         )
-
-        return logit
 
 
 class DecoderOnlyForCausalLM(nn.Module):
@@ -324,12 +344,13 @@ class DecoderOnlyForCausalLM(nn.Module):
         _phase: Current processing phase ("prefill" or "decode")
     """
 
-    def __init__(self, causal_lm: PreTrainedModel, model):
+    def __init__(self, causal_lm: PreTrainedModel, model: nn.Module):
         super().__init__()
         self.config = causal_lm.config
         self._original_mod = causal_lm
         self.model = model
         self._phase = "prefill"
+        self.lm_head = self._original_mod.lm_head
 
     @property
     def phase(self):
@@ -365,7 +386,7 @@ class DecoderOnlyForCausalLM(nn.Module):
         if self.phase == "prefill":
             hidden_states = hidden_states[:, query_position.to(torch.int).unsqueeze(0)]
 
-        logits = self._original_mod.lm_head(hidden_states)
+        logits = self.lm_head(hidden_states)
         return logits
 
 
@@ -457,8 +478,12 @@ class DecoderOnlyModel(nn.Module):
 
         # get cos,sin vector if needed
         if rotary_emb is not None:
-            cos, sin = rotary_emb(hidden_states, self.max_seq_len)  # dtype carrier, max_seq_len
-            cos, sin = slice_and_unsqueeze_cos_sin(cos, sin, cache_position)
+            if isinstance(rotary_emb, torch.Tensor):
+                cos = rotary_emb[0]
+                sin = rotary_emb[1]
+            else:
+                cos, sin = rotary_emb(hidden_states, self.max_seq_len)  # dtype carrier, max_seq_len
+                cos, sin = slice_and_unsqueeze_cos_sin(cos, sin, cache_position)
         else:
             batch_size = inputs_embeds.shape[0]
             if cache_position.shape[0] > 1:
@@ -835,7 +860,6 @@ def rotate_half(x):
 
 def apply_rotary_pos_emb(q, k, cos, sin):
     """Applies Rotary Position Embedding to the query and key tensors."""
-
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
     return q_embed, k_embed

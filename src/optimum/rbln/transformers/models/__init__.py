@@ -56,6 +56,12 @@ _import_structure = {
         "RBLNCLIPVisionModelWithProjection",
         "RBLNCLIPVisionModelWithProjectionConfig",
     ],
+    "qwen2_5_vl": [
+        "RBLNQwen2_5_VisionTransformerPretrainedModel",
+        "RBLNQwen2_5_VisionTransformerPretrainedModelConfig",
+        "RBLNQwen2_5_VLForConditionalGeneration",
+        "RBLNQwen2_5_VLForConditionalGenerationConfig",
+    ],
     "decoderonly": [
         "RBLNDecoderOnlyModelForCausalLM",
         "RBLNDecoderOnlyModelForCausalLMConfig",
@@ -156,6 +162,12 @@ if TYPE_CHECKING:
     from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig
     from .phi import RBLNPhiForCausalLM, RBLNPhiForCausalLMConfig
     from .qwen2 import RBLNQwen2ForCausalLM, RBLNQwen2ForCausalLMConfig
+    from .qwen2_5_vl import (
+        RBLNQwen2_5_VisionTransformerPretrainedModel,
+        RBLNQwen2_5_VisionTransformerPretrainedModelConfig,
+        RBLNQwen2_5_VLForConditionalGeneration,
+        RBLNQwen2_5_VLForConditionalGenerationConfig,
+    )
     from .t5 import (
         RBLNT5EncoderModel,
         RBLNT5EncoderModelConfig,
