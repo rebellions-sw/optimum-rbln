@@ -565,7 +565,57 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             finally:
                 torch.nn.functional.linear = original_linear
 
-        return compile_model(quantize_config=rbln_config.quantization)
+        compiled_models = compile_model(quantize_config=rbln_config.quantization)
+
+        # check if the memory is enough to have additional blocks
+        required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
+        if rbln_config.kvcache_num_blocks < required_num_blocks:
+            cls.maybe_suggest_kvcache_num_blocks(
+                compiled_models=compiled_models,
+                model_config=model.config,
+                rbln_config=rbln_config,
+            )
+
+        return compiled_models
+
+    @classmethod
+    def maybe_suggest_kvcache_num_blocks(
+        cls,
+        compiled_models: Dict[str, rebel.RBLNCompiledModel],
+        model_config: PretrainedConfig,
+        rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
+    ) -> None:
+        # Get the actual memory allocation of each node by key
+        alloc_memory_per_node_by_key: Dict[str, List[int]] = compiled_models["prefill"].get_alloc_per_node_by_key()
+        alloc_memory_by_key: Dict[str, int] = {
+            key: sum(memory_per_node) for key, memory_per_node in alloc_memory_per_node_by_key.items()
+        }
+        for key, memory_per_node in compiled_models["decoder"].get_alloc_per_node_by_key().items():
+            alloc_memory_by_key[key] += sum(memory_per_node)
+        alloc_memory_by_key.pop("PortRecur")  # kv-cache
+        kernel_size = alloc_memory_by_key.pop("Kernel")  # model weight
+
+        # Get the maximum number of blocks that can be allocated
+        buffer = sum(alloc_memory_by_key.values())
+        max_num_blocks = cls.get_maximum_num_blocks(
+            config=model_config,
+            tensor_parallel_size=rbln_config.tensor_parallel_size,
+            kvcache_block_size=rbln_config.kvcache_block_size,
+            kernel_size=kernel_size,
+            buffer=buffer,
+        )
+
+        # Since our estimation logic is not always accurate,
+        # users can set `kvcache_num_blocks` to `max_num_blocks`.
+        # If the memory is not enough, the model will fail to compile.
+        if rbln_config.kvcache_num_blocks < max_num_blocks:
+            logger.warning(
+                f"Current `kvcache_num_blocks` setting is {rbln_config.kvcache_num_blocks}. "
+                "Our analysis indicates that additional memory is available for more blocks. "
+                f"Consider increasing `kvcache_num_blocks` to {max_num_blocks} for potentially improved performance. "
+                "Please be advised that our memory estimation algorithm has limitations, "
+                "and increasing this value may not guarantee successful model compilation."
+            )
 
     @classmethod
     def get_maximum_num_blocks(
@@ -573,8 +623,10 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         config: PretrainedConfig,
         tensor_parallel_size: int,
         kvcache_block_size: int,
-        nbits_per_param: int,
-        n_model_params: int,
+        nbits_per_param: Optional[int] = None,
+        n_model_params: Optional[int] = None,
+        kernel_size: Optional[int] = None,
+        buffer: Optional[int] = None,
     ) -> int:
         """
         We are finding max_n_blocks(x) that satisfies the following equation:
@@ -624,24 +676,30 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         ATOM_SYS_DRAM_NBYTES = 288 * 2**20
         available_dram = tensor_parallel_size * (ATOM_DRAM_NBYTES - ATOM_SYS_DRAM_NBYTES)
 
-        # Get estimated kernel size (approximated)
-        lm_heads_params = align(vocab_size, 64) * hidden_size
-        lm_heads_nbytes = (
-            align_2MB(lm_heads_params * nbits_per_param // 8 / tensor_parallel_size) * tensor_parallel_size
-        )
-        params = n_model_params - lm_heads_params
-        layer_nbytes = (
-            align_2MB(params * nbits_per_param // 8 / num_layers / tensor_parallel_size)
-            * num_layers
-            * tensor_parallel_size
-        )
-        kernel_size = layer_nbytes + lm_heads_nbytes
+        if kernel_size is None:
+            if n_model_params is None:
+                raise ValueError("`n_model_params` should be specified to estimate the kernel memory.")
+            # Get estimated kernel size (approximated)
+            lm_heads_params = align(vocab_size, 64) * hidden_size
+            lm_heads_nbytes = (
+                align_2MB(lm_heads_params * nbits_per_param // 8 / tensor_parallel_size) * tensor_parallel_size
+            )
+            params = n_model_params - lm_heads_params
+            layer_nbytes = (
+                align_2MB(params * nbits_per_param // 8 / num_layers / tensor_parallel_size)
+                * num_layers
+                * tensor_parallel_size
+            )
+            kernel_size = layer_nbytes + lm_heads_nbytes
+        elif n_model_params is not None:
+            raise ValueError("Both `n_model_params` and `kernel_size` cannot be specified.")
 
         available_dram -= kernel_size
 
-        # TODO: Accurate buffer estimation
-        buffer_per_core = 2**29  # 500MB per npu
-        buffer = buffer_per_core * tensor_parallel_size
+        if buffer is None:
+            # TODO: Accurate buffer estimation
+            buffer_per_core = 2**29  # 500MB per npu
+            buffer = buffer_per_core * tensor_parallel_size
         available_dram -= buffer
 
         b = kvcache_block_size * align(head_dim, 64) * math.ceil(num_key_value_heads / tensor_parallel_size) * 2
@@ -680,32 +738,39 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             max_seq_len=rbln_config.max_seq_len,
         )
 
-        rbln_config.kvcache_num_blocks = (
-            rbln_config.max_seq_len // rbln_config.kvcache_block_size
-        ) * rbln_config.batch_size
+        required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
+        max_num_blocks = required_num_blocks
 
         if rbln_config.attn_impl == "flash_attn":
-            max_num_blocks = cls.get_maximum_num_blocks(
+            estimated_max_num_blocks = cls.get_maximum_num_blocks(
                 config=model_config,
                 tensor_parallel_size=rbln_config.tensor_parallel_size or 1,
                 kvcache_block_size=rbln_config.kvcache_block_size,
                 nbits_per_param=16 if not rbln_config.quantization else 4,  # TODO(jongho): FIX Ad-hoc
                 n_model_params=sum(p.numel() for p in model.parameters()),
             )
-            rbln_config.kvcache_num_blocks = min(rbln_config.kvcache_num_blocks, max_num_blocks)
 
-            required_blocks = rbln_config.max_seq_len // rbln_config.kvcache_block_size + 1
-            if rbln_config.kvcache_num_blocks < required_blocks:
-                rbln_config.kvcache_num_blocks = required_blocks
+            max_num_blocks = min(max_num_blocks, estimated_max_num_blocks)
 
-            logger.info(f"[KVCache] Compiling with num_blocks: {rbln_config.kvcache_num_blocks}")
+            flash_min_blocks = rbln_config.max_seq_len // rbln_config.kvcache_block_size + 1
+            if max_num_blocks < flash_min_blocks:
+                max_num_blocks = flash_min_blocks
 
-            if rbln_config.kvcache_num_blocks < rbln_config.batch_size:
+            if max_num_blocks < rbln_config.batch_size:
                 raise RuntimeError(
-                    f"Batch size ({rbln_config.batch_size}) exceeds available KV cache blocks ({rbln_config.kvcache_num_blocks}). "
+                    f"Batch size ({rbln_config.batch_size}) exceeds available KV cache blocks ({max_num_blocks}). "
                     "Ensure the number of blocks is at least equal to the batch size."
                 )
 
+        if rbln_config.kvcache_num_blocks is None:
+            rbln_config.kvcache_num_blocks = max_num_blocks
+        elif rbln_config.kvcache_num_blocks > max_num_blocks:
+            logger.warning(
+                f"The set `kvcache_num_blocks` ({rbln_config.kvcache_num_blocks}) is greater"
+                f" than the estimated maximum number of blocks ({max_num_blocks})."
+                "This can cause a failure during model compilation."
+            )
+        logger.info(f"[KVCache] Compiling with num_blocks: {rbln_config.kvcache_num_blocks}")
         num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
         num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
         num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
