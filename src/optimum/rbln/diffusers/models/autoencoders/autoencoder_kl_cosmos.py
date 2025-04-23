@@ -25,7 +25,7 @@ from ....modeling import RBLNModel
 from ....modeling_config import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
-from .vae import RBLNRuntimeCosmosVAEDecoder, RBLNRuntimeVAEEncoder, _VAECosmosDecoder, _VAEEncoder
+from .vae import RBLNRuntimeVAEDecoder, RBLNRuntimeVAEEncoder, _VAECosmosDecoder, _VAEEncoder
 
 from diffusers.models.autoencoders.vae import DecoderOutput
 
@@ -52,9 +52,9 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
         super().__post_init__(**kwargs)
         if self.rbln_config.model_cfg.get("img2vid_pipeline"):
             self.encoder = RBLNRuntimeVAEEncoder(runtime=self.model[0], main_input_name="x")
-            self.decoder = RBLNRuntimeCosmosVAEDecoder(runtime=self.model[1], main_input_name="z")
+            self.decoder = RBLNRuntimeVAEDecoder(runtime=self.model[1], main_input_name="z")
         else:
-            self.decoder = RBLNRuntimeCosmosVAEDecoder(runtime=self.model[0], main_input_name="z")
+            self.decoder = RBLNRuntimeVAEDecoder(runtime=self.model[0], main_input_name="z")
 
         height = self.rbln_config.model_cfg.get("height")
         width = self.rbln_config.model_cfg.get("width")
@@ -107,8 +107,9 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
                     output = z.permute(0,2,3,4,1)
                     output = self.layer(output).permute(0,4,1,2,3)
                     output = torch.nn.functional.interpolate(output, size=(128, 704, 1280))
-                    dec = output.permute(0,2,1,3,4)[:,:121,:,:,:]
-
+                    dec = output[:,:,:121,:,:]
+                    
+                    # output = torch.Size([1, 3, 121, 704, 1280])
                     if not return_dict:
                         return (dec,)
                     return DecoderOutput(sample=dec)
@@ -265,6 +266,22 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
     def encode(self, x: torch.FloatTensor, return_dict: bool = True) -> torch.FloatTensor:
         posterior = self.encoder.encode(x)
         return AutoencoderKLOutput(latent_dist=posterior)
+    
+    def _decode(self, z: torch.FloatTensor, return_dict: bool = True) -> torch.FloatTensor:
+        dec = self.decoder.forward(z)
 
+        if not return_dict:
+            return (dec,)
+        return DecoderOutput(sample=dec)
+    
     def decode(self, z: torch.FloatTensor, return_dict: bool = True) -> torch.FloatTensor:
-        return self.decoder.decode(z, return_dict=return_dict)
+        if z.shape[0] > 1:
+            decoded_slices = [self._decode(z_slice).sample for z_slice in z.split(1)]
+            decoded = torch.cat(decoded_slices)
+        else :
+            decoded = self._decode(z).sample
+        
+        if not return_dict:
+            return (decoded,)
+        
+        return DecoderOutput(sample=decoded)

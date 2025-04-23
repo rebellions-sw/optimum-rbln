@@ -41,26 +41,6 @@ class RBLNRuntimeVAEDecoder(RBLNPytorchRuntime):
     def decode(self, z: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
         return (self.forward(z),)
 
-class RBLNRuntimeCosmosVAEDecoder(RBLNPytorchRuntime):
-    def _decode(self, z: torch.FloatTensor, return_dict: bool = True) -> torch.FloatTensor:
-        dec = self.forward(z),
-        
-        if not return_dict:
-            return (dec,)
-        return DecoderOutput(sample=dec)
-    
-    def decode(self, z: torch.FloatTensor, return_dict: bool = True) -> torch.FloatTensor:
-        if z.shape[0] > 1:
-            decoded_slices = [self._decode(z_slice).sample for z_slice in z.split(1)]
-            decoded = torch.cat(decoded_slices)
-        else :
-            decoded = self._decode(z).sample
-        
-        if not return_dict:
-            return (decoded,)
-        
-        return DecoderOutput(sample=decoded)
-
 class _VAEDecoder(torch.nn.Module):
     def __init__(self, vae: "AutoencoderKL"):
         super().__init__()
@@ -76,7 +56,6 @@ class _VAECosmosDecoder(torch.nn.Module):
         self.vae = vae
 
     def forward(self, z):
-        import pdb; pdb.set_trace()
         vae_out = self.vae._decode(z, return_dict=False)
         return vae_out
 
