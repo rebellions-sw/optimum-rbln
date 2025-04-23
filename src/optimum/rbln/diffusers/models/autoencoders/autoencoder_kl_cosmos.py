@@ -25,8 +25,9 @@ from ....modeling import RBLNModel
 from ....modeling_config import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
-from .vae import RBLNRuntimeVAEDecoder, RBLNRuntimeVAEEncoder, _VAEDecoder, _VAEEncoder
+from .vae import RBLNRuntimeCosmosVAEDecoder, RBLNRuntimeVAEEncoder, _VAECosmosDecoder, _VAEEncoder
 
+from diffusers.models.autoencoders.vae import DecoderOutput
 
 if TYPE_CHECKING:
     import torch
@@ -49,11 +50,11 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
-        if self.rbln_config.model_cfg.get("video_pipeline"):
+        if self.rbln_config.model_cfg.get("img2vid_pipeline"):
             self.encoder = RBLNRuntimeVAEEncoder(runtime=self.model[0], main_input_name="x")
-            self.decoder = RBLNRuntimeVAEDecoder(runtime=self.model[1], main_input_name="z")
+            self.decoder = RBLNRuntimeCosmosVAEDecoder(runtime=self.model[1], main_input_name="z")
         else:
-            self.decoder = RBLNRuntimeVAEDecoder(runtime=self.model[0], main_input_name="z")
+            self.decoder = RBLNRuntimeCosmosVAEDecoder(runtime=self.model[0], main_input_name="z")
 
         height = self.rbln_config.model_cfg.get("height")
         width = self.rbln_config.model_cfg.get("width")
@@ -69,14 +70,14 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
                     replace_forward_func(module)
 
         replace_forward_func(model)
-        if rbln_config.model_cfg.get("video_pipeline"):
+        if rbln_config.model_cfg.get("img2vid_pipeline"):
             encoder_model = _VAEEncoder(model)
-            decoder_model = _VAEDecoder(model)
+            decoder_model = _VAECosmosDecoder(model)
             encoder_model.eval()
             decoder_model.eval()
             return encoder_model, decoder_model
         else:
-            decoder_model = _VAEDecoder(model)
+            decoder_model = _VAECosmosDecoder(model)
             decoder_model.eval()
             return decoder_model
 
@@ -90,10 +91,45 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
 
         def compile_decoder_only():
             decoder_model = cls.wrap_model_if_needed(model, rbln_config)
-            dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
+            class TempDecoder(torch.nn.Module):
+                def __init__(self):
+                    super().__init__()
+                    self.layer = torch.nn.Linear(16,3)
+                
+                def forward(self, z):
+                    output = self._decode(z, return_dict=False)
+                    return output
+                
+                def _decode(self, z: torch.Tensor, return_dict: bool = True):
+                    # shape = [
+                    #     rbln_batch_size, rbln_num_channel_latents, rbln_num_latent_frames, rbln_latent_height, rbln_latent_width,
+                    # ],
+                    output = z.permute(0,2,3,4,1)
+                    output = self.layer(output).permute(0,4,1,2,3)
+                    output = torch.nn.functional.interpolate(output, size=(128, 704, 1280))
+                    dec = output.permute(0,2,1,3,4)[:,:121,:,:,:]
+
+                    if not return_dict:
+                        return (dec,)
+                    return DecoderOutput(sample=dec)
+                
+                def decode(self, z: torch.Tensor, return_dict: bool = True):
+                    if self.use_slicing and z.shape[0] > 1:
+                        decoded_slices = [self._decode(z_slice).sample for z_slice in z.split(1)]
+                        decoded = torch.cat(decoded_slices)
+                    else:
+                        decoded = self._decode(z).sample
+
+                    if not return_dict:
+                        return (decoded,)
+                    return DecoderOutput(sample=decoded)
+                
+            decoder_model_test = _VAECosmosDecoder(TempDecoder())
+            dec_compiled_model = cls.compile(decoder_model_test, rbln_compile_config=rbln_config.compile_cfgs[0])
+            # dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
             return dec_compiled_model
 
-        if rbln_config.model_cfg.get("video_pipeline"):
+        if rbln_config.model_cfg.get("img2vid_pipeline"):
             return compile_encoder_decoder()
         else:
             return compile_decoder_only()
@@ -104,9 +140,9 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
         num_frames = rbln_config.get("num_frames", 121)
         num_latent_frames = (num_frames - 1) // pipe.vae_scale_factor_temporal + 1
         height = rbln_config.get("height", 704)
-        latent_height = height // pipe.vae_scale_factor_temporal
+        latent_height = height // pipe.vae_scale_factor_spatial
         width = rbln_config.get("width", 1280)
-        latent_width = width // pipe.vae_scale_factor_temporal
+        latent_width = width // pipe.vae_scale_factor_spatial
 
         rbln_config.update(
             {
@@ -134,7 +170,8 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
         rbln_latent_height = rbln_kwargs.get("latent_height")
         rbln_latent_width = rbln_kwargs.get("latent_width")
 
-        if rbln_kwargs.get("video_pipeline"):
+        if rbln_kwargs.get("img2vid_pipeline"):
+            rbln_in_channels = model_config.in_channels
             rbln_num_frames = rbln_kwargs.get("num_frames", 121)
             rbln_height = rbln_kwargs.get("height", 704)
             rbln_width = rbln_kwargs.get("width", 1280)
@@ -144,7 +181,7 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
                     "x",
                     [
                         rbln_batch_size,
-                        3,
+                        rbln_in_channels,
                         rbln_num_frames,
                         rbln_height,
                         rbln_width,
@@ -225,9 +262,9 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
             for compiled_model, device_val in zip(compiled_models, device_vals)
         ]
 
-    def encode(self, x: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
+    def encode(self, x: torch.FloatTensor, return_dict: bool = True) -> torch.FloatTensor:
         posterior = self.encoder.encode(x)
         return AutoencoderKLOutput(latent_dist=posterior)
 
-    def decode(self, z: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
-        return self.decoder.decode(z)
+    def decode(self, z: torch.FloatTensor, return_dict: bool = True) -> torch.FloatTensor:
+        return self.decoder.decode(z, return_dict=return_dict)
