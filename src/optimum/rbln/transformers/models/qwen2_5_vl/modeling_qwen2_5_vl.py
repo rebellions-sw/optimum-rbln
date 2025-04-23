@@ -355,6 +355,12 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
     def can_generate(self):
         return True
 
+    def get_attn_impl(self) -> str:
+        return self.rbln_config.attn_impl
+
+    def get_kvcache_num_blocks(self) -> int:
+        return self.rbln_config.kvcache_num_blocks
+
     @classmethod
     def update_kwargs(cls, kwargs):
         kwargs.update(
