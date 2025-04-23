@@ -229,6 +229,12 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
         self.connector = self.model[0]
         self.text_model = self.rbln_submodules[1]
 
+    def get_attn_impl(self) -> str:
+        return self.rbln_config.attn_impl
+
+    def get_kvcache_num_blocks(self) -> int:
+        return self.rbln_config.kvcache_num_blocks
+
     def get_input_embeddings(self):
         return self.text_model.get_input_embeddings()
 
