@@ -27,9 +27,6 @@ from transformers import (
     PretrainedConfig,
     PreTrainedModel,
 )
-from transformers.modeling_attn_mask_utils import (
-    _prepare_4d_attention_mask,
-)
 from transformers.modeling_outputs import BaseModelOutput
 from transformers.modeling_utils import no_init_weights
 from transformers.models.idefics3.modeling_idefics3 import Idefics3CausalLMOutputWithPast, Idefics3VisionEmbeddings
@@ -67,8 +64,6 @@ class RBLNRuntimeVisionModel(RBLNPytorchRuntime):
         self,
         pixel_values,
         patch_attention_mask: Optional[torch.BoolTensor] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         **kwargs,
     ):
@@ -85,12 +80,6 @@ class RBLNRuntimeVisionModel(RBLNPytorchRuntime):
             patch_attention_mask = patch_attention_mask.to(dtype=torch.bool, device=pixel_values.device)
 
         hidden_states = self.embeddings(pixel_values=pixel_values, patch_attention_mask=patch_attention_mask)
-        patch_attention_mask = patch_attention_mask.view(batch_size, -1)
-
-        if not torch.any(~patch_attention_mask):
-            patch_attention_mask = None
-        elif not self._use_flash_attention_2:
-            patch_attention_mask = _prepare_4d_attention_mask(patch_attention_mask, hidden_states.dtype)
 
         return super().forward(hidden_states.contiguous())
 
@@ -175,9 +164,8 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
         self,
         pixel_values,
         patch_attention_mask: Optional[torch.BoolTensor] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        **kwargs,
     ) -> Union[Tuple, BaseModelOutput]:
         batch_size = pixel_values.shape[0]
         last_hidden_state = []
@@ -190,8 +178,6 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
             batch_hidden_state = self.model(
                 pixel_values[i : i + 1,],
                 batch_attention_mask,
-                output_attentions,
-                output_hidden_states,
                 return_dict=False,
             )
             last_hidden_state.append(batch_hidden_state)
@@ -312,7 +298,7 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
                 model_inputs.update({"inputs_embeds": inputs_embeds})
             else:
                 raise ValueError(
-                    "The specifying inputs_embedst is only supported when using a compiled RBLN model with 'rbln_use_inputs_embeds' set to True."
+                    "The specifying inputs_embeds is only supported when using a compiled RBLN model with 'rbln_use_inputs_embeds' set to True."
                 )
         else:
             model_inputs.update({"input_ids": input_ids})
@@ -363,9 +349,7 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
         else:
             raise ValueError("You have to specify either input_ids or inputs_embeds")
 
-        past_seen_tokens = 0
-
-        if inputs_embeds is not None and input_ids is None and past_seen_tokens == 0:
+        if inputs_embeds is not None and input_ids is None:
             raise ValueError("When first calling the model, if input_embeds are passed, input_ids should not be None.")
 
         if inputs_embeds is None:
@@ -412,7 +396,7 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
         elif image_hidden_states is not None:
             image_hidden_states = image_hidden_states.to(dtype=self.dtype, device=input_ids.device)
 
-        if past_seen_tokens == 0 and inputs_embeds is not None and image_hidden_states is not None:
+        if inputs_embeds is not None and image_hidden_states is not None:
             inputs_embeds = self.inputs_merger(
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
