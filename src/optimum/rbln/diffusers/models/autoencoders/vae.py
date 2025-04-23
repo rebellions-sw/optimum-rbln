@@ -52,6 +52,16 @@ class _VAEDecoder(torch.nn.Module):
         return vae_out
 
 
+class _VAECosmosDecoder(torch.nn.Module):
+    def __init__(self, vae: "AutoencoderKL"):
+        super().__init__()
+        self.vae = vae
+
+    def forward(self, z):
+        vae_out = self.vae._decode(z, return_dict=False)
+        return vae_out
+
+
 class _VAEEncoder(torch.nn.Module):
     def __init__(self, vae: "AutoencoderKL"):
         super().__init__()
