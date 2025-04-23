@@ -128,8 +128,8 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
     ) -> RBLNConfig:
         # Since the Cosmos VAE Decoder already requires approximately 7.9 GiB of memory,
         # Optimum-rbln cannot execute this model on RBLN-CA12 when the batch size > 1.
-        # However, the Cosmos VAE Decoder enforces batch slicing when the batch size is greater than 1,
-        # Optimum-rbln adheres to this rule by compiling with batch_size=1 to enable batch slicing.
+        # However, the Cosmos VAE Decoder propose batch slicing when the batch size is greater than 1,
+        # Optimum-rbln utilize this method by compiling with batch_size=1 to enable batch slicing.
         rbln_batch_size = 1
         rbln_kwargs.update({"batch_size": 1})
 
