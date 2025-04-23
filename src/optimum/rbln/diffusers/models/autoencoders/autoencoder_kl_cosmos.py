@@ -230,7 +230,7 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
             for compiled_model, device_val in zip(compiled_models, device_vals)
         ]
 
-    def encode(self, x: torch.FloatTensor, return_dict: bool = True) -> torch.FloatTensor:
+    def encode(self, x: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
         posterior = self.encoder.encode(x)
         return AutoencoderKLOutput(latent_dist=posterior)
 
