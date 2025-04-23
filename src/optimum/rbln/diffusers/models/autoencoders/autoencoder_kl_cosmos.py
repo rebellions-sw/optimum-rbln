@@ -50,7 +50,7 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
-        if self.rbln_config.model_cfg.get("img2vid_pipeline"):
+        if self.rbln_config.model_cfg.get("vid2vid_pipeline"):
             self.encoder = RBLNRuntimeVAEEncoder(runtime=self.model[0], main_input_name="x")
             self.decoder = RBLNRuntimeVAEDecoder(runtime=self.model[1], main_input_name="z")
         else:
@@ -70,7 +70,7 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
                     replace_forward_func(module)
 
         replace_forward_func(model)
-        if rbln_config.model_cfg.get("img2vid_pipeline"):
+        if rbln_config.model_cfg.get("vid2vid_pipeline"):
             encoder_model = _VAEEncoder(model)
             decoder_model = _VAECosmosDecoder(model)
             encoder_model.eval()
@@ -94,7 +94,7 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
             dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
             return dec_compiled_model
 
-        if rbln_config.model_cfg.get("img2vid_pipeline"):
+        if rbln_config.model_cfg.get("vid2vid_pipeline"):
             return compile_encoder_decoder()
         else:
             return compile_decoder_only()
@@ -126,17 +126,20 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
         model_config: "PretrainedConfig",
         rbln_kwargs: Dict[str, Any] = {},
     ) -> RBLNConfig:
-        rbln_batch_size = rbln_kwargs.get("batch_size")
-        if rbln_batch_size is None:
-            rbln_batch_size = 1
+        # Since the Cosmos VAE Decoder already requires approximately 7.9 GiB of memory,
+        # Optimum-rbln cannot execute this model on RBLN-CA12 when the batch size > 1.
+        # However, the Cosmos VAE Decoder enforces batch slicing when the batch size is greater than 1,
+        # Optimum-rbln adheres to this rule by compiling with batch_size=1 to enable batch slicing.
+        rbln_batch_size = 1
+        rbln_kwargs.update({"batch_size": 1})
 
         rbln_num_channel_latents = rbln_kwargs.get("num_channel_latents")
         rbln_num_latent_frames = rbln_kwargs.get("num_latent_frames")
         rbln_latent_height = rbln_kwargs.get("latent_height")
         rbln_latent_width = rbln_kwargs.get("latent_width")
 
-        if rbln_kwargs.get("img2vid_pipeline"):
-            rbln_in_channels = model_config.in_channels
+        if rbln_kwargs.get("vid2vid_pipeline"):
+            rbln_in_channels = model_config.in_channels if hasattr(model_config, "in_channels") else 3
             rbln_num_frames = rbln_kwargs.get("num_frames", 121)
             rbln_height = rbln_kwargs.get("height", 704)
             rbln_width = rbln_kwargs.get("width", 1280)
