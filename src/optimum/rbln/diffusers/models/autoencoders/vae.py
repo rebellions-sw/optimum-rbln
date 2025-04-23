@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, List
 
 import torch  # noqa: I001
 from diffusers import AutoencoderKL, VQModel
-from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution, DecoderOutput
+from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
 from diffusers.models.autoencoders.vq_model import VQEncoderOutput
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
 
@@ -41,6 +41,7 @@ class RBLNRuntimeVAEDecoder(RBLNPytorchRuntime):
     def decode(self, z: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
         return (self.forward(z),)
 
+
 class _VAEDecoder(torch.nn.Module):
     def __init__(self, vae: "AutoencoderKL"):
         super().__init__()
@@ -50,6 +51,7 @@ class _VAEDecoder(torch.nn.Module):
         vae_out = self.vae.decode(z, return_dict=False)
         return vae_out
 
+
 class _VAECosmosDecoder(torch.nn.Module):
     def __init__(self, vae: "AutoencoderKL"):
         super().__init__()
@@ -58,6 +60,7 @@ class _VAECosmosDecoder(torch.nn.Module):
     def forward(self, z):
         vae_out = self.vae._decode(z, return_dict=False)
         return vae_out
+
 
 class _VAEEncoder(torch.nn.Module):
     def __init__(self, vae: "AutoencoderKL"):
