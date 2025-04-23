@@ -1,4 +1,4 @@
-# Copyright 2024 Rebellions Inc.
+# Copyright 2025 Rebellions Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,7 +22,8 @@ from ...modeling_diffusers import RBLNDiffusionMixin
 
 class RBLNCosmosPipeline(RBLNDiffusionMixin, CosmosPipeline):
     original_class = CosmosPipeline
-    _submodules = ["text_encoder", "transformer", "vae", "safety_checker"]
+    _submodules = ["text_encoder", "transformer", "vae"]
+    _optional_components = ["safety_checker"]
 
     def forward(self, *args, **kwargs):
         param_names = list(signature(super().forward).parameters.keys())
