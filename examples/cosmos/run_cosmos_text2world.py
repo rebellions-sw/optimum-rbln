@@ -1,3 +1,4 @@
+import os
 from functools import partial
 from unittest.mock import patch
 
@@ -36,6 +37,7 @@ def main(
             },
         )
         pipe = RBLNCosmosPipeline.from_pretrained(model_id, safety_checker=checker, export=True)
+        pipe.save_pretrained(os.path.basename(model_id))
     else:
         safety_checker_dir = "cosmos_safety_checker"
         with patch("torch.load", partial(torch.load, weights_only=True, map_location=torch.device("cpu"))):
