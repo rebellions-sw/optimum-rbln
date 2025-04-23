@@ -1,4 +1,8 @@
+from functools import partial
+from unittest.mock import patch
+
 import fire
+import torch
 from diffusers.pipelines.cosmos.cosmos_guardrail import CosmosSafetyChecker
 from diffusers.utils import export_to_video
 
@@ -14,7 +18,8 @@ def main(
     model_id = "/mnt/shared_data/users/dkhong/nas_data/cosmos_examples/CosmosPredict1"  # FIXME: For test
     if from_diffusers:
         safety_checker_dir = "cosmos_safety_checker"
-        model = CosmosSafetyChecker()
+        with patch("torch.load", partial(torch.load, weights_only=True, map_location=torch.device("cpu"))):
+            model = CosmosSafetyChecker()
         checker = RBLNCosmosSafetyChecker.compile_submodules(
             model=model,
             model_save_dir=safety_checker_dir,
@@ -33,7 +38,8 @@ def main(
         pipe = RBLNCosmosPipeline.from_pretrained(model_id, safety_checker=checker, export=True)
     else:
         safety_checker_dir = "cosmos_safety_checker"
-        model = CosmosSafetyChecker()
+        with patch("torch.load", partial(torch.load, weights_only=True, map_location=torch.device("cpu"))):
+            model = CosmosSafetyChecker()
         checker = RBLNCosmosSafetyChecker.load_submodules(
             model=model,
             model_save_dir=safety_checker_dir,
