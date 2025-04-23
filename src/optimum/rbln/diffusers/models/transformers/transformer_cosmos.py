@@ -184,6 +184,7 @@ class RBLNCosmosLearnablePositionalEmbed(torch.nn.Module):
 class RBLNCosmosEmbedding(torch.nn.Module):
     def __init__(self, time_embed):
         super().__init__()
+        self.time_proj = time_embed.time_proj
         self.t_embedder = time_embed.t_embedder
         self.norm = time_embed.norm
 
