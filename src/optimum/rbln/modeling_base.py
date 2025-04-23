@@ -387,13 +387,13 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     @classmethod
     def get_hf_class(cls):
         """
-        Lazily loads and caches the corresponding Hugging Face model class.
+        Lazily loads and caches the corresponding HuggingFace model class.
         Removes 'RBLN' prefix from the class name to get the original class name
         (e.g., RBLNLlamaForCausalLM -> LlamaForCausalLM) and imports it from
         the transformers/diffusers module.
 
         Returns:
-            type: The original Hugging Face model class
+            type: The original HuggingFace model class
         """
         if cls._hf_class is None:
             hf_cls_name = cls.__name__[4:]
@@ -459,7 +459,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             save_directory (`Union[str, Path]`):
                 Directory where to save the model file.
             push_to_hub (`bool`, *optional*, defaults to `False`):
-                Whether or not to push your model to the Hugging Face model hub after saving it.
+                Whether or not to push your model to the HuggingFace model hub after saving it.
 
         """
         if os.path.isfile(save_directory):

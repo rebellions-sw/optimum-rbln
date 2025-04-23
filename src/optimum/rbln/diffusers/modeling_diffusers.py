@@ -150,7 +150,7 @@ class RBLNDiffusionMixin:
         Args:
             model_id (`str`):
                 The model ID or path to the pretrained model to load. Can be either:
-                - A model ID from the Hugging Face Hub
+                - A model ID from the HuggingFace Hub
                 - A local path to a saved model directory
             export (`bool`, *optional*, defaults to `False`):
                 If True, takes a PyTorch model from `model_id` and compiles it for RBLN NPU execution.
