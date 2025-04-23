@@ -451,6 +451,12 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
     def get_input_embeddings(self):
         return self.embed_tokens
 
+    def get_attn_impl(self) -> str:
+        return self.rbln_config.attn_impl
+
+    def get_kvcache_num_blocks(self) -> int:
+        return self.rbln_config.kvcache_num_blocks
+
     @classmethod
     def get_quantized_model(
         cls,
