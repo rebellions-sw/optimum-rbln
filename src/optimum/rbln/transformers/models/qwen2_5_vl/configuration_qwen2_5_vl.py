@@ -40,8 +40,16 @@ class RBLNQwen2_5_VisionTransformerPretrainedModelConfig(RBLNModelConfig):
     def __init__(self, max_seq_lens: Union[int, List[int]] = None, **kwargs):
         """
         Args:
-            max_seq_lens (Optional[Union[int, List[int]]): The lengths of seq in ViT attention.
-                Can be an integer a List of integer.
+            max_seq_lens (Optional[Union[int, List[int]]]): Maximum sequence lengths for Vision
+                Transformer attention. Can be an integer or list of integers, each indicating
+                the number of patches in a sequence for an image or video. For example, an image
+                of 224x196 pixels with patch size 14 and window size 112 has its width padded to
+                224, forming a 224x224 image. This yields 256 patches [(224/14) * (224/14)], so
+                `max_seq_len` must be at least 256. For window-based attention, `max_seq_len`
+                must be a multiple of `(window_size / patch_size)^2`, e.g., (112/14)^2 = 64,
+                making 256 (64 * 4) valid. RBLN optimization runs inference per image or video
+                frame, so set `max_seq_len` to match the maximum expected resolution to reduce
+                computation. If not provided, a `ValueError` is raised.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:

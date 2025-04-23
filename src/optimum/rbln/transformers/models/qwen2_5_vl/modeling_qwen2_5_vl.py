@@ -119,6 +119,11 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
 
         input_infos = []
         for max_seq_len in rbln_config.max_seq_lens:
+            if max_seq_len % window_seq_len > 0:
+                raise ValueError(
+                    f"max_seq_len ({max_seq_len}) must be a multiple of window_seq_len ({window_seq_len})."
+                )
+
             input_info = [
                 ("hidden_states", [max_seq_len, hidden_size], "float32"),
                 ("full_attn_masks", [1, 1, max_seq_len, max_seq_len], "float32"),
