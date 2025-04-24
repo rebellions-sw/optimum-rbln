@@ -14,7 +14,7 @@
 
 import math
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -22,15 +22,19 @@ from diffusers import CosmosTransformer3DModel
 from diffusers.models.embeddings import Timesteps
 from diffusers.pipelines.cosmos.pipeline_cosmos import retrieve_timesteps
 
+from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
-from ...modeling_diffusers import RBLNDiffusionMixin
+from ....utils.logging import get_logger
+from ...configurations import RBLNCosmosTransformer3DModelConfig
 
 
 if TYPE_CHECKING:
-    import torch
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig, PreTrainedModel
 
+    from ...modeling_diffusers import RBLNCosmosTransformer3DModelConfig, RBLNDiffusionMixin
+
+
+logger = get_logger(__name__)
 
 class CosmosTransformer3DModelWrapper(torch.nn.Module):
     def __init__(
@@ -197,6 +201,7 @@ class RBLNCosmosEmbedding(torch.nn.Module):
 
 class RBLNCosmosTransformer3DModel(RBLNModel):
     hf_library_name = "diffusers"
+    auto_model_class = CosmosTransformer3DModel
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
@@ -237,7 +242,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         if embedding_dim % 2 == 1:
             emb = torch.nn.functional.pad(emb, (0, 1, 0, 0))
 
-        emb = emb.reshape(1, -1)
+        # timesteps = timesteps.reshape(-1, 1)
 
         emb_dict = {}
         for timestep, e in zip(timesteps, emb):
@@ -251,12 +256,12 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         return emb
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
-        num_latent_frames = rbln_config.model_cfg.get("num_latent_frames")
-        latent_height = rbln_config.model_cfg.get("latent_height")
-        latent_width = rbln_config.model_cfg.get("latent_width")
-        hidden_size = rbln_config.model_cfg.get("hidden_size")
-        fps = rbln_config.model_cfg.get("fps")
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
+        num_latent_frames = rbln_config.num_latent_frames
+        latent_height = rbln_config.latent_height
+        latent_width = rbln_config.latent_width
+        hidden_size = rbln_config.hidden_size
+        fps = rbln_config.fps
         return CosmosTransformer3DModelWrapper(
             model=model,
             num_latent_frames=num_latent_frames,
@@ -267,33 +272,17 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         ).eval()
 
     @classmethod
-    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
-        max_sequence_length = rbln_config.get("max_sequence_length", 512)
-        num_channel_latents = pipe.transformer.config.in_channels
-        num_frames = rbln_config.get("num_frames", 121)
-        num_latent_frames = (num_frames - 1) // pipe.vae_scale_factor_temporal + 1
-        height = rbln_config.get("height", 704)
-        latent_height = height // pipe.vae_scale_factor_temporal
-        width = rbln_config.get("width", 1280)
-        latent_width = width // pipe.vae_scale_factor_temporal
-        hidden_size = pipe.transformer.config.num_attention_heads * pipe.transformer.config.attention_head_dim
-        embedding_dim = pipe.text_encoder.encoder.embed_tokens.embedding_dim
-        time_proj_num_channels = pipe.transformer.time_embed.time_proj.num_channels
-        fps = rbln_config.get("fps", None)
+    def update_rbln_config_using_pipe(
+            cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNCosmosTransformer3DModelConfig", submodule_name: str
+    ) -> RBLNCosmosTransformer3DModelConfig:
+        rbln_config.num_channel_latents = pipe.transformer.config.in_channels
+        rbln_config.num_latent_frames = (rbln_config.num_frames - 1) // pipe.vae_scale_factor_temporal + 1
+        rbln_config.latent_height = rbln_config.height // pipe.vae_scale_factor_temporal
+        rbln_config.latent_width = rbln_config.width // pipe.vae_scale_factor_temporal
+        rbln_config.hidden_size = pipe.transformer.config.num_attention_heads * pipe.transformer.config.attention_head_dim
+        rbln_config.embedding_dim = pipe.text_encoder.encoder.embed_tokens.embedding_dim
+        rbln_config.time_proj_num_channels = pipe.transformer.time_embed.time_proj.num_channels
 
-        rbln_config.update(
-            {
-                "max_sequence_length": max_sequence_length,
-                "num_channel_latents": num_channel_latents,
-                "num_latent_frames": num_latent_frames,
-                "latent_height": latent_height,
-                "latent_width": latent_width,
-                "hidden_size": hidden_size,
-                "embedding_dim": embedding_dim,
-                "time_proj_num_channels": time_proj_num_channels,
-                "fps": fps,
-            }
-        )
         return rbln_config
 
     @classmethod
@@ -302,7 +291,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         model: "PreTrainedModel",
         save_dir_path: Path,
         subfolder: str,
-        rbln_config: RBLNConfig,
+        rbln_config: RBLNModelConfig,
     ):
         time_proj = model.time_embed.time_proj
         save_dict = {}
@@ -313,45 +302,39 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
+        model: "PreTrainedModel",
         model_config: "PretrainedConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
-        rbln_batch_size = rbln_kwargs.get("batch_size", None)
-        if rbln_batch_size is None:
-            rbln_batch_size = 1
-
-        rbln_max_sequence_length = rbln_kwargs.get("max_sequence_length")
-        rbln_num_channel_latents = rbln_kwargs.get("num_channel_latents")
-        rbln_num_latent_frames = rbln_kwargs.get("num_latent_frames")
-        rbln_latent_height = rbln_kwargs.get("latent_height")
-        rbln_latent_width = rbln_kwargs.get("latent_width")
-        rbln_embedding_dim = rbln_kwargs.get("embedding_dim")
-        rbln_time_proj_num_channels = rbln_kwargs.get("time_proj_num_channels")
-        rbln_height = rbln_kwargs.get("height", 704)
-        rbln_width = rbln_kwargs.get("width", 1280)
-
+        rbln_config: "RBLNCosmosTransformer3DModelConfig",
+    ) -> RBLNCosmosTransformer3DModelConfig:
         input_info = [
             (
                 "hidden_states",
                 [
-                    rbln_batch_size,
-                    rbln_num_channel_latents,
-                    rbln_num_latent_frames,
-                    rbln_latent_height,
-                    rbln_latent_width,
+                    rbln_config.batch_size,
+                    rbln_config.num_channel_latents,
+                    rbln_config.num_latent_frames,
+                    rbln_config.latent_height,
+                    rbln_config.latent_width,
                 ],
                 "float32",
             ),
-            ("timestep", [rbln_batch_size, rbln_time_proj_num_channels], "float32"),
+            (
+                "timestep",
+                [
+                    rbln_config.batch_size,
+                    rbln_config.time_proj_num_channels
+                ],
+                "float32"
+            ),
             (
                 "encoder_hidden_states",
                 [
-                    rbln_batch_size,
-                    rbln_max_sequence_length,
-                    rbln_embedding_dim,
+                    rbln_config.batch_size,
+                    rbln_config.max_sequence_length,
+                    rbln_config.embedding_dim,
                 ],
                 "float32",
             ),
@@ -360,23 +343,15 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
                 [
                     1,
                     1,
-                    rbln_height,
-                    rbln_width,
+                    rbln_config.height,
+                    rbln_config.width,
                 ],
                 "float32",
             ),
         ]
 
-        rbln_compile_config = RBLNCompileConfig(input_info=input_info)
-
-        rbln_config = RBLNConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[rbln_compile_config],
-            rbln_kwargs=rbln_kwargs,
-        )
-
-        rbln_config.model_cfg.update({"batch_size": rbln_batch_size})
-
+        compile_config = RBLNCompileConfig(input_info=input_info)
+        rbln_config.set_compile_cfgs([compile_config])
         return rbln_config
 
     def forward(
@@ -391,7 +366,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         return_dict: bool = True,
     ):
         timestep = self.time_embed_table(timestep)
-        output = self.runtime.forward(
+        output = self.model[0].forward(
             hidden_states,
             timestep,
             encoder_hidden_states,
