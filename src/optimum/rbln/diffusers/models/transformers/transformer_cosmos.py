@@ -242,8 +242,6 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         if embedding_dim % 2 == 1:
             emb = torch.nn.functional.pad(emb, (0, 1, 0, 0))
 
-        # timesteps = timesteps.reshape(-1, 1)
-
         emb_dict = {}
         for timestep, e in zip(timesteps, emb):
             emb_dict[timestep.item()] = e.reshape(1, -1)
@@ -365,6 +363,9 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         padding_mask: Optional[torch.Tensor] = None,
         return_dict: bool = True,
     ):
+        if not hasattr(self, "_emb_cached"):
+            raise RuntimeError("To run 'RBLNCosmosTransformer3DModel', the method 'get_time_embed_table' should be executed with the scheduler and 'num_inference_steps'.")
+
         timestep = self.time_embed_table(timestep)
         output = self.model[0].forward(
             hidden_states,
