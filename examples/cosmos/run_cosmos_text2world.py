@@ -7,7 +7,7 @@ import torch
 from diffusers.pipelines.cosmos.cosmos_guardrail import CosmosSafetyChecker
 from diffusers.utils import export_to_video
 
-from optimum.rbln import RBLNCosmosPipeline, RBLNCosmosSafetyChecker
+from optimum.rbln.diffusers.pipelines.cosmos import RBLNCosmosPipeline, RBLNCosmosSafetyChecker
 
 
 def main(
