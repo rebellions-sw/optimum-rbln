@@ -36,7 +36,7 @@ logger = get_logger(__name__)
 COSMOS_GUARDRAIL_CHECKPOINT = "nvidia/Cosmos-1.0-Guardrail"
 
 
-class RBLNsimpleModel:
+class RBLNSimpleModel:
     """
     An abstract class for compiling, loading, and saving PyTorch models to run on RBLN NPU devices.
 
@@ -49,9 +49,9 @@ class RBLNsimpleModel:
     `rbln_config` contains various kwargs required for compilation and runtime. For example, `rbln_device`
     specifies the device to be used at runtime. If not specified, defaults to device 0.
 
-    `RBLNModel`, `RBLNModelFor*`, etc. are all child classes of RBLNsimpleModel.
+    `RBLNModel`, `RBLNModelFor*`, etc. are all child classes of RBLNSimpleModel.
 
-    RBLNsimpleModel is a class for models consisting of an arbitrary number of `torch.nn.Module`s, and
+    RBLNSimpleModel is a class for models consisting of an arbitrary number of `torch.nn.Module`s, and
     therefore is an abstract class without explicit implementations of `forward` or `export` functions.
     To inherit from this class, `forward`, `export`, etc. must be implemented.
     """
@@ -224,7 +224,7 @@ class RBLNsimpleModel:
         return output
 
 
-class RBLNRetinaFace(RBLNsimpleModel):
+class RBLNRetinaFace(RBLNSimpleModel):
     @classmethod
     def _get_rbln_config(cls, rbln_kwargs):
         height = rbln_kwargs.get("height", 704)
@@ -241,7 +241,7 @@ class RBLNRetinaFace(RBLNsimpleModel):
         return rbln_config
 
 
-class RBLNVideoSafetyModel(RBLNsimpleModel):
+class RBLNVideoSafetyModel(RBLNSimpleModel):
     @classmethod
     def _get_rbln_config(cls, rbln_kwargs):
         input_info_cls = [("data", [1, 1152], "float32")]  # hard coded
@@ -295,7 +295,7 @@ class _SiglipVisionModel(torch.nn.Module):
         )
 
 
-class RBLNSiglipVisionModel(RBLNsimpleModel):
+class RBLNSiglipVisionModel(RBLNSimpleModel):
     @classmethod
     def _get_rbln_config(cls, rbln_kwargs):
         input_info_enc = [("pixel_values", [1, 3, 384, 384], "float32")]  # hard coded
