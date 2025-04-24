@@ -25,7 +25,9 @@ ALL_IMPORTABLE_CLASSES.update(LOADABLE_CLASSES["optimum.rbln"])
 _import_structure = {
     "configurations": [
         "RBLNAutoencoderKLConfig",
+        "RBLNAutoencoderKLCosmosConfig",
         "RBLNControlNetModelConfig",
+        "RBLNCosmosTransformer3DModelConfig",
         "RBLNKandinskyV22CombinedPipelineConfig",
         "RBLNKandinskyV22Img2ImgCombinedPipelineConfig",
         "RBLNKandinskyV22Img2ImgPipelineConfig",
@@ -82,6 +84,7 @@ _import_structure = {
         "RBLNAutoencoderKLCosmos",
         "RBLNUNet2DConditionModel",
         "RBLNControlNetModel",
+        "RBLNCosmosTransformer3DModel",
         "RBLNSD3Transformer2DModel",
         "RBLNPriorTransformer",
         "RBLNVQModel",
@@ -94,7 +97,9 @@ _import_structure = {
 if TYPE_CHECKING:
     from .configurations import (
         RBLNAutoencoderKLConfig,
+        RBLNAutoencoderKLCosmosConfig,
         RBLNControlNetModelConfig,
+        RBLNCosmosTransformer3DModelConfig,
         RBLNKandinskyV22CombinedPipelineConfig,
         RBLNKandinskyV22Img2ImgCombinedPipelineConfig,
         RBLNKandinskyV22Img2ImgPipelineConfig,
@@ -125,6 +130,7 @@ if TYPE_CHECKING:
         RBLNAutoencoderKL,
         RBLNAutoencoderKLCosmos,
         RBLNControlNetModel,
+        RBLNCosmosTransformer3DModel,
         RBLNPriorTransformer,
         RBLNSD3Transformer2DModel,
         RBLNUNet2DConditionModel,
