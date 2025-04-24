@@ -209,12 +209,14 @@ class RBLNFluxTransformer2DModel(RBLNModel):
                     "To ensure consistent behavior, consider removing the guidance scale or "
                     "adjusting the batch size configuration as needed."
                 )
-
+        tensor_parallel_size = rbln_config.get("tensor_parallel_size")
+        
         return {
             "batch_size": batch_size,
             "max_sequence_length": max_sequence_length,
             "sample_size": sample_size,
             "vae_scale_factor": pipe.vae_scale_factor,
+            "tensor_parallel_size": tensor_parallel_size,
         }
 
     @classmethod
