@@ -54,7 +54,6 @@ _import_structure = {
         "RBLNVQModelConfig",
     ],
     "pipelines": [
-        "RBLNCosmosPipeline",
         "RBLNKandinskyV22CombinedPipeline",
         "RBLNKandinskyV22Img2ImgCombinedPipeline",
         "RBLNKandinskyV22InpaintCombinedPipeline",
@@ -76,15 +75,11 @@ _import_structure = {
         "RBLNStableDiffusion3Pipeline",
         "RBLNStableDiffusion3Img2ImgPipeline",
         "RBLNStableDiffusion3InpaintPipeline",
-        "RBLNCosmosPipeline",
-        "RBLNCosmosSafetyChecker",
     ],
     "models": [
         "RBLNAutoencoderKL",
-        "RBLNAutoencoderKLCosmos",
         "RBLNUNet2DConditionModel",
         "RBLNControlNetModel",
-        "RBLNCosmosTransformer3DModel",
         "RBLNSD3Transformer2DModel",
         "RBLNPriorTransformer",
         "RBLNVQModel",
@@ -128,17 +123,13 @@ if TYPE_CHECKING:
     from .modeling_diffusers import RBLNDiffusionMixin
     from .models import (
         RBLNAutoencoderKL,
-        RBLNAutoencoderKLCosmos,
         RBLNControlNetModel,
-        RBLNCosmosTransformer3DModel,
         RBLNPriorTransformer,
         RBLNSD3Transformer2DModel,
         RBLNUNet2DConditionModel,
         RBLNVQModel,
     )
     from .pipelines import (
-        RBLNCosmosPipeline,
-        RBLNCosmosSafetyChecker,
         RBLNKandinskyV22CombinedPipeline,
         RBLNKandinskyV22Img2ImgCombinedPipeline,
         RBLNKandinskyV22Img2ImgPipeline,
