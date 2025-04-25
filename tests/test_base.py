@@ -12,6 +12,8 @@ import transformers
 from diffusers import DiffusionPipeline
 from transformers import AutoConfig, CLIPConfig
 
+from optimum.rbln.configuration_utils import ContextRblnConfig
+
 
 class TestLevel(Enum):
     ESSENTIAL = 1
@@ -184,40 +186,44 @@ class BaseTest:
             if self.EXPECTED_OUTPUT:
                 self.assertEqual(output, self.EXPECTED_OUTPUT)
 
+        def _inner_test_save_load(self, tmpdir):
+            with self.subTest():
+                self.model.save_pretrained(tmpdir)
+                config_path = os.path.join(tmpdir, self.RBLN_CLASS.config_name)
+                self.assertTrue(os.path.exists(config_path), "save_pretrained does not work.")
+
+            with self.subTest():
+                # Test load
+                _ = self.RBLN_CLASS.from_pretrained(
+                    tmpdir,
+                    export=False,
+                    rbln_create_runtimes=False,
+                    **self.HF_CONFIG_KWARGS,
+                )
+
+            with self.subTest():
+                # Test saving from exported pipe
+                self.model.save_pretrained(tmpdir)
+                _ = self.RBLN_CLASS.from_pretrained(
+                    tmpdir,
+                    export=False,
+                    rbln_create_runtimes=False,
+                    **self.HF_CONFIG_KWARGS,
+                )
+
         def test_save_load(self):
             with tempfile.TemporaryDirectory() as tmpdir:
-                with self.subTest():
-                    self.model.save_pretrained(tmpdir)
-                    config_path = os.path.join(tmpdir, self.RBLN_CLASS.config_name)
-                    self.assertTrue(os.path.exists(config_path), "save_pretrained does not work.")
-
-                with self.subTest():
-                    # Test load
-                    _ = self.RBLN_CLASS.from_pretrained(
-                        tmpdir,
-                        export=False,
-                        rbln_create_runtimes=False,
-                        **self.HF_CONFIG_KWARGS,
-                    )
-
-                with self.subTest():
-                    # Test saving from exported pipe
-                    self.model.save_pretrained(tmpdir)
-                    _ = self.RBLN_CLASS.from_pretrained(
-                        tmpdir,
-                        export=False,
-                        rbln_create_runtimes=False,
-                        **self.HF_CONFIG_KWARGS,
-                    )
+                self._inner_test_save_load(tmpdir)
 
         def test_model_save_dir_load(self):
-            # Test model_save_dir
-            _ = self.RBLN_CLASS.from_pretrained(
-                self.get_rbln_local_dir(),
-                export=False,
-                rbln_create_runtimes=False,
-                **self.HF_CONFIG_KWARGS,
-            )
+            with ContextRblnConfig(create_runtimes=False):
+                # Test model_save_dir
+                _ = self.RBLN_CLASS.from_pretrained(
+                    self.get_rbln_local_dir(),
+                    export=False,
+                    rbln_create_runtimes=False,
+                    **self.HF_CONFIG_KWARGS,
+                )
 
         def test_automap(self):
             if self.RBLN_AUTO_CLASS is None:

@@ -24,6 +24,7 @@ from optimum.rbln import (
     RBLNQwen2ForCausalLM,
     RBLNT5ForConditionalGeneration,
 )
+from optimum.rbln.configuration_utils import ContextRblnConfig
 
 from .test_base import BaseTest, DisallowedTestBase, TestLevel
 
@@ -224,7 +225,6 @@ class TestBartModel(LLMTest.TestLLM):
 class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
     RBLN_CLASS = RBLNLlavaNextForConditionalGeneration
-    TEST_LEVEL = TestLevel.FULL
     HF_MODEL_ID = "llava-hf/llava-v1.6-mistral-7b-hf"  # No tiny model yet.
     PROMPT = "[INST] <image>\nWhat’s shown in this image? [/INST]"
     RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True}}}
@@ -255,6 +255,18 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
         inputs["max_new_tokens"] = 20
         inputs["do_sample"] = False
         return inputs
+
+    def _inner_test_save_load(self, tmpdir):
+        with ContextRblnConfig(create_runtimes=False):
+            super()._inner_test_save_load(tmpdir)
+
+            # Test loading from nested config
+            _ = self.RBLN_CLASS.from_pretrained(
+                tmpdir,
+                export=False,
+                rbln_config={"language_model": {"create_runtimes": False}},
+                **self.HF_CONFIG_KWARGS,
+            )
 
 
 class TestIdefics3ForConditionalGeneration(LLMTest.TestLLM):
