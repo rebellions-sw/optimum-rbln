@@ -31,7 +31,7 @@ from .vae import RBLNRuntimeVAEDecoder, _VAECosmosDecoder
 
 if TYPE_CHECKING:
     import torch
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig, PreTrainedModel
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PreTrainedModel
 
     from ...modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 
@@ -55,8 +55,7 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
         super().__post_init__(**kwargs)
 
         if self.rbln_config.uses_encoder:
-            logger.warning("We currently support Text to World pipeline only.")
-            self.rbln_config.uses_encoder = False
+            raise NotImplementedError("We currently support Text to World pipeline only.")
 
         self.encoder = None
         self.decoder = RBLNRuntimeVAEDecoder(runtime=self.model[-1], main_input_name="z")
@@ -75,8 +74,8 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
 
         replace_forward_func(model)
         if rbln_config.uses_encoder:
-            logger.warning("We currently support Text to World pipeline only.")
-            rbln_config.uses_encoder = False
+            raise NotImplementedError("We currently support Text to World pipeline only.")
+
         decoder_model = _VAECosmosDecoder(model)
         decoder_model.eval()
         return decoder_model
@@ -85,36 +84,20 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
     def get_compiled_model(
         cls, model, rbln_config: RBLNAutoencoderKLCosmosConfig
     ) -> Dict[str, rebel.RBLNCompiledModel]:
-        def compile_encoder_decoder():
-            encoder_model, decoder_model = cls.wrap_model_if_needed(model, rbln_config)
-            enc_compiled_model = cls.compile(encoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
-            dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[1])
-            return {"encoder": enc_compiled_model, "decoder": dec_compiled_model}
+        if rbln_config.uses_encoder:
+            raise NotImplementedError("We currently support Text to World pipeline only.")
 
-        def compile_decoder_only():
-            decoder_model = cls.wrap_model_if_needed(model, rbln_config)
-            dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
-            return dec_compiled_model
-
-        return compile_decoder_only()
+        decoder_model = cls.wrap_model_if_needed(model, rbln_config)
+        dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
+        return {"decoder" : dec_compiled_model}
 
     @classmethod
     def update_rbln_config_using_pipe(
         cls, pipe: RBLNDiffusionMixin, rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
     ) -> "RBLNDiffusionMixinConfig":
-        num_channel_latents = pipe.transformer.config.in_channels
-        num_latent_frames = (rbln_config.num_frames - 1) // pipe.vae_scale_factor_temporal + 1
-        latent_height = rbln_config.height // pipe.vae_scale_factor_spatial
-        latent_width = rbln_config.width // pipe.vae_scale_factor_spatial
-
-        rbln_config.update(
-            {
-                "num_channel_latents": num_channel_latents,
-                "num_latent_frames": num_latent_frames,
-                "latent_height": latent_height,
-                "latent_width": latent_width,
-            }
-        )
+        rbln_config.vae.num_channel_latents = pipe.transformer.config.in_channels
+        rbln_config.vae.vae_scale_factor_temporal = pipe.vae_scale_factor_temporal
+        rbln_config.vae.vae_scale_factor = pipe.vae_scale_factor_spatial
         return rbln_config
 
     @classmethod
@@ -127,32 +110,21 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
     ) -> RBLNAutoencoderKLCosmosConfig:
         compile_cfgs = []
         if rbln_config.uses_encoder:
-            rbln_config.in_channels = model_config.in_channels if hasattr(model_config, "in_channels") else 3
+            raise NotImplementedError("We currently support Text to World pipeline only.")
 
-            vae_enc_input_info = [
-                (
-                    "x",
-                    [
-                        rbln_config.batch_size,
-                        rbln_config.in_channels,
-                        rbln_config.num_frames,
-                        rbln_config.height,
-                        rbln_config.width,
-                    ],
-                    "float32",
-                ),
-            ]
-            compile_cfgs.append(RBLNCompileConfig(compiled_model_name="encoder", input_info=vae_enc_input_info))
-
+        num_latent_frames = (rbln_config.num_frames - 1) // rbln_config.vae_scale_factor_temporal + 1
+        latent_height = rbln_config.height // rbln_config.vae_scale_factor
+        latent_width = rbln_config.width // rbln_config.vae_scale_factor
+        
         vae_dec_input_info = [
             (
                 "z",
                 [
                     rbln_config.batch_size,
                     rbln_config.num_channel_latents,
-                    rbln_config.num_latent_frames,
-                    rbln_config.latent_height,
-                    rbln_config.latent_width,
+                    num_latent_frames,
+                    latent_height,
+                    latent_width,
                 ],
                 "float32",
             ),
@@ -172,8 +144,7 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
             # decoder
             expected_models = ["decoder"]
         else:
-            # encoder, decoder
-            expected_models = ["encoder", "decoder"]
+            raise NotImplementedError("We currently support Text to World pipeline only.")
 
         if any(model_name not in rbln_config.device_map for model_name in expected_models):
             cls._raise_missing_compiled_file_error(expected_models)
