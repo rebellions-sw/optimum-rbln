@@ -47,17 +47,11 @@ class RBLNDiffusionMixin:
 
     1. Create a new pipeline class that inherits from both this mixin and the original StableDiffusionPipeline.
     2. Define the required _submodules class variable listing the components to be compiled.
-    3. If needed, implement get_default_rbln_config for custom configuration of submodules.
 
     Example:
         ```python
         class RBLNStableDiffusionPipeline(RBLNDiffusionMixin, StableDiffusionPipeline):
             _submodules = ["text_encoder", "unet", "vae"]
-
-            @classmethod
-            def get_default_rbln_config(cls, model, submodule_name, rbln_config):
-                # Configuration for other submodules...
-                pass
         ```
 
     Class Variables:
@@ -76,14 +70,6 @@ class RBLNDiffusionMixin:
     _submodules = []
     _prefix = {}
     _rbln_config_class = None
-
-    @classmethod
-    def is_img2img_pipeline(cls):
-        return "Img2Img" in cls.__name__
-
-    @classmethod
-    def is_inpaint_pipeline(cls):
-        return "Inpaint" in cls.__name__
 
     @staticmethod
     def _maybe_apply_and_fuse_lora(
@@ -151,7 +137,47 @@ class RBLNDiffusionMixin:
         lora_weights_names: Optional[Union[str, List[str]]] = None,
         lora_scales: Optional[Union[float, List[float]]] = None,
         **kwargs,
-    ) -> RBLNModel:
+    ) -> "RBLNDiffusionMixin":
+        """
+        Load a pretrained diffusion pipeline from a model checkpoint, with optional compilation for RBLN NPUs.
+
+        This method has two distinct operating modes:
+        - When `export=True`: Takes a PyTorch-based diffusion model, compiles it for RBLN NPUs, and loads the compiled model
+        - When `export=False`: Loads an already compiled RBLN model from `model_id` without recompilation
+
+        It supports various diffusion pipelines including Stable Diffusion, Kandinsky, ControlNet, and other diffusers-based models.
+
+        Args:
+            model_id (`str`):
+                The model ID or path to the pretrained model to load. Can be either:
+                - A model ID from the HuggingFace Hub
+                - A local path to a saved model directory
+            export (`bool`, *optional*, defaults to `False`):
+                If True, takes a PyTorch model from `model_id` and compiles it for RBLN NPU execution.
+                If False, loads an already compiled RBLN model from `model_id` without recompilation.
+            model_save_dir (`os.PathLike`, *optional*):
+                Directory to save the compiled model artifacts. Only used when `export=True`.
+                If not provided and `export=True`, a temporary directory is used.
+            rbln_config (`Dict[str, Any]`, *optional*, defaults to `{}`):
+                Configuration options for RBLN compilation. Can include settings for specific submodules
+                such as `text_encoder`, `unet`, and `vae`. Configuration can be tailored to the specific
+                pipeline being compiled.
+            lora_ids (`str` or `List[str]`, *optional*):
+                LoRA adapter ID(s) to load and apply before compilation. LoRA weights are fused
+                into the model weights during compilation. Only used when `export=True`.
+            lora_weights_names (`str` or `List[str]`, *optional*):
+                Names of specific LoRA weight files to load, corresponding to lora_ids. Only used when `export=True`.
+            lora_scales (`float` or `List[float]`, *optional*):
+                Scaling factor(s) to apply to the LoRA adapter(s). Only used when `export=True`.
+            **kwargs:
+                Additional arguments to pass to the underlying diffusion pipeline constructor or the
+                RBLN compilation process. These may include parameters specific to individual submodules
+                or the particular diffusion pipeline being used.
+
+        Returns:
+            `RBLNDiffusionMixin`: A compiled or loaded diffusion pipeline that can be used for inference on RBLN NPU.
+            The returned object is an instance of the class that called this method, inheriting from RBLNDiffusionMixin.
+        """
         rbln_config, kwargs = cls.get_rbln_config_class().initialize_from_kwargs(rbln_config, **kwargs)
 
         if export:
