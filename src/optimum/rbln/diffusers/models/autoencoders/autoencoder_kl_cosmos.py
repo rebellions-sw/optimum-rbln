@@ -59,7 +59,7 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
 
         self.encoder = None
         self.decoder = RBLNRuntimeVAEDecoder(runtime=self.model[-1], main_input_name="z")
-        self.image_size = self.rbln_config.sample_size
+        self.image_size = self.rbln_config.image_size
 
     @classmethod
     def wrap_model_if_needed(
@@ -98,8 +98,6 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
         rbln_config.vae.num_channel_latents = pipe.transformer.config.in_channels
         rbln_config.vae.vae_scale_factor_temporal = pipe.vae_scale_factor_temporal
         rbln_config.vae.vae_scale_factor = pipe.vae_scale_factor_spatial
-        
-        rbln_config.vae.sample_size = (rbln_config.height, rbln_config.width)
         return rbln_config
 
     @classmethod
@@ -115,8 +113,8 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
             raise NotImplementedError("We currently support Text to World pipeline only.")
 
         num_latent_frames = (rbln_config.num_frames - 1) // rbln_config.vae_scale_factor_temporal + 1
-        latent_height = rbln_config.sample_size[0] // rbln_config.vae_scale_factor
-        latent_width = rbln_config.sample_size[1] // rbln_config.vae_scale_factor
+        latent_height = rbln_config.height // rbln_config.vae_scale_factor
+        latent_width = rbln_config.width // rbln_config.vae_scale_factor
         
         vae_dec_input_info = [
             (
