@@ -15,7 +15,7 @@ import os
 from abc import abstractmethod
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import rebel
 import torch
@@ -24,8 +24,13 @@ from diffusers.pipelines.cosmos.cosmos_guardrail import (
 )
 
 from optimum.rbln import RBLNLlamaForCausalLM
+from optimum.rbln.diffusers.configurations.models.configuration_cosmos_guardrail import (
+    RBLNRetinaFaceConfig,
+    RBLNSiglipVisionModelConfig,
+    RBLNVideoSafetyModelConfig,
+)
 
-from ....modeling_config import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNConfig, use_rbln_config
+from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig
 from ....utils.hub import validate_files
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime, UnavailableRuntime
@@ -59,7 +64,7 @@ class RBLNSimpleModel:
     def __init__(
         self,
         models: List[rebel.Runtime],
-        rbln_config: RBLNConfig,
+        rbln_config: "RBLNModelConfig",
         model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
         rbln_compiled_models: Optional[rebel.RBLNCompiledModel] = None,
         subfolder: str = "",
@@ -71,7 +76,9 @@ class RBLNSimpleModel:
         self.subfolder = subfolder
 
     @classmethod
-    def load_compiled_model(cls, model_id, rbln_config, subfolder=""):
+    def load_compiled_model(
+        cls, model_id: str, rbln_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None, subfolder: str = ""
+    ):
         return cls._load_compiled_model(model_id=model_id, subfolder=subfolder, rbln_config=rbln_config)
 
     @classmethod
@@ -83,11 +90,12 @@ class RBLNSimpleModel:
         rbln_config_filenames = list(model_save_dir.glob("rbln_config.json"))
         validate_files(rbln_files, rbln_config_filenames, f"directory {model_save_dir}")
 
-        from_export_method = isinstance(rbln_config, RBLNConfig) and rbln_compiled_models is not None
+        from_export_method = isinstance(rbln_config, RBLNModelConfig) and rbln_compiled_models is not None
         if not from_export_method:
-            rbln_kwargs = rbln_config or {}
-            rbln_config = RBLNConfig.load(model_save_dir)
-            rbln_config.update_runtime_cfg(rbln_kwargs)
+            rbln_config_as_kwargs = {f"rbln_{key}": value for key, value in rbln_config.items()}
+            rbln_config, kwargs = RBLNAutoConfig.load(
+                model_save_dir, passed_rbln_config=None, kwargs=rbln_config_as_kwargs, return_unused_kwargs=True
+            )
 
         compiled_models = Path(model_save_dir).glob("*.rbln")
         rbln_compiled_models = {cm.stem: rebel.RBLNCompiledModel(cm) for cm in compiled_models}
@@ -97,7 +105,7 @@ class RBLNSimpleModel:
     def _from_compiled_models(
         cls,
         rbln_compiled_models: Dict[str, rebel.RBLNCompiledModel],
-        rbln_config: RBLNConfig,
+        rbln_config: "RBLNModelConfig",
         model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
         subfolder="",
         **kwargs,
@@ -108,7 +116,7 @@ class RBLNSimpleModel:
         # create runtimes only if `rbln_create_runtimes` is enabled
         try:
             models = (
-                cls._create_runtimes(rbln_compiled_models, rbln_config.device_map, rbln_config.activate_profiler)
+                cls._create_runtimes(rbln_compiled_models, rbln_config)
                 if rbln_config.create_runtimes
                 else UnavailableRuntime()
             )
@@ -138,8 +146,38 @@ class RBLNSimpleModel:
         return model
 
     @classmethod
-    def compile_model(cls, model, rbln_kwargs, model_save_dir, subfolder=""):
-        rbln_config = cls._get_rbln_config(rbln_kwargs)
+    def prepare_rbln_config(
+        cls, rbln_config: Optional[Union[Dict[str, Any], RBLNModelConfig]] = None, **kwargs
+    ) -> Tuple[RBLNModelConfig, Dict[str, Any]]:
+        """
+        Extract rbln-config from kwargs and convert it to RBLNModelConfig.
+        """
+        if not hasattr(cls, "_rbln_config_class"):
+            raise ValueError
+
+        rbln_config, kwargs = cls._rbln_config_class.initialize_from_kwargs(rbln_config, **kwargs)
+        return rbln_config, kwargs
+
+    @classmethod
+    def update_rbln_config(cls, **others) -> RBLNModelConfig:
+        rbln_config = cls._update_rbln_config(**others)
+        rbln_config.freeze()
+        if rbln_config.rbln_model_cls_name != cls.__name__:
+            raise NameError(
+                f"Cannot get the rbln config. {cls.__name__} is not the same as {rbln_config.rbln_model_cls_name}. "
+                "This is an internal error. Please report it to the developers."
+            )
+        return rbln_config
+
+    @classmethod
+    @abstractmethod
+    def _update_rbln_config(cls, **rbln_config_kwargs) -> RBLNModelConfig:
+        pass
+
+    @classmethod
+    def compile_model(cls, model, rbln_config, model_save_dir, subfolder="", **kwargs):
+        rbln_config, kwargs = cls.prepare_rbln_config(rbln_config=rbln_config, **kwargs)
+        rbln_config: RBLNModelConfig = cls.update_rbln_config(rbln_config=rbln_config)
         compiled_model = cls._get_compiled_model(model, rbln_config)
 
         # Save compiled models (.rbln)
@@ -156,11 +194,6 @@ class RBLNSimpleModel:
             model_id=model_save_dir, subfolder=subfolder, rbln_config=rbln_config, rbln_compiled_models=compiled_models
         )
         return rbln_compiled_models
-
-    @classmethod
-    @abstractmethod
-    def _get_rbln_config(cls, rbln_kwargs):
-        pass
 
     @classmethod
     def _get_compiled_model(cls, model, rbln_config):
@@ -182,15 +215,17 @@ class RBLNSimpleModel:
     def _create_runtimes(
         cls,
         compiled_models: List[rebel.RBLNCompiledModel],
-        rbln_device_map: Dict[str, int],
-        activate_profiler: Optional[bool] = None,
+        rbln_config: RBLNModelConfig,
     ) -> List[rebel.Runtime]:
-        if DEFAULT_COMPILED_MODEL_NAME not in rbln_device_map:
+        if DEFAULT_COMPILED_MODEL_NAME not in rbln_config.device_map:
             cls._raise_missing_compiled_file_error([DEFAULT_COMPILED_MODEL_NAME])
 
-        device = rbln_device_map[DEFAULT_COMPILED_MODEL_NAME]
         return [
-            compiled_model.create_runtime(tensor_type="pt", device=device, activate_profiler=activate_profiler)
+            compiled_model.create_runtime(
+                tensor_type="pt",
+                device=rbln_config.device_map[DEFAULT_COMPILED_MODEL_NAME],
+                activate_profiler=rbln_config.activate_profiler,
+            )
             for compiled_model in compiled_models
         ]
 
@@ -225,33 +260,29 @@ class RBLNSimpleModel:
 
 
 class RBLNRetinaFace(RBLNSimpleModel):
+    _rbln_config_class = RBLNRetinaFaceConfig
+
     @classmethod
-    def _get_rbln_config(cls, rbln_kwargs):
-        height = rbln_kwargs.get("height", 704)
-        width = rbln_kwargs.get("width", 1280)
-        input_info = [("frames", [1, 3, height, width], "float32")]  # hard coded
+    def _update_rbln_config(cls, rbln_config: RBLNRetinaFaceConfig):
+        height = rbln_config.height
+        width = rbln_config.width
+        input_info = [("frames", [1, 3, height, width], "float32")]
 
         postprocessor_config = RBLNCompileConfig(input_info=input_info)
-
-        rbln_config = RBLNConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[postprocessor_config],
-            rbln_kwargs=rbln_kwargs,
-        )
+        rbln_config.set_compile_cfgs([postprocessor_config])
         return rbln_config
 
 
 class RBLNVideoSafetyModel(RBLNSimpleModel):
-    @classmethod
-    def _get_rbln_config(cls, rbln_kwargs):
-        input_info_cls = [("data", [1, 1152], "float32")]  # hard coded
-        cls_config = RBLNCompileConfig(input_info=input_info_cls)
+    _rbln_config_class = RBLNVideoSafetyModelConfig
 
-        rbln_config = RBLNConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[cls_config],
-            rbln_kwargs=rbln_kwargs,
-        )
+    @classmethod
+    def _update_rbln_config(cls, rbln_config: RBLNVideoSafetyModelConfig):
+        batch_size = rbln_config.batch_size
+        input_size = rbln_config.input_size
+        input_info_cls = [("data", [batch_size, input_size], "float32")]
+        cls_config = RBLNCompileConfig(input_info=input_info_cls)
+        rbln_config.set_compile_cfgs([cls_config])
         return rbln_config
 
     @classmethod
@@ -296,16 +327,17 @@ class _SiglipVisionModel(torch.nn.Module):
 
 
 class RBLNSiglipVisionModel(RBLNSimpleModel):
-    @classmethod
-    def _get_rbln_config(cls, rbln_kwargs):
-        input_info_enc = [("pixel_values", [1, 3, 384, 384], "float32")]  # hard coded
-        enc_config = RBLNCompileConfig(input_info=input_info_enc)
+    _rbln_config_class = RBLNSiglipVisionModelConfig
 
-        rbln_config = RBLNConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[enc_config],
-            rbln_kwargs=rbln_kwargs,
-        )
+    @classmethod
+    def _update_rbln_config(cls, rbln_config: RBLNSiglipVisionModelConfig):
+        batch_size = rbln_config.batch_size
+        height = rbln_config.height
+        width = rbln_config.width
+
+        input_info_enc = [("pixel_values", [batch_size, 3, height, width], "float32")]  # hard coded
+        enc_config = RBLNCompileConfig(input_info=input_info_enc)
+        rbln_config.set_compile_cfgs([enc_config])
         return rbln_config
 
     @classmethod
@@ -317,10 +349,17 @@ class RBLNSiglipVisionModel(RBLNSimpleModel):
         return RBLNRuntimeSiglipVisionModel(model)
 
 
-class RBLNLlamaGuard(RBLNLlamaForCausalLM):
+class RBLNLlamaGuard:
+    _origin_class = RBLNLlamaForCausalLM
+
     @classmethod
     def load_compiled_model(cls, model_id, rbln_config, subfolder=""):
-        model = RBLNLlamaForCausalLM.from_pretrained(
+        # FIXME: this is temp patch until fix main branch
+        rbln_config_as_kwargs = {f"rbln_{key}": value for key, value in rbln_config.items()}
+        rbln_config, kwargs = RBLNAutoConfig.load(
+            model_id, passed_rbln_config=None, kwargs=rbln_config_as_kwargs, return_unused_kwargs=True
+        )
+        model = cls._origin_class.from_pretrained(
             model_id=model_id,
             export=False,
             rbln_config=rbln_config,
@@ -328,24 +367,66 @@ class RBLNLlamaGuard(RBLNLlamaForCausalLM):
         return model
 
     @classmethod
-    def compile_model(cls, model, rbln_kwargs, model_save_dir, subfolder=""):
-        batch_size = rbln_kwargs.get("batch_size", 1)
-        max_seq_len = rbln_kwargs.get("max_seq_len", 4096)
-        tensor_parallel_size = rbln_kwargs.get("tensor_parallel_size", 4)
-        rbln_device = rbln_kwargs.get("device", [0, 1, 2, 3])
+    def compile_model(cls, model, rbln_config, model_save_dir, subfolder=""):
+        batch_size = rbln_config.get("batch_size", 1)
+        max_seq_len = rbln_config.get("max_seq_len", 4096)
+        tensor_parallel_size = rbln_config.get("tensor_parallel_size", 4)
+        rbln_device = rbln_config.get("device", [0, 1, 2, 3])
 
         model = model.merge_and_unload()
-        compiled_model = RBLNLlamaForCausalLM.from_model(
+        compiled_model = cls._origin_class.from_model(
             model,
             export=True,
             rbln_batch_size=batch_size,
             rbln_max_seq_len=max_seq_len,
             rbln_tensor_parallel_size=tensor_parallel_size,
-            model_save_dir=model_save_dir,
             rbln_device=rbln_device,
+            model_save_dir=model_save_dir,
             subfolder=subfolder,
         )
         return compiled_model
+
+
+def update_submodule_config(fn):
+    """
+    If the function uses rbln_config and kwargs,
+        then extract `rbln_` prefix from kwargs.
+
+    If rbln_config is already an instance of RBLNConfig, then pass.
+    """
+
+    def merged_rbln_config_fn(*args, **kwargs):
+        submodules = ["video_guardrail", "text_guardrail"]
+
+        rbln_kwargs = kwargs.pop("rbln_kwargs", None)
+        if rbln_kwargs is not None:
+            raise KeyError("`rbln_kwargs` cannot be specified when using `rbln_config`!")
+
+        rbln_config = kwargs.pop("rbln_config", None)
+
+        keys = list(kwargs.keys())
+        rbln_kwargs = {key[5:]: kwargs.pop(key) for key in keys if key.startswith("rbln_")}
+
+        if rbln_config is None:
+            rbln_config_dict = {}
+
+        else:
+            rbln_config_dict = rbln_config
+
+        for submodule in submodules:
+            submodule_dict = rbln_config_dict.get(submodule, None)
+            if submodule_dict is None:
+                rbln_config_dict[submodule] = {}
+
+            for key in rbln_config_dict[submodule]:
+                if key in rbln_kwargs:
+                    raise KeyError(f"Duplicated key in both `rbln_config` and rbln_{key}.")
+
+            rbln_config_dict[submodule].update(rbln_kwargs)
+
+        return fn(*args, **kwargs, rbln_config=rbln_config_dict)
+
+    return merged_rbln_config_fn
 
 
 class RBLNCosmosSafetyChecker:
@@ -359,7 +440,7 @@ class RBLNCosmosSafetyChecker:
     _rbln_modules = [RBLNRetinaFace, RBLNSiglipVisionModel, RBLNVideoSafetyModel, RBLNLlamaGuard]
 
     @classmethod
-    @use_rbln_config
+    @update_submodule_config
     def compile_submodules(cls, model, rbln_config, model_save_dir: str = "safety_checker"):
         save_dir_path = Path(model_save_dir)
         save_dir_path.mkdir(exist_ok=True)
@@ -377,7 +458,7 @@ class RBLNCosmosSafetyChecker:
             compile_target = getattr(target_model, cls._target_model_names[i])
             compiled_model = cls._rbln_modules[i].compile_model(
                 compile_target,
-                rbln_kwargs=rbln_config.get(guardrail, {}),
+                rbln_config=rbln_config.get(guardrail, {}),
                 model_save_dir=save_dir_path,
                 subfolder=cls._subfolders[i],
             )
@@ -386,7 +467,7 @@ class RBLNCosmosSafetyChecker:
         return model
 
     @classmethod
-    @use_rbln_config
+    @update_submodule_config
     def load_submodules(cls, model, rbln_config, model_save_dir=""):
         for i, target_model_name in enumerate(cls._target_model_names):
             guardrail = cls._guardrails[i]

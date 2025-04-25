@@ -20,6 +20,7 @@ from ....utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class RBLNAutoencoderKLCosmosConfig(RBLNModelConfig):
     def __init__(
         self,

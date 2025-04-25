@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+
 class CosmosTransformer3DModelWrapper(torch.nn.Module):
     def __init__(
         self,
@@ -271,13 +272,15 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
 
     @classmethod
     def update_rbln_config_using_pipe(
-            cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNCosmosTransformer3DModelConfig", submodule_name: str
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNCosmosTransformer3DModelConfig", submodule_name: str
     ) -> RBLNCosmosTransformer3DModelConfig:
         rbln_config.num_channel_latents = pipe.transformer.config.in_channels
         rbln_config.num_latent_frames = (rbln_config.num_frames - 1) // pipe.vae_scale_factor_temporal + 1
         rbln_config.latent_height = rbln_config.height // pipe.vae_scale_factor_temporal
         rbln_config.latent_width = rbln_config.width // pipe.vae_scale_factor_temporal
-        rbln_config.hidden_size = pipe.transformer.config.num_attention_heads * pipe.transformer.config.attention_head_dim
+        rbln_config.hidden_size = (
+            pipe.transformer.config.num_attention_heads * pipe.transformer.config.attention_head_dim
+        )
         rbln_config.embedding_dim = pipe.text_encoder.encoder.embed_tokens.embedding_dim
         rbln_config.time_proj_num_channels = pipe.transformer.time_embed.time_proj.num_channels
 
@@ -319,14 +322,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
                 ],
                 "float32",
             ),
-            (
-                "timestep",
-                [
-                    rbln_config.batch_size,
-                    rbln_config.time_proj_num_channels
-                ],
-                "float32"
-            ),
+            ("timestep", [rbln_config.batch_size, rbln_config.time_proj_num_channels], "float32"),
             (
                 "encoder_hidden_states",
                 [
@@ -364,7 +360,9 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         return_dict: bool = True,
     ):
         if not hasattr(self, "_emb_cached"):
-            raise RuntimeError("To run 'RBLNCosmosTransformer3DModel', the method 'get_time_embed_table' should be executed with the scheduler and 'num_inference_steps'.")
+            raise RuntimeError(
+                "To run 'RBLNCosmosTransformer3DModel', the method 'get_time_embed_table' should be executed with the scheduler and 'num_inference_steps'."
+            )
 
         timestep = self.time_embed_table(timestep)
         output = self.model[0].forward(

@@ -52,6 +52,9 @@ _import_structure = {
         "RBLNSD3Transformer2DModelConfig",
         "RBLNUNet2DConditionModelConfig",
         "RBLNVQModelConfig",
+        "RBLNRetinaFaceConfig",
+        "RBLNSiglipVisionModelConfig",
+        "RBLNVideoSafetyModelConfig",
     ],
     "pipelines": [
         "RBLNKandinskyV22CombinedPipeline",
@@ -103,7 +106,9 @@ if TYPE_CHECKING:
         RBLNKandinskyV22PipelineConfig,
         RBLNKandinskyV22PriorPipelineConfig,
         RBLNPriorTransformerConfig,
+        RBLNRetinaFaceConfig,
         RBLNSD3Transformer2DModelConfig,
+        RBLNSiglipVisionModelConfig,
         RBLNStableDiffusion3Img2ImgPipelineConfig,
         RBLNStableDiffusion3InpaintPipelineConfig,
         RBLNStableDiffusion3PipelineConfig,
@@ -118,6 +123,7 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLInpaintPipelineConfig,
         RBLNStableDiffusionXLPipelineConfig,
         RBLNUNet2DConditionModelConfig,
+        RBLNVideoSafetyModelConfig,
         RBLNVQModelConfig,
     )
     from .modeling_diffusers import RBLNDiffusionMixin

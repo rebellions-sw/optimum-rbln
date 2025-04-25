@@ -174,6 +174,9 @@ _import_structure = {
         "RBLNUNet2DConditionModelConfig",
         "RBLNVQModel",
         "RBLNVQModelConfig",
+        "RBLNRetinaFaceConfig",
+        "RBLNSiglipVisionModelConfig",
+        "RBLNVideoSafetyModelConfig",
     ],
 }
 
@@ -207,8 +210,10 @@ if TYPE_CHECKING:
         RBLNMultiControlNetModel,
         RBLNPriorTransformer,
         RBLNPriorTransformerConfig,
+        RBLNRetinaFaceConfig,
         RBLNSD3Transformer2DModel,
         RBLNSD3Transformer2DModelConfig,
+        RBLNSiglipVisionModelConfig,
         RBLNStableDiffusion3Img2ImgPipeline,
         RBLNStableDiffusion3Img2ImgPipelineConfig,
         RBLNStableDiffusion3InpaintPipeline,
@@ -237,6 +242,7 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLPipelineConfig,
         RBLNUNet2DConditionModel,
         RBLNUNet2DConditionModelConfig,
+        RBLNVideoSafetyModelConfig,
         RBLNVQModel,
         RBLNVQModelConfig,
     )
