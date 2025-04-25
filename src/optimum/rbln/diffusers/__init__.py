@@ -52,6 +52,7 @@ _import_structure = {
         "RBLNSD3Transformer2DModelConfig",
         "RBLNUNet2DConditionModelConfig",
         "RBLNVQModelConfig",
+        "RBLNRetinaFaceConfig", "RBLNSiglipVisionModelConfig", "RBLNVideoSafetyModelConfig",
     ],
     "pipelines": [
         "RBLNCosmosPipeline",
@@ -124,6 +125,7 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLPipelineConfig,
         RBLNUNet2DConditionModelConfig,
         RBLNVQModelConfig,
+        RBLNRetinaFaceConfig, RBLNSiglipVisionModelConfig, RBLNVideoSafetyModelConfig,
     )
     from .modeling_diffusers import RBLNDiffusionMixin
     from .models import (

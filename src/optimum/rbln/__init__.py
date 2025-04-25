@@ -178,6 +178,7 @@ _import_structure = {
         "RBLNUNet2DConditionModelConfig",
         "RBLNVQModel",
         "RBLNVQModelConfig",
+        "RBLNRetinaFaceConfig", "RBLNSiglipVisionModelConfig", "RBLNVideoSafetyModelConfig",
     ],
 }
 
@@ -247,6 +248,7 @@ if TYPE_CHECKING:
         RBLNUNet2DConditionModelConfig,
         RBLNVQModel,
         RBLNVQModelConfig,
+        RBLNRetinaFaceConfig, RBLNSiglipVisionModelConfig, RBLNVideoSafetyModelConfig,
     )
     from .modeling import (
         RBLNBaseModel,

@@ -7,6 +7,7 @@ from .models import (
     RBLNSD3Transformer2DModelConfig,
     RBLNUNet2DConditionModelConfig,
     RBLNVQModelConfig,
+    RBLNRetinaFaceConfig, RBLNSiglipVisionModelConfig, RBLNVideoSafetyModelConfig,
 )
 from .pipelines import (
     RBLNKandinskyV22CombinedPipelineConfig,
