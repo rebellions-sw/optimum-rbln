@@ -72,7 +72,6 @@ class _RBLNStableDiffusionPipelineBaseConfig(RBLNModelConfig):
         self.unet = self.init_submodule_config(
             RBLNUNet2DConditionModelConfig,
             unet,
-            batch_size=batch_size,
             sample_size=sample_size,
         )
         self.vae = self.init_submodule_config(
@@ -84,15 +83,15 @@ class _RBLNStableDiffusionPipelineBaseConfig(RBLNModelConfig):
         )
 
         # Get default guidance scale from original class to set UNet batch size
-        guidance_scale = (
-            guidance_scale
-            or self.get_default_values_for_original_cls("__call__", ["guidance_scale"])["guidance_scale"]
-        )
+        if guidance_scale is None:
+            guidance_scale = self.get_default_values_for_original_cls("__call__", ["guidance_scale"])["guidance_scale"]
 
         if not self.unet.batch_size_is_specified:
             do_classifier_free_guidance = guidance_scale > 1.0
             if do_classifier_free_guidance:
                 self.unet.batch_size = self.text_encoder.batch_size * 2
+            else:
+                self.unet.batch_size = self.text_encoder.batch_size
 
     @property
     def batch_size(self):

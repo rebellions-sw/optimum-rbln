@@ -75,7 +75,6 @@ class _RBLNStableDiffusionControlNetPipelineBaseConfig(RBLNModelConfig):
         self.unet = self.init_submodule_config(
             RBLNUNet2DConditionModelConfig,
             unet,
-            batch_size=batch_size,
             sample_size=sample_size,
         )
         self.vae = self.init_submodule_config(
@@ -85,19 +84,24 @@ class _RBLNStableDiffusionControlNetPipelineBaseConfig(RBLNModelConfig):
             uses_encoder=self.__class__._vae_uses_encoder,
             sample_size=image_size,  # image size is equal to sample size in vae
         )
-        self.controlnet = self.init_submodule_config(RBLNControlNetModelConfig, controlnet, batch_size=batch_size)
+        self.controlnet = self.init_submodule_config(RBLNControlNetModelConfig, controlnet)
 
         # Get default guidance scale from original class to set UNet and ControlNet batch size
-        guidance_scale = (
-            guidance_scale
-            or self.get_default_values_for_original_cls("__call__", ["guidance_scale"])["guidance_scale"]
-        )
+        if guidance_scale is None:
+            guidance_scale = self.get_default_values_for_original_cls("__call__", ["guidance_scale"])["guidance_scale"]
 
         if guidance_scale is not None:
             do_classifier_free_guidance = guidance_scale > 1.0
             if do_classifier_free_guidance:
-                self.unet.batch_size = self.text_encoder.batch_size * 2
-                self.controlnet.batch_size = self.text_encoder.batch_size * 2
+                if not self.unet.batch_size_is_specified:
+                    self.unet.batch_size = self.text_encoder.batch_size * 2
+                if not self.controlnet.batch_size_is_specified:
+                    self.controlnet.batch_size = self.text_encoder.batch_size * 2
+            else:
+                if not self.unet.batch_size_is_specified:
+                    self.unet.batch_size = self.text_encoder.batch_size
+                if not self.controlnet.batch_size_is_specified:
+                    self.controlnet.batch_size = self.text_encoder.batch_size
 
     @property
     def batch_size(self):
@@ -182,7 +186,6 @@ class _RBLNStableDiffusionXLControlNetPipelineBaseConfig(RBLNModelConfig):
         self.unet = self.init_submodule_config(
             RBLNUNet2DConditionModelConfig,
             unet,
-            batch_size=batch_size,
             sample_size=sample_size,
         )
         self.vae = self.init_submodule_config(
@@ -192,7 +195,7 @@ class _RBLNStableDiffusionXLControlNetPipelineBaseConfig(RBLNModelConfig):
             uses_encoder=self.__class__._vae_uses_encoder,
             sample_size=image_size,  # image size is equal to sample size in vae
         )
-        self.controlnet = self.init_submodule_config(RBLNControlNetModelConfig, controlnet, batch_size=batch_size)
+        self.controlnet = self.init_submodule_config(RBLNControlNetModelConfig, controlnet)
 
         # Get default guidance scale from original class to set UNet and ControlNet batch size
         guidance_scale = (
@@ -206,6 +209,11 @@ class _RBLNStableDiffusionXLControlNetPipelineBaseConfig(RBLNModelConfig):
                 self.unet.batch_size = self.text_encoder.batch_size * 2
             if not self.controlnet.batch_size_is_specified:
                 self.controlnet.batch_size = self.text_encoder.batch_size * 2
+        else:
+            if not self.unet.batch_size_is_specified:
+                self.unet.batch_size = self.text_encoder.batch_size
+            if not self.controlnet.batch_size_is_specified:
+                self.controlnet.batch_size = self.text_encoder.batch_size
 
     @property
     def batch_size(self):

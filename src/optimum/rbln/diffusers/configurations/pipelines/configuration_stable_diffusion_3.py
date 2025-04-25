@@ -93,7 +93,6 @@ class _RBLNStableDiffusion3PipelineBaseConfig(RBLNModelConfig):
         self.transformer = self.init_submodule_config(
             RBLNSD3Transformer2DModelConfig,
             transformer,
-            batch_size=batch_size,
             sample_size=sample_size,
         )
         self.vae = self.init_submodule_config(
@@ -105,15 +104,15 @@ class _RBLNStableDiffusion3PipelineBaseConfig(RBLNModelConfig):
         )
 
         # Get default guidance scale from original class to set Transformer batch size
-        guidance_scale = (
-            guidance_scale
-            or self.get_default_values_for_original_cls("__call__", ["guidance_scale"])["guidance_scale"]
-        )
+        if guidance_scale is None:
+            guidance_scale = self.get_default_values_for_original_cls("__call__", ["guidance_scale"])["guidance_scale"]
 
         if not self.transformer.batch_size_is_specified:
             do_classifier_free_guidance = guidance_scale > 1.0
             if do_classifier_free_guidance:
                 self.transformer.batch_size = self.text_encoder.batch_size * 2
+            else:
+                self.transformer.batch_size = self.text_encoder.batch_size
 
     @property
     def max_seq_len(self):
