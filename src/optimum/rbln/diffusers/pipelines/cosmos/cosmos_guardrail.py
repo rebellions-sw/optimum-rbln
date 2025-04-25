@@ -12,12 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
-import importlib
-
 from abc import abstractmethod
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, Dict, List, Optional, Union, Tuple, Type
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import rebel
 import torch
@@ -26,12 +24,16 @@ from diffusers.pipelines.cosmos.cosmos_guardrail import (
 )
 
 from optimum.rbln import RBLNLlamaForCausalLM
+from optimum.rbln.diffusers.configurations.models.configuration_cosmos_guardrail import (
+    RBLNRetinaFaceConfig,
+    RBLNSiglipVisionModelConfig,
+    RBLNVideoSafetyModelConfig,
+)
 
-from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNModelConfig, RBLNAutoConfig
+from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig
 from ....utils.hub import validate_files
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime, UnavailableRuntime
-from optimum.rbln.diffusers.configurations.models.configuration_cosmos_guardrail import RBLNRetinaFaceConfig, RBLNVideoSafetyModelConfig, RBLNSiglipVisionModelConfig
 
 
 logger = get_logger(__name__)
@@ -74,7 +76,9 @@ class RBLNSimpleModel:
         self.subfolder = subfolder
 
     @classmethod
-    def load_compiled_model(cls, model_id: str, rbln_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None, subfolder: str = ""):
+    def load_compiled_model(
+        cls, model_id: str, rbln_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None, subfolder: str = ""
+    ):
         return cls._load_compiled_model(model_id=model_id, subfolder=subfolder, rbln_config=rbln_config)
 
     @classmethod
@@ -142,17 +146,18 @@ class RBLNSimpleModel:
         return model
 
     @classmethod
-    def prepare_rbln_config(cls, rbln_config: Optional[Union[Dict[str, Any], RBLNModelConfig]] = None, **kwargs
+    def prepare_rbln_config(
+        cls, rbln_config: Optional[Union[Dict[str, Any], RBLNModelConfig]] = None, **kwargs
     ) -> Tuple[RBLNModelConfig, Dict[str, Any]]:
         """
         Extract rbln-config from kwargs and convert it to RBLNModelConfig.
         """
         if not hasattr(cls, "_rbln_config_class"):
             raise ValueError
-        
+
         rbln_config, kwargs = cls._rbln_config_class.initialize_from_kwargs(rbln_config, **kwargs)
         return rbln_config, kwargs
-    
+
     @classmethod
     def update_rbln_config(cls, **others) -> RBLNModelConfig:
         rbln_config = cls._update_rbln_config(**others)
@@ -163,18 +168,16 @@ class RBLNSimpleModel:
                 "This is an internal error. Please report it to the developers."
             )
         return rbln_config
-    
+
     @classmethod
     @abstractmethod
     def _update_rbln_config(cls, **rbln_config_kwargs) -> RBLNModelConfig:
         pass
-    
+
     @classmethod
     def compile_model(cls, model, rbln_config, model_save_dir, subfolder="", **kwargs):
         rbln_config, kwargs = cls.prepare_rbln_config(rbln_config=rbln_config, **kwargs)
-        rbln_config: RBLNModelConfig = cls.update_rbln_config(
-            rbln_config=rbln_config
-        )
+        rbln_config: RBLNModelConfig = cls.update_rbln_config(rbln_config=rbln_config)
         compiled_model = cls._get_compiled_model(model, rbln_config)
 
         # Save compiled models (.rbln)
@@ -218,9 +221,11 @@ class RBLNSimpleModel:
             cls._raise_missing_compiled_file_error([DEFAULT_COMPILED_MODEL_NAME])
 
         return [
-            compiled_model.create_runtime(tensor_type="pt", 
-                                          device=rbln_config.device_map[DEFAULT_COMPILED_MODEL_NAME], 
-                                          activate_profiler=rbln_config.activate_profiler)
+            compiled_model.create_runtime(
+                tensor_type="pt",
+                device=rbln_config.device_map[DEFAULT_COMPILED_MODEL_NAME],
+                activate_profiler=rbln_config.activate_profiler,
+            )
             for compiled_model in compiled_models
         ]
 
@@ -256,6 +261,7 @@ class RBLNSimpleModel:
 
 class RBLNRetinaFace(RBLNSimpleModel):
     _rbln_config_class = RBLNRetinaFaceConfig
+
     @classmethod
     def _update_rbln_config(cls, rbln_config: RBLNRetinaFaceConfig):
         height = rbln_config.height
@@ -269,7 +275,7 @@ class RBLNRetinaFace(RBLNSimpleModel):
 
 class RBLNVideoSafetyModel(RBLNSimpleModel):
     _rbln_config_class = RBLNVideoSafetyModelConfig
-    
+
     @classmethod
     def _update_rbln_config(cls, rbln_config: RBLNVideoSafetyModelConfig):
         batch_size = rbln_config.batch_size
@@ -322,13 +328,13 @@ class _SiglipVisionModel(torch.nn.Module):
 
 class RBLNSiglipVisionModel(RBLNSimpleModel):
     _rbln_config_class = RBLNSiglipVisionModelConfig
-    
+
     @classmethod
     def _update_rbln_config(cls, rbln_config: RBLNSiglipVisionModelConfig):
         batch_size = rbln_config.batch_size
         height = rbln_config.height
         width = rbln_config.width
-        
+
         input_info_enc = [("pixel_values", [batch_size, 3, height, width], "float32")]  # hard coded
         enc_config = RBLNCompileConfig(input_info=input_info_enc)
         rbln_config.set_compile_cfgs([enc_config])
@@ -345,10 +351,11 @@ class RBLNSiglipVisionModel(RBLNSimpleModel):
 
 class RBLNLlamaGuard:
     _origin_class = RBLNLlamaForCausalLM
+
     @classmethod
     def load_compiled_model(cls, model_id, rbln_config, subfolder=""):
         # FIXME: this is temp patch until fix main branch
-        rbln_config_as_kwargs = {f"rbln_{key}": value for key, value in rbln_config.items()} 
+        rbln_config_as_kwargs = {f"rbln_{key}": value for key, value in rbln_config.items()}
         rbln_config, kwargs = RBLNAutoConfig.load(
             model_id, passed_rbln_config=None, kwargs=rbln_config_as_kwargs, return_unused_kwargs=True
         )
@@ -379,6 +386,7 @@ class RBLNLlamaGuard:
         )
         return compiled_model
 
+
 def update_submodule_config(fn):
     """
     If the function uses rbln_config and kwargs,
@@ -389,7 +397,7 @@ def update_submodule_config(fn):
 
     def merged_rbln_config_fn(*args, **kwargs):
         submodules = ["video_guardrail", "text_guardrail"]
-        
+
         rbln_kwargs = kwargs.pop("rbln_kwargs", None)
         if rbln_kwargs is not None:
             raise KeyError("`rbln_kwargs` cannot be specified when using `rbln_config`!")
@@ -404,16 +412,16 @@ def update_submodule_config(fn):
 
         else:
             rbln_config_dict = rbln_config
-        
+
         for submodule in submodules:
             submodule_dict = rbln_config_dict.get(submodule, None)
-            if submodule_dict is None : 
+            if submodule_dict is None:
                 rbln_config_dict[submodule] = {}
 
             for key in rbln_config_dict[submodule]:
                 if key in rbln_kwargs:
                     raise KeyError(f"Duplicated key in both `rbln_config` and rbln_{key}.")
-            
+
             rbln_config_dict[submodule].update(rbln_kwargs)
 
         return fn(*args, **kwargs, rbln_config=rbln_config_dict)

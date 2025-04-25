@@ -63,7 +63,9 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
         self.image_size = self.rbln_config.image_size
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNAutoencoderKLCosmosConfig) -> torch.nn.Module:
+    def wrap_model_if_needed(
+        cls, model: torch.nn.Module, rbln_config: RBLNAutoencoderKLCosmosConfig
+    ) -> torch.nn.Module:
         def replace_forward_func(model):
             for name, module in model.named_children():
                 if isinstance(module, CosmosCausalConv3d) and module.temporal_pad == 0:
@@ -80,7 +82,9 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
         return decoder_model
 
     @classmethod
-    def get_compiled_model(cls, model, rbln_config: RBLNAutoencoderKLCosmosConfig) -> Dict[str, rebel.RBLNCompiledModel]:
+    def get_compiled_model(
+        cls, model, rbln_config: RBLNAutoencoderKLCosmosConfig
+    ) -> Dict[str, rebel.RBLNCompiledModel]:
         def compile_encoder_decoder():
             encoder_model, decoder_model = cls.wrap_model_if_needed(model, rbln_config)
             enc_compiled_model = cls.compile(encoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
@@ -121,7 +125,6 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
         model_config: "PretrainedConfig",
         rbln_config: RBLNAutoencoderKLCosmosConfig,
     ) -> RBLNAutoencoderKLCosmosConfig:
-
         compile_cfgs = []
         if rbln_config.uses_encoder:
             rbln_config.in_channels = model_config.in_channels if hasattr(model_config, "in_channels") else 3
