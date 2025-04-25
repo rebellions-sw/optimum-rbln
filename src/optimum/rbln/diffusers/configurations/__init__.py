@@ -32,4 +32,5 @@ from .pipelines import (
     RBLNStableDiffusionXLImg2ImgPipelineConfig,
     RBLNStableDiffusionXLInpaintPipelineConfig,
     RBLNStableDiffusionXLPipelineConfig,
+    RBLNCosmosPipelineConfig,
 )

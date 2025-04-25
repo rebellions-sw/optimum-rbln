@@ -177,6 +177,7 @@ _import_structure = {
         "RBLNRetinaFaceConfig",
         "RBLNSiglipVisionModelConfig",
         "RBLNVideoSafetyModelConfig",
+        "RBLNCosmosPipelineConfig",
     ],
 }
 
@@ -245,6 +246,7 @@ if TYPE_CHECKING:
         RBLNVideoSafetyModelConfig,
         RBLNVQModel,
         RBLNVQModelConfig,
+        RBLNCosmosPipelineConfig,
     )
     from .modeling import (
         RBLNBaseModel,

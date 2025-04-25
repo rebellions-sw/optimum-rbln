@@ -28,3 +28,4 @@ from .configuration_stable_diffusion_xl import (
     RBLNStableDiffusionXLInpaintPipelineConfig,
     RBLNStableDiffusionXLPipelineConfig,
 )
+from .configuration_cosmos import RBLNCosmosPipelineConfig
