@@ -283,6 +283,7 @@ class TestKandinskyV22Img2ImgModel(BaseTest.TestModel):
     HF_MODEL_ID = "hf-internal-testing/tiny-random-kandinsky-v22-decoder"
 
     from diffusers.utils import load_image
+
     img_url = "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/kandinsky/frog.png"
     image = load_image(img_url).resize([64, 64])
     GENERATION_KWARGS = {
