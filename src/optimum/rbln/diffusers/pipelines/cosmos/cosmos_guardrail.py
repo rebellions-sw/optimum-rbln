@@ -449,7 +449,7 @@ class RBLNCosmosSafetyChecker:
             submodule = cls._submodules[i]
             additional_module = cls._additional_modules[i]
 
-            save_dir_path = Path(model_save_dir + f"/{guardrail}/{submodule}")
+            save_dir_path = Path(model_save_dir) / f"{guardrail}/{submodule}"
             os.makedirs(save_dir_path, exist_ok=True)
             target_model = getattr(getattr(model, guardrail), submodule)[cls._module_ids[i]]
             if additional_module is not None:
@@ -475,7 +475,7 @@ class RBLNCosmosSafetyChecker:
             additional_module = cls._additional_modules[i]
             rbln_module = cls._rbln_modules[i]
 
-            save_dir_path = Path(model_save_dir + f"/{guardrail}/{submodule}")
+            save_dir_path = Path(model_save_dir) / f"{guardrail}/{submodule}"
 
             target_model = getattr(getattr(model, guardrail), submodule)[cls._module_ids[i]]
             if additional_module is not None:
