@@ -216,6 +216,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             if isinstance(rbln_config, dict):
                 rbln_config_as_kwargs = {f"rbln_{key}": value for key, value in rbln_config.items()}
                 kwargs.update(rbln_config_as_kwargs)
+                rbln_config = None
             elif isinstance(rbln_config, RBLNModelConfig) and rbln_config.rbln_model_cls_name != cls.__name__:
                 raise ValueError(
                     f"Cannot use the passed rbln_config. Its model class name ({rbln_config.rbln_model_cls_name}) "
