@@ -63,7 +63,7 @@ def pull_compiled_model_from_hub(
     force_download: bool,
     local_files_only: bool,
 ) -> Path:
-    """Pull model files from the Hugging Face Hub."""
+    """Pull model files from the HuggingFace Hub."""
     huggingface_token = _get_huggingface_token(use_auth_token)
     repo_files = list(
         map(
@@ -119,4 +119,4 @@ def _get_huggingface_token(use_auth_token: Union[bool, str]) -> str:
     elif use_auth_token:
         return HfFolder.get_token()
     else:
-        raise ValueError("`use_auth_token` must be provided to interact with the Hugging Face Hub.")
+        raise ValueError("`use_auth_token` must be provided to interact with the HuggingFace Hub.")

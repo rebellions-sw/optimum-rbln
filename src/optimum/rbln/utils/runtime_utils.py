@@ -45,23 +45,54 @@ class RBLNPytorchRuntime:
 
 
 class UnavailableRuntime:
+    """
+    A placeholder class used when model runtimes are not created.
+
+    This class is returned by RBLNBaseModel._from_compiled_models when rbln_config.create_runtimes=False.
+    It provides proper error messages when users attempt to use a model that was loaded without
+    runtime creation.
+
+    Usage:
+        1. When compiling models on machines without NPU hardware
+        2. When preparing models for later deployment
+        3. When only model compilation is needed, not inference
+
+    To use a model with runtimes, either:
+        - Load the model with from_pretrained(..., rbln_create_runtimes=True)
+        - Or set rbln_config={"create_runtimes": True} during loading
+    """
+
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Raises a RuntimeError when the model is called without runtimes."""
         raise self.forward(*args, **kwargs)
 
     def __len__(self) -> int:
+        """Returns 0 since no runtimes are available."""
         return 0
 
     def __getitem__(self, idx: int) -> Any:
+        """Returns self for any index, allowing iteration to work with appropriate errors."""
         return self
 
     def __iter__(self):
+        """Returns an iterator with self as the only item."""
         return iter([self])
 
     def forward(self, *args: List["torch.Tensor"], **kwargs: Dict[str, "torch.Tensor"]):
-        raise RuntimeError("The model can't run because the runtime hasn't been created.")
+        """Raises a detailed RuntimeError explaining why inference cannot be performed."""
+        raise RuntimeError(
+            "Cannot perform inference: RBLN runtime is not available.\n\n"
+            "This model was loaded with create_runtimes=False. To use this model for inference:\n"
+            "1. Load the model with runtime creation enabled:\n"
+            "   model = RBLNModel.from_pretrained(..., rbln_create_runtimes=True)\n"
+            "2. Ensure your NPU hardware is properly configured (check with 'rbln-stat' command)\n"
+            "3. If you're on a machine without NPU hardware, you need to transfer the model files\n"
+            "   to a compatible system with NPU support."
+        )
 
     def __repr__(self) -> str:
-        return "UnavailableRuntime"
+        """Returns a detailed string representation of the UnavailableRuntime."""
+        return "<UnavailableRuntime: Model loaded without runtime creation (create_runtimes=False)>"
 
 
 class ContextRblnConfig:
