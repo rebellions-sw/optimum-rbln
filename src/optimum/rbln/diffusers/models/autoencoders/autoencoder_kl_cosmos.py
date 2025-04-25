@@ -1,0 +1,215 @@
+# Copyright 2025 Rebellions Inc. All rights reserved.
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from typing import TYPE_CHECKING, Dict, List, Union
+
+import rebel
+import torch
+from diffusers.models.autoencoders.autoencoder_kl_cosmos import AutoencoderKLCosmos, CosmosCausalConv3d
+from diffusers.models.autoencoders.vae import DecoderOutput
+from diffusers.models.modeling_outputs import AutoencoderKLOutput
+from torch.nn import functional as F
+from transformers import PretrainedConfig
+
+from ....configuration_utils import RBLNCompileConfig
+from ....modeling import RBLNModel
+from ....utils.logging import get_logger
+from ...configurations import RBLNAutoencoderKLCosmosConfig
+from .vae import RBLNRuntimeVAEDecoder, _VAECosmosDecoder
+
+
+if TYPE_CHECKING:
+    import torch
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig, PreTrainedModel
+
+    from ...modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
+
+logger = get_logger(__name__)
+
+
+def replaced_forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+    if self.temporal_pad != 0:
+        hidden_states_prev = hidden_states[:, :, :1, ...].repeat(1, 1, self.temporal_pad, 1, 1)
+        hidden_states = torch.cat([hidden_states_prev, hidden_states], dim=2)
+    hidden_states = F.pad(hidden_states, (*self.spatial_pad, 0, 0), mode=self.pad_mode, value=0.0)
+    return super(CosmosCausalConv3d, self).forward(hidden_states)
+
+
+class RBLNAutoencoderKLCosmos(RBLNModel):
+    auto_model_class = AutoencoderKLCosmos
+    hf_library_name = "diffusers"
+    _rbln_config_class = RBLNAutoencoderKLCosmosConfig
+
+    def __post_init__(self, **kwargs):
+        super().__post_init__(**kwargs)
+
+        if self.rbln_config.uses_encoder:
+            logger.warning("We currently support Text to World pipeline only.")
+            self.rbln_config.uses_encoder = False
+
+        self.encoder = None
+        self.decoder = RBLNRuntimeVAEDecoder(runtime=self.model[-1], main_input_name="z")
+        self.image_size = self.rbln_config.image_size
+
+    @classmethod
+    def wrap_model_if_needed(
+        cls, model: torch.nn.Module, rbln_config: RBLNAutoencoderKLCosmosConfig
+    ) -> torch.nn.Module:
+        def replace_forward_func(model):
+            for name, module in model.named_children():
+                if isinstance(module, CosmosCausalConv3d) and module.temporal_pad == 0:
+                    module.forward = replaced_forward.__get__(module, module.__class__)
+                else:
+                    replace_forward_func(module)
+
+        replace_forward_func(model)
+        if rbln_config.uses_encoder:
+            logger.warning("We currently support Text to World pipeline only.")
+            rbln_config.uses_encoder = False
+        decoder_model = _VAECosmosDecoder(model)
+        decoder_model.eval()
+        return decoder_model
+
+    @classmethod
+    def get_compiled_model(
+        cls, model, rbln_config: RBLNAutoencoderKLCosmosConfig
+    ) -> Dict[str, rebel.RBLNCompiledModel]:
+        def compile_encoder_decoder():
+            encoder_model, decoder_model = cls.wrap_model_if_needed(model, rbln_config)
+            enc_compiled_model = cls.compile(encoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
+            dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[1])
+            return {"encoder": enc_compiled_model, "decoder": dec_compiled_model}
+
+        def compile_decoder_only():
+            decoder_model = cls.wrap_model_if_needed(model, rbln_config)
+            dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
+            return dec_compiled_model
+
+        return compile_decoder_only()
+
+    @classmethod
+    def update_rbln_config_using_pipe(
+        cls, pipe: RBLNDiffusionMixin, rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
+    ) -> "RBLNDiffusionMixinConfig":
+        num_channel_latents = pipe.transformer.config.in_channels
+        num_latent_frames = (rbln_config.num_frames - 1) // pipe.vae_scale_factor_temporal + 1
+        latent_height = rbln_config.height // pipe.vae_scale_factor_spatial
+        latent_width = rbln_config.width // pipe.vae_scale_factor_spatial
+
+        rbln_config.update(
+            {
+                "num_channel_latents": num_channel_latents,
+                "num_latent_frames": num_latent_frames,
+                "latent_height": latent_height,
+                "latent_width": latent_width,
+            }
+        )
+        return rbln_config
+
+    @classmethod
+    def _update_rbln_config(
+        cls,
+        preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
+        model: "PreTrainedModel",
+        model_config: "PretrainedConfig",
+        rbln_config: RBLNAutoencoderKLCosmosConfig,
+    ) -> RBLNAutoencoderKLCosmosConfig:
+        compile_cfgs = []
+        if rbln_config.uses_encoder:
+            rbln_config.in_channels = model_config.in_channels if hasattr(model_config, "in_channels") else 3
+
+            vae_enc_input_info = [
+                (
+                    "x",
+                    [
+                        rbln_config.batch_size,
+                        rbln_config.in_channels,
+                        rbln_config.num_frames,
+                        rbln_config.height,
+                        rbln_config.width,
+                    ],
+                    "float32",
+                ),
+            ]
+            compile_cfgs.append(RBLNCompileConfig(compiled_model_name="encoder", input_info=vae_enc_input_info))
+
+        vae_dec_input_info = [
+            (
+                "z",
+                [
+                    rbln_config.batch_size,
+                    rbln_config.num_channel_latents,
+                    rbln_config.num_latent_frames,
+                    rbln_config.latent_height,
+                    rbln_config.latent_width,
+                ],
+                "float32",
+            ),
+        ]
+        compile_cfgs.append(RBLNCompileConfig(compiled_model_name="decoder", input_info=vae_dec_input_info))
+
+        rbln_config.set_compile_cfgs(compile_cfgs)
+        return rbln_config
+
+    @classmethod
+    def _create_runtimes(
+        cls,
+        compiled_models: List[rebel.RBLNCompiledModel],
+        rbln_config: RBLNAutoencoderKLCosmosConfig,
+    ) -> List[rebel.Runtime]:
+        if len(compiled_models) == 1:
+            # decoder
+            expected_models = ["decoder"]
+        else:
+            # encoder, decoder
+            expected_models = ["encoder", "decoder"]
+
+        if any(model_name not in rbln_config.device_map for model_name in expected_models):
+            cls._raise_missing_compiled_file_error(expected_models)
+
+        device_vals = [rbln_config.device_map[model_name] for model_name in expected_models]
+        return [
+            rebel.Runtime(
+                compiled_model,
+                tensor_type="pt",
+                device=device_val,
+                activate_profiler=rbln_config.activate_profiler,
+            )
+            for compiled_model, device_val in zip(compiled_models, device_vals)
+        ]
+
+    def encode(self, x: torch.FloatTensor, return_dict: bool = True, **kwargs) -> torch.FloatTensor:
+        posterior = self.encoder.encode(x)
+        if not return_dict:
+            return (posterior,)
+        return AutoencoderKLOutput(latent_dist=posterior)
+
+    def _decode(self, z: torch.FloatTensor, return_dict: bool = True) -> torch.FloatTensor:
+        dec = self.decoder(z)
+
+        if not return_dict:
+            return (dec,)
+        return DecoderOutput(sample=dec)
+
+    def decode(self, z: torch.FloatTensor, return_dict: bool = True) -> torch.FloatTensor:
+        if z.shape[0] > 1:
+            decoded_slices = [self._decode(z_slice).sample for z_slice in z.split(1)]
+            decoded = torch.cat(decoded_slices)
+        else:
+            decoded = self._decode(z).sample
+
+        if not return_dict:
+            return (decoded,)
+
+        return DecoderOutput(sample=decoded)
