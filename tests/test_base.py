@@ -187,29 +187,29 @@ class BaseTest:
                 self.assertEqual(output, self.EXPECTED_OUTPUT)
 
         def _inner_test_save_load(self, tmpdir):
-            with self.subTest():
-                self.model.save_pretrained(tmpdir)
-                config_path = os.path.join(tmpdir, self.RBLN_CLASS.config_name)
-                self.assertTrue(os.path.exists(config_path), "save_pretrained does not work.")
+            with ContextRblnConfig(create_runtimes=False):
+                with self.subTest():
+                    self.model.save_pretrained(tmpdir)
+                    config_path = os.path.join(tmpdir, self.RBLN_CLASS.config_name)
+                    self.assertTrue(os.path.exists(config_path), "save_pretrained does not work.")
 
-            with self.subTest():
-                # Test load
-                _ = self.RBLN_CLASS.from_pretrained(
-                    tmpdir,
-                    export=False,
-                    rbln_create_runtimes=False,
-                    **self.HF_CONFIG_KWARGS,
-                )
+                with self.subTest():
+                    # Test load
+                    _ = self.RBLN_CLASS.from_pretrained(
+                        tmpdir,
+                        export=False,
+                        **self.HF_CONFIG_KWARGS,
+                    )
 
-            with self.subTest():
-                # Test saving from exported pipe
-                self.model.save_pretrained(tmpdir)
-                _ = self.RBLN_CLASS.from_pretrained(
-                    tmpdir,
-                    export=False,
-                    rbln_create_runtimes=False,
-                    **self.HF_CONFIG_KWARGS,
-                )
+                with self.subTest():
+                    # Test saving from exported pipe
+                    self.model.save_pretrained(tmpdir)
+                    _ = self.RBLN_CLASS.from_pretrained(
+                        tmpdir,
+                        export=False,
+                        rbln_create_runtimes=False,
+                        **self.HF_CONFIG_KWARGS,
+                    )
 
         def test_save_load(self):
             with tempfile.TemporaryDirectory() as tmpdir:
