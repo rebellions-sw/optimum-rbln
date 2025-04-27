@@ -29,11 +29,6 @@ class RBLNAutoencoderKLCosmosConfig(RBLNModelConfig):
         num_frames: Optional[int] = None,
         height: Optional[int] = None,
         width: Optional[int] = None,
-        num_channel_latents: Optional[int] = None,
-        num_latent_frames: Optional[int] = None,
-        latent_height: Optional[int] = None,
-        latent_width: Optional[int] = None,
-        in_channels: Optional[int] = None,
         **kwargs,
     ):
         """
@@ -63,12 +58,6 @@ class RBLNAutoencoderKLCosmosConfig(RBLNModelConfig):
         self.height = height or 704
         self.width = width or 1280
 
-        self.num_channel_latents = num_channel_latents
-        self.num_latent_frames = num_latent_frames
-        self.latent_height = self.latent_height
-        self.latent_width = latent_width
-        self.in_channels = in_channels
-
     @property
     def image_size(self):
-        return [self.height, self.width]
+        return (self.height, self.width)
