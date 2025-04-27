@@ -24,7 +24,6 @@ from optimum.rbln import (
     RBLNQwen2ForCausalLM,
     RBLNT5ForConditionalGeneration,
 )
-from optimum.rbln.configuration_utils import ContextRblnConfig
 
 from .test_base import BaseTest, DisallowedTestBase, TestLevel
 
