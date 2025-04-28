@@ -25,6 +25,7 @@ logger = get_logger(__name__)
 
 class RBLNCosmosPipelineConfig(RBLNModelConfig):
     submodules = ["text_encoder", "transformer", "vae"]
+    _optional_components = ["safety_checker"]
     _vae_uses_encoder = False
 
     def __init__(
@@ -36,8 +37,9 @@ class RBLNCosmosPipelineConfig(RBLNModelConfig):
         batch_size: Optional[int] = None,
         height: Optional[int] = None,
         width: Optional[int] = None,
+        num_frames: Optional[int] = None,
+        fps: Optional[int] = None,
         max_seq_len: Optional[int] = None,
-        guidance_scale: Optional[float] = None,
         **kwargs,
     ):
         """
@@ -49,12 +51,11 @@ class RBLNCosmosPipelineConfig(RBLNModelConfig):
             vae (Optional[RBLNAutoencoderKLCosmosConfig]): Configuration for the VAE model component.
                 Initialized as RBLNAutoencoderKLCosmosConfig if not provided.
             batch_size (Optional[int]): Batch size for inference, applied to all submodules.
-            img_height (Optional[int]): Height of the generated images.
-            img_width (Optional[int]): Width of the generated images.
-            sample_size (Optional[Tuple[int, int]]): Spatial dimensions for the UNet model.
-            image_size (Optional[Tuple[int, int]]): Alternative way to specify image dimensions.
-                Cannot be used together with img_height/img_width.
-            guidance_scale (Optional[float]): Scale for classifier-free guidance. Deprecated parameter.
+            height (Optional[int]): Height of the generated images.
+            width (Optional[int]): Width of the generated images.
+            num_frames (Optional[int]): The number of frames in the generated video.
+            fps (Optional[int]): The frames per second of the generated video.
+            max_seq_len (Optional[int]): Maximum sequence length supported by the model.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -74,12 +75,19 @@ class RBLNCosmosPipelineConfig(RBLNModelConfig):
             transformer,
             batch_size=batch_size,
             max_sequence_length=max_seq_len,
+            height=height,
+            width=width,
+            num_frames=num_frames,
+            fps=fps,
         )
         self.vae = self.init_submodule_config(
             RBLNAutoencoderKLCosmosConfig,
             vae,
             batch_size=batch_size,
             uses_encoder=False,
+            height=height,
+            width=width,
+            num_frames=num_frames,
         )
 
     @property
