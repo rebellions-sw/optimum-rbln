@@ -20,6 +20,7 @@ from transformers.utils import _LazyModule
 _import_structure = {
     "autoencoders": [
         "RBLNAutoencoderKL",
+        "RBLNAutoencoderKLCosmos",
         "RBLNVQModel",
     ],
     "unets": [
@@ -28,6 +29,7 @@ _import_structure = {
     "controlnet": ["RBLNControlNetModel"],
     "transformers": [
         "RBLNPriorTransformer",
+        "RBLNCosmosTransformer3DModel",
         "RBLNSD3Transformer2DModel",
     ],
 }
@@ -35,11 +37,13 @@ _import_structure = {
 if TYPE_CHECKING:
     from .autoencoders import (
         RBLNAutoencoderKL,
+        RBLNAutoencoderKLCosmos,
         RBLNVQModel,
     )
     from .controlnet import RBLNControlNetModel
     from .transformers import (
         RBLNPriorTransformer,
+        RBLNCosmosTransformer3DModel,
         RBLNSD3Transformer2DModel,
     )
     from .unets import (
