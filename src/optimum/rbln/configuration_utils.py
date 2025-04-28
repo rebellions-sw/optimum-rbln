@@ -716,7 +716,6 @@ class RBLNModelConfig:
         Get default values for original class attributes from RBLNModelConfig.
 
         Args:
-            rbln_config (RBLNModelConfig): The RBLN model configuration.
             func_name (str): The name of the function to get the default values for.
             keys (List[str]): The keys of the attributes to get.
 
