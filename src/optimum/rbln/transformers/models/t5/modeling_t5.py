@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 import torch
 from transformers import AutoModelForTextEncoding, T5EncoderModel, T5ForConditionalGeneration
+from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
 
 from ...modeling_generic import RBLNTransformerEncoderForFeatureExtraction
 from ...models.seq2seq import RBLNModelForSeq2SeqLM
@@ -55,16 +56,18 @@ class RBLNT5EncoderModel(RBLNTransformerEncoderForFeatureExtraction):
         rbln_config: "RBLNDiffusionMixinConfig",
         submodule_name: str,
     ) -> "RBLNDiffusionMixinConfig":
-        submodule_config = getattr(rbln_config, submodule_name)
-        submodule_config.max_seq_len = rbln_config.max_seq_len or 256
         return rbln_config
 
     def forward(self, input_ids, attention_mask, *args, **kwargs):
         if attention_mask is None:
-            return self.model[0](input_ids)
+            last_hidden_state = self.model[0](input_ids)
         else:
             attention_mask = attention_mask.long()
-            return self.model[0](input_ids, attention_mask)
+            last_hidden_state = self.model[0](input_ids, attention_mask)
+        if self.config.use_return_dict:
+            return BaseModelOutputWithPastAndCrossAttentions(last_hidden_state=last_hidden_state)
+        else:
+            return last_hidden_state
 
 
 class RBLNT5ForConditionalGeneration(RBLNModelForSeq2SeqLM):

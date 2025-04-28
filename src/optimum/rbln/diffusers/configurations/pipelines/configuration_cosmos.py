@@ -24,7 +24,7 @@ logger = get_logger(__name__)
 
 
 class RBLNCosmosPipelineConfig(RBLNModelConfig):
-    submodules = ["text_encoder", "unet", "vae"]
+    submodules = ["text_encoder", "transformer", "vae"]
     _vae_uses_encoder = False
 
     def __init__(
@@ -44,7 +44,7 @@ class RBLNCosmosPipelineConfig(RBLNModelConfig):
         Args:
             text_encoder (Optional[RBLNT5EncoderModelConfig]): Configuration for the text encoder component.
                 Initialized as RBLNT5EncoderModelConfig if not provided.
-            unet (Optional[RBLNCosmosTransformer3DModelConfig]): Configuration for the UNet model component.
+            transformer (Optional[RBLNCosmosTransformer3DModelConfig]): Configuration for the UNet model component.
                 Initialized as RBLNCosmosTransformer3DModelConfig if not provided.
             vae (Optional[RBLNAutoencoderKLCosmosConfig]): Configuration for the VAE model component.
                 Initialized as RBLNAutoencoderKLCosmosConfig if not provided.
@@ -66,7 +66,6 @@ class RBLNCosmosPipelineConfig(RBLNModelConfig):
         """
         super().__init__(**kwargs)
 
-        max_seq_len = max_seq_len or 512
         self.text_encoder = self.init_submodule_config(
             RBLNT5EncoderModelConfig, text_encoder, batch_size=batch_size, max_seq_len=max_seq_len
         )
@@ -83,11 +82,6 @@ class RBLNCosmosPipelineConfig(RBLNModelConfig):
             uses_encoder=False,
         )
 
-        if guidance_scale is not None:
-            logger.warning("Specifying `guidance_scale` is deprecated. It will be removed in a future version.")
-            do_classifier_free_guidance = guidance_scale > 1.0
-            if do_classifier_free_guidance:
-                self.unet.batch_size = self.text_encoder.batch_size * 2
 
     @property
     def batch_size(self):
