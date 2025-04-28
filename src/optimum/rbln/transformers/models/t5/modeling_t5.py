@@ -59,7 +59,7 @@ class RBLNT5EncoderModel(RBLNTransformerEncoderForFeatureExtraction):
         submodule_config.max_seq_len = rbln_config.max_seq_len or 256
         return rbln_config
 
-    def forward(input_ids, attention_mask, *args, **kwargs):
+    def forward(self, input_ids, attention_mask, *args, **kwargs):
         if attention_mask is None:
             return self.model[0](input_ids)
         else:
