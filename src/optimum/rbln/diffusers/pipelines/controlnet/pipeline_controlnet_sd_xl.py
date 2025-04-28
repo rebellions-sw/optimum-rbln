@@ -37,6 +37,7 @@ from diffusers.utils import deprecate, logging
 from diffusers.utils.torch_utils import is_compiled_module, is_torch_version
 
 from ....utils.decorator_utils import remove_compile_time_kwargs
+from ...configurations import RBLNStableDiffusionXLControlNetPipelineConfig
 from ...modeling_diffusers import RBLNDiffusionMixin
 from ...models import RBLNControlNetModel
 from ...pipelines.controlnet.multicontrolnet import RBLNMultiControlNetModel
@@ -47,6 +48,7 @@ logger = logging.get_logger(__name__)
 
 class RBLNStableDiffusionXLControlNetPipeline(RBLNDiffusionMixin, StableDiffusionXLControlNetPipeline):
     original_class = StableDiffusionXLControlNetPipeline
+    _rbln_config_class = RBLNStableDiffusionXLControlNetPipelineConfig
     _submodules = ["text_encoder", "text_encoder_2", "unet", "vae", "controlnet"]
 
     # Almost copied from diffusers.pipelines.controlnet.pipeline_controlnet_sd_xl.py
