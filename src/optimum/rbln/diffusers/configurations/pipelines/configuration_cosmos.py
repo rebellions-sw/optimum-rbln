@@ -67,7 +67,9 @@ class RBLNCosmosPipelineConfig(RBLNModelConfig):
         super().__init__(**kwargs)
 
         max_seq_len = max_seq_len or 512
-        self.text_encoder = self.init_submodule_config(RBLNT5EncoderModelConfig, text_encoder, batch_size=batch_size, max_seq_len=max_seq_len)
+        self.text_encoder = self.init_submodule_config(
+            RBLNT5EncoderModelConfig, text_encoder, batch_size=batch_size, max_seq_len=max_seq_len
+        )
         self.transformer = self.init_submodule_config(
             RBLNCosmosTransformer3DModelConfig,
             transformer,
