@@ -97,7 +97,7 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
     ) -> "RBLNDiffusionMixinConfig":
         rbln_config.vae.num_channel_latents = pipe.transformer.config.in_channels
         rbln_config.vae.vae_scale_factor_temporal = pipe.vae_scale_factor_temporal
-        rbln_config.vae.vae_scale_factor = pipe.vae_scale_factor_spatial
+        rbln_config.vae.vae_scale_factor_spatial = pipe.vae_scale_factor_spatial
         return rbln_config
 
     @classmethod
@@ -113,8 +113,8 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
             raise NotImplementedError("We currently support Text to World pipeline only.")
 
         num_latent_frames = (rbln_config.num_frames - 1) // rbln_config.vae_scale_factor_temporal + 1
-        latent_height = rbln_config.height // rbln_config.vae_scale_factor
-        latent_width = rbln_config.width // rbln_config.vae_scale_factor
+        latent_height = rbln_config.height // rbln_config.vae_scale_factor_spatial
+        latent_width = rbln_config.width // rbln_config.vae_scale_factor_spatial
 
         vae_dec_input_info = [
             (
