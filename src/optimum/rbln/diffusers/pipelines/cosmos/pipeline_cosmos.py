@@ -28,9 +28,14 @@ class RBLNCosmosPipeline(RBLNDiffusionMixin, CosmosPipeline):
     _optional_components = ["safety_checker"]
 
     def handle_additional_kwargs(self, **kwargs):
-        if "fps" in kwargs and kwargs["fps"] != self.transformer.rbln_config.fps:
+        if "num_frames" in kwargs and kwargs["num_frames"] != self.transformer.rbln_config.num_frames:
             logger.warning(
-                f"The tranformer in this pipeline is compiled with 'fps={self.transformer.rbln_config.fps}'. 'fps' set by the user will be ignored"
+                f"The tranformer in this pipeline is compiled with 'num_frames={self.transformer.rbln_config.num_frames}'. 'num_frames' set by the user will be ignored"
             )
-            kwargs.pop("fps")
+            kwargs.pop("num_frames")
+        if "max_seq_len" in kwargs and kwargs["max_seq_len"] != self.transformer.rbln_config.max_seq_len:
+            logger.warning(
+                f"The tranformer in this pipeline is compiled with 'max_seq_len={self.transformer.rbln_config.max_seq_len}'. 'max_seq_len' set by the user will be ignored"
+            )
+            kwargs.pop("max_seq_len")
         return kwargs
