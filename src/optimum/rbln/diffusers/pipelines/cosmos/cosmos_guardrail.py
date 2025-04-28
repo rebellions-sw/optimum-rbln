@@ -122,10 +122,10 @@ class RBLNSimpleModel:
             )
 
         except rebel.core.exception.RBLNRuntimeError as e:
-            logger.warning(
+            error_msg = (
                 f"Failed to create the runtime for the model due to a runtime error: {e.__class__.__name__} - {e}"
             )
-            models = UnavailableRuntime()
+            raise rebel.core.exception.RBLNRuntimeError(error_msg) from e
 
         models = [cls.wrap_runtime_if_needed(model) for model in models]
 
@@ -369,7 +369,6 @@ class RBLNLlamaGuard:
     @classmethod
     def compile_model(cls, model, rbln_config, model_save_dir, subfolder=""):
         batch_size = rbln_config.get("batch_size", 1)
-        max_seq_len = rbln_config.get("max_seq_len", 4096)
         tensor_parallel_size = rbln_config.get("tensor_parallel_size", 4)
         rbln_device = rbln_config.get("device", [0, 1, 2, 3])
 
@@ -378,7 +377,6 @@ class RBLNLlamaGuard:
             model,
             export=True,
             rbln_batch_size=batch_size,
-            rbln_max_seq_len=max_seq_len,
             rbln_tensor_parallel_size=tensor_parallel_size,
             rbln_device=rbln_device,
             model_save_dir=model_save_dir,
