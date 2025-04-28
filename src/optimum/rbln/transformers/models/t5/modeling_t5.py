@@ -57,8 +57,14 @@ class RBLNT5EncoderModel(RBLNTransformerEncoderForFeatureExtraction):
     ) -> "RBLNDiffusionMixinConfig":
         submodule_config = getattr(rbln_config, submodule_name)
         submodule_config.max_seq_len = rbln_config.max_seq_len or 256
-        submodule_config.model_input_names = ["input_ids"]
         return rbln_config
+
+    def forward(input_ids, attention_mask, *args, **kwargs):
+        if attention_mask is None:
+            return self.model[0](input_ids)
+        else:
+            attention_mask = attention_mask.long()
+            return self.model[0](input_ids, attention_mask)
 
 
 class RBLNT5ForConditionalGeneration(RBLNModelForSeq2SeqLM):
