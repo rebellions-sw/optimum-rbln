@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import inspect
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable
 
 import torch
 from transformers import AutoModelForTextEncoding, T5EncoderModel, T5ForConditionalGeneration
