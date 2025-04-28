@@ -20,7 +20,10 @@ import numpy as np
 import torch
 from diffusers import CosmosTransformer3DModel
 from diffusers.models.embeddings import Timesteps
+from torchvision import transforms
+from diffusers.models.modeling_outputs import Transformer2DModelOutput
 from diffusers.pipelines.cosmos.pipeline_cosmos import retrieve_timesteps
+from diffusers.models.transformers.transformer_cosmos import CosmosRotaryPosEmbed, CosmosLearnablePositionalEmbed, CosmosPatchEmbed, CosmosEmbedding
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
@@ -31,7 +34,7 @@ from ...configurations import RBLNCosmosTransformer3DModelConfig
 if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig, PreTrainedModel
 
-    from ...modeling_diffusers import RBLNCosmosTransformer3DModelConfig, RBLNDiffusionMixin
+    from ...modeling_diffusers import RBLNCosmosTransformer3DModelConfig, RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 
 
 logger = get_logger(__name__)
@@ -44,160 +47,49 @@ class CosmosTransformer3DModelWrapper(torch.nn.Module):
         num_latent_frames: int = 16,
         latent_height: int = 88,
         latent_width: int = 160,
-        hidden_size: int = 4096,
-        fps: int = 30,
     ) -> None:
         super().__init__()
         self.model = model
-        self.set_rope(num_latent_frames, latent_height, latent_width, fps)
-        self.set_learnable_pos_emb(num_latent_frames, latent_height, latent_width, hidden_size)
-        self.set_time_embed()
-
-    def set_rope(self, num_latent_frames, latent_height, latent_width, fps):
-        self.model.rope = RBLNCosmosRotaryPosEmbed(
-            self.model.rope, num_latent_frames, latent_height, latent_width, fps
-        )
-
-    def set_learnable_pos_emb(self, num_latent_frames, latent_height, latent_width, hidden_size):
-        native_lpoe = self.model.learnable_pos_embed
-        patch_size = native_lpoe.patch_size
-        eps = native_lpoe.eps
-        batch_size = 1
-        pe_size = [num_latent_frames // patch_size[0], latent_height // patch_size[1], latent_width // patch_size[2]]
-        emb_t = native_lpoe.pos_emb_t[: pe_size[0]][None, :, None, None, :].repeat(
-            batch_size, 1, pe_size[1], pe_size[2], 1
-        )
-        emb_h = native_lpoe.pos_emb_h[: pe_size[1]][None, None, :, None, :].repeat(
-            batch_size, pe_size[0], 1, pe_size[2], 1
-        )
-        emb_w = native_lpoe.pos_emb_w[: pe_size[2]][None, None, None, :, :].repeat(
-            batch_size, pe_size[0], pe_size[1], 1, 1
-        )
-
-        self.model.learnable_pos_embed = RBLNCosmosLearnablePositionalEmbed(
-            emb_t.data, emb_h.data, emb_w.data, hidden_size, eps
-        ).train(self.model.training)
-
-    def set_time_embed(self):
-        self.model.time_embed = RBLNCosmosEmbedding(self.model.time_embed)
+        # self.model.transformer_blocks = self.model.transformer_blocks[:1]
+        self.num_latent_frames = num_latent_frames
+        self.latent_height = latent_height
+        self.latent_width = latent_width
+        self.p_t, self.p_h, self.p_w = model.config.patch_size
 
     def forward(
         self,
         hidden_states: torch.Tensor,
-        timestep: torch.Tensor,
         encoder_hidden_states: torch.Tensor,
-        padding_mask: Optional[torch.Tensor] = None,
-        fps: Optional[int] = None,
+        embedded_timestep: torch.Tensor,
+        temb: torch.Tensor,
+        image_rotary_emb_0: torch.Tensor,
+        image_rotary_emb_1: torch.Tensor,
+        extra_pos_emb: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
-        condition_mask: Optional[torch.Tensor] = None,
-        return_dict: bool = True,
+        return_dict: bool = False,
     ):
-        return self.model(
-            hidden_states=hidden_states,
-            timestep=timestep,
-            encoder_hidden_states=encoder_hidden_states,
-            fps=fps,
-            padding_mask=padding_mask,
-            return_dict=False,
-        )
+        image_rotary_emb = [image_rotary_emb_0, image_rotary_emb_1]
+        for block in self.model.transformer_blocks:
+            hidden_states = block(
+                hidden_states=hidden_states,
+                encoder_hidden_states=encoder_hidden_states,
+                embedded_timestep=embedded_timestep,
+                temb=temb,
+                image_rotary_emb=image_rotary_emb,
+                extra_pos_emb=extra_pos_emb,
+                attention_mask=attention_mask,
+            )
+        post_patch_num_frames = self.num_latent_frames // self.p_t
+        post_patch_height = self.latent_height // self.p_h
+        post_patch_width = self.latent_width // self.p_w
+        hidden_states = self.model.norm_out(hidden_states, embedded_timestep, temb)
+        hidden_states = self.model.proj_out(hidden_states)
+        hidden_states = hidden_states.unflatten(2, (self.p_h, self.p_w, self.p_t, -1))
+        hidden_states = hidden_states.unflatten(1, (post_patch_num_frames, post_patch_height, post_patch_width))
+        hidden_states = hidden_states.permute(0, 7, 1, 6, 2, 4, 3, 5)
+        hidden_states = hidden_states.flatten(6, 7).flatten(4, 5).flatten(2, 3)
 
-
-class RBLNCosmosRotaryPosEmbed(torch.nn.Module):
-    def __init__(
-        self,
-        rope,
-        num_latent_frames,
-        latent_height,
-        latent_width,
-        fps=None,
-    ) -> None:
-        super().__init__()
-
-        self.max_size = rope.max_size
-        self.patch_size = rope.patch_size
-        self.base_fps = rope.base_fps
-
-        self.dim_h = rope.dim_h
-        self.dim_w = rope.dim_w
-        self.dim_t = rope.dim_t
-
-        self.h_ntk_factor = rope.h_ntk_factor
-        self.w_ntk_factor = rope.w_ntk_factor
-        self.t_ntk_factor = rope.t_ntk_factor
-
-        seq = torch.arange(max(self.max_size), dtype=torch.float32)
-        pe_size = [
-            num_latent_frames // self.patch_size[0],
-            latent_height // self.patch_size[1],
-            latent_width // self.patch_size[2],
-        ]
-
-        h_theta = 10000.0 * self.h_ntk_factor
-        w_theta = 10000.0 * self.w_ntk_factor
-        t_theta = 10000.0 * self.t_ntk_factor
-
-        dim_h_range = torch.arange(0, self.dim_h, 2, dtype=torch.float32)[: (self.dim_h // 2)] / self.dim_h
-        dim_w_range = torch.arange(0, self.dim_w, 2, dtype=torch.float32)[: (self.dim_w // 2)] / self.dim_w
-        dim_t_range = torch.arange(0, self.dim_t, 2, dtype=torch.float32)[: (self.dim_t // 2)] / self.dim_t
-
-        h_spatial_freqs = 1.0 / (h_theta**dim_h_range)
-        w_spatial_freqs = 1.0 / (w_theta**dim_w_range)
-        temporal_freqs = 1.0 / (t_theta**dim_t_range)
-
-        emb_h = torch.outer(seq[: pe_size[1]], h_spatial_freqs)[None, :, None, :].repeat(pe_size[0], 1, pe_size[2], 1)
-        emb_w = torch.outer(seq[: pe_size[2]], w_spatial_freqs)[None, None, :, :].repeat(pe_size[0], pe_size[1], 1, 1)
-
-        if fps is None:
-            emb_t = torch.outer(seq[: pe_size[0]], temporal_freqs)
-        else:
-            emb_t = torch.outer(seq[: pe_size[0]] / fps * self.base_fps, temporal_freqs)
-
-        emb_t = emb_t[:, None, None, :].repeat(1, pe_size[1], pe_size[2], 1)
-        freqs = torch.cat([emb_t, emb_h, emb_w] * 2, dim=-1).flatten(0, 2).float()
-        self.cos = torch.cos(freqs)
-        self.sin = torch.sin(freqs)
-
-    def forward(self, hidden_states: torch.Tensor, fps: Optional[int] = None) -> Tuple[torch.Tensor, torch.Tensor]:
-        return self.cos.to(dtype=hidden_states.dtype), self.sin.to(dtype=hidden_states.dtype)
-
-
-class RBLNCosmosLearnablePositionalEmbed(torch.nn.Module):
-    def __init__(
-        self,
-        emb_t,
-        emb_h,
-        emb_w,
-        hidden_size,
-        eps,
-    ) -> None:
-        super().__init__()
-
-        self.emb_t = emb_t
-        self.emb_h = emb_h
-        self.emb_w = emb_w
-        self.eps = eps
-        self.alpha = np.sqrt(1 / hidden_size)
-
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        emb = self.emb_t + self.emb_h + self.emb_w
-        emb = emb.flatten(1, 3)
-        norm = torch.linalg.vector_norm(emb, dim=-1, keepdim=True, dtype=torch.float32)
-        norm = torch.add(self.eps, norm, alpha=self.alpha)
-        return (emb / norm).type_as(hidden_states)
-
-
-class RBLNCosmosEmbedding(torch.nn.Module):
-    def __init__(self, time_embed):
-        super().__init__()
-        self.time_proj = time_embed.time_proj
-        self.t_embedder = time_embed.t_embedder
-        self.norm = time_embed.norm
-
-    def forward(self, hidden_states, timesteps):
-        timesteps_proj = timesteps.type_as(hidden_states)
-        temb = self.t_embedder(timesteps_proj)
-        embedded_timestep = self.norm(timesteps_proj)
-        return temb, embedded_timestep
+        return (hidden_states,)
 
 
 class RBLNCosmosTransformer3DModel(RBLNModel):
@@ -207,82 +99,98 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
         artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
-        num_channels = artifacts["num_channels"]
-        flip_sin_to_cos = artifacts["flip_sin_to_cos"]
-        downscale_freq_shift = artifacts["downscale_freq_shift"]
-        scale = artifacts["scale"]
-        self.time_proj = Timesteps(
-            num_channels=num_channels,
-            flip_sin_to_cos=flip_sin_to_cos,
-            downscale_freq_shift=downscale_freq_shift,
-            scale=scale,
+
+        hidden_size = self.config.num_attention_heads * self.config.attention_head_dim
+        patch_embed_in_channels = self.config.in_channels + 1 if self.config.concat_padding_mask else self.config.in_channels
+        self.rope = CosmosRotaryPosEmbed(
+            hidden_size=self.config.attention_head_dim,
+            max_size=self.config.max_size,
+            patch_size=self.config.patch_size,
+            rope_scale=self.config.rope_scale,
         )
+        self.rope.load_state_dict(artifacts["rope"])
+        if artifacts["learnable_pos_embed"] is None:
+            self.learnable_pos_embed = None
+        else:
+            self.learnable_pos_embed = CosmosLearnablePositionalEmbed(
+                hidden_size=hidden_size,
+                max_size=self.config.max_size,
+                patch_size=self.config.patch_size,
+            )
+            self.learnable_pos_embed.load_state_dict(artifacts["learnable_pos_embed"])
+        self.patch_embed = CosmosPatchEmbed(patch_embed_in_channels, hidden_size, self.config.patch_size, bias=False)
+        self.patch_embed.load_state_dict(artifacts["patch_embed"])
+        self.time_embed = CosmosEmbedding(hidden_size, hidden_size)
+        self.time_embed.load_state_dict(artifacts["time_embed"])
 
-    def get_time_embed_table(self, scheduler, num_inference_steps):
-        timesteps = retrieve_timesteps(scheduler, num_inference_steps)[0]
 
-        embedding_dim = self.time_proj.num_channels
-        flip_sin_to_cos = self.time_proj.flip_sin_to_cos
-        downscale_freq_shift = self.time_proj.downscale_freq_shift
-        scale = self.time_proj.scale
+    def compute_embedding(
+        self,
+        hidden_states: torch.Tensor,
+        timestep: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        fps: Optional[int] = None,
+        condition_mask: Optional[torch.Tensor] = None,
+        padding_mask: Optional[torch.Tensor] = None,
+    ):
+        batch_size, num_channels, num_frames, height, width = hidden_states.shape
 
-        half_dim = embedding_dim // 2
-        max_period = 10000
-        exponent = -math.log(max_period) * torch.arange(start=0, end=half_dim, dtype=torch.float32)
-        exponent = exponent / (half_dim - downscale_freq_shift)
+        # 1. Concatenate padding mask if needed & prepare attention mask
+        if condition_mask is not None:
+            hidden_states = torch.cat([hidden_states, condition_mask], dim=1)
 
-        emb = torch.exp(exponent)
-        emb = timesteps[:, None].float() * emb[None, :]
+        if self.config.concat_padding_mask:
+            padding_mask = transforms.functional.resize(
+                padding_mask, list(hidden_states.shape[-2:]), interpolation=transforms.InterpolationMode.NEAREST
+            )
+            hidden_states = torch.cat(
+                [hidden_states, padding_mask.unsqueeze(2).repeat(batch_size, 1, num_frames, 1, 1)], dim=1
+            )
 
-        emb = scale * emb
-        emb = torch.cat([torch.sin(emb), torch.cos(emb)], dim=-1)
+        if attention_mask is not None:
+            attention_mask = attention_mask.unsqueeze(1).unsqueeze(1)  # [B, 1, 1, S]
 
-        if flip_sin_to_cos:
-            emb = torch.cat([emb[:, half_dim:], emb[:, :half_dim]], dim=-1)
+        # 2. Generate positional embeddings
+        image_rotary_emb = self.rope(hidden_states, fps=fps)
+        extra_pos_emb = self.learnable_pos_embed(hidden_states) if self.config.extra_pos_embed_type else None
 
-        if embedding_dim % 2 == 1:
-            emb = torch.nn.functional.pad(emb, (0, 1, 0, 0))
+        # 3. Patchify input
+        p_t, p_h, p_w = self.config.patch_size
+        hidden_states = self.patch_embed(hidden_states)
+        hidden_states = hidden_states.flatten(1, 3)  # [B, T, H, W, C] -> [B, THW, C]
 
-        emb_dict = {}
-        for timestep, e in zip(timesteps, emb):
-            emb_dict[timestep.item()] = e.reshape(1, -1)
+        # 4. Timestep embeddings
+        temb, embedded_timestep = self.time_embed(hidden_states, timestep)
 
-        self._emb_cached = emb_dict
+        return hidden_states, temb, embedded_timestep, image_rotary_emb[0], image_rotary_emb[1], extra_pos_emb, attention_mask
 
-    def time_embed_table(self, timestep):
-        emb = self._emb_cached[timestep[0].item()]
-        emb = emb.repeat(timestep.shape[0], 1)
-        return emb
 
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
         num_latent_frames = rbln_config.num_latent_frames
         latent_height = rbln_config.latent_height
         latent_width = rbln_config.latent_width
-        hidden_size = rbln_config.hidden_size
-        fps = rbln_config.fps
         return CosmosTransformer3DModelWrapper(
             model=model,
             num_latent_frames=num_latent_frames,
             latent_height=latent_height,
             latent_width=latent_width,
-            hidden_size=hidden_size,
-            fps=fps,
         ).eval()
 
     @classmethod
     def update_rbln_config_using_pipe(
-        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNCosmosTransformer3DModelConfig", submodule_name: str
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
     ) -> RBLNCosmosTransformer3DModelConfig:
-        rbln_config.num_channel_latents = pipe.transformer.config.in_channels
-        rbln_config.num_latent_frames = (rbln_config.num_frames - 1) // pipe.vae_scale_factor_temporal + 1
-        rbln_config.latent_height = rbln_config.height // pipe.vae_scale_factor_temporal
-        rbln_config.latent_width = rbln_config.width // pipe.vae_scale_factor_temporal
-        rbln_config.hidden_size = (
+        rbln_config.transformer.num_channel_latents = pipe.transformer.config.in_channels
+        rbln_config.transformer.num_latent_frames = (rbln_config.transformer.num_frames - 1) // pipe.vae_scale_factor_temporal + 1
+        rbln_config.transformer.latent_height = rbln_config.transformer.height // pipe.vae_scale_factor_temporal
+        rbln_config.transformer.latent_width = rbln_config.transformer.width // pipe.vae_scale_factor_temporal
+        rbln_config.transformer.hidden_size = (
             pipe.transformer.config.num_attention_heads * pipe.transformer.config.attention_head_dim
         )
-        rbln_config.embedding_dim = pipe.text_encoder.encoder.embed_tokens.embedding_dim
-        rbln_config.time_proj_num_channels = pipe.transformer.time_embed.time_proj.num_channels
+        rbln_config.transformer.embedding_dim = pipe.text_encoder.encoder.embed_tokens.embedding_dim
+        rbln_config.transformer.time_proj_num_channels = pipe.transformer.time_embed.time_proj.num_channels
+        rbln_config.transformer.attention_head_dim = pipe.transformer.config.attention_head_dim
 
         return rbln_config
 
@@ -294,12 +202,12 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         subfolder: str,
         rbln_config: RBLNModelConfig,
     ):
-        time_proj = model.time_embed.time_proj
         save_dict = {}
-        save_dict["num_channels"] = time_proj.num_channels
-        save_dict["flip_sin_to_cos"] = time_proj.flip_sin_to_cos
-        save_dict["downscale_freq_shift"] = time_proj.downscale_freq_shift
-        save_dict["scale"] = time_proj.scale
+        save_dict["rope"] = model.rope.state_dict()
+        if model.learnable_pos_embed is not None:
+            save_dict["learnable_pos_embed"] = model.learnable_pos_embed.state_dict()
+        save_dict["patch_embed"] = model.patch_embed.state_dict()
+        save_dict["time_embed"] = model.time_embed.state_dict()
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
     @classmethod
@@ -310,19 +218,18 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         model_config: "PretrainedConfig",
         rbln_config: "RBLNCosmosTransformer3DModelConfig",
     ) -> RBLNCosmosTransformer3DModelConfig:
+        p_t, p_h, p_w = model_config.patch_size
+        hidden_dim = (rbln_config.num_latent_frames // p_t) * (rbln_config.latent_height // p_h) * (rbln_config.latent_width // p_w)
         input_info = [
             (
                 "hidden_states",
                 [
                     rbln_config.batch_size,
-                    rbln_config.num_channel_latents,
-                    rbln_config.num_latent_frames,
-                    rbln_config.latent_height,
-                    rbln_config.latent_width,
+                    hidden_dim,
+                    rbln_config.hidden_size,
                 ],
                 "float32",
             ),
-            ("timestep", [rbln_config.batch_size, rbln_config.time_proj_num_channels], "float32"),
             (
                 "encoder_hidden_states",
                 [
@@ -332,16 +239,11 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
                 ],
                 "float32",
             ),
-            (
-                "padding_mask",
-                [
-                    1,
-                    1,
-                    rbln_config.height,
-                    rbln_config.width,
-                ],
-                "float32",
-            ),
+            ("embedded_timestep", [rbln_config.batch_size, rbln_config.hidden_size], "float32"),
+            ("temb", [1, rbln_config.hidden_size * 3], "float32"),
+            ("image_roatry_emb_0", [hidden_dim, rbln_config.attention_head_dim], "float32"),
+            ("image_roatry_emb_1", [hidden_dim, rbln_config.attention_head_dim], "float32"),
+            ("extra_pos_emb", [rbln_config.batch_size, hidden_dim, rbln_config.hidden_size], "float32"),
         ]
 
         compile_config = RBLNCompileConfig(input_info=input_info)
@@ -359,16 +261,27 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         padding_mask: Optional[torch.Tensor] = None,
         return_dict: bool = True,
     ):
-        if not hasattr(self, "_emb_cached"):
-            raise RuntimeError(
-                "To run 'RBLNCosmosTransformer3DModel', the method 'get_time_embed_table' should be executed with the scheduler and 'num_inference_steps'."
-            )
-
-        timestep = self.time_embed_table(timestep)
-        output = self.model[0].forward(
+        (
             hidden_states,
-            timestep,
+            temb,
+            embedded_timestep,
+            image_rotary_emb_0,
+            image_rotary_emb_1,
+            extra_pos_emb,
+            attention_mask
+        ) = self.compute_embedding(hidden_states, timestep, attention_mask, fps, condition_mask, padding_mask)
+
+        hidden_states = self.model[0].forward(
+            hidden_states,
             encoder_hidden_states,
-            padding_mask,
+            embedded_timestep,
+            temb,
+            image_rotary_emb_0,
+            image_rotary_emb_1,
+            extra_pos_emb,
         )
-        return output
+
+        if not return_dict:
+            return (hidden_states,)
+        else:
+            return Transformer2DModelOutput(sample=hidden_states)
