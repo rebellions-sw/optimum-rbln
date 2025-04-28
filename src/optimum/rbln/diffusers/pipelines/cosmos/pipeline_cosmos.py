@@ -29,6 +29,8 @@ class RBLNCosmosPipeline(RBLNDiffusionMixin, CosmosPipeline):
 
     def handle_additional_kwargs(self, **kwargs):
         if "fps" in kwargs and kwargs["fps"] != self.transformer.rbln_config.fps:
-            logger.warning(f"The tranformer in this pipeline is compiled with 'fps={self.transformer.rbln_config.fps}'. 'fps' set by the user will be ignored")
+            logger.warning(
+                f"The tranformer in this pipeline is compiled with 'fps={self.transformer.rbln_config.fps}'. 'fps' set by the user will be ignored"
+            )
             kwargs.pop("fps")
         return kwargs
