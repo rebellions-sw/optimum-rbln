@@ -12,6 +12,7 @@ from .models import (
     RBLNVQModelConfig,
 )
 from .pipelines import (
+    RBLNCosmosPipelineConfig,
     RBLNKandinskyV22CombinedPipelineConfig,
     RBLNKandinskyV22Img2ImgCombinedPipelineConfig,
     RBLNKandinskyV22Img2ImgPipelineConfig,
