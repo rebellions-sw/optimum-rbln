@@ -58,7 +58,7 @@ class RBLNT5EncoderModel(RBLNTransformerEncoderForFeatureExtraction):
     ) -> "RBLNDiffusionMixinConfig":
         return rbln_config
 
-    def forward(self, *args, return_dict: Optional[bool] = None, **kwargs):
+    def forward(
         self,
         input_ids=None,
         attention_mask=None,
