@@ -439,7 +439,12 @@ class RBLNCosmosSafetyChecker:
 
     @classmethod
     @update_submodule_config
-    def compile_submodules(cls, model: torch.nn.Module, rbln_config: Optional[dict[str, str]] = {}, model_save_dir: str = "cosmos_safety_checker"):
+    def compile_submodules(
+        cls,
+        model: torch.nn.Module,
+        rbln_config: Optional[dict[str, str]] = {},
+        model_save_dir: str = "cosmos_safety_checker",
+    ):
         save_dir_path = Path(model_save_dir)
         save_dir_path.mkdir(exist_ok=True)
         for i, target_model_name in enumerate(cls._target_model_names):
@@ -466,7 +471,12 @@ class RBLNCosmosSafetyChecker:
 
     @classmethod
     @update_submodule_config
-    def load_submodules(cls, model: torch.nn.Module, rbln_config: Optional[dict[str, str]] = {}, model_save_dir: str = "cosmos_safety_checker"):
+    def load_submodules(
+        cls,
+        model: torch.nn.Module,
+        rbln_config: Optional[dict[str, str]] = {},
+        model_save_dir: str = "cosmos_safety_checker",
+    ):
         for i, target_model_name in enumerate(cls._target_model_names):
             guardrail = cls._guardrails[i]
             submodule = cls._submodules[i]

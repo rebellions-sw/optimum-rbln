@@ -82,7 +82,6 @@ class RBLNCosmosPipelineConfig(RBLNModelConfig):
             uses_encoder=False,
         )
 
-
     @property
     def batch_size(self):
         return self.vae.batch_size
