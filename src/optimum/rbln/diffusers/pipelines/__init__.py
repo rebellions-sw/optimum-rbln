@@ -55,16 +55,17 @@ _import_structure = {
     ],
 }
 if TYPE_CHECKING:
+    from .cosmos import (
+        RBLNCosmosPipeline,
+        RBLNCosmosSafetyChecker,
+    )
+
     from .controlnet import (
         RBLNMultiControlNetModel,
         RBLNStableDiffusionControlNetImg2ImgPipeline,
         RBLNStableDiffusionControlNetPipeline,
         RBLNStableDiffusionXLControlNetImg2ImgPipeline,
         RBLNStableDiffusionXLControlNetPipeline,
-    )
-    from cosmos import (
-        RBLNCosmosPipeline,
-        RBLNCosmosSafetyChecker,
     )
     from .kandinsky2_2 import (
         RBLNKandinskyV22CombinedPipeline,
