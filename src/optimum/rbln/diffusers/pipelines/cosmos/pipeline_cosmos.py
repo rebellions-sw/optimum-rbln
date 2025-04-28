@@ -13,7 +13,6 @@
 # limitations under the License.
 
 
-from inspect import signature
 
 from diffusers import CosmosPipeline
 
@@ -24,13 +23,6 @@ class RBLNCosmosPipeline(RBLNDiffusionMixin, CosmosPipeline):
     original_class = CosmosPipeline
     _submodules = ["text_encoder", "transformer", "vae"]
     _optional_components = ["safety_checker"]
+    _optional_components = []
 
-    def forward(self, *args, **kwargs):
-        param_names = list(signature(super().forward).parameters.keys())
-        for i, value in enumerate(args):
-            kwargs[param_names[i]] = value
-
-        num_inference_steps = kwargs["num_inference_steps"]
-        if (not hasattr(self.transformer, "_emb_cached")) or len(self.transformer._emb_cached) != num_inference_steps:
-            self.transformer.get_time_embed_table(self.scheduler, num_inference_steps)
-        super().forward(**kwargs)
+        return kwargs
