@@ -66,7 +66,7 @@ class RBLNCosmosPipelineConfig(RBLNModelConfig):
         """
         super().__init__(**kwargs)
 
-        self.max_seq_len = max_seq_len or 512
+        max_seq_len = max_seq_len or 512
         self.text_encoder = self.init_submodule_config(
             RBLNT5EncoderModelConfig, text_encoder, batch_size=batch_size, max_seq_len=max_seq_len
         )
@@ -92,3 +92,7 @@ class RBLNCosmosPipelineConfig(RBLNModelConfig):
     @property
     def batch_size(self):
         return self.vae.batch_size
+
+    @property
+    def max_seq_len(self):
+        return self.text_encoder.max_seq_len
