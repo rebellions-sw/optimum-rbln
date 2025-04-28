@@ -58,13 +58,7 @@ class RBLNT5EncoderModel(RBLNTransformerEncoderForFeatureExtraction):
     ) -> "RBLNDiffusionMixinConfig":
         return rbln_config
 
-    def forward(
-        self,
-        input_ids=None,
-        attention_mask=None,
-        return_dict=None,
-        **kwargs
-    ):
+    def forward(self, input_ids=None, attention_mask=None, return_dict=None, **kwargs):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         input_dict = {"input_ids": input_ids.long()}
         if attention_mask is not None:
