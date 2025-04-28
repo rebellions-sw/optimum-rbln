@@ -21,11 +21,11 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
     def __init__(
         self,
         batch_size: Optional[int] = None,
-        max_sequence_length: Optional[int] = None,
         num_frames: Optional[int] = None,
         height: Optional[int] = None,
         width: Optional[int] = None,
         fps: Optional[int] = None,
+        max_sequence_length: Optional[int] = None,
         num_channel_latents: Optional[int] = None,
         num_latent_frames: Optional[int] = None,
         latent_height: Optional[int] = None,
@@ -33,12 +33,15 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
         hidden_size: Optional[int] = None,
         embedding_dim: Optional[int] = None,
         time_proj_num_channels: Optional[int] = None,
-        prompt_embed_length: Optional[int] = None,
         **kwargs,
     ):
         """
         Args:
             batch_size (Optional[int]): The batch size for inference. Defaults to 1.
+            num_frames (Optional[int]): The number of frames in the generated video.
+            height (Optional[int]): The height in pixels of the generated image.
+            width (Optional[int]): The width in pixels of the generated image.
+            fps (Optional[int]): The frames per second of the generated video.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -46,11 +49,11 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
         """
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
-        self.max_sequence_length = max_sequence_length or 512
         self.num_frames = num_frames or 121
         self.height = height or 704
         self.width = width or 1280
         self.fps = fps or 30
+        self.max_seq_len = max_sequence_length or 512
 
         self.num_channel_latents = num_channel_latents
         self.num_latent_frames = num_latent_frames

@@ -13,7 +13,6 @@
 # limitations under the License.
 
 
-
 from diffusers import CosmosPipeline
 
 from ...modeling_diffusers import RBLNDiffusionMixin
@@ -23,6 +22,3 @@ class RBLNCosmosPipeline(RBLNDiffusionMixin, CosmosPipeline):
     original_class = CosmosPipeline
     _submodules = ["text_encoder", "transformer", "vae"]
     _optional_components = ["safety_checker"]
-    _optional_components = []
-
-        return kwargs
