@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import inspect
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import torch
 from transformers import AutoModelForTextEncoding, T5EncoderModel, T5ForConditionalGeneration
@@ -58,16 +58,32 @@ class RBLNT5EncoderModel(RBLNTransformerEncoderForFeatureExtraction):
     ) -> "RBLNDiffusionMixinConfig":
         return rbln_config
 
-    def forward(self, input_ids, attention_mask, *args, **kwargs):
-        if attention_mask is None:
-            last_hidden_state = self.model[0](input_ids)
+    def forward(self, *args, return_dict: Optional[bool] = None, **kwargs):
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        new_args = []
+        new_kwargs = {}
+        for arg in args:
+            if arg is not None:
+                new_args.append(arg.long())
+            else:
+                new_args.append(arg)
+        for k, v in kwargs.items():
+            if v is not None:
+                new_kwargs[k] = v.long()
+        args = tuple(new_args)
+        kwargs = new_kwargs
+        output = self.model[0](*args, **kwargs)
+        return self._prepare_output(output, return_dict)
+
+    def _prepare_output(self, output, return_dict):
+        if not return_dict:
+            return (output,) if not isinstance(output, (tuple, list)) else output
         else:
-            attention_mask = attention_mask.long()
-            last_hidden_state = self.model[0](input_ids, attention_mask)
-        if self.config.use_return_dict:
-            return BaseModelOutputWithPastAndCrossAttentions(last_hidden_state=last_hidden_state)
-        else:
-            return last_hidden_state
+            if self.output_class is None:
+                return BaseModelOutputWithPastAndCrossAttentions(last_hidden_state=output)
+
+            # Create output with the appropriate class and key
+            return self.output_class(**{self.output_key: output})
 
 
 class RBLNT5ForConditionalGeneration(RBLNModelForSeq2SeqLM):
