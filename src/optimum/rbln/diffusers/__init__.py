@@ -58,6 +58,8 @@ _import_structure = {
         "RBLNVideoSafetyModelConfig",
     ],
     "pipelines": [
+        "RBLNCosmosPipeline",
+        "RBLNCosmosSafetyChecker",
         "RBLNKandinskyV22CombinedPipeline",
         "RBLNKandinskyV22Img2ImgCombinedPipeline",
         "RBLNKandinskyV22InpaintCombinedPipeline",
@@ -141,6 +143,8 @@ if TYPE_CHECKING:
         RBLNVQModel,
     )
     from .pipelines import (
+        RBLNCosmosPipeline,
+        RBLNCosmosSafetyChecker,
         RBLNKandinskyV22CombinedPipeline,
         RBLNKandinskyV22Img2ImgCombinedPipeline,
         RBLNKandinskyV22Img2ImgPipeline,
