@@ -29,6 +29,7 @@ from transformers import (
     CLIPVisionModelWithProjection,
 )
 
+from ...configurations import RBLNKandinskyV22CombinedPipelineConfig
 from ...modeling_diffusers import RBLNDiffusionMixin
 from .pipeline_kandinsky2_2 import RBLNKandinskyV22Pipeline
 from .pipeline_kandinsky2_2_img2img import RBLNKandinskyV22Img2ImgPipeline
@@ -38,6 +39,7 @@ from .pipeline_kandinsky2_2_prior import RBLNKandinskyV22PriorPipeline
 
 class RBLNKandinskyV22CombinedPipeline(RBLNDiffusionMixin, KandinskyV22CombinedPipeline):
     original_class = KandinskyV22CombinedPipeline
+    _rbln_config_class = RBLNKandinskyV22CombinedPipelineConfig
     _connected_classes = {"prior_pipe": RBLNKandinskyV22PriorPipeline, "decoder_pipe": RBLNKandinskyV22Pipeline}
     _submodules = ["prior_image_encoder", "prior_text_encoder", "prior_prior", "unet", "movq"]
     _prefix = {"prior_pipe": "prior_"}

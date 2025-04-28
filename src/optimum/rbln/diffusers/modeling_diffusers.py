@@ -21,8 +21,6 @@ import torch
 
 from ..configuration_utils import ContextRblnConfig, RBLNModelConfig
 from ..modeling import RBLNModel
-
-# from ..transformers import RBLNCLIPTextModelConfig
 from ..utils.decorator_utils import remove_compile_time_kwargs
 from ..utils.logging import get_logger
 

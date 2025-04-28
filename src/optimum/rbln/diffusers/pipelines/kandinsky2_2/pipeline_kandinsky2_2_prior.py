@@ -14,9 +14,11 @@
 
 from diffusers import KandinskyV22PriorPipeline
 
+from ...configurations import RBLNKandinskyV22PriorPipelineConfig
 from ...modeling_diffusers import RBLNDiffusionMixin
 
 
 class RBLNKandinskyV22PriorPipeline(RBLNDiffusionMixin, KandinskyV22PriorPipeline):
     original_class = KandinskyV22PriorPipeline
+    _rbln_config_class = RBLNKandinskyV22PriorPipelineConfig
     _submodules = ["text_encoder", "image_encoder", "prior"]
