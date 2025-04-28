@@ -15,10 +15,19 @@
 
 from diffusers import CosmosPipeline
 
+from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
+
+
+logger = get_logger(__name__)
 
 
 class RBLNCosmosPipeline(RBLNDiffusionMixin, CosmosPipeline):
     original_class = CosmosPipeline
     _submodules = ["text_encoder", "transformer", "vae"]
     _optional_components = ["safety_checker"]
+
+    def handle_additional_kwargs(self, **kwargs):
+        if "fps" in kwargs and kwargs["fps"] != self.transformer.rbln_config.fps:
+            logger.warning(f"The tranformer in this pipeline is compiled with 'fps={self.transformer.rbln_config.fps}'. 'fps' set by the user will be ignored")
+            kwargs.pop("fps")
