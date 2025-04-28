@@ -36,6 +36,7 @@ class RBLNCosmosPipelineConfig(RBLNModelConfig):
         batch_size: Optional[int] = None,
         height: Optional[int] = None,
         width: Optional[int] = None,
+        max_seq_len: Optional[int] = None,
         guidance_scale: Optional[float] = None,
         **kwargs,
     ):
@@ -65,11 +66,13 @@ class RBLNCosmosPipelineConfig(RBLNModelConfig):
         """
         super().__init__(**kwargs)
 
-        self.text_encoder = self.init_submodule_config(RBLNT5EncoderModelConfig, text_encoder, batch_size=batch_size)
+        max_seq_len = max_seq_len or 512
+        self.text_encoder = self.init_submodule_config(RBLNT5EncoderModelConfig, text_encoder, batch_size=batch_size, max_seq_len=max_seq_len)
         self.transformer = self.init_submodule_config(
             RBLNCosmosTransformer3DModelConfig,
             transformer,
             batch_size=batch_size,
+            max_sequence_length=max_seq_len,
         )
         self.vae = self.init_submodule_config(
             RBLNAutoencoderKLCosmosConfig,
