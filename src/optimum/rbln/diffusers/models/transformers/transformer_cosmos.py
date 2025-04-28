@@ -190,7 +190,6 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
     def update_rbln_config_using_pipe(
         cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
     ) -> RBLNCosmosTransformer3DModelConfig:
-        rbln_config.transformer.num_channel_latents = pipe.transformer.config.in_channels
         rbln_config.transformer.num_latent_frames = (
             rbln_config.transformer.num_frames - 1
         ) // pipe.vae_scale_factor_temporal + 1
@@ -201,7 +200,6 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         )
         rbln_config.transformer.embedding_dim = pipe.text_encoder.encoder.embed_tokens.embedding_dim
         rbln_config.transformer.time_proj_num_channels = pipe.transformer.time_embed.time_proj.num_channels
-        rbln_config.transformer.attention_head_dim = pipe.transformer.config.attention_head_dim
 
         return rbln_config
 
@@ -235,6 +233,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
             * (rbln_config.latent_height // p_h)
             * (rbln_config.latent_width // p_w)
         )
+        attention_head_dim = model_config.attention_head_dim
         input_info = [
             (
                 "hidden_states",
@@ -249,15 +248,15 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
                 "encoder_hidden_states",
                 [
                     rbln_config.batch_size,
-                    rbln_config.max_sequence_length,
+                    rbln_config.max_seq_len,
                     rbln_config.embedding_dim,
                 ],
                 "float32",
             ),
             ("embedded_timestep", [rbln_config.batch_size, rbln_config.hidden_size], "float32"),
             ("temb", [1, rbln_config.hidden_size * 3], "float32"),
-            ("image_roatry_emb_0", [hidden_dim, rbln_config.attention_head_dim], "float32"),
-            ("image_roatry_emb_1", [hidden_dim, rbln_config.attention_head_dim], "float32"),
+            ("image_roatry_emb_0", [hidden_dim, attention_head_dim], "float32"),
+            ("image_roatry_emb_1", [hidden_dim, attention_head_dim], "float32"),
             ("extra_pos_emb", [rbln_config.batch_size, hidden_dim, rbln_config.hidden_size], "float32"),
         ]
 
