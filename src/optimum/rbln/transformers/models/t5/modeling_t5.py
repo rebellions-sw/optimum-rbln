@@ -62,7 +62,7 @@ class RBLNT5EncoderModel(RBLNTransformerEncoderForFeatureExtraction):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         input_dict = {"input_ids": input_ids.long()}
         if attention_mask is not None:
-            input_dict = attention_mask.long()
+            input_dict["attention_mask"] = attention_mask.long()
 
         output = self.model[0](**input_dict)
         return self._prepare_output(output, return_dict)
