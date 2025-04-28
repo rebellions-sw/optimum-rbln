@@ -14,3 +14,4 @@
 
 from .prior_transformer import RBLNPriorTransformer
 from .transformer_sd3 import RBLNSD3Transformer2DModel
+from .transformer_cosmos import RBLNCosmosTransformer3DModel

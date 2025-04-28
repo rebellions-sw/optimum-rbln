@@ -120,6 +120,7 @@ _import_structure = {
     "diffusers": [
         "RBLNAutoencoderKL",
         "RBLNAutoencoderKLConfig",
+        "RBLNAutoencoderKLCosmos",
         "RBLNAutoencoderKLCosmosConfig",
         "RBLNControlNetModel",
         "RBLNControlNetModelConfig",
@@ -178,6 +179,7 @@ _import_structure = {
         "RBLNSiglipVisionModelConfig",
         "RBLNVideoSafetyModelConfig",
         "RBLNCosmosPipelineConfig",
+        "RBLNCosmosTransformer3DModel",
     ],
 }
 
@@ -189,6 +191,7 @@ if TYPE_CHECKING:
     from .diffusers import (
         RBLNAutoencoderKL,
         RBLNAutoencoderKLConfig,
+        RBLNAutoencoderKLCosmos,
         RBLNAutoencoderKLCosmosConfig,
         RBLNControlNetModel,
         RBLNControlNetModelConfig,
@@ -247,6 +250,7 @@ if TYPE_CHECKING:
         RBLNVQModel,
         RBLNVQModelConfig,
         RBLNCosmosPipelineConfig,
+        RBLNCosmosTransformer3DModel,
     )
     from .modeling import (
         RBLNBaseModel,

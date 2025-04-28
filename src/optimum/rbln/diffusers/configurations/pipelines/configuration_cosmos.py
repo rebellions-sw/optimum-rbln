@@ -34,10 +34,10 @@ class RBLNCosmosPipelineConfig(RBLNModelConfig):
         transformer: Optional[RBLNCosmosTransformer3DModelConfig] = None,
         vae: Optional[RBLNAutoencoderKLCosmosConfig] = None,
         *,
+        max_seq_len: Optional[int] = None,
         batch_size: Optional[int] = None,
         img_height: Optional[int] = None,
         img_width: Optional[int] = None,
-        sample_size: Optional[Tuple[int, int]] = None,
         image_size: Optional[Tuple[int, int]] = None,
         guidance_scale: Optional[float] = None,
         **kwargs,
@@ -73,26 +73,29 @@ class RBLNCosmosPipelineConfig(RBLNModelConfig):
         if img_height is not None and img_width is not None:
             image_size = (img_height, img_width)
 
-        self.text_encoder = self.init_submodule_config(RBLNT5EncoderModelConfig, text_encoder, batch_size=batch_size)
-        self.unet = self.init_submodule_config(
+        max_seq_len = max_seq_len or 512
+        
+        self.text_encoder = self.init_submodule_config(
+            RBLNT5EncoderModelConfig, 
+            text_encoder,
+            batch_size=batch_size,
+            max_seq_len=max_seq_len,
+            )
+        self.transformer = self.init_submodule_config(
             RBLNCosmosTransformer3DModelConfig,
             transformer,
             batch_size=batch_size,
-            sample_size=sample_size,
+            height=img_height,
+            width=img_width,
         )
         self.vae = self.init_submodule_config(
             RBLNAutoencoderKLCosmosConfig,
             vae,
             batch_size=batch_size,
             uses_encoder=self.__class__._vae_uses_encoder,
-            sample_size=image_size,  # image size is equal to sample size in vae
+            height=img_height,
+            width=img_width,
         )
-
-        if guidance_scale is not None:
-            logger.warning("Specifying `guidance_scale` is deprecated. It will be removed in a future version.")
-            do_classifier_free_guidance = guidance_scale > 1.0
-            if do_classifier_free_guidance:
-                self.unet.batch_size = self.text_encoder.batch_size * 2
 
     @property
     def batch_size(self):
@@ -100,8 +103,12 @@ class RBLNCosmosPipelineConfig(RBLNModelConfig):
 
     @property
     def sample_size(self):
-        return self.unet.sample_size
+        return (self.transformer.height, self.transformer.width)
 
     @property
     def image_size(self):
-        return self.vae.sample_size
+        return self.vae.image_size
+    
+    @property
+    def max_seq_len(self):
+        return self.text_encoder.max_seq_len

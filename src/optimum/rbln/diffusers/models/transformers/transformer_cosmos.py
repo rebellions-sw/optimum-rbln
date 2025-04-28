@@ -255,10 +255,10 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         return emb
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
-        num_latent_frames = rbln_config.num_latent_frames
-        latent_height = rbln_config.latent_height
-        latent_width = rbln_config.latent_width
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: "RBLNCosmosTransformer3DModelConfig") -> torch.nn.Module:
+        num_latent_frames = (rbln_config.num_frames - 1) // rbln_config.vae_scale_factor_temporal + 1
+        latent_height = rbln_config.height // rbln_config.vae_scale_factor_spatial
+        latent_width = rbln_config.width // rbln_config.vae_scale_factor_spatial
         hidden_size = rbln_config.hidden_size
         fps = rbln_config.fps
         return CosmosTransformer3DModelWrapper(
@@ -274,16 +274,20 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
     def update_rbln_config_using_pipe(
         cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNCosmosTransformer3DModelConfig", submodule_name: str
     ) -> RBLNCosmosTransformer3DModelConfig:
-        rbln_config.num_channel_latents = pipe.transformer.config.in_channels
-        rbln_config.num_latent_frames = (rbln_config.num_frames - 1) // pipe.vae_scale_factor_temporal + 1
-        rbln_config.latent_height = rbln_config.height // pipe.vae_scale_factor_temporal
-        rbln_config.latent_width = rbln_config.width // pipe.vae_scale_factor_temporal
-        rbln_config.hidden_size = (
+        import pdb; pdb.set_trace()
+        rbln_config.transformer.num_channel_latents = pipe.transformer.config.in_channels
+        # rbln_config.num_latent_frames = (rbln_config.num_frames - 1) // pipe.vae_scale_factor_temporal + 1
+        rbln_config.transformer.vae_scale_factor_temporal = pipe.vae_scale_factor_temporal
+        rbln_config.transformer.vae_scale_factor_spatial = pipe.vae_scale_factor_spatial
+        # rbln_config.latent_height = rbln_config.height // pipe.vae_scale_factor_spatial
+        # rbln_config.latent_width = rbln_config.width // pipe.vae_scale_factor_spatial
+        rbln_config.transformer.hidden_size = (
             pipe.transformer.config.num_attention_heads * pipe.transformer.config.attention_head_dim
         )
-        rbln_config.embedding_dim = pipe.text_encoder.encoder.embed_tokens.embedding_dim
-        rbln_config.time_proj_num_channels = pipe.transformer.time_embed.time_proj.num_channels
-
+        rbln_config.transformer.embedding_dim = pipe.text_encoder.encoder.embed_tokens.embedding_dim
+        rbln_config.transformer.time_proj_num_channels = pipe.transformer.time_embed.time_proj.num_channels
+        rbln_config.transformer.max_seq_len = rbln_config.max_seq_len
+        import pdb; pdb.set_trace()
         return rbln_config
 
     @classmethod
@@ -292,7 +296,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         model: "PreTrainedModel",
         save_dir_path: Path,
         subfolder: str,
-        rbln_config: RBLNModelConfig,
+        rbln_config: "RBLNCosmosTransformer3DModelConfig",
     ):
         time_proj = model.time_embed.time_proj
         save_dict = {}
@@ -310,15 +314,19 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         model_config: "PretrainedConfig",
         rbln_config: "RBLNCosmosTransformer3DModelConfig",
     ) -> RBLNCosmosTransformer3DModelConfig:
+        import pdb; pdb.set_trace()
         input_info = [
             (
                 "hidden_states",
                 [
                     rbln_config.batch_size,
-                    rbln_config.num_channel_latents,
-                    rbln_config.num_latent_frames,
-                    rbln_config.latent_height,
-                    rbln_config.latent_width,
+                    model_config.in_channels,
+                    # rbln_config.num_latent_frames,
+                    (rbln_config.num_frames - 1) // rbln_config.vae_scale_factor_temporal + 1,
+                    # rbln_config.latent_height,
+                    # rbln_config.latent_width,
+                    rbln_config.height // rbln_config.vae_scale_factor_spatial,
+                    rbln_config.width // rbln_config.vae_scale_factor_spatial
                 ],
                 "float32",
             ),
@@ -327,7 +335,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
                 "encoder_hidden_states",
                 [
                     rbln_config.batch_size,
-                    rbln_config.max_sequence_length,
+                    rbln_config.max_seq_len,
                     rbln_config.embedding_dim,
                 ],
                 "float32",

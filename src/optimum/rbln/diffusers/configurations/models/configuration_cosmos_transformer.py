@@ -21,19 +21,18 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
     def __init__(
         self,
         batch_size: Optional[int] = None,
-        max_sequence_length: Optional[int] = None,
         num_frames: Optional[int] = None,
         height: Optional[int] = None,
         width: Optional[int] = None,
         fps: Optional[int] = None,
-        num_channel_latents: Optional[int] = None,
-        num_latent_frames: Optional[int] = None,
-        latent_height: Optional[int] = None,
-        latent_width: Optional[int] = None,
-        hidden_size: Optional[int] = None,
-        embedding_dim: Optional[int] = None,
-        time_proj_num_channels: Optional[int] = None,
-        prompt_embed_length: Optional[int] = None,
+        # num_channel_latents: Optional[int] = None,
+        # num_latent_frames: Optional[int] = None,
+        # latent_height: Optional[int] = None,
+        # latent_width: Optional[int] = None,
+        # hidden_size: Optional[int] = None,
+        # embedding_dim: Optional[int] = None,
+        # time_proj_num_channels: Optional[int] = None,
+        # prompt_embed_length: Optional[int] = None,
         **kwargs,
     ):
         """
@@ -46,19 +45,20 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
         """
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
-        self.max_sequence_length = max_sequence_length or 512
+        if not isinstance(self.batch_size, int) or self.batch_size < 0:
+            raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
         self.num_frames = num_frames or 121
         self.height = height or 704
         self.width = width or 1280
         self.fps = fps or 30
 
-        self.num_channel_latents = num_channel_latents
-        self.num_latent_frames = num_latent_frames
-        self.latent_height = latent_height
-        self.latent_width = latent_width
-        self.hidden_size = hidden_size
-        self.embedding_dim = embedding_dim
-        self.time_proj_num_channels = time_proj_num_channels
+        # self.num_channel_latents = num_channel_latents
+        # self.num_latent_frames = num_latent_frames
+        # self.latent_height = latent_height
+        # self.latent_width = latent_width
+        # self.hidden_size = hidden_size
+        # self.embedding_dim = embedding_dim
+        # self.time_proj_num_channels = time_proj_num_channels
 
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")

@@ -87,6 +87,8 @@ _import_structure = {
         "RBLNSD3Transformer2DModel",
         "RBLNPriorTransformer",
         "RBLNVQModel",
+        "RBLNAutoencoderKLCosmos",
+        "RBLNCosmosTransformer3DModel",
     ],
     "modeling_diffusers": [
         "RBLNDiffusionMixin",
@@ -136,6 +138,8 @@ if TYPE_CHECKING:
         RBLNSD3Transformer2DModel,
         RBLNUNet2DConditionModel,
         RBLNVQModel,
+        RBLNAutoencoderKLCosmos,
+        RBLNCosmosTransformer3DModel
     )
     from .pipelines import (
         RBLNKandinskyV22CombinedPipeline,
