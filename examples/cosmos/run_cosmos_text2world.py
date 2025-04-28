@@ -70,7 +70,7 @@ def main(
                         3,
                     ]
                 },
-                "video_guardrail": {"device": 0},
+                "video_guardrail": {"device": 3},
             },
         )
         pipe = RBLNCosmosPipeline.from_pretrained(
@@ -79,13 +79,15 @@ def main(
             export=False,
             rbln_config={
                 "transformer": {
-                    "device": [4, 5, 6, 7],
+                    "device": [0, 1, 3, 4],
                     "tensor_parallel_size": 4,
                 },
                 "text_encoder": {
-                    "device": 1,
+                    "device": 4,
                 },
-                "vae": {"device": 2},
+                "vae": {
+                    "device": 2,
+                },
             },
         )
 
