@@ -24,7 +24,6 @@ from optimum.rbln import (
     RBLNQwen2ForCausalLM,
     RBLNT5ForConditionalGeneration,
 )
-from optimum.rbln.configuration_utils import ContextRblnConfig
 
 from .test_base import BaseTest, DisallowedTestBase, TestLevel
 
@@ -257,16 +256,14 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
         return inputs
 
     def _inner_test_save_load(self, tmpdir):
-        with ContextRblnConfig(create_runtimes=False):
-            super()._inner_test_save_load(tmpdir)
-
-            # Test loading from nested config
-            _ = self.RBLN_CLASS.from_pretrained(
-                tmpdir,
-                export=False,
-                rbln_config={"language_model": {"create_runtimes": False}},
-                **self.HF_CONFIG_KWARGS,
-            )
+        super()._inner_test_save_load(tmpdir)
+        # Test loading from nested config
+        _ = self.RBLN_CLASS.from_pretrained(
+            tmpdir,
+            export=False,
+            rbln_config={"language_model": {"create_runtimes": False}},
+            **self.HF_CONFIG_KWARGS,
+        )
 
 
 class TestIdefics3ForConditionalGeneration(LLMTest.TestLLM):
