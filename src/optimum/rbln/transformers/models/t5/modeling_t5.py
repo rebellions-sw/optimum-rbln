@@ -59,20 +59,18 @@ class RBLNT5EncoderModel(RBLNTransformerEncoderForFeatureExtraction):
         return rbln_config
 
     def forward(self, *args, return_dict: Optional[bool] = None, **kwargs):
+        self,
+        input_ids=None,
+        attention_mask=None,
+        return_dict=None,
+        **kwargs
+    ):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-        new_args = []
-        new_kwargs = {}
-        for arg in args:
-            if arg is not None:
-                new_args.append(arg.long())
-            else:
-                new_args.append(arg)
-        for k, v in kwargs.items():
-            if v is not None:
-                new_kwargs[k] = v.long()
-        args = tuple(new_args)
-        kwargs = new_kwargs
-        output = self.model[0](*args, **kwargs)
+        input_dict = {"input_ids": input_ids.long()}
+        if attention_mask is not None:
+            input_dict = attention_mask.long()
+
+        output = self.model[0](**input_dict)
         return self._prepare_output(output, return_dict)
 
     def _prepare_output(self, output, return_dict):
