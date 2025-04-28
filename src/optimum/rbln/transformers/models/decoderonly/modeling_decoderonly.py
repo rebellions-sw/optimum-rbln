@@ -560,7 +560,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         for (name, _, _), tensor in zip(prefill_compile_config.input_info, prefill_example_inputs):
             if "past_key_values" in name:
                 static_tensors[name] = tensor
-                context.mark_static_address(tensor)
+                context.mark_static_address(tensor, name)
 
         dec_example_inputs = dec_compile_config.get_dummy_inputs(fill=0, static_tensors=static_tensors)
 
