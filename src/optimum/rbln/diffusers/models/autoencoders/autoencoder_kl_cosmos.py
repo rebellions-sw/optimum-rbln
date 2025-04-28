@@ -89,11 +89,11 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
 
         decoder_model = cls.wrap_model_if_needed(model, rbln_config)
         dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
-        return {"decoder" : dec_compiled_model}
+        return {"decoder": dec_compiled_model}
 
     @classmethod
     def update_rbln_config_using_pipe(
-        cls, pipe: RBLNDiffusionMixin, rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
     ) -> "RBLNDiffusionMixinConfig":
         rbln_config.vae.num_channel_latents = pipe.transformer.config.in_channels
         rbln_config.vae.vae_scale_factor_temporal = pipe.vae_scale_factor_temporal
@@ -115,7 +115,7 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
         num_latent_frames = (rbln_config.num_frames - 1) // rbln_config.vae_scale_factor_temporal + 1
         latent_height = rbln_config.height // rbln_config.vae_scale_factor
         latent_width = rbln_config.width // rbln_config.vae_scale_factor
-        
+
         vae_dec_input_info = [
             (
                 "z",

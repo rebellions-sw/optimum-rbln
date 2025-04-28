@@ -12,18 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import math
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Optional, Union
 
-import numpy as np
 import torch
 from diffusers import CosmosTransformer3DModel
-from diffusers.models.embeddings import Timesteps
-from torchvision import transforms
 from diffusers.models.modeling_outputs import Transformer2DModelOutput
-from diffusers.pipelines.cosmos.pipeline_cosmos import retrieve_timesteps
-from diffusers.models.transformers.transformer_cosmos import CosmosRotaryPosEmbed, CosmosLearnablePositionalEmbed, CosmosPatchEmbed, CosmosEmbedding
+from diffusers.models.transformers.transformer_cosmos import (
+    CosmosEmbedding,
+    CosmosLearnablePositionalEmbed,
+    CosmosPatchEmbed,
+    CosmosRotaryPosEmbed,
+)
+from torchvision import transforms
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
@@ -101,7 +102,9 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
 
         hidden_size = self.config.num_attention_heads * self.config.attention_head_dim
-        patch_embed_in_channels = self.config.in_channels + 1 if self.config.concat_padding_mask else self.config.in_channels
+        patch_embed_in_channels = (
+            self.config.in_channels + 1 if self.config.concat_padding_mask else self.config.in_channels
+        )
         self.rope = CosmosRotaryPosEmbed(
             hidden_size=self.config.attention_head_dim,
             max_size=self.config.max_size,
@@ -122,7 +125,6 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         self.patch_embed.load_state_dict(artifacts["patch_embed"])
         self.time_embed = CosmosEmbedding(hidden_size, hidden_size)
         self.time_embed.load_state_dict(artifacts["time_embed"])
-
 
     def compute_embedding(
         self,
@@ -162,8 +164,15 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         # 4. Timestep embeddings
         temb, embedded_timestep = self.time_embed(hidden_states, timestep)
 
-        return hidden_states, temb, embedded_timestep, image_rotary_emb[0], image_rotary_emb[1], extra_pos_emb, attention_mask
-
+        return (
+            hidden_states,
+            temb,
+            embedded_timestep,
+            image_rotary_emb[0],
+            image_rotary_emb[1],
+            extra_pos_emb,
+            attention_mask,
+        )
 
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
@@ -182,7 +191,9 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
     ) -> RBLNCosmosTransformer3DModelConfig:
         rbln_config.transformer.num_channel_latents = pipe.transformer.config.in_channels
-        rbln_config.transformer.num_latent_frames = (rbln_config.transformer.num_frames - 1) // pipe.vae_scale_factor_temporal + 1
+        rbln_config.transformer.num_latent_frames = (
+            rbln_config.transformer.num_frames - 1
+        ) // pipe.vae_scale_factor_temporal + 1
         rbln_config.transformer.latent_height = rbln_config.transformer.height // pipe.vae_scale_factor_temporal
         rbln_config.transformer.latent_width = rbln_config.transformer.width // pipe.vae_scale_factor_temporal
         rbln_config.transformer.hidden_size = (
@@ -219,7 +230,11 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         rbln_config: "RBLNCosmosTransformer3DModelConfig",
     ) -> RBLNCosmosTransformer3DModelConfig:
         p_t, p_h, p_w = model_config.patch_size
-        hidden_dim = (rbln_config.num_latent_frames // p_t) * (rbln_config.latent_height // p_h) * (rbln_config.latent_width // p_w)
+        hidden_dim = (
+            (rbln_config.num_latent_frames // p_t)
+            * (rbln_config.latent_height // p_h)
+            * (rbln_config.latent_width // p_w)
+        )
         input_info = [
             (
                 "hidden_states",
@@ -268,7 +283,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
             image_rotary_emb_0,
             image_rotary_emb_1,
             extra_pos_emb,
-            attention_mask
+            attention_mask,
         ) = self.compute_embedding(hidden_states, timestep, attention_mask, fps, condition_mask, padding_mask)
 
         hidden_states = self.model[0].forward(

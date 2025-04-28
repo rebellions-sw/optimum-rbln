@@ -133,10 +133,9 @@ if TYPE_CHECKING:
     from .modeling_diffusers import RBLNDiffusionMixin
     from .models import (
         RBLNAutoencoderKL,
-        RBLNAutoencoderKL,
         RBLNControlNetModel,
-        RBLNPriorTransformer,
         RBLNCosmosTransformer3DModel,
+        RBLNPriorTransformer,
         RBLNSD3Transformer2DModel,
         RBLNUNet2DConditionModel,
         RBLNVQModel,
