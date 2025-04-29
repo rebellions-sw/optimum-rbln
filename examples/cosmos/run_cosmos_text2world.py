@@ -15,6 +15,8 @@ def main(
     from_diffusers: bool = False,
     prompt: str = None,
     steps: int = 36,
+    height: int = 704,
+    width: int = 1280,
 ):
     if prompt is None:
         prompt = "A sleek, humanoid robot stands in a vast warehouse filled with neatly stacked cardboard boxes on industrial shelves. The robot's metallic body gleams under the bright, even lighting, highlighting its futuristic design and intricate joints. A glowing blue light emanates from its chest, adding a touch of advanced technology. The background is dominated by rows of boxes, suggesting a highly organized storage system. The floor is lined with wooden pallets, enhancing the industrial setting. The camera remains static, capturing the robot's poised stance amidst the orderly environment, with a shallow depth of field that keeps the focus on the robot while subtly blurring the background for a cinematic effect."
@@ -27,6 +29,8 @@ def main(
         checker = RBLNCosmosSafetyChecker.compile_submodules(
             model=model,
             model_save_dir=safety_checker_dir,
+            rbln_height=height,
+            rbln_width=width,
             rbln_config={
                 "text_guardrail": {
                     "device": [
@@ -34,6 +38,9 @@ def main(
                         1,
                         2,
                         3,
+                        4,
+                        5,
+                        6,
                     ]
                 },
                 "video_guardrail": {"device": 3},
@@ -43,6 +50,8 @@ def main(
             model_id,
             safety_checker=checker,
             export=True,
+            rbln_height=height,
+            rbln_width=width,
             rbln_config={
                 "transformer": {
                     "device": [0, 1, 3, 4],
@@ -61,6 +70,8 @@ def main(
         checker = RBLNCosmosSafetyChecker.load_submodules(
             model=model,
             model_save_dir=safety_checker_dir,
+            rbln_height=height,
+            rbln_width=width,
             rbln_config={
                 "text_guardrail": {
                     "device": [
@@ -77,6 +88,8 @@ def main(
             model_id,
             safety_checker=checker,
             export=False,
+            rbln_height=height,
+            rbln_width=width,
             rbln_config={
                 "transformer": {
                     "device": [0, 1, 3, 4],
