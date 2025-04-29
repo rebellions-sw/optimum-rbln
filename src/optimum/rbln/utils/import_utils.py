@@ -145,11 +145,11 @@ def check_version_compats() -> None:
             warnings.warn(f"optimum-rbln requires {compat.package_name} to be installed.", ImportWarning)
             continue
 
-        # For versions 0.7.2 and above, don't show warning for rebel-compiler if versions match exactly
+        # For versions 0.7.2 and above, don't show warning for rebel-compiler if base versions match
         if (
             Version(my_version) >= Version("0.7.2")
             and compat.package_name == "rebel-compiler"
-            and my_version == dep_version
+            and Version(my_version).base_version == Version(dep_version).base_version
         ):
             continue
 
