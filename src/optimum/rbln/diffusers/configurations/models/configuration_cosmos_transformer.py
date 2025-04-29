@@ -25,7 +25,7 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
         height: Optional[int] = None,
         width: Optional[int] = None,
         fps: Optional[int] = None,
-        max_sequence_length: Optional[int] = None,
+        max_seq_len: Optional[int] = None,
         num_channel_latents: Optional[int] = None,
         num_latent_frames: Optional[int] = None,
         latent_height: Optional[int] = None,
@@ -53,7 +53,7 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
         self.height = height or 704
         self.width = width or 1280
         self.fps = fps or 30
-        self.max_seq_len = max_sequence_length or 512
+        self.max_seq_len = max_seq_len or 512
 
         self.num_channel_latents = num_channel_latents
         self.num_latent_frames = num_latent_frames

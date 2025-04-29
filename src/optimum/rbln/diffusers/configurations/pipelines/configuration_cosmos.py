@@ -74,7 +74,7 @@ class RBLNCosmosPipelineConfig(RBLNModelConfig):
             RBLNCosmosTransformer3DModelConfig,
             transformer,
             batch_size=batch_size,
-            max_sequence_length=max_seq_len,
+            max_seq_len=max_seq_len,
             height=height,
             width=width,
             num_frames=num_frames,
