@@ -38,14 +38,6 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def replaced_forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-    if self.temporal_pad != 0:
-        hidden_states_prev = hidden_states[:, :, :1, ...].repeat(1, 1, self.temporal_pad, 1, 1)
-        hidden_states = torch.cat([hidden_states_prev, hidden_states], dim=2)
-    hidden_states = F.pad(hidden_states, (*self.spatial_pad, 0, 0), mode=self.pad_mode, value=0.0)
-    return super(CosmosCausalConv3d, self).forward(hidden_states)
-
-
 class RBLNAutoencoderKLCosmos(RBLNModel):
     auto_model_class = AutoencoderKLCosmos
     hf_library_name = "diffusers"
@@ -65,14 +57,7 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
     def wrap_model_if_needed(
         cls, model: torch.nn.Module, rbln_config: RBLNAutoencoderKLCosmosConfig
     ) -> torch.nn.Module:
-        def replace_forward_func(model):
-            for name, module in model.named_children():
-                if isinstance(module, CosmosCausalConv3d) and module.temporal_pad == 0:
-                    module.forward = replaced_forward.__get__(module, module.__class__)
-                else:
-                    replace_forward_func(module)
 
-        replace_forward_func(model)
         if rbln_config.uses_encoder:
             raise NotImplementedError("We currently support Text to World pipeline only.")
 
@@ -87,8 +72,21 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
         if rbln_config.uses_encoder:
             raise NotImplementedError("We currently support Text to World pipeline only.")
 
+        def replaced_forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+            if self.temporal_pad != 0:
+                hidden_states_prev = hidden_states[:, :, :1, ...].repeat(1, 1, self.temporal_pad, 1, 1)
+                hidden_states = torch.cat([hidden_states_prev, hidden_states], dim=2)
+            hidden_states = F.pad(hidden_states, (*self.spatial_pad, 0, 0), mode=self.pad_mode, value=0.0)
+            return super(CosmosCausalConv3d, self).forward(hidden_states)
+
+        original_forward = CosmosCausalConv3d.forward
+        CosmosCausalConv3d.forward = replaced_forward
+
         decoder_model = cls.wrap_model_if_needed(model, rbln_config)
         dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
+
+        CosmosCausalConv3d.forward = original_forward
+
         return {"decoder": dec_compiled_model}
 
     @classmethod
