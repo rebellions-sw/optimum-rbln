@@ -57,13 +57,6 @@ class RBLNCosmosPipelineConfig(RBLNModelConfig):
             fps (Optional[int]): The frames per second of the generated video.
             max_seq_len (Optional[int]): Maximum sequence length supported by the model.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
-
-        Raises:
-            ValueError: If both image_size and img_height/img_width are provided.
-
-        Note:
-            When guidance_scale > 1.0, the UNet batch size is automatically doubled to
-            accommodate classifier-free guidance.
         """
         super().__init__(**kwargs)
 
