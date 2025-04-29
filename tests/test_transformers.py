@@ -3,6 +3,7 @@ import shutil
 import unittest
 
 import torch
+from rebel.core.exception import RBLNRuntimeError
 from transformers import T5EncoderModel
 
 from optimum.rbln import (
@@ -77,7 +78,6 @@ class TestResNetModel(BaseTest.TestModel):
                     **self.HF_CONFIG_KWARGS,
                     **{
                         "torchscript": True,
-                        "return_dict": False,
                     },
                 )
                 _ = self.RBLN_CLASS.from_model(
@@ -86,6 +86,14 @@ class TestResNetModel(BaseTest.TestModel):
                     **self.HF_CONFIG_KWARGS,
                     preprocessors=preprocessors,  # For image_classification
                 )
+
+    def test_failed_to_create_runtime(self):
+        with self.assertRaises(RBLNRuntimeError):
+            _ = self.RBLN_CLASS.from_pretrained(
+                self.HF_MODEL_ID,
+                export=True,
+                rbln_device=[0, 1, 2, 3],
+            )
 
 
 class TestBertModel(BaseTest.TestModel):

@@ -55,6 +55,7 @@ class TestSDModelBatch(BaseTest.TestModel):
                 "sample_size": (64, 64),
             },
         },
+        "rbln_guidance_scale": 0.0,
     }
 
 

@@ -48,7 +48,7 @@ class _BaseAutoModelClass:
 
         Args:
             pretrained_model_name_or_path (str): Identifier or path to the pretrained model.
-            export (bool): Whether to infer the class based on Hugging Face (HF) architecture.
+            export (bool): Whether to infer the class based on HuggingFace (HF) architecture.
             kwargs: Additional arguments for configuration and loading.
 
         Returns:
@@ -86,14 +86,14 @@ class _BaseAutoModelClass:
         **kwargs,
     ):
         """
-        Infer the Hugging Face model class based on the configuration or model name.
+        Infer the HuggingFace model class based on the configuration or model name.
 
         Args:
             pretrained_model_name_or_path (str): Identifier or path to the pretrained model.
             kwargs: Additional arguments for configuration and loading.
 
         Returns:
-            PretrainedModel: The inferred Hugging Face model class.
+            PretrainedModel: The inferred HuggingFace model class.
         """
 
         # Try to load configuration if provided or retrieve it from the model ID

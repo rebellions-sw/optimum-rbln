@@ -16,9 +16,11 @@ from optimum.rbln import (
     RBLNBartForConditionalGeneration,
     RBLNExaoneForCausalLM,
     RBLNGPT2LMHeadModel,
+    RBLNIdefics3ForConditionalGeneration,
     RBLNLlamaForCausalLM,
     RBLNLlavaNextForConditionalGeneration,
     RBLNPhiForCausalLM,
+    RBLNQwen2_5_VLForConditionalGeneration,
     RBLNQwen2ForCausalLM,
     RBLNT5ForConditionalGeneration,
 )
@@ -222,7 +224,6 @@ class TestBartModel(LLMTest.TestLLM):
 class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
     RBLN_CLASS = RBLNLlavaNextForConditionalGeneration
-    TEST_LEVEL = TestLevel.FULL
     HF_MODEL_ID = "llava-hf/llava-v1.6-mistral-7b-hf"  # No tiny model yet.
     PROMPT = "[INST] <image>\nWhat’s shown in this image? [/INST]"
     RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True}}}
@@ -244,6 +245,86 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
         kwargs = {"text_config": text_config}
         cls.HF_CONFIG_KWARGS.update(kwargs)
         return super().setUpClass()
+
+    def get_inputs(self):
+        tokenizer = self.get_tokenizer()
+        img_path = f"{os.path.dirname(__file__)}/../assets/rbln_logo.png"
+        image = Image.open(img_path)
+        inputs = tokenizer(images=[image], text=[self.PROMPT], return_tensors="pt", padding=True)
+        inputs["max_new_tokens"] = 20
+        inputs["do_sample"] = False
+        return inputs
+
+    def _inner_test_save_load(self, tmpdir):
+        super()._inner_test_save_load(tmpdir)
+        # Test loading from nested config
+        _ = self.RBLN_CLASS.from_pretrained(
+            tmpdir,
+            export=False,
+            rbln_config={"language_model": {"create_runtimes": False}},
+            **self.HF_CONFIG_KWARGS,
+        )
+
+
+class TestIdefics3ForConditionalGeneration(LLMTest.TestLLM):
+    RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
+    RBLN_CLASS = RBLNIdefics3ForConditionalGeneration
+    TEST_LEVEL = TestLevel.FULL
+    HF_MODEL_ID = "hf-internal-testing/tiny-random-Idefics3ForConditionalGeneration"
+    PROMPT = [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": "Describe this image."}]}]
+    RBLN_CLASS_KWARGS = {"rbln_config": {"text_model": {"use_inputs_embeds": True, "attn_impl": "flash_attn"}}}
+
+    @classmethod
+    def get_tokenizer(cls):
+        if cls._tokenizer is None:
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
+        return cls._tokenizer
+
+    # override
+    @classmethod
+    def setUpClass(cls):
+        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
+        text_config = json.loads(config.text_config.to_json_string())
+        text_config["num_hidden_layers"] = 1
+        kwargs = {"text_config": text_config}
+        cls.HF_CONFIG_KWARGS.update(kwargs)
+        return super().setUpClass()
+
+    def get_inputs(self):
+        tokenizer = self.get_tokenizer()
+        img_path = f"{os.path.dirname(__file__)}/../assets/rbln_logo.png"
+        image = Image.open(img_path)
+        text = tokenizer.apply_chat_template(self.PROMPT, add_generation_prompt=True)
+        inputs = tokenizer(images=[image], text=[text], return_tensors="pt", padding=True)
+        inputs["max_new_tokens"] = 20
+        inputs["do_sample"] = False
+        return inputs
+
+
+class TestQwen2_5_VLForConditionalGeneration(LLMTest.TestLLM):
+    RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
+    RBLN_CLASS = RBLNQwen2_5_VLForConditionalGeneration
+    TEST_LEVEL = TestLevel.FULL
+    HF_MODEL_ID = "Qwen/Qwen2.5-VL-3B-Instruct"  # No tiny model yet.
+    PROMPT = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>Describe this image.<|im_end|>\n<|im_start|>assistant\n"
+    RBLN_CLASS_KWARGS = {
+        "rbln_config": {
+            "visual": {"max_seq_lens": 512},
+            "tensor_parallel_size": 1,
+            "kvcache_partition_len": 16_384,
+            "max_seq_len": 32_768,
+        }
+    }
+    EXPECTED_OUTPUT = "讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣"
+    HF_CONFIG_KWARGS = {
+        "num_hidden_layers": 1,
+    }
+
+    @classmethod
+    def get_tokenizer(cls):
+        if cls._tokenizer is None:
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, max_pixels=64 * 14 * 14)
+        return cls._tokenizer
 
     def get_inputs(self):
         tokenizer = self.get_tokenizer()

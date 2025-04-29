@@ -36,7 +36,7 @@ def get_pr_diff():
 
 
 def get_prompt(diff, pr):
-    system_prompt = """You are an experienced software engineer specializing in code reviews for deep learning libraries. Your task is to review code changes and related pull request (PR) information for `optimum-rbln`, a Python library that optimizes Hugging Face models for execution on RBLN NPUs.
+    system_prompt = """You are an experienced software engineer specializing in code reviews for deep learning libraries. Your task is to review code changes and related pull request (PR) information for `optimum-rbln`, a Python library that optimizes HuggingFace models for execution on RBLN NPUs.
 
 Focus on providing actionable and constructive feedback. Don't make generalized suggestions."""
 

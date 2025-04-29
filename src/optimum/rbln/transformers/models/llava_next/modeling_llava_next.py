@@ -157,6 +157,12 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         self._padding_side = "left"  # set it to left by default, user can use setter to change padding_sides
         return super().__post_init__(**kwargs)
 
+    def get_attn_impl(self) -> str:
+        return self.rbln_config.language_model.attn_impl
+
+    def get_kvcache_num_blocks(self) -> int:
+        return self.rbln_config.language_model.kvcache_num_blocks
+
     def get_input_embeddings(self):
         return self.language_model.get_input_embeddings()
 

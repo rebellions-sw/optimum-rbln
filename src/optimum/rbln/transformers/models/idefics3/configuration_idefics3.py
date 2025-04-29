@@ -17,36 +17,35 @@ from typing import Optional
 from ....configuration_utils import RBLNModelConfig
 
 
-class RBLNPriorTransformerConfig(RBLNModelConfig):
-    subclass_non_save_attributes = ["_batch_size_is_specified"]
+class RBLNIdefics3VisionTransformerConfig(RBLNModelConfig):
+    pass
+
+
+class RBLNIdefics3ForConditionalGenerationConfig(RBLNModelConfig):
+    submodules = ["vision_model", "text_model"]
 
     def __init__(
         self,
         batch_size: Optional[int] = None,
-        embedding_dim: Optional[int] = None,
-        num_embeddings: Optional[int] = None,
+        vision_model: Optional[RBLNModelConfig] = None,
+        text_model: Optional[RBLNModelConfig] = None,
         **kwargs,
     ):
         """
         Args:
             batch_size (Optional[int]): The batch size for inference. Defaults to 1.
-            embedding_dim (Optional[int]): Dimension of the embedding vectors in the model.
-            num_embeddings (Optional[int]): Number of discrete embeddings in the codebook.
+            vision_model (Optional[RBLNModelConfig]): Configuration for the vision transformer component.
+            text_model (Optional[RBLNModelConfig]): Configuration for the text model component.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If batch_size is not a positive integer.
         """
-        super().__init__(**kwargs)
-        self._batch_size_is_specified = batch_size is not None
 
+        super().__init__(**kwargs)
         self.batch_size = batch_size or 1
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
-        self.embedding_dim = embedding_dim
-        self.num_embeddings = num_embeddings
-
-    @property
-    def batch_size_is_specified(self):
-        return self._batch_size_is_specified
+        self.vision_model = vision_model
+        self.text_model = text_model

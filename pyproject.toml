@@ -1,7 +1,7 @@
 [project]
 name = "optimum-rbln"
 description = """
-Optimum RBLN is the interface between the Hugging Face Transformers and Diffusers libraries and RBLN accelerators.
+Optimum RBLN is the interface between the HuggingFace Transformers and Diffusers libraries and RBLN accelerators.
 It provides a set of tools enabling easy model loading and inference on single and multiple rbln device settings for different downstream tasks.
 """
 authors = [

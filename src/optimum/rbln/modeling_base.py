@@ -216,6 +216,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             if isinstance(rbln_config, dict):
                 rbln_config_as_kwargs = {f"rbln_{key}": value for key, value in rbln_config.items()}
                 kwargs.update(rbln_config_as_kwargs)
+                rbln_config = None
             elif isinstance(rbln_config, RBLNModelConfig) and rbln_config.rbln_model_cls_name != cls.__name__:
                 raise ValueError(
                     f"Cannot use the passed rbln_config. Its model class name ({rbln_config.rbln_model_cls_name}) "
@@ -314,10 +315,15 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             )
 
         except rebel.core.exception.RBLNRuntimeError as e:
-            logger.warning(
-                f"Failed to create the runtime for the model due to a runtime error: {e.__class__.__name__} - {e}"
+            error_msg = (
+                f"\nFailed to create RBLN runtime: {str(e)}\n\n"
+                f"If you only need to compile the model without loading it to NPU, you can use:\n"
+                f"  from_pretrained(..., rbln_create_runtimes=False) or\n"
+                f"  from_pretrained(..., rbln_config={{..., 'create_runtimes': False}})\n\n"
+                f"To check your NPU status, run the 'rbln-stat' command in your terminal.\n"
+                f"Make sure your NPU is properly installed and operational."
             )
-            models = UnavailableRuntime()
+            raise rebel.core.exception.RBLNRuntimeError(error_msg) from e
 
         return cls(
             models,
@@ -387,13 +393,13 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     @classmethod
     def get_hf_class(cls):
         """
-        Lazily loads and caches the corresponding Hugging Face model class.
+        Lazily loads and caches the corresponding HuggingFace model class.
         Removes 'RBLN' prefix from the class name to get the original class name
         (e.g., RBLNLlamaForCausalLM -> LlamaForCausalLM) and imports it from
         the transformers/diffusers module.
 
         Returns:
-            type: The original Hugging Face model class
+            type: The original HuggingFace model class
         """
         if cls._hf_class is None:
             hf_cls_name = cls.__name__[4:]
@@ -422,6 +428,20 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
     def to(self, *args, **kwargs):
         return self
+
+    def parameters(self):
+        """
+        Provides a dummy parameter generator for compatibility.
+
+        This method mimics the interface of torch.nn.Module.parameters()
+        specifically for code that uses `next(model.parameters())` to infer
+        the device or dtype. It yields a single dummy tensor on CPU with float32 dtype.
+
+        Warning:
+            This does NOT yield the actual model parameters used by the RBLN runtime.
+            Code relying on iterating through all model parameters will not work as expected.
+        """
+        yield torch.tensor([1.0], dtype=torch.float32, device=torch.device("cpu"))
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
@@ -459,7 +479,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             save_directory (`Union[str, Path]`):
                 Directory where to save the model file.
             push_to_hub (`bool`, *optional*, defaults to `False`):
-                Whether or not to push your model to the Hugging Face model hub after saving it.
+                Whether or not to push your model to the HuggingFace model hub after saving it.
 
         """
         if os.path.isfile(save_directory):
