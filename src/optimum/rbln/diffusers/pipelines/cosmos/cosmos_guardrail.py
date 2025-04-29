@@ -277,6 +277,23 @@ class RBLNVideoSafetyModel(RBLNSimpleModel):
     _rbln_config_class = RBLNVideoSafetyModelConfig
 
     @classmethod
+    def prepare_rbln_config(
+        cls, rbln_config: Optional[Union[Dict[str, Any], RBLNModelConfig]] = None, **kwargs
+    ) -> Tuple[RBLNModelConfig, Dict[str, Any]]:
+        """
+        Extract rbln-config from kwargs and convert it to RBLNModelConfig.
+        """
+        submodule_rbln_config = {}
+        submodule_rbln_config.update(rbln_config)
+        submodule_rbln_config.update(kwargs)
+        if "height" in submodule_rbln_config:
+            submodule_rbln_config.pop("height")
+        if "width" in submodule_rbln_config:
+            submodule_rbln_config.pop("width")
+
+        return super().prepare_rbln_config(submodule_rbln_config)
+
+    @classmethod
     def _update_rbln_config(cls, rbln_config: RBLNVideoSafetyModelConfig):
         batch_size = rbln_config.batch_size
         input_size = rbln_config.input_size
