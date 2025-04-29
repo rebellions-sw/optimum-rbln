@@ -57,7 +57,6 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
     def wrap_model_if_needed(
         cls, model: torch.nn.Module, rbln_config: RBLNAutoencoderKLCosmosConfig
     ) -> torch.nn.Module:
-
         if rbln_config.uses_encoder:
             raise NotImplementedError("We currently support Text to World pipeline only.")
 
