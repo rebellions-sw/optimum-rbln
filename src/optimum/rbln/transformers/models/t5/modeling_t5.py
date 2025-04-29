@@ -43,7 +43,7 @@ class T5EncoderWrapper(torch.nn.Module):
 
 class RBLNT5EncoderModel(RBLNTransformerEncoderForFeatureExtraction):
     auto_model_class = AutoModelForTextEncoding
-    rbln_model_input_names = ["input_ids", "attention_mask"]
+    output_class = BaseModelOutputWithPastAndCrossAttentions
 
     @classmethod
     def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: RBLNT5EncoderModelConfig):
@@ -58,24 +58,13 @@ class RBLNT5EncoderModel(RBLNTransformerEncoderForFeatureExtraction):
     ) -> "RBLNDiffusionMixinConfig":
         return rbln_config
 
-    def forward(self, input_ids=None, attention_mask=None, return_dict=None, **kwargs):
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+    def forward(self, input_ids=None, attention_mask=None, **kwargs):
         input_dict = {"input_ids": input_ids.long()}
         if attention_mask is not None:
             input_dict["attention_mask"] = attention_mask.long()
 
-        output = self.model[0](**input_dict)
-        return self._prepare_output(output, return_dict)
-
-    def _prepare_output(self, output, return_dict):
-        if not return_dict:
-            return (output,) if not isinstance(output, (tuple, list)) else output
-        else:
-            if self.output_class is None:
-                return BaseModelOutputWithPastAndCrossAttentions(last_hidden_state=output)
-
-            # Create output with the appropriate class and key
-            return self.output_class(**{self.output_key: output})
+        output = super().forward(**input_dict, **kwargs)
+        return output
 
 
 class RBLNT5ForConditionalGeneration(RBLNModelForSeq2SeqLM):
