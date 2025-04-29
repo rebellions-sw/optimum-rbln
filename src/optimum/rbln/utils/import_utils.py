@@ -144,7 +144,6 @@ def check_version_compats() -> None:
         except importlib.metadata.PackageNotFoundError:
             warnings.warn(f"optimum-rbln requires {compat.package_name} to be installed.", ImportWarning)
             continue
-        # breakpoint()
         # For versions 0.7.2 and above, don't show warning for rebel-compiler if base versions match
 
         if compat.package_name == "rebel-compiler":
