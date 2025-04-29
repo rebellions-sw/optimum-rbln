@@ -38,9 +38,6 @@ def main(
                         1,
                         2,
                         3,
-                        4,
-                        5,
-                        6,
                     ]
                 },
                 "video_guardrail": {"device": 3},
