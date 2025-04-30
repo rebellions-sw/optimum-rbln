@@ -20,6 +20,7 @@ def main(
 ):
     if prompt is None:
         prompt = "A sleek, humanoid robot stands in a vast warehouse filled with neatly stacked cardboard boxes on industrial shelves. The robot's metallic body gleams under the bright, even lighting, highlighting its futuristic design and intricate joints. A glowing blue light emanates from its chest, adding a touch of advanced technology. The background is dominated by rows of boxes, suggesting a highly organized storage system. The floor is lined with wooden pallets, enhancing the industrial setting. The camera remains static, capturing the robot's poised stance amidst the orderly environment, with a shallow depth of field that keeps the focus on the robot while subtly blurring the background for a cinematic effect."
+    print(prompt)
 
     safety_checker_dir = "cosmos_safety_checker"
     with patch("torch.load", partial(torch.load, weights_only=True, map_location=torch.device("cpu"))):
@@ -51,11 +52,11 @@ def main(
             rbln_width=width,
             rbln_config={
                 "transformer": {
-                    "device": [0, 1, 3, 4],
+                    "device": [4, 5, 6, 7],
                     "tensor_parallel_size": 4,
                 },
                 "text_encoder": {
-                    "device": 4,
+                    "device": 1,
                 },
                 "vae": {
                     "device": 2,
@@ -67,8 +68,6 @@ def main(
         checker = RBLNCosmosSafetyChecker.load_submodules(
             model=model,
             model_save_dir=safety_checker_dir,
-            rbln_height=height,
-            rbln_width=width,
             rbln_config={
                 "text_guardrail": {
                     "device": [
@@ -85,15 +84,13 @@ def main(
             model_id,
             safety_checker=checker,
             export=False,
-            rbln_height=height,
-            rbln_width=width,
             rbln_config={
                 "transformer": {
-                    "device": [0, 1, 3, 4],
+                    "device": [4, 5, 6, 7],
                     "tensor_parallel_size": 4,
                 },
                 "text_encoder": {
-                    "device": 4,
+                    "device": 1,
                 },
                 "vae": {
                     "device": 2,
