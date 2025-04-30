@@ -16,12 +16,11 @@ import importlib
 from typing import TYPE_CHECKING, Any, Dict, List, Type
 
 from ..configuration_utils import RBLNModelConfig
+from ..modeling_base import RBLNBaseModel, get_rbln_model_class
 
 
 if TYPE_CHECKING:
     from transformers import PreTrainedModel
-
-    from ..modeling_base import RBLNBaseModel
 
 
 class SubModulesMixin:
@@ -54,7 +53,7 @@ class SubModulesMixin:
                 torch_submodule: PreTrainedModel = getattr(model, submodule_name)
 
             cls_name = torch_submodule.__class__.__name__
-            submodule_cls: Type["RBLNBaseModel"] = getattr(importlib.import_module("optimum.rbln"), f"RBLN{cls_name}")
+            submodule_cls: Type["RBLNBaseModel"] = get_rbln_model_class(f"RBLN{cls_name}")
             submodule_rbln_config = getattr(rbln_config, submodule_name) or {}
 
             if isinstance(submodule_rbln_config, dict):

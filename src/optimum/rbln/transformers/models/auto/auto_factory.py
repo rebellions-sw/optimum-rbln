@@ -11,17 +11,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import importlib
 import inspect
 import warnings
+from typing import Type
 
 from transformers import AutoConfig, PretrainedConfig
 from transformers.dynamic_module_utils import get_class_from_dynamic_module
 from transformers.models.auto.auto_factory import _get_model_class
 
 from optimum.rbln.configuration_utils import RBLNAutoConfig
-from optimum.rbln.modeling_base import RBLNBaseModel
+from optimum.rbln.modeling_base import MODEL_MAPPING, RBLNBaseModel, get_rbln_model_class
 from optimum.rbln.utils.model_utils import convert_hf_to_rbln_model_name, convert_rbln_to_hf_model_name
 
 
@@ -68,8 +68,7 @@ class _BaseAutoModelClass:
                 )
 
         try:
-            module = importlib.import_module("optimum.rbln")
-            rbln_cls = getattr(module, rbln_class_name)
+            rbln_cls = get_rbln_model_class(rbln_class_name)
         except AttributeError as e:
             raise AttributeError(
                 f"Class '{rbln_class_name}' not found in 'optimum.rbln' module for model ID '{pretrained_model_name_or_path}'. "
@@ -159,11 +158,25 @@ class _BaseAutoModelClass:
         return rbln_config.rbln_model_cls_name
 
     @classmethod
-    def from_pretrained(
-        cls,
-        model_id,
-        *args,
-        **kwargs,
-    ):
+    def from_pretrained(cls, model_id, *args, **kwargs):
         rbln_cls = cls.get_rbln_cls(model_id, *args, **kwargs)
         return rbln_cls.from_pretrained(model_id, *args, **kwargs)
+
+    @staticmethod
+    def register(rbln_cls: Type[RBLNBaseModel], exist_ok=False):
+        """
+        Register a new RBLN model class.
+
+        Args:
+            rbln_cls (Type[RBLNBaseModel]): The RBLN model class to register.
+            exist_ok (bool): Whether to allow registering an already registered model.
+        """
+        if not issubclass(rbln_cls, RBLNBaseModel):
+            raise ValueError("`rbln_cls` must be a subclass of RBLNBaseModel.")
+
+        native_cls = getattr(importlib.import_module("optimum.rbln"), rbln_cls.__name__, None)
+        if rbln_cls.__name__ in MODEL_MAPPING or native_cls is not None:
+            if not exist_ok:
+                raise ValueError(f"Model for {rbln_cls.__name__} already registered.")
+
+        MODEL_MAPPING[rbln_cls.__name__] = rbln_cls
