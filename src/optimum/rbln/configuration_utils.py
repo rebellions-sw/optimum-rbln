@@ -607,6 +607,8 @@ class RBLNModelConfig:
                 serializable_map[key] = value._prepare_for_serialization()
             elif key == "_compile_cfgs":
                 serializable_map[key] = [cfg.asdict() for cfg in value]
+            elif dataclass.is_dataclass(value):
+                serializable_map[key] = asdict(value)
             else:
                 serializable_map[key] = value
         return serializable_map
@@ -814,3 +816,14 @@ class RBLNModelConfig:
     @activate_profiler.setter
     def activate_profiler(self, activate_profiler: bool):
         self._runtime_options["activate_profiler"] = activate_profiler
+
+
+@dataclass
+class RBLNLoRAConfig:
+    max_lora_rank: int
+    max_loras: int
+    lora_dtype: Optional[Union[torch.dtype, str]] = None
+    lora_extra_vocab_size: int = 256
+    lora_vocab_padding_size: int = 256
+    long_lora_scaling_factors: Optional[tuple[float]] = None
+    bias_enabled: bool = False

@@ -542,7 +542,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
     @classmethod
     @torch.inference_mode()
-    def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNDecoderOnlyModelForCausalLMConfig):
+    def get_compiled_model(
+        cls, model: "PreTrainedModel", rbln_config: RBLNDecoderOnlyModelForCausalLMConfig
+    ) -> Dict[str, rebel.RBLNCompiledModel]:
         wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
 
         rbln_compile_configs = rbln_config.compile_cfgs

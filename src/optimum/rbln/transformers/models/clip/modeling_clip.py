@@ -75,7 +75,9 @@ class RBLNCLIPTextModel(RBLNModel):
         rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
         return rbln_config
 
-    def forward(self, input_ids: torch.LongTensor, return_dict: bool = None, **kwargs) -> torch.FloatTensor:
+    def forward(
+        self, input_ids: torch.LongTensor, return_dict: bool = None, **kwargs
+    ) -> Union[Tuple, CLIPTextModelOutput]:
         # To ignore using attention_mask, we override forward method.
         output = super().forward(input_ids, return_dict=return_dict)
         return output

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, List, Union
+from typing import TYPE_CHECKING, Dict, List, Union
 
 import rebel
 import torch
@@ -52,7 +52,7 @@ class RBLNVQModel(RBLNModel):
         self.image_size = self.rbln_config.image_size
 
     @classmethod
-    def get_compiled_model(cls, model, rbln_config: RBLNModelConfig):
+    def get_compiled_model(cls, model, rbln_config: RBLNModelConfig) -> Dict[str, rebel.RBLNCompiledModel]:
         if rbln_config.uses_encoder:
             expected_models = ["encoder", "decoder"]
         else:

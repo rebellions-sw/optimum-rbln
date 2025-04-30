@@ -25,7 +25,7 @@ import inspect
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
 import rebel
 import torch
@@ -164,7 +164,9 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
 
     @classmethod
     @torch.inference_mode()
-    def get_compiled_model(cls, model, rbln_config: RBLNTimeSeriesTransformerForPredictionConfig):
+    def get_compiled_model(
+        cls, model: "PreTrainedModel", rbln_config: RBLNTimeSeriesTransformerForPredictionConfig
+    ) -> Dict[str, rebel.RBLNCompiledModel]:
         wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
 
         enc_compile_config = rbln_config.compile_cfgs[0]

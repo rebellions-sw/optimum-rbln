@@ -22,6 +22,27 @@ from ...utils.rbln_quantization import QuantizationManager
 
 
 logger = get_logger()
+# from transformers import QuantizedCacheConfig
+# from transformers.utils.quantization_config import QuantizationConfigMixin
+
+# class RBLNLoraConfig(RBLNModelConfig):
+#     def __init__(
+#         self,
+#         lora_ids: Optional[Union[str, List[str]]] = None,
+#         lora_weights_names: Optional[Union[str, List[str]]] = None,
+#         lora_scales: Optional[Union[float, List[float]]] = None,
+#         **kwargs: Dict[str, Any],
+#     ):
+#         super().__init__(**kwargs)
+#         self.lora_ids = lora_ids
+#         if isinstance(self.lora_ids, str):
+#             self.lora_ids = [self.lora_ids]
+#         self.lora_weights_names = lora_weights_names
+#         if isinstance(self.lora_weights_names, str):
+#             self.lora_weights_names = [self.lora_weights_names]
+#         self.lora_scales = lora_scales
+#         if isinstance(self.lora_scales, float):
+#             self.lora_scales = [self.lora_scales]
 
 
 class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
@@ -37,6 +58,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         quantization: Optional[Dict[str, Any]] = None,
         prefill_chunk_size: Optional[int] = None,
         kvcache_num_blocks: Optional[int] = None,
+        # lora_config: Optional[Dict[str, Any]] = None,
         **kwargs,
     ):
         """

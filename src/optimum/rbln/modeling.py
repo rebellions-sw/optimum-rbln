@@ -14,7 +14,7 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
 
 import rebel
 import torch
@@ -82,7 +82,9 @@ class RBLNModel(RBLNBaseModel):
         return model
 
     @classmethod
-    def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
+    def get_compiled_model(
+        cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig
+    ) -> Union[rebel.RBLNCompiledModel, Dict[str, rebel.RBLNCompiledModel]]:
         model = cls.wrap_model_if_needed(model, rbln_config)
         rbln_compile_config = rbln_config.compile_cfgs[0]
         compiled_model = cls.compile(model, rbln_compile_config=rbln_compile_config)
@@ -231,7 +233,7 @@ class RBLNModel(RBLNBaseModel):
             for compiled_model in compiled_models
         ]
 
-    def forward(self, *args, return_dict: Optional[bool] = None, **kwargs):
+    def forward(self, *args, return_dict: Optional[bool] = None, **kwargs) -> Union[Tuple, BaseModelOutput]:
         if self.hf_library_name == "transformers":
             return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         else:
@@ -243,7 +245,7 @@ class RBLNModel(RBLNBaseModel):
         # Format output according to task requirements
         return self._prepare_output(output, return_dict)
 
-    def _prepare_output(self, output, return_dict):
+    def _prepare_output(self, output, return_dict) -> Union[Tuple, BaseModelOutput]:
         """
         Prepare model output based on return_dict flag.
         This method can be overridden by subclasses to provide task-specific output handling.
