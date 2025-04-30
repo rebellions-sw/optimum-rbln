@@ -113,6 +113,26 @@ class RBLNModel(RBLNBaseModel):
                 save_dir_path = Path(model_save_dir)
                 save_dir_path.mkdir(exist_ok=True)
 
+        # Load submodules
+        if len(cls._rbln_submodules) > 0:
+            rbln_submodules = cls._load_submodules(
+                model=model,
+                model_save_dir=save_dir,
+                rbln_config=rbln_config,
+                **kwargs,
+            )
+        else:
+            rbln_submodules = []
+
+        # Get compilation arguments (e.g. input_info)
+        rbln_config: RBLNModelConfig = cls.update_rbln_config(
+            preprocessors=preprocessors, model=model, model_config=config, rbln_config=rbln_config
+        )
+
+        compiled_model: Union[rebel.RBLNCompiledModel, Dict[str, rebel.RBLNCompiledModel]] = cls.get_compiled_model(
+            model, rbln_config=rbln_config
+        )
+
         # Save configs
         if config is None:
             config = model.config
@@ -133,31 +153,13 @@ class RBLNModel(RBLNBaseModel):
 
         if not isinstance(config, PretrainedConfig):  # diffusers config
             config = PretrainedConfig(**config)
+
+        config.torchscript = False  # it was modified by update_kwargs, so we need to restore it
         config.save_pretrained(save_dir_path / subfolder)
 
         # Save preprocessor
         for preprocessor in preprocessors:
             preprocessor.save_pretrained(save_dir_path / subfolder)
-
-        # Load submodules
-        if len(cls._rbln_submodules) > 0:
-            rbln_submodules = cls._load_submodules(
-                model=model,
-                model_save_dir=save_dir,
-                rbln_config=rbln_config,
-                **kwargs,
-            )
-        else:
-            rbln_submodules = []
-
-        # Get compilation arguments (e.g. input_info)
-        rbln_config: RBLNModelConfig = cls.update_rbln_config(
-            preprocessors=preprocessors, model=model, model_config=config, rbln_config=rbln_config
-        )
-
-        compiled_model: Union[rebel.RBLNCompiledModel, Dict[str, rebel.RBLNCompiledModel]] = cls.get_compiled_model(
-            model, rbln_config=rbln_config
-        )
 
         # Save compiled models (.rbln)
         (save_dir_path / subfolder).mkdir(exist_ok=True)
