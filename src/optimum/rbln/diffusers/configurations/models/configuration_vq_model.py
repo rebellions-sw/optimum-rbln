@@ -22,6 +22,7 @@ class RBLNVQModelConfig(RBLNModelConfig):
         self,
         batch_size: Optional[int] = None,
         sample_size: Optional[Tuple[int, int]] = None,
+        uses_encoder: Optional[bool] = None,
         vqmodel_scale_factor: Optional[float] = None,  # TODO: rename to scaling_factor
         in_channels: Optional[int] = None,
         latent_channels: Optional[int] = None,
@@ -32,6 +33,8 @@ class RBLNVQModelConfig(RBLNModelConfig):
             batch_size (Optional[int]): The batch size for inference. Defaults to 1.
             sample_size (Optional[Tuple[int, int]]): The spatial dimensions (height, width) of the input/output images.
                 If an integer is provided, it's used for both height and width.
+            uses_encoder (Optional[bool]): Whether to include the encoder part of the VAE in the model.
+                When False, only the decoder is used (for latent-to-image conversion).
             vqmodel_scale_factor (Optional[float]): The scaling factor between pixel space and latent space.
                 Determines the downsampling ratio between original images and latent representations.
             in_channels (Optional[int]): Number of input channels for the model.
@@ -46,6 +49,7 @@ class RBLNVQModelConfig(RBLNModelConfig):
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
+        self.uses_encoder = uses_encoder
         self.sample_size = sample_size
         if isinstance(self.sample_size, int):
             self.sample_size = (self.sample_size, self.sample_size)

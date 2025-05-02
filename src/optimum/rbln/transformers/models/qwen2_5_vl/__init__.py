@@ -12,13 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from diffusers import StableDiffusion3Img2ImgPipeline
-
-from ...configurations import RBLNStableDiffusion3Img2ImgPipelineConfig
-from ...modeling_diffusers import RBLNDiffusionMixin
-
-
-class RBLNStableDiffusion3Img2ImgPipeline(RBLNDiffusionMixin, StableDiffusion3Img2ImgPipeline):
-    original_class = StableDiffusion3Img2ImgPipeline
-    _rbln_config_class = RBLNStableDiffusion3Img2ImgPipelineConfig
-    _submodules = ["transformer", "text_encoder_3", "text_encoder", "text_encoder_2", "vae"]
+from .configuration_qwen2_5_vl import (
+    RBLNQwen2_5_VisionTransformerPretrainedModelConfig,
+    RBLNQwen2_5_VLForConditionalGenerationConfig,
+)
+from .modeling_qwen2_5_vl import RBLNQwen2_5_VisionTransformerPretrainedModel, RBLNQwen2_5_VLForConditionalGeneration

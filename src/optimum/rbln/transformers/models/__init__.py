@@ -56,6 +56,12 @@ _import_structure = {
         "RBLNCLIPVisionModelWithProjection",
         "RBLNCLIPVisionModelWithProjectionConfig",
     ],
+    "qwen2_5_vl": [
+        "RBLNQwen2_5_VisionTransformerPretrainedModel",
+        "RBLNQwen2_5_VisionTransformerPretrainedModelConfig",
+        "RBLNQwen2_5_VLForConditionalGeneration",
+        "RBLNQwen2_5_VLForConditionalGenerationConfig",
+    ],
     "decoderonly": [
         "RBLNDecoderOnlyModelForCausalLM",
         "RBLNDecoderOnlyModelForCausalLMConfig",
@@ -67,6 +73,12 @@ _import_structure = {
     "exaone": ["RBLNExaoneForCausalLM", "RBLNExaoneForCausalLMConfig"],
     "gemma": ["RBLNGemmaForCausalLM", "RBLNGemmaForCausalLMConfig"],
     "gpt2": ["RBLNGPT2LMHeadModel", "RBLNGPT2LMHeadModelConfig"],
+    "idefics3": [
+        "RBLNIdefics3VisionTransformer",
+        "RBLNIdefics3ForConditionalGeneration",
+        "RBLNIdefics3ForConditionalGenerationConfig",
+        "RBLNIdefics3VisionTransformerConfig",
+    ],
     "llama": ["RBLNLlamaForCausalLM", "RBLNLlamaForCausalLMConfig"],
     "llava_next": ["RBLNLlavaNextForConditionalGeneration", "RBLNLlavaNextForConditionalGenerationConfig"],
     "midm": ["RBLNMidmLMHeadModel", "RBLNMidmLMHeadModelConfig"],
@@ -138,12 +150,24 @@ if TYPE_CHECKING:
     from .exaone import RBLNExaoneForCausalLM, RBLNExaoneForCausalLMConfig
     from .gemma import RBLNGemmaForCausalLM, RBLNGemmaForCausalLMConfig
     from .gpt2 import RBLNGPT2LMHeadModel, RBLNGPT2LMHeadModelConfig
+    from .idefics3 import (
+        RBLNIdefics3ForConditionalGeneration,
+        RBLNIdefics3ForConditionalGenerationConfig,
+        RBLNIdefics3VisionTransformer,
+        RBLNIdefics3VisionTransformerConfig,
+    )
     from .llama import RBLNLlamaForCausalLM, RBLNLlamaForCausalLMConfig
     from .llava_next import RBLNLlavaNextForConditionalGeneration, RBLNLlavaNextForConditionalGenerationConfig
     from .midm import RBLNMidmLMHeadModel, RBLNMidmLMHeadModelConfig
     from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig
     from .phi import RBLNPhiForCausalLM, RBLNPhiForCausalLMConfig
     from .qwen2 import RBLNQwen2ForCausalLM, RBLNQwen2ForCausalLMConfig
+    from .qwen2_5_vl import (
+        RBLNQwen2_5_VisionTransformerPretrainedModel,
+        RBLNQwen2_5_VisionTransformerPretrainedModelConfig,
+        RBLNQwen2_5_VLForConditionalGeneration,
+        RBLNQwen2_5_VLForConditionalGenerationConfig,
+    )
     from .t5 import (
         RBLNT5EncoderModel,
         RBLNT5EncoderModelConfig,

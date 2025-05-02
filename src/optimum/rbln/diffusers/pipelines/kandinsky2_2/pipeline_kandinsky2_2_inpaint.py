@@ -14,11 +14,13 @@
 
 from diffusers import KandinskyV22InpaintPipeline
 
+from ...configurations import RBLNKandinskyV22InpaintPipelineConfig
 from ...modeling_diffusers import RBLNDiffusionMixin
 
 
 class RBLNKandinskyV22InpaintPipeline(RBLNDiffusionMixin, KandinskyV22InpaintPipeline):
     original_class = KandinskyV22InpaintPipeline
+    _rbln_config_class = RBLNKandinskyV22InpaintPipelineConfig
     _submodules = ["unet", "movq"]
 
     def get_compiled_image_size(self):

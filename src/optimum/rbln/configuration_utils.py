@@ -32,6 +32,7 @@ logger = get_logger(__name__)
 
 DEFAULT_COMPILED_MODEL_NAME = "compiled_model"
 DEFAULT_MOD_NAME = "default"
+TypeInputInfo = List[Tuple[str, Tuple[int], str]]
 
 
 @dataclass
@@ -42,7 +43,7 @@ class RBLNCompileConfig:
     Attributes:
         compiled_model_name (str): Name of the compiled model.
         mod_name (str): Name of the RBLN module.
-        input_info (List[Tuple[str, Tuple[int], Optional[str]]]): Information about input tensors.
+        input_info (Union[List[TypeInputInfo], TypeInputInfo]): Information about input tensors.
         fusion (Optional[bool]): Whether to use fusion optimization.
         npu (Optional[str]): NPU configuration.
         tensor_parallel_size (Optional[int]): Size for tensor parallelism.
@@ -50,7 +51,7 @@ class RBLNCompileConfig:
 
     compiled_model_name: str = DEFAULT_COMPILED_MODEL_NAME
     mod_name: str = DEFAULT_MOD_NAME
-    input_info: List[Tuple[str, Tuple[int], Optional[str]]] = None
+    input_info: Union[List[TypeInputInfo], TypeInputInfo] = None
     fusion: Optional[bool] = None
     npu: Optional[str] = None
     tensor_parallel_size: Optional[int] = None
@@ -75,8 +76,33 @@ class RBLNCompileConfig:
                 dtype = dtype[:-2]
             return dtype
 
+    @property
+    def is_multiple_input_info(self) -> bool:
+        def is_valid_input_info(input_info):
+            if not isinstance(input_info, list):
+                return False
+            return all(
+                isinstance(item, (tuple, list))
+                and len(item) == 3
+                and isinstance(item[0], str)  # name
+                and isinstance(item[1], (tuple, list))  # shape
+                and all(isinstance(x, int) for x in item[1])
+                and isinstance(item[2], str)  # dtype
+                for item in input_info
+            )
+
+        if isinstance(self.input_info, list):
+            return all(is_valid_input_info(info) for info in self.input_info)
+        return False
+
     def __post_init__(self):
-        self.input_info = [(i[0], i[1], RBLNCompileConfig.normalize_dtype(i[2]) or "float32") for i in self.input_info]
+        def normalize_input_info(input_info):
+            return [(i[0], i[1], RBLNCompileConfig.normalize_dtype(i[2]) or "float32") for i in input_info]
+
+        if self.is_multiple_input_info:
+            self.input_info = [normalize_input_info(info) for info in self.input_info]
+        else:
+            self.input_info = normalize_input_info(self.input_info)
 
     def update(self, kwargs: Dict[str, Any]):
         self.compiled_model_name = kwargs.get("compiled_model_name", self.compiled_model_name)
@@ -149,6 +175,14 @@ class RBLNAutoConfig:
         return cls(**kwargs)
 
     @staticmethod
+    def load_from_dict(config_dict: Dict[str, Any]) -> "RBLNModelConfig":
+        cls_name = config_dict.get("cls_name")
+        if cls_name is None:
+            raise ValueError("`cls_name` is required.")
+        cls = getattr(importlib.import_module("optimum.rbln"), cls_name)
+        return cls(**config_dict)
+
+    @staticmethod
     def load(
         path: str,
         passed_rbln_config: Optional["RBLNModelConfig"] = None,
@@ -169,8 +203,9 @@ class RBLNAutoConfig:
         cls, config_file = load_config(path)
 
         rbln_keys = [key for key in kwargs.keys() if key.startswith("rbln_")]
-
         rbln_runtime_kwargs = {key[5:]: kwargs.pop(key) for key in rbln_keys if key[5:] in RUNTIME_KEYWORDS}
+        rbln_submodule_kwargs = {key[5:]: kwargs.pop(key) for key in rbln_keys if key[5:] in cls.submodules}
+
         rbln_kwargs = {
             key[5:]: kwargs.pop(key)
             for key in rbln_keys
@@ -179,6 +214,14 @@ class RBLNAutoConfig:
 
         if len(rbln_kwargs) > 0:
             raise ValueError(f"Cannot set the following arguments: {list(rbln_kwargs.keys())}")
+
+        # Process submodule's rbln_config
+        for submodule in cls.submodules:
+            if submodule not in config_file:
+                raise ValueError(f"Submodule {submodule} not found in rbln_config.json.")
+            submodule_config = config_file[submodule]
+            submodule_config.update(rbln_submodule_kwargs.pop(submodule, {}))
+            config_file[submodule] = RBLNAutoConfig.load_from_dict(submodule_config)
 
         if passed_rbln_config is not None:
             config_file.update(passed_rbln_config._runtime_options)
@@ -409,6 +452,7 @@ class RBLNModelConfig:
         "activate_profiler",
     ]
     submodules: List[str] = []
+    subclass_non_save_attributes = []
 
     def init_submodule_config(
         self,
@@ -437,7 +481,11 @@ class RBLNModelConfig:
         return submodule_config
 
     def __setattr__(self, key, value):
-        if key != "_attributes_map" and key not in self.non_save_attributes:
+        if (
+            key != "_attributes_map"
+            and key not in self.non_save_attributes
+            and key not in self.subclass_non_save_attributes
+        ):
             self._attributes_map[key] = value
 
         if hasattr(self, "_frozen") and self._frozen:
@@ -679,6 +727,28 @@ class RBLNModelConfig:
                 setattr(rbln_config, key, value)
 
         return rbln_config, kwargs
+
+    def get_default_values_for_original_cls(self, func_name: str, keys: List[str]) -> Dict[str, Any]:
+        """
+        Get default values for original class attributes from RBLNModelConfig.
+
+        Args:
+            func_name (str): The name of the function to get the default values for.
+            keys (List[str]): The keys of the attributes to get.
+
+        Returns:
+            Dict[str, Any]: The default values for the attributes.
+        """
+        model_cls = self.rbln_model_cls.get_hf_class()
+        func = getattr(model_cls, func_name)
+        func_signature = inspect.signature(func)
+        default_values = {}
+        for key in keys:
+            if key in func_signature.parameters:
+                default_values[key] = func_signature.parameters[key].default
+            else:
+                raise ValueError(f"Default value for `{key}` is not set for the model class.")
+        return default_values
 
     @property
     def create_runtimes(self):

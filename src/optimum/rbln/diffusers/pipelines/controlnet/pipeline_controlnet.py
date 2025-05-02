@@ -39,6 +39,7 @@ from diffusers.utils.torch_utils import is_compiled_module, is_torch_version
 
 from ....utils.decorator_utils import remove_compile_time_kwargs
 from ....utils.logging import get_logger
+from ...configurations import RBLNStableDiffusionControlNetPipelineConfig
 from ...modeling_diffusers import RBLNDiffusionMixin
 from ...models import RBLNControlNetModel
 from ...pipelines.controlnet.multicontrolnet import RBLNMultiControlNetModel
@@ -49,6 +50,7 @@ logger = get_logger(__name__)
 
 class RBLNStableDiffusionControlNetPipeline(RBLNDiffusionMixin, StableDiffusionControlNetPipeline):
     original_class = StableDiffusionControlNetPipeline
+    _rbln_config_class = RBLNStableDiffusionControlNetPipelineConfig
     _submodules = ["text_encoder", "unet", "vae", "controlnet"]
 
     # Almost copied from diffusers.pipelines.controlnet.pipeline_controlnet.py

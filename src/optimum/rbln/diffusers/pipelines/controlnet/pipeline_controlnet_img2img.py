@@ -37,6 +37,7 @@ from diffusers.utils import deprecate, logging
 from diffusers.utils.torch_utils import is_compiled_module
 
 from ....utils.decorator_utils import remove_compile_time_kwargs
+from ...configurations import RBLNStableDiffusionControlNetImg2ImgPipelineConfig
 from ...modeling_diffusers import RBLNDiffusionMixin
 from ...models import RBLNControlNetModel
 from ...pipelines.controlnet.multicontrolnet import RBLNMultiControlNetModel
@@ -48,6 +49,7 @@ logger = logging.get_logger(__name__)
 class RBLNStableDiffusionControlNetImg2ImgPipeline(RBLNDiffusionMixin, StableDiffusionControlNetImg2ImgPipeline):
     original_class = StableDiffusionControlNetImg2ImgPipeline
     _submodules = ["text_encoder", "unet", "vae", "controlnet"]
+    _rbln_config_class = RBLNStableDiffusionControlNetImg2ImgPipelineConfig
 
     # Almost copied from diffusers.pipelines.controlnet.pipeline_controlnet_img2img.py
     def check_inputs(

@@ -20,7 +20,7 @@ from diffusers import VQModel
 from diffusers.models.autoencoders.vae import DecoderOutput
 from diffusers.models.autoencoders.vq_model import VQEncoderOutput
 
-from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNModelConfig
+from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...configurations.models.configuration_vq_model import RBLNVQModelConfig
@@ -42,22 +42,34 @@ class RBLNVQModel(RBLNModel):
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
 
-        self.encoder = RBLNRuntimeVQEncoder(runtime=self.model[0], main_input_name="x")
-        self.decoder = RBLNRuntimeVQDecoder(runtime=self.model[1], main_input_name="z")
+        if self.rbln_config.uses_encoder:
+            self.encoder = RBLNRuntimeVQEncoder(runtime=self.model[0], main_input_name="x")
+        else:
+            self.encoder = None
+
+        self.decoder = RBLNRuntimeVQDecoder(runtime=self.model[-1], main_input_name="z")
         self.decoder.lookup_from_codebook = self.config.lookup_from_codebook
         self.image_size = self.rbln_config.image_size
 
     @classmethod
     def get_compiled_model(cls, model, rbln_config: RBLNModelConfig):
-        encoder_model = _VQEncoder(model)
-        decoder_model = _VQDecoder(model)
-        encoder_model.eval()
-        decoder_model.eval()
+        if rbln_config.uses_encoder:
+            expected_models = ["encoder", "decoder"]
+        else:
+            expected_models = ["decoder"]
 
-        enc_compiled_model = cls.compile(encoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
-        dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[1])
+        compiled_models = {}
+        for i, model_name in enumerate(expected_models):
+            if model_name == "encoder":
+                wrapped_model = _VQEncoder(model)
+            else:
+                wrapped_model = _VQDecoder(model)
 
-        return {"encoder": enc_compiled_model, "decoder": dec_compiled_model}
+            wrapped_model.eval()
+
+            compiled_models[model_name] = cls.compile(wrapped_model, rbln_compile_config=rbln_config.compile_cfgs[i])
+
+        return compiled_models
 
     @classmethod
     def update_rbln_config_using_pipe(
@@ -79,28 +91,38 @@ class RBLNVQModel(RBLNModel):
             # image processor default value 8 (int)
             rbln_config.vqmodel_scale_factor = 8
 
-        enc_shape = rbln_config.image_size
-        dec_shape = rbln_config.latent_sample_size
+        compile_cfgs = []
+        if rbln_config.uses_encoder:
+            enc_input_info = [
+                (
+                    "x",
+                    [
+                        rbln_config.batch_size,
+                        model_config.in_channels,
+                        rbln_config.sample_size[0],
+                        rbln_config.sample_size[1],
+                    ],
+                    "float32",
+                )
+            ]
+            enc_rbln_compile_config = RBLNCompileConfig(compiled_model_name="encoder", input_info=enc_input_info)
+            compile_cfgs.append(enc_rbln_compile_config)
 
-        enc_input_info = [
-            (
-                "x",
-                [rbln_config.batch_size, model_config.in_channels, enc_shape[0], enc_shape[1]],
-                "float32",
-            )
-        ]
         dec_input_info = [
             (
                 "h",
-                [rbln_config.batch_size, model_config.latent_channels, dec_shape[0], dec_shape[1]],
+                [
+                    rbln_config.batch_size,
+                    model_config.latent_channels,
+                    rbln_config.latent_sample_size[0],
+                    rbln_config.latent_sample_size[1],
+                ],
                 "float32",
             )
         ]
-
-        enc_rbln_compile_config = RBLNCompileConfig(compiled_model_name="encoder", input_info=enc_input_info)
         dec_rbln_compile_config = RBLNCompileConfig(compiled_model_name="decoder", input_info=dec_input_info)
+        compile_cfgs.append(dec_rbln_compile_config)
 
-        compile_cfgs = [enc_rbln_compile_config, dec_rbln_compile_config]
         rbln_config.set_compile_cfgs(compile_cfgs)
         return rbln_config
 
@@ -111,14 +133,16 @@ class RBLNVQModel(RBLNModel):
         rbln_config: RBLNVQModelConfig,
     ) -> List[rebel.Runtime]:
         if len(compiled_models) == 1:
-            device_val = rbln_config.device_map[DEFAULT_COMPILED_MODEL_NAME]
-            return [
-                compiled_models[0].create_runtime(
-                    tensor_type="pt", device=device_val, activate_profiler=rbln_config.activate_profiler
-                )
-            ]
+            # decoder
+            expected_models = ["decoder"]
+        else:
+            # encoder, decoder
+            expected_models = ["encoder", "decoder"]
 
-        device_vals = [rbln_config.device_map["encoder"], rbln_config.device_map["decoder"]]
+        if any(model_name not in rbln_config.device_map for model_name in expected_models):
+            cls._raise_missing_compiled_file_error(expected_models)
+
+        device_vals = [rbln_config.device_map[model_name] for model_name in expected_models]
         return [
             rebel.Runtime(
                 compiled_model,
