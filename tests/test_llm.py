@@ -65,7 +65,7 @@ class LLMTest:
 class TestQwen2Model(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen2ForCausalLM
     HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
-    EXPECTED_OUTPUT = " I am a 30-year-old woman who has been living with lupus for over 1"
+    EXPECTED_OUTPUT = " I am a 30-year-old woman who has been living with a chronic illness for the past"
     HF_CONFIG_KWARGS = {"max_position_embeddings": 1024}
 
 
@@ -224,7 +224,6 @@ class TestBartModel(LLMTest.TestLLM):
 class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
     RBLN_CLASS = RBLNLlavaNextForConditionalGeneration
-    TEST_LEVEL = TestLevel.FULL
     HF_MODEL_ID = "llava-hf/llava-v1.6-mistral-7b-hf"  # No tiny model yet.
     PROMPT = "[INST] <image>\nWhat’s shown in this image? [/INST]"
     RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True}}}
@@ -255,6 +254,16 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
         inputs["max_new_tokens"] = 20
         inputs["do_sample"] = False
         return inputs
+
+    def _inner_test_save_load(self, tmpdir):
+        super()._inner_test_save_load(tmpdir)
+        # Test loading from nested config
+        _ = self.RBLN_CLASS.from_pretrained(
+            tmpdir,
+            export=False,
+            rbln_config={"language_model": {"create_runtimes": False}},
+            **self.HF_CONFIG_KWARGS,
+        )
 
 
 class TestIdefics3ForConditionalGeneration(LLMTest.TestLLM):

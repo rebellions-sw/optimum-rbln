@@ -21,8 +21,6 @@ import torch
 
 from ..configuration_utils import ContextRblnConfig, RBLNModelConfig
 from ..modeling import RBLNModel
-
-# from ..transformers import RBLNCLIPTextModelConfig
 from ..utils.decorator_utils import remove_compile_time_kwargs
 from ..utils.logging import get_logger
 
@@ -70,6 +68,7 @@ class RBLNDiffusionMixin:
     _submodules = []
     _prefix = {}
     _rbln_config_class = None
+    _hf_class = None
 
     @staticmethod
     def _maybe_apply_and_fuse_lora(
@@ -124,6 +123,14 @@ class RBLNDiffusionMixin:
                     "Please report it to the developers."
                 )
         return cls._rbln_config_class
+
+    @classmethod
+    def get_hf_class(cls):
+        if cls._hf_class is None:
+            hf_cls_name = cls.__name__[4:]
+            library = importlib.import_module("diffusers")
+            cls._hf_class = getattr(library, hf_cls_name, None)
+        return cls._hf_class
 
     @classmethod
     def from_pretrained(

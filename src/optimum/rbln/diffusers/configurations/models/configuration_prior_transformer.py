@@ -18,6 +18,8 @@ from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNPriorTransformerConfig(RBLNModelConfig):
+    subclass_non_save_attributes = ["_batch_size_is_specified"]
+
     def __init__(
         self,
         batch_size: Optional[int] = None,
@@ -36,9 +38,15 @@ class RBLNPriorTransformerConfig(RBLNModelConfig):
             ValueError: If batch_size is not a positive integer.
         """
         super().__init__(**kwargs)
+        self._batch_size_is_specified = batch_size is not None
+
         self.batch_size = batch_size or 1
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
         self.embedding_dim = embedding_dim
         self.num_embeddings = num_embeddings
+
+    @property
+    def batch_size_is_specified(self):
+        return self._batch_size_is_specified
