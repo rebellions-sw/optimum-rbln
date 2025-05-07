@@ -133,7 +133,6 @@ class RBLNModel(RBLNBaseModel):
 
         if not isinstance(config, PretrainedConfig):  # diffusers config
             config = PretrainedConfig(**config)
-        config.save_pretrained(save_dir_path / subfolder)
 
         # Save preprocessor
         for preprocessor in preprocessors:
@@ -168,6 +167,9 @@ class RBLNModel(RBLNBaseModel):
         for compiled_model_name, cm in compiled_models.items():
             cm.save(save_dir_path / subfolder / f"{compiled_model_name}.rbln")
         rbln_config.save(save_dir_path / subfolder)
+
+        config.torchscript = False  # it was modified by update_kwargs, so we need to restore it
+        config.save_pretrained(save_dir_path / subfolder)
 
         # Save torch artifacts (e.g. embedding matrix if needed.)
         cls.save_torch_artifacts(model, save_dir_path=save_dir_path, subfolder=subfolder, rbln_config=rbln_config)
