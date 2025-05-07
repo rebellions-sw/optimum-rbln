@@ -16,11 +16,13 @@ import importlib
 from typing import TYPE_CHECKING, Any, Dict, List, Type
 
 from ..configuration_utils import RBLNModelConfig
-from ..modeling_base import RBLNBaseModel, get_rbln_model_class
+from ..utils.model_utils import get_rbln_model_class
 
 
 if TYPE_CHECKING:
     from transformers import PreTrainedModel
+
+    from ..modeling_base import RBLNBaseModel
 
 
 class SubModulesMixin:

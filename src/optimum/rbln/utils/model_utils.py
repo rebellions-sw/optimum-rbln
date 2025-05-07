@@ -12,8 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import importlib
+from typing import TYPE_CHECKING, Type
+
+
+if TYPE_CHECKING:
+    from ..modeling_base import RBLNBaseModel
+
 # Prefix used for RBLN model class names
 RBLN_PREFIX = "RBLN"
+
+
+MODEL_MAPPING = {}
 
 
 def convert_hf_to_rbln_model_name(hf_model_name: str):
@@ -41,3 +51,13 @@ def convert_rbln_to_hf_model_name(rbln_model_name: str):
     """
 
     return rbln_model_name.removeprefix(RBLN_PREFIX)
+
+
+def get_rbln_model_class(cls_name: str) -> Type["RBLNBaseModel"]:
+    cls = getattr(importlib.import_module("optimum.rbln"), cls_name, None)
+    if cls is None:
+        if cls_name in MODEL_MAPPING:
+            cls = MODEL_MAPPING[cls_name]
+        else:
+            raise ValueError(f"Model for {cls_name} not found.")
+    return cls

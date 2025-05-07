@@ -38,19 +38,6 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-MODEL_MAPPING = {}
-
-
-def get_rbln_model_class(cls_name: str) -> Type["RBLNBaseModel"]:
-    cls = getattr(importlib.import_module("optimum.rbln"), cls_name, None)
-    if cls is None:
-        if cls_name in MODEL_MAPPING:
-            cls = MODEL_MAPPING[cls_name]
-        else:
-            raise ValueError(f"Model for {cls_name} not found.")
-    return cls
-
-
 class PreTrainedModel(ABC):  # noqa: F811
     pass
 

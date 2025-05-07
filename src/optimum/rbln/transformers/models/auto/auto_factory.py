@@ -21,8 +21,13 @@ from transformers.dynamic_module_utils import get_class_from_dynamic_module
 from transformers.models.auto.auto_factory import _get_model_class
 
 from optimum.rbln.configuration_utils import RBLNAutoConfig
-from optimum.rbln.modeling_base import MODEL_MAPPING, RBLNBaseModel, get_rbln_model_class
-from optimum.rbln.utils.model_utils import convert_hf_to_rbln_model_name, convert_rbln_to_hf_model_name
+from optimum.rbln.modeling_base import RBLNBaseModel
+from optimum.rbln.utils.model_utils import (
+    MODEL_MAPPING,
+    convert_hf_to_rbln_model_name,
+    convert_rbln_to_hf_model_name,
+    get_rbln_model_class,
+)
 
 
 class _BaseAutoModelClass:
