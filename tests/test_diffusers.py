@@ -282,10 +282,10 @@ class TestKandinskyV22Img2ImgModel(BaseTest.TestModel):
     RBLN_CLASS = RBLNKandinskyV22Img2ImgCombinedPipeline
     HF_MODEL_ID = "hf-internal-testing/tiny-random-kandinsky-v22-decoder"
 
-    from diffusers.utils import load_image
+    from torchvision.transforms.functional import to_pil_image
 
-    img_url = "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/kandinsky/frog.png"
-    image = load_image(img_url).resize([64, 64])
+    image = torch.randn(3, 64, 64)
+    image = to_pil_image(image)
     GENERATION_KWARGS = {
         "prompt": "A red cartoon frog, 4k",
         "generator": torch.manual_seed(42),
