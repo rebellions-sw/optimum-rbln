@@ -43,7 +43,9 @@ jobs:
         if: ${{ inputs.commit_message == '' }}
         run: |
           COMMIT_MESSAGE=$(git log -1 --pretty=%B)
-          echo "message=$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v3
@@ -62,7 +64,13 @@ jobs:
         run: |
           PYPI_URL=$(echo ${{ env.REBEL_PYPI_ENDPOINT }} | sed "s/\/\//\0${{ env.REBEL_PYPI_USERNAME}}:${{ env.REBEL_PYPI_PASSWORD}}@/")
           uv pip install --extra-index-url $PYPI_URL rebel-compiler==${{ inputs.rebel_compiler_version }}
-      
+
+      - name: Run pytest (config)
+        env:
+          OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
+        run: |
+          uv run --no-sync pytest tests/test_config.py
+
       - name: Run pytest (transformers)
         env:
           OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}

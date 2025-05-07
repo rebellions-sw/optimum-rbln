@@ -13,20 +13,22 @@
 # limitations under the License.
 
 import importlib
-from typing import TYPE_CHECKING, Any, Dict, Optional, Union
+from typing import TYPE_CHECKING, Dict, Optional, Union
 
 import torch
 from diffusers import ControlNetModel
+from diffusers.models.controlnet import ControlNetOutput
 from transformers import PretrainedConfig
 
+from ...configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ...modeling import RBLNModel
-from ...modeling_config import RBLNCompileConfig, RBLNConfig
 from ...utils.logging import get_logger
-from ..modeling_diffusers import RBLNDiffusionMixin
+from ..configurations import RBLNControlNetModelConfig
+from ..modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 
 
 if TYPE_CHECKING:
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PreTrainedModel
 
 
 logger = get_logger(__name__)
@@ -98,6 +100,7 @@ class _ControlNetModel_Cross_Attention(torch.nn.Module):
 class RBLNControlNetModel(RBLNModel):
     hf_library_name = "diffusers"
     auto_model_class = ControlNetModel
+    output_class = ControlNetOutput
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
@@ -106,7 +109,7 @@ class RBLNControlNetModel(RBLNModel):
         )
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
         use_encoder_hidden_states = False
         for down_block in model.down_blocks:
             if use_encoder_hidden_states := getattr(down_block, "has_cross_attention", False):
@@ -118,73 +121,50 @@ class RBLNControlNetModel(RBLNModel):
             return _ControlNetModel(model).eval()
 
     @classmethod
-    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
+    def update_rbln_config_using_pipe(
+        cls,
+        pipe: RBLNDiffusionMixin,
+        rbln_config: "RBLNDiffusionMixinConfig",
+        submodule_name: str,
+    ) -> "RBLNDiffusionMixinConfig":
         rbln_vae_cls = getattr(importlib.import_module("optimum.rbln"), f"RBLN{pipe.vae.__class__.__name__}")
         rbln_unet_cls = getattr(importlib.import_module("optimum.rbln"), f"RBLN{pipe.unet.__class__.__name__}")
+
+        rbln_config.controlnet.max_seq_len = pipe.text_encoder.config.max_position_embeddings
         text_model_hidden_size = pipe.text_encoder_2.config.hidden_size if hasattr(pipe, "text_encoder_2") else None
-
-        batch_size = rbln_config.get("batch_size")
-        if not batch_size:
-            do_classifier_free_guidance = (
-                rbln_config.get("guidance_scale", 5.0) > 1.0 and pipe.unet.config.time_cond_proj_dim is None
-            )
-            batch_size = 2 if do_classifier_free_guidance else 1
-        else:
-            if rbln_config.get("guidance_scale"):
-                logger.warning(
-                    "guidance_scale is ignored because batch size is explicitly specified. "
-                    "To ensure consistent behavior, consider removing the guidance scale or "
-                    "adjusting the batch size configuration as needed."
-                )
-
-        rbln_config.update(
-            {
-                "max_seq_len": pipe.text_encoder.config.max_position_embeddings,
-                "text_model_hidden_size": text_model_hidden_size,
-                "vae_sample_size": rbln_vae_cls.get_vae_sample_size(pipe, rbln_config),
-                "unet_sample_size": rbln_unet_cls.get_unet_sample_size(pipe, rbln_config),
-                "batch_size": batch_size,
-            }
+        rbln_config.controlnet.text_model_hidden_size = text_model_hidden_size
+        rbln_config.controlnet.vae_sample_size = rbln_vae_cls.get_vae_sample_size(pipe, rbln_config.vae)
+        rbln_config.controlnet.unet_sample_size = rbln_unet_cls.get_unet_sample_size(
+            pipe, rbln_config.unet, image_size=rbln_config.image_size
         )
 
         return rbln_config
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
+        model: "PreTrainedModel",
         model_config: "PretrainedConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
-        batch_size = rbln_kwargs.get("batch_size")
-        max_seq_len = rbln_kwargs.get("max_seq_len")
-        unet_sample_size = rbln_kwargs.get("unet_sample_size")
-        vae_sample_size = rbln_kwargs.get("vae_sample_size")
+        rbln_config: RBLNControlNetModelConfig,
+    ) -> RBLNModelConfig:
+        if rbln_config.unet_sample_size is None:
+            raise ValueError("`unet_sample_size` (latent height, width) must be specified (ex. unet's sample_size)")
 
-        if batch_size is None:
-            batch_size = 1
+        if rbln_config.vae_sample_size is None:
+            raise ValueError("`vae_sample_size` (input image height, width) must be specified (ex. vae's sample_size)")
 
-        if unet_sample_size is None:
-            raise ValueError(
-                "`rbln_unet_sample_size` (latent height, widht) must be specified (ex. unet's sample_size)"
-            )
-
-        if vae_sample_size is None:
-            raise ValueError(
-                "`rbln_vae_sample_size` (input image height, width) must be specified (ex. vae's sample_size)"
-            )
-
-        if max_seq_len is None:
-            raise ValueError("`rbln_max_seq_len` (ex. text_encoder's max_position_embeddings )must be specified")
+        if rbln_config.max_seq_len is None:
+            raise ValueError("`max_seq_len` (ex. text_encoder's max_position_embeddings) must be specified")
 
         input_info = [
             (
                 "sample",
                 [
-                    batch_size,
+                    rbln_config.batch_size,
                     model_config.in_channels,
-                    unet_sample_size[0],
-                    unet_sample_size[1],
+                    rbln_config.unet_sample_size[0],
+                    rbln_config.unet_sample_size[1],
                 ],
                 "float32",
             ),
@@ -196,7 +176,7 @@ class RBLNControlNetModel(RBLNModel):
             input_info.append(
                 (
                     "encoder_hidden_states",
-                    [batch_size, max_seq_len, model_config.cross_attention_dim],
+                    [rbln_config.batch_size, rbln_config.max_seq_len, model_config.cross_attention_dim],
                     "float32",
                 )
             )
@@ -204,25 +184,18 @@ class RBLNControlNetModel(RBLNModel):
         input_info.append(
             (
                 "controlnet_cond",
-                [batch_size, 3, vae_sample_size[0], vae_sample_size[1]],
+                [rbln_config.batch_size, 3, rbln_config.vae_sample_size[0], rbln_config.vae_sample_size[1]],
                 "float32",
             )
         )
         input_info.append(("conditioning_scale", [], "float32"))
 
         if hasattr(model_config, "addition_embed_type") and model_config.addition_embed_type == "text_time":
-            rbln_text_model_hidden_size = rbln_kwargs["text_model_hidden_size"]
-            input_info.append(("text_embeds", [batch_size, rbln_text_model_hidden_size], "float32"))
-            input_info.append(("time_ids", [batch_size, 6], "float32"))
+            input_info.append(("text_embeds", [rbln_config.batch_size, rbln_config.text_model_hidden_size], "float32"))
+            input_info.append(("time_ids", [rbln_config.batch_size, 6], "float32"))
 
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
-
-        rbln_config = RBLNConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[rbln_compile_config],
-            rbln_kwargs=rbln_kwargs,
-        )
-
+        rbln_config.set_compile_cfgs([rbln_compile_config])
         return rbln_config
 
     @property
@@ -237,6 +210,7 @@ class RBLNControlNetModel(RBLNModel):
         controlnet_cond: torch.FloatTensor,
         conditioning_scale: torch.Tensor = 1.0,
         added_cond_kwargs: Dict[str, torch.Tensor] = {},
+        return_dict: bool = True,
         **kwargs,
     ):
         sample_batch_size = sample.size()[0]
@@ -246,14 +220,14 @@ class RBLNControlNetModel(RBLNModel):
         ):
             raise ValueError(
                 f"Mismatch between ControlNet's runtime batch size ({sample_batch_size}) and compiled batch size ({compiled_batch_size}). "
-                "This may be caused by the 'guidance scale' parameter, which doubles the runtime batch size in Stable Diffusion. "
-                "Adjust the batch size during compilation or modify the 'guidance scale' to match the compiled batch size.\n\n"
-                "For details, see: https://docs.rbln.ai/software/optimum/model_api.html#stable-diffusion"
+                "This may be caused by the 'guidance_scale' parameter, which doubles the runtime batch size of ControlNet in Stable Diffusion. "
+                "Adjust the batch size of ControlNet during compilation to match the runtime batch size.\n\n"
+                "For details, see: https://docs.rbln.ai/software/optimum/model_api/diffusers/pipelines/controlnet.html#important-batch-size-configuration-for-guidance-scale"
             )
 
         added_cond_kwargs = {} if added_cond_kwargs is None else added_cond_kwargs
         if self.use_encoder_hidden_states:
-            output = super().forward(
+            output = self.model[0](
                 sample.contiguous(),
                 timestep.float(),
                 encoder_hidden_states,
@@ -262,14 +236,25 @@ class RBLNControlNetModel(RBLNModel):
                 **added_cond_kwargs,
             )
         else:
-            output = super().forward(
+            output = self.model[0](
                 sample.contiguous(),
                 timestep.float(),
                 controlnet_cond,
                 torch.tensor(conditioning_scale),
                 **added_cond_kwargs,
             )
+
         down_block_res_samples = output[:-1]
         mid_block_res_sample = output[-1]
+        output = (down_block_res_samples, mid_block_res_sample)
+        output = self._prepare_output(output, return_dict)
+        return output
 
-        return down_block_res_samples, mid_block_res_sample
+    def _prepare_output(self, output, return_dict):
+        if not return_dict:
+            return (output,) if not isinstance(output, (tuple, list)) else output
+        else:
+            return ControlNetOutput(
+                down_block_res_samples=output[:-1],
+                mid_block_res_sample=output[-1],
+            )

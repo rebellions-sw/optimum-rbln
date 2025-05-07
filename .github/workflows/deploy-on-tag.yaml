@@ -28,7 +28,7 @@ jobs:
               workflow_id: 'rebel_dispatch_model_generation_for_vllm.yaml',
               ref: 'dev',
               inputs: {
-                optimum_rbln_version: ${{ github.ref_name }},
+                optimum_rbln_version: "${{ github.ref_name }}",
               }
             })
             console.log(result)

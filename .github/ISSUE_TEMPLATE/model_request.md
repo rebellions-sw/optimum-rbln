@@ -8,7 +8,7 @@ assignees: ''
 
 ### Model Information
 - Model name: 
-- Model link (Hugging Face/Paper/GitHub): 
+- Model link (HuggingFace/Paper/GitHub): 
 - Task type (e.g., Text Generation, Image Classification): 
 
 ### Model Details

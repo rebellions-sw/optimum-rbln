@@ -12,4 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .configuration_gpt2 import RBLNGPT2LMHeadModelConfig
 from .modeling_gpt2 import RBLNGPT2LMHeadModel

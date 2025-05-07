@@ -17,8 +17,7 @@ from typing import TYPE_CHECKING, List, Union
 import torch  # noqa: I001
 from diffusers import AutoencoderKL, AutoencoderKLTemporalDecoder, VQModel
 from diffusers.models.autoencoders.vae import DecoderOutput, DiagonalGaussianDistribution
-from diffusers.models.autoencoders.vq_model import VQEncoderOutput
-from diffusers.models.modeling_outputs import AutoencoderKLOutput
+from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
 
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
@@ -34,12 +33,12 @@ class RBLNRuntimeVAEEncoder(RBLNPytorchRuntime):
     def encode(self, x: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
         moments = self.forward(x.contiguous())
         posterior = DiagonalGaussianDistribution(moments)
-        return AutoencoderKLOutput(latent_dist=posterior)
+        return posterior
 
 
 class RBLNRuntimeVAEDecoder(RBLNPytorchRuntime):
     def decode(self, z: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
-        return (self.forward(z),)
+        return self.forward(z)
 
 
 class RBLNRuntimeVAETemporalDecoder(RBLNPytorchRuntime):
@@ -103,7 +102,7 @@ class _VAEEncoder(torch.nn.Module):
 class RBLNRuntimeVQEncoder(RBLNPytorchRuntime):
     def encode(self, x: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
         h = self.forward(x.contiguous())
-        return VQEncoderOutput(latents=h)
+        return h
 
 
 class RBLNRuntimeVQDecoder(RBLNPytorchRuntime):

@@ -26,13 +26,15 @@ from transformers import AutoConfig, AutoModelForCausalLM, PretrainedConfig, Pre
 from transformers.modeling_utils import no_init_weights
 from transformers.utils import ModelOutput
 
+from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
 from ...utils.rbln_quantization import QuantizationManager
+from .configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
 from .decoderonly_architecture import (
     DecoderOnlyWrapper,
+    set_default_values,
     validate_attention_method,
 )
 
@@ -161,6 +163,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         attention_mask: Optional[torch.Tensor] = None,
         batch_idx: Optional[int] = None,
         block_tables: Optional[torch.Tensor] = None,
+        position_embed: Optional[torch.Tensor] = None,
     ):
         if input_ids is None and inputs_embeds is None:
             raise ValueError("Either `input_ids` or `inputs_embeds` must be provided.")
@@ -185,9 +188,12 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 block_tables,
                 is_external_block_tables,
                 attention_mask=attention_mask,
+                position_embed=position_embed,
             )
         else:
-            return self.prefill_forward(inputs, cache_position, attention_mask, batch_idx, block_tables)
+            return self.prefill_forward(
+                inputs, cache_position, attention_mask, batch_idx, block_tables, position_embed=position_embed
+            )
 
     def decode_forward(
         self,
@@ -196,6 +202,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         block_tables: torch.Tensor = None,
         is_external_block_tables: bool = None,
         attention_mask: Optional[torch.Tensor] = None,
+        position_embed: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         batch_size = inputs.shape[0]
         if batch_size != self.batch_size:
@@ -227,6 +234,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             cache_position,
             attention_mask if self.use_attention_mask else None,
             block_tables,
+            position_embed,
         )
 
         return logits
@@ -239,6 +247,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         batch_idx: int = None,
         block_tables: torch.Tensor = None,
         is_external_block_tables: bool = None,
+        position_embed: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         """
         Performs chunked prefill for efficient KV-cache updates and memory optimization.
@@ -249,6 +258,10 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         # Handle continuous batching in a compiled graph by extracting valid inputs
         # If an attention mask is provided, select only the valid (non-masked) inputs
         inputs = inputs[:, attention_mask.bool()] if attention_mask is not None else inputs
+        if position_embed is not None:
+            position_embed = (
+                position_embed[:, :, :, attention_mask.bool(), :] if attention_mask is not None else position_embed
+            )
 
         query_length = inputs.shape[1]
         if query_length > self.max_seq_len:
@@ -293,9 +306,14 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     dim=-1,
                 )
 
+                if position_embed is not None:
+                    position_embed = torch.nn.functional.pad(position_embed, (0, 0, 0, padding_size))
+
             # Extract the current chunk of inputs and cache positions
             input_chunk = inputs[:, step : step + self.prefill_chunk_size]
             cache_pos_chunk = cache_position[:, step : step + self.prefill_chunk_size]
+            if position_embed is not None:
+                position_embed_chunk = position_embed[:, :, :, step : step + self.prefill_chunk_size, :]
 
             if self.use_attention_mask:
                 # Update attention mask to ensure proper causal behavior
@@ -313,6 +331,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 chunked_attention_mask if self.use_attention_mask else None,
                 query_position,
                 block_tables,
+                position_embed_chunk if position_embed is not None else None,
                 out=out_buffers,
             )
 
@@ -356,17 +375,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
     _use_rotary_emb = True
 
     def __post_init__(self, **kwargs):
-        self.batch_size = self.rbln_config.model_cfg["batch_size"]
-        self.max_seq_len = self.rbln_config.model_cfg["max_seq_len"]
-        self.prefill_chunk_size = self.rbln_config.model_cfg["prefill_chunk_size"]
-        self.kvcache_block_size = self.rbln_config.model_cfg["kvcache_block_size"]
-        # FIXME get kvcache_num_blocks from compiled results.
-        self.kvcache_num_blocks = self.rbln_config.model_cfg["kvcache_num_blocks"]
-        self.use_attention_mask = self.rbln_config.model_cfg["use_attention_mask"]
-        attn_impl = self.rbln_config.model_cfg["attn_impl"]
         main_input_name = self.main_input_name
 
-        if self.rbln_config.model_cfg["use_inputs_embeds"]:
+        if self.rbln_config.use_inputs_embeds:
             main_input_name = "inputs_embeds"
             artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
             with no_init_weights():
@@ -380,40 +391,44 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             self.embed_tokens = None
 
         # Initialize shared resources to be used across Runtime instances (prefill and decode phases)
-        dec_attn_mask = torch.zeros(self.batch_size, 1, 1, self.max_seq_len, dtype=torch.float32)
+        dec_attn_mask = torch.zeros(
+            self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=torch.float32
+        )
         block_tables = torch.zeros(
-            self.batch_size, self.max_seq_len // self.kvcache_block_size, dtype=torch.int16
+            self.rbln_config.batch_size,
+            self.rbln_config.max_seq_len // self.rbln_config.kvcache_block_size,
+            dtype=torch.int16,
         ).fill_(-1)
-        free_block_pool = deque(x for x in range(self.kvcache_num_blocks))
+        free_block_pool = deque(x for x in range(self.rbln_config.kvcache_num_blocks))
 
         self.prefill_decoder = RBLNRuntimeModel(
             runtime=self.model[0],
             main_input_name=main_input_name,
             embed_tokens=self.embed_tokens,
             phase="prefill",
-            batch_size=self.batch_size,
+            batch_size=self.rbln_config.batch_size,
             dec_attn_mask=dec_attn_mask,
             block_tables=block_tables,
             free_block_pool=free_block_pool,
-            kvcache_block_size=self.kvcache_block_size,
+            kvcache_block_size=self.rbln_config.kvcache_block_size,
             vocab_size=self.config.vocab_size,
-            prefill_chunk_size=self.prefill_chunk_size,
-            max_seq_len=self.max_seq_len,
-            use_attention_mask=self.use_attention_mask,
-            attn_impl=attn_impl,
+            prefill_chunk_size=self.rbln_config.prefill_chunk_size,
+            max_seq_len=self.rbln_config.max_seq_len,
+            use_attention_mask=self.rbln_config.use_attention_mask,
+            attn_impl=self.rbln_config.attn_impl,
         )
         self.decoder = RBLNRuntimeModel(
             runtime=self.model[1],
             main_input_name=main_input_name,
             embed_tokens=self.embed_tokens,
             phase="decode",
-            batch_size=self.batch_size,
+            batch_size=self.rbln_config.batch_size,
             dec_attn_mask=dec_attn_mask,
             block_tables=block_tables,
             free_block_pool=free_block_pool,
-            kvcache_block_size=self.kvcache_block_size,
-            use_attention_mask=self.use_attention_mask,
-            attn_impl=attn_impl,
+            kvcache_block_size=self.rbln_config.kvcache_block_size,
+            use_attention_mask=self.rbln_config.use_attention_mask,
+            attn_impl=self.rbln_config.attn_impl,
         )
 
     @classmethod
@@ -422,19 +437,25 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         model: "PreTrainedModel",
         save_dir_path: Path,
         subfolder: str,
-        rbln_config: RBLNConfig,
+        rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
     ):
         """
         If you are unavoidably running on a CPU rather than an RBLN device,
         store the torch tensor, weight, etc. in this function.
         """
-        if rbln_config.model_cfg["use_inputs_embeds"]:
+        if rbln_config.use_inputs_embeds:
             save_dict = {}
             save_dict["embed_tokens"] = model.get_input_embeddings().state_dict()
             torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
     def get_input_embeddings(self):
         return self.embed_tokens
+
+    def get_attn_impl(self) -> str:
+        return self.rbln_config.attn_impl
+
+    def get_kvcache_num_blocks(self) -> int:
+        return self.rbln_config.kvcache_num_blocks
 
     @classmethod
     def get_quantized_model(
@@ -493,33 +514,35 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         return val
 
     @classmethod
-    def get_pytorch_model(cls, *args, **kwargs) -> "PreTrainedModel":
-        logger.debug("Loading the LLM model to the CPU.")  # TODO(jongho): Remove.
-
-        rbln_kwargs = kwargs.get("rbln_kwargs", {})
-        rbln_quantization = rbln_kwargs.get("quantization", None)
-        if rbln_quantization is not None and rbln_quantization["format"] == "rbln":
+    def get_pytorch_model(
+        cls, *args, rbln_config: Optional[RBLNDecoderOnlyModelForCausalLMConfig] = None, **kwargs
+    ) -> "PreTrainedModel":
+        if (
+            rbln_config is not None
+            and "format" in rbln_config.quantization
+            and rbln_config.quantization["format"] == "rbln"
+        ):
             model = cls.get_quantized_model(*args, **kwargs)
         else:
             model = super().get_pytorch_model(*args, **kwargs)
 
-        logger.debug("Loaded the LLM model to the CPU.")
         return model
 
     @classmethod
-    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: "RBLNConfig"):
-        wrapper_cfg = {"max_seq_len": rbln_config.model_cfg["max_seq_len"]}
-        wrapper_cfg["attn_impl"] = rbln_config.model_cfg.get("attn_impl")
-        wrapper_cfg["kvcache_partition_len"] = rbln_config.model_cfg.get("kvcache_partition_len")
-        wrapper_cfg["kvcache_block_size"] = rbln_config.model_cfg.get("kvcache_block_size")
-        wrapper_cfg["use_rotary_emb"] = cls._use_rotary_emb
-        wrapper_cfg["use_attention_mask"] = rbln_config.model_cfg.get("use_attention_mask")
-
+    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: "RBLNDecoderOnlyModelForCausalLMConfig"):
+        wrapper_cfg = {
+            "max_seq_len": rbln_config.max_seq_len,
+            "attn_impl": rbln_config.attn_impl,
+            "kvcache_partition_len": rbln_config.kvcache_partition_len,
+            "kvcache_block_size": rbln_config.kvcache_block_size,
+            "use_rotary_emb": cls._use_rotary_emb,
+            "use_attention_mask": rbln_config.use_attention_mask,
+        }
         return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
 
     @classmethod
     @torch.inference_mode()
-    def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNConfig):
+    def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNDecoderOnlyModelForCausalLMConfig):
         wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
 
         rbln_compile_configs = rbln_config.compile_cfgs
@@ -540,8 +563,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 context.mark_static_address(tensor)
 
         dec_example_inputs = dec_compile_config.get_dummy_inputs(fill=0, static_tensors=static_tensors)
-
-        quantize_config = rbln_config.model_cfg.get("quantization", None)
 
         @QuantizationManager.with_quantization_env
         def compile_model(*args, **kwargs):
@@ -567,7 +588,57 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             finally:
                 torch.nn.functional.linear = original_linear
 
-        return compile_model(quantize_config=quantize_config)
+        compiled_models = compile_model(quantize_config=rbln_config.quantization)
+
+        # check if the memory is enough to have additional blocks
+        required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
+        if rbln_config.kvcache_num_blocks < required_num_blocks:
+            cls.maybe_suggest_kvcache_num_blocks(
+                compiled_models=compiled_models,
+                model_config=model.config,
+                rbln_config=rbln_config,
+            )
+
+        return compiled_models
+
+    @classmethod
+    def maybe_suggest_kvcache_num_blocks(
+        cls,
+        compiled_models: Dict[str, rebel.RBLNCompiledModel],
+        model_config: PretrainedConfig,
+        rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
+    ) -> None:
+        # Get the actual memory allocation of each node by key
+        alloc_memory_per_node_by_key: Dict[str, List[int]] = compiled_models["prefill"].get_alloc_per_node_by_key()
+        alloc_memory_by_key: Dict[str, int] = {
+            key: sum(memory_per_node) for key, memory_per_node in alloc_memory_per_node_by_key.items()
+        }
+        for key, memory_per_node in compiled_models["decoder"].get_alloc_per_node_by_key().items():
+            alloc_memory_by_key[key] += sum(memory_per_node)
+        alloc_memory_by_key.pop("PortRecur")  # kv-cache
+        kernel_size = alloc_memory_by_key.pop("Kernel")  # model weight
+
+        # Get the maximum number of blocks that can be allocated
+        buffer = sum(alloc_memory_by_key.values())
+        max_num_blocks = cls.get_maximum_num_blocks(
+            config=model_config,
+            tensor_parallel_size=rbln_config.tensor_parallel_size,
+            kvcache_block_size=rbln_config.kvcache_block_size,
+            kernel_size=kernel_size,
+            buffer=buffer,
+        )
+
+        # Since our estimation logic is not always accurate,
+        # users can set `kvcache_num_blocks` to `max_num_blocks`.
+        # If the memory is not enough, the model will fail to compile.
+        if rbln_config.kvcache_num_blocks < max_num_blocks:
+            logger.warning(
+                f"Current `kvcache_num_blocks` setting is {rbln_config.kvcache_num_blocks}. "
+                "Our analysis indicates that additional memory is available for more blocks. "
+                f"Consider increasing `kvcache_num_blocks` to {max_num_blocks} for potentially improved performance. "
+                "Please be advised that our memory estimation algorithm has limitations, "
+                "and increasing this value may not guarantee successful model compilation."
+            )
 
     @classmethod
     def get_maximum_num_blocks(
@@ -575,14 +646,46 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         config: PretrainedConfig,
         tensor_parallel_size: int,
         kvcache_block_size: int,
-        nbits_per_param: int,
-        n_model_params: int,
+        nbits_per_param: Optional[int] = None,
+        n_model_params: Optional[int] = None,
+        kernel_size: Optional[int] = None,
+        buffer: Optional[int] = None,
     ) -> int:
+        """
+        We are finding max_n_blocks(x) that satisfies the following equation:
+
+        available_dram - kernel_size - buffer
+            - num_layers * 2 * tensor_parallel_size
+            * align_2MB(
+                x
+                * block_size
+                * align_64(head_dim)
+                * math.ceil(num_key_value_heads / tensor_parallel_size)
+                * 2
+            ) > 0
+
+        This inequality can be rewritten as follows:
+
+        a - c * align_2MB(b * x) > 0
+        where
+           a = available_dram - kernel_size - buffer
+           b = block_size * align_64(head_dim) * math.ceil(num_key_value_heads / tensor_parallel_size) * 2
+           c = num_layers * 2 * tensor_parallel_size
+
+        We can rewrite the inequality as follows:
+        k > align_2MB(b*x)
+        where
+           k = a / c
+
+        After that, we can derive the following equation:
+        x = floor(2**21 / b * floor((k - 1) / 2**21))
+        """
+
         def align(x: int, nbytes: int) -> int:
             return int(math.ceil(x / nbytes) * nbytes)
 
         def align_2MB(x: int) -> int:
-            return align(x, 2 * 1024 * 1024)
+            return align(x, 2**21)
 
         num_attention_heads = getattr(config, "n_head", None) or getattr(config, "num_attention_heads")
         num_layers = getattr(config, "n_layer", None) or getattr(config, "num_hidden_layers")
@@ -596,223 +699,206 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         ATOM_SYS_DRAM_NBYTES = 288 * 2**20
         available_dram = tensor_parallel_size * (ATOM_DRAM_NBYTES - ATOM_SYS_DRAM_NBYTES)
 
-        # Get estimated kernel size (approximated)
-        lm_heads_params = align(vocab_size, 64) * hidden_size
-        lm_heads_nbytes = (
-            align_2MB(lm_heads_params * nbits_per_param // 8 / tensor_parallel_size) * tensor_parallel_size
-        )
-        params = n_model_params - lm_heads_params
-        layer_nbytes = (
-            align_2MB(params * nbits_per_param // 8 / num_layers / tensor_parallel_size)
-            * num_layers
-            * tensor_parallel_size
-        )
-        kernel_size = layer_nbytes + lm_heads_nbytes
+        if kernel_size is None:
+            if n_model_params is None:
+                raise ValueError("`n_model_params` should be specified to estimate the kernel memory.")
+            # Get estimated kernel size (approximated)
+            lm_heads_params = align(vocab_size, 64) * hidden_size
+            lm_heads_nbytes = (
+                align_2MB(lm_heads_params * nbits_per_param // 8 / tensor_parallel_size) * tensor_parallel_size
+            )
+            params = n_model_params - lm_heads_params
+            layer_nbytes = (
+                align_2MB(params * nbits_per_param // 8 / num_layers / tensor_parallel_size)
+                * num_layers
+                * tensor_parallel_size
+            )
+            kernel_size = layer_nbytes + lm_heads_nbytes
+        elif n_model_params is not None:
+            raise ValueError("Both `n_model_params` and `kernel_size` cannot be specified.")
 
         available_dram -= kernel_size
 
-        # TODO: Accurate buffer estimation
-        buffer = 2**30  # 1GB Buffer
-        if tensor_parallel_size <= 4:
-            buffer /= 4
-
+        if buffer is None:
+            # TODO: Accurate buffer estimation
+            buffer_per_core = 2**29  # 500MB per npu
+            buffer = buffer_per_core * tensor_parallel_size
         available_dram -= buffer
 
-        # Estimate nbytes per a single kvcache block
-        nbytes_per_block = (
-            align_2MB(
-                kvcache_block_size
-                * head_dim
-                * math.ceil(num_key_value_heads / tensor_parallel_size)  # Shard
-                * 2  # (fp16)
-            )
-            * num_layers
-            * 2  # (k, v)
-            * tensor_parallel_size
-        )
-        n_blocks = available_dram // nbytes_per_block
+        b = kvcache_block_size * align(head_dim, 64) * math.ceil(num_key_value_heads / tensor_parallel_size) * 2
+        c = num_layers * 2 * tensor_parallel_size
+        k = available_dram / c
+        max_n_blocks = math.floor(2**21 / b * math.floor((k - 1) / 2**21))
 
-        return n_blocks, nbytes_per_block
+        return max_n_blocks
 
     @classmethod
-    def _get_rbln_config(
+    def get_input_info(
         cls,
-        preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
-        model_config: "PretrainedConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
-        rbln_max_seq_len = rbln_kwargs.get("max_seq_len", None)
-        rbln_batch_size = rbln_kwargs.get("batch_size", None)
-        rbln_use_inputs_embeds = rbln_kwargs.get("use_inputs_embeds", None)
-        rbln_use_attention_mask = rbln_kwargs.get("use_attention_mask", None)
-        rbln_attn_impl = rbln_kwargs.get("attn_impl", None)
-        rbln_kvcache_partition_len = rbln_kwargs.get("kvcache_partition_len", None)
-        rbln_kvcache_block_size = rbln_kwargs.get("kvcache_block_size", None)
-        rbln_quantization = QuantizationManager.validate_quantization_config(rbln_kwargs.get("quantization", None))
-        rbln_prefill_chunk_size = rbln_kwargs.get("prefill_chunk_size", None)
+        batch_size: int,
+        query_length: int,
+        use_inputs_embeds: bool,
+        use_attention_mask: bool,
+        max_seq_len: int,
+        kvcache_block_size: int,
+        kvcache_num_blocks: int,
+        num_key_value_heads: int,
+        num_hidden_layers: int,
+        hidden_size: int,
+        head_dim: int,
+    ):
+        if use_inputs_embeds:
+            main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
+        else:
+            main_input = ("input_ids", [batch_size, query_length], "int64")
 
-        if rbln_use_attention_mask is None:
-            rbln_use_attention_mask = False
-            rbln_npu = rbln_kwargs.get("npu", None) or rebel.get_npu_name()
-            if rbln_npu == "RBLN-CA02":
-                rbln_use_attention_mask = True
+        input_info = [
+            main_input,
+            (
+                "cache_position",
+                [batch_size, query_length],
+                "int32",
+            ),
+        ]
 
-        if rbln_prefill_chunk_size is None:
-            rbln_prefill_chunk_size = 128
-        elif rbln_prefill_chunk_size % 64 != 0 or rbln_prefill_chunk_size == 0:
-            raise ValueError(
-                f"Invalid rbln_prefill_chunk_size: {rbln_prefill_chunk_size}. It must be a nonzero multiple of 64."
-            )
-
-        if rbln_max_seq_len is None:
-            rbln_max_seq_len = getattr(model_config, "max_position_embeddings", None) or getattr(
-                model_config, "n_positions", None
-            )
-        if rbln_max_seq_len is None:
-            raise ValueError("`rbln_max_seq_len` should be specified.")
-
-        rbln_batch_size = 1 if rbln_batch_size is None else rbln_batch_size
-        rbln_use_inputs_embeds = False if rbln_use_inputs_embeds is None else rbln_use_inputs_embeds
-
-        rbln_attn_impl, rbln_kvcache_partition_len, rbln_kvcache_block_size = validate_attention_method(
-            rbln_attn_impl=rbln_attn_impl,
-            rbln_kvcache_partition_len=rbln_kvcache_partition_len,
-            rbln_kvcache_block_size=rbln_kvcache_block_size,
-            rbln_max_seq_len=rbln_max_seq_len,
-        )
-
-        if rbln_kvcache_block_size is None:
-            if rbln_attn_impl == "eager":
-                rbln_kvcache_block_size = rbln_max_seq_len
-            else:
-                rbln_kvcache_block_size = rbln_kvcache_partition_len
-
-        rbln_kvcache_num_blocks = (rbln_max_seq_len // rbln_kvcache_block_size) * rbln_batch_size
-        if rbln_attn_impl == "flash_attn":
-            max_num_blocks, _ = cls.get_maximum_num_blocks(
-                config=model_config,
-                tensor_parallel_size=rbln_kwargs.get("tensor_parallel_size", 1),
-                kvcache_block_size=rbln_kvcache_block_size,
-                nbits_per_param=16 if rbln_quantization is None else 4,  # TODO(jongho): FIX Ad-hoc
-                n_model_params=rbln_kwargs["n_model_params"],
-            )
-            rbln_kvcache_num_blocks = min(rbln_kvcache_num_blocks, max_num_blocks)
-
-            required_blocks = rbln_max_seq_len // rbln_kvcache_block_size + 1
-            if rbln_kvcache_num_blocks < required_blocks:
-                rbln_kvcache_num_blocks = required_blocks
-
-            logger.info(f"[KVCache] Compiling with num_blocks: {rbln_kvcache_num_blocks}")
-
-            if rbln_kvcache_num_blocks < rbln_batch_size:
-                raise RuntimeError(
-                    f"Batch size ({rbln_batch_size}) exceeds available KV cache blocks ({rbln_kvcache_num_blocks}). "
-                    "Ensure the number of blocks is at least equal to the batch size."
-                )
-
-        num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
-        num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
-        num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
-        head_dim = getattr(model_config, "head_dim", None) or model_config.hidden_size // num_attention_heads
-        hidden_size = getattr(model_config, "n_embd", None) or getattr(model_config, "hidden_size")
-
-        def get_input_info(
-            batch_size,
-            query_length,
-            use_inputs_embeds,
-            hidden_size,
-        ):
-            if use_inputs_embeds:
-                main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
-            else:
-                main_input = ("input_ids", [batch_size, query_length], "int64")
-
-            input_info = [
-                main_input,
-                (
-                    "cache_position",
-                    [batch_size, query_length],
-                    "int32",
-                ),
-            ]
-
-            if rbln_use_attention_mask:
-                input_info.extend(
-                    [
-                        ("attention_mask", [batch_size, 1, query_length, rbln_max_seq_len], "float32"),
-                    ]
-                )
-
-            if query_length > 1:
-                input_info.extend(
-                    [
-                        ("query_position", [], "int16"),
-                    ]
-                )
-
-            max_block_cnt = rbln_max_seq_len // rbln_kvcache_block_size
-
-            if query_length > 1:
-                input_info.extend([("block_tables", [max_block_cnt], "int16")])
-            else:
-                input_info.extend([("block_tables", [batch_size, max_block_cnt], "int16")])
-
+        if use_attention_mask:
             input_info.extend(
                 [
-                    (
-                        f"past_key_values_{i}",
-                        [
-                            rbln_kvcache_num_blocks,
-                            num_key_value_heads,
-                            rbln_kvcache_block_size,
-                            head_dim,
-                        ],
-                        "float32",
-                    )
-                    for i in range(num_hidden_layers * 2)
+                    ("attention_mask", [batch_size, 1, query_length, max_seq_len], "float32"),
                 ]
             )
 
-            return input_info
+        if query_length > 1:
+            input_info.extend(
+                [
+                    ("query_position", [], "int16"),
+                ]
+            )
 
-        prefill_input_info = get_input_info(
-            batch_size=1,
-            query_length=rbln_prefill_chunk_size,
-            use_inputs_embeds=rbln_use_inputs_embeds,
-            hidden_size=hidden_size,
+        max_block_cnt = max_seq_len // kvcache_block_size
+
+        if query_length > 1:
+            input_info.extend([("block_tables", [max_block_cnt], "int16")])
+        else:
+            input_info.extend([("block_tables", [batch_size, max_block_cnt], "int16")])
+
+        input_info.extend(
+            [
+                (
+                    f"past_key_values_{i}",
+                    [
+                        kvcache_num_blocks,
+                        num_key_value_heads,
+                        kvcache_block_size,
+                        head_dim,
+                    ],
+                    "float32",
+                )
+                for i in range(num_hidden_layers * 2)
+            ]
         )
-        dec_input_info = get_input_info(
-            batch_size=rbln_batch_size,
-            query_length=1,
-            use_inputs_embeds=rbln_use_inputs_embeds,
+
+        return input_info
+
+    @classmethod
+    def _update_rbln_config(
+        cls,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
+        model: Optional["PreTrainedModel"] = None,
+        model_config: Optional["PretrainedConfig"] = None,
+        rbln_config: Optional[RBLNDecoderOnlyModelForCausalLMConfig] = None,
+    ) -> RBLNDecoderOnlyModelForCausalLMConfig:
+        if rbln_config.max_seq_len is None:
+            rbln_config.max_seq_len = getattr(model_config, "max_position_embeddings", None) or getattr(
+                model_config, "n_positions", None
+            )
+        if rbln_config.max_seq_len is None:
+            raise ValueError("`max_seq_len` should be specified.")
+
+        rbln_config.attn_impl, rbln_config.kvcache_partition_len, rbln_config.kvcache_block_size = set_default_values(
+            attn_impl=rbln_config.attn_impl,
+            kvcache_partition_len=rbln_config.kvcache_partition_len,
+            kvcache_block_size=rbln_config.kvcache_block_size,
+            max_seq_len=rbln_config.max_seq_len,
+        )
+
+        validate_attention_method(
+            attn_impl=rbln_config.attn_impl,
+            kvcache_partition_len=rbln_config.kvcache_partition_len,
+            kvcache_block_size=rbln_config.kvcache_block_size,
+            max_seq_len=rbln_config.max_seq_len,
+        )
+
+        required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
+        max_num_blocks = required_num_blocks
+
+        if rbln_config.attn_impl == "flash_attn":
+            estimated_max_num_blocks = cls.get_maximum_num_blocks(
+                config=model_config,
+                tensor_parallel_size=rbln_config.tensor_parallel_size or 1,
+                kvcache_block_size=rbln_config.kvcache_block_size,
+                nbits_per_param=16 if not rbln_config.quantization else 4,  # TODO(jongho): FIX Ad-hoc
+                n_model_params=sum(p.numel() for p in model.parameters()),
+            )
+
+            max_num_blocks = min(max_num_blocks, estimated_max_num_blocks)
+
+            flash_min_blocks = rbln_config.max_seq_len // rbln_config.kvcache_block_size + 1
+            if max_num_blocks < flash_min_blocks:
+                max_num_blocks = flash_min_blocks
+
+            if max_num_blocks < rbln_config.batch_size:
+                raise RuntimeError(
+                    f"Batch size ({rbln_config.batch_size}) exceeds available KV cache blocks ({max_num_blocks}). "
+                    "Ensure the number of blocks is at least equal to the batch size."
+                )
+
+        if rbln_config.kvcache_num_blocks is None:
+            rbln_config.kvcache_num_blocks = max_num_blocks
+        elif rbln_config.kvcache_num_blocks > max_num_blocks:
+            logger.warning(
+                f"The set `kvcache_num_blocks` ({rbln_config.kvcache_num_blocks}) is greater"
+                f" than the estimated maximum number of blocks ({max_num_blocks})."
+                "This can cause a failure during model compilation."
+            )
+        logger.info(f"[KVCache] Compiling with num_blocks: {rbln_config.kvcache_num_blocks}")
+        num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
+        num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
+        num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
+        hidden_size = getattr(model_config, "n_embd", None) or getattr(model_config, "hidden_size")
+        head_dim = getattr(model_config, "head_dim", None) or hidden_size // num_attention_heads
+
+        prefill_input_info = cls.get_input_info(
+            batch_size=1,
+            query_length=rbln_config.prefill_chunk_size,
+            use_inputs_embeds=rbln_config.use_inputs_embeds,
+            use_attention_mask=rbln_config.use_attention_mask,
+            max_seq_len=rbln_config.max_seq_len,
+            kvcache_block_size=rbln_config.kvcache_block_size,
+            kvcache_num_blocks=rbln_config.kvcache_num_blocks,
+            num_key_value_heads=num_key_value_heads,
+            num_hidden_layers=num_hidden_layers,
             hidden_size=hidden_size,
+            head_dim=head_dim,
+        )
+        dec_input_info = cls.get_input_info(
+            batch_size=rbln_config.batch_size,
+            query_length=1,
+            use_inputs_embeds=rbln_config.use_inputs_embeds,
+            use_attention_mask=rbln_config.use_attention_mask,
+            max_seq_len=rbln_config.max_seq_len,
+            kvcache_block_size=rbln_config.kvcache_block_size,
+            kvcache_num_blocks=rbln_config.kvcache_num_blocks,
+            num_key_value_heads=num_key_value_heads,
+            num_hidden_layers=num_hidden_layers,
+            hidden_size=hidden_size,
+            head_dim=head_dim,
         )
 
         prefill_compile_config = RBLNCompileConfig(compiled_model_name="prefill", input_info=prefill_input_info)
         dec_compile_config = RBLNCompileConfig(compiled_model_name="decoder", input_info=dec_input_info)
 
-        rbln_config = RBLNConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[prefill_compile_config, dec_compile_config],
-            rbln_kwargs=rbln_kwargs,
-        )
-
-        rbln_config.model_cfg.update(
-            {
-                "max_seq_len": rbln_max_seq_len,
-                "batch_size": rbln_batch_size,
-                "prefill_chunk_size": rbln_prefill_chunk_size,
-                "use_attention_mask": rbln_use_attention_mask,
-                "use_inputs_embeds": rbln_use_inputs_embeds,
-                "kvcache_partition_len": rbln_kvcache_partition_len,
-                "kvcache_block_size": rbln_kvcache_block_size,
-                "attn_impl": rbln_attn_impl,
-                "kvcache_num_blocks": rbln_kvcache_num_blocks,
-            }
-        )
-
-        if rbln_quantization is not None:
-            rbln_config.model_cfg.update({"quantization": rbln_quantization})
+        rbln_config.set_compile_cfgs([prefill_compile_config, dec_compile_config])
 
         return rbln_config
 
@@ -820,18 +906,23 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
     def _create_runtimes(
         cls,
         compiled_models: List[rebel.RBLNCompiledModel],
-        rbln_device_map: Dict[str, int],
-        activate_profiler: Optional[bool] = None,
+        rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
     ) -> List[rebel.Runtime]:
-        if any(model_name not in rbln_device_map for model_name in ["prefill", "decoder"]):
+        if any(model_name not in rbln_config.device_map for model_name in ["prefill", "decoder"]):
             cls._raise_missing_compiled_file_error(["prefill", "decoder"])
 
         return [
-            compiled_models[0].create_runtime(
-                tensor_type="pt", device=rbln_device_map["prefill"], activate_profiler=activate_profiler
+            rebel.Runtime(
+                compiled_models[0],
+                tensor_type="pt",
+                device=rbln_config.device_map["prefill"],
+                activate_profiler=rbln_config.activate_profiler,
             ),
-            compiled_models[1].create_runtime(
-                tensor_type="pt", device=rbln_device_map["decoder"], activate_profiler=activate_profiler
+            rebel.Runtime(
+                compiled_models[1],
+                tensor_type="pt",
+                device=rbln_config.device_map["decoder"],
+                activate_profiler=rbln_config.activate_profiler,
             ),
         ]
 
@@ -868,11 +959,11 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             model_inputs.update({"input_ids": input_ids})
 
         if inputs_embeds is not None:
-            if self.rbln_config.model_cfg["use_inputs_embeds"]:
+            if self.rbln_config.use_inputs_embeds:
                 model_inputs.update({"inputs_embeds": inputs_embeds})
             else:
                 raise ValueError(
-                    "The specifying inputs_embedst is only supported when using a compiled RBLN model with 'rbln_use_inputs_embeds' set to True."
+                    "The specifying inputs_embeds is only supported when using a compiled RBLN model with 'rbln_use_inputs_embeds' set to True."
                 )
         else:
             model_inputs.update({"input_ids": input_ids})

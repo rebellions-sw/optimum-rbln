@@ -16,17 +16,8 @@ from typing import Optional, Tuple, Union
 
 import torch
 from torch import nn
-from transformers.modeling_outputs import (
-    BaseModelOutput,
-    Seq2SeqLMOutput,
-)
+from transformers.modeling_outputs import BaseModelOutput, Seq2SeqLMOutput
 from transformers.utils import logging
-
-from ....ops import (
-    register_rbln_custom_cache_update,
-    register_rbln_custom_paged_attention,
-    register_rbln_custom_paged_causal_attention,
-)
 
 
 logger = logging.get_logger(__name__)
@@ -34,7 +25,6 @@ logger = logging.get_logger(__name__)
 
 class WhisperWrapper:
     def __init__(self, model, use_attention_mask, rbln_token_timestamps):
-        register_rbln_custom_cache_update()
         self.encoder = WhisperEncoderWrapper(model)
         self.decoder = WhisperDecoderWrapper(
             model, use_attention_mask=use_attention_mask, output_attentions=rbln_token_timestamps
@@ -80,9 +70,11 @@ class WhisperEncoderWrapper(torch.nn.Module):
 
         # 3. update cross_attention's past_key_value to the device-dram for optimization.
         batch_axis = torch.tensor(1, dtype=torch.int16)
-        enc_output = torch.ops.rbln_custom_ops.rbln_cache_update(cross_key_values, cross_kv, b_idx[0], batch_axis)
+        cross_key_values = torch.ops.rbln_custom_ops.rbln_cache_update(
+            cross_key_values, cross_kv, b_idx[0], batch_axis
+        )
 
-        return enc_output
+        return cross_key_values
 
 
 class WhisperDecoderWrapper(torch.nn.Module):
@@ -100,11 +92,6 @@ class WhisperDecoderWrapper(torch.nn.Module):
         It is inspired by the BART architecture, but it is designed to be flexible and can be overridden
         by subclasses to modify or add custom attributes as necessary.
         """
-        if self.use_attention_mask:
-            register_rbln_custom_paged_attention()
-        else:
-            register_rbln_custom_paged_causal_attention()
-
         self.num_layers = self.config.decoder_layers
         self.decoder = self.convert_to_rbln_conditional_generation(model)
 
@@ -190,11 +177,11 @@ class WhisperDecoder(nn.Module):
         all_hiddens = []
         for i in range(inputs_embeds.shape[0]):
             position_id = cache_position[i]
-            position = self.embed_positions(input_ids, position_ids=position_id)
+            position = self.embed_positions.weight[position_id]
             batch_hidden = position + inputs_embeds[i]
             all_hiddens.append(batch_hidden)
 
-        hidden_states = torch.stack(all_hiddens, dim=0)
+        hidden_states = torch.cat(all_hiddens, dim=0).unsqueeze(1)
 
         # prepare attn mask (normal attention - masked)
         if attention_mask is not None:
@@ -310,22 +297,23 @@ class WhisperSelfAttention(WhisperAttention):
         value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
         block_size = past_key_value[0].shape[-2]
 
-        args = [
-            query_states,
-            key_states,
-            value_states,
-            past_key_value[0].view(bsz, self.num_heads, 1, -1, self.head_dim),
-            past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
-            cache_position,
-            torch.tensor(1.0, dtype=torch.float32),  # scale
-            block_tables,
-            block_size,
-        ]
+        args = {
+            "q": query_states,
+            "k": key_states,
+            "v": value_states,
+            "kcache": past_key_value[0].view(bsz, self.num_heads, 1, -1, self.head_dim),
+            "vcache": past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
+            "seq": cache_position.expand(bsz, 1),
+            "scale": torch.tensor(1.0, dtype=torch.float32),
+            "block_table": block_tables,
+            "block_size": block_size,
+        }
+
         if attention_mask is not None:
-            args.insert(3, attention_mask.unsqueeze(2))
-            attn_output = torch.ops.rbln_custom_ops.paged_attn_decode(*args)
+            args["mask"] = attention_mask.unsqueeze(2)
+            attn_output = torch.ops.rbln_custom_ops.paged_attn_decode(**args)
         else:
-            attn_output = torch.ops.rbln_custom_ops.paged_causal_attn_decode(*args)
+            attn_output = torch.ops.rbln_custom_ops.paged_causal_attn_decode(**args)
 
         attn_output = attn_output.view(bsz, self.num_heads, tgt_len, self.head_dim)
         attn_output = attn_output.transpose(1, 2)
