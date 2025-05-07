@@ -26,6 +26,7 @@ from transformers import AutoConfig, AutoModelForCausalLM, PretrainedConfig, Pre
 from transformers.modeling_utils import no_init_weights
 from transformers.utils import ModelOutput
 
+from ....utils.tensor_utils import aligned_tensor
 from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
@@ -43,6 +44,7 @@ logger = get_logger()
 
 if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
+
 
 
 class RBLNRuntimeModel(RBLNPytorchRuntime):
@@ -334,6 +336,16 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 position_embed_chunk if position_embed is not None else None,
                 out=out_buffers,
             )
+            # n_layers = 3
+            # import rebel.kv_cache
+            # cpu_kv_cache = aligned_tensor(n_layers * 2 * 1 * 8 * 1 * 2 * 8192 * 64)
+            
+            # rebel.kv_cache.get_kv_cache(
+            #     self.runtime, cpu_kv_cache, 0, step, size=self.prefill_chunk_size)            
+            
+            # rebel.kv_cache.set_kv_cache(
+            #     self.runtime, cpu_kv_cache, 0, step, size=self.prefill_chunk_size)
+
 
         # Update decoder attention mask with processed KV-cache length from prefill phase
         if not is_external_block_tables and self.use_attention_mask:
