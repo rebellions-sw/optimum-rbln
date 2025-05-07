@@ -439,6 +439,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 attn_impl=self.rbln_config.attn_impl,
             )
 
+        # NOTE(eunji): Use a decoder whose batch size matches the model's main batch size for compatibility.
+        self.decoder = self.decoders[self.rbln_config.batch_size]
+
     @classmethod
     def save_torch_artifacts(
         cls,
