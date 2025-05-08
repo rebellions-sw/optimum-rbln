@@ -17,6 +17,8 @@ from typing import List, Optional, Tuple, Union
 
 import torch
 from torch import nn
+from torch.distributed.tensor.parallel import parallelize_module, ColwiseParallel
+from torch.distributed.device_mesh import init_device_mesh
 from transformers import PretrainedConfig, PreTrainedModel
 
 from ....utils import logging
@@ -633,7 +635,7 @@ class DecoderOnlyAttention(nn.Module):
         self.use_attention_mask = use_attention_mask
         self.attention = self.get_attention()
         self.kvcache_block_size = kvcache_block_size
-        self.__post_init__()
+        self.__post_init__(self.num_key_value_heads)
 
     @property
     def phase(self):
@@ -647,10 +649,11 @@ class DecoderOnlyAttention(nn.Module):
     def get_attention(self):
         return AttentionOp(self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask)
 
-    def __post_init__(self):
-        self.q_proj = self._original_mod.q_proj
-        self.k_proj = self._original_mod.k_proj
-        self.v_proj = self._original_mod.v_proj
+    def __post_init__(self, num_key_value_heads: int):
+        tp_mesh = init_device_mesh("cuda", (num_key_value_heads,))
+        self.q_proj = parallelize_module(self._original_mod.q_proj, tp_mesh, {"w1": ColwiseParallel()})
+        self.k_proj = parallelize_module(self._original_mod.k_proj, tp_mesh, {"w1": ColwiseParallel()})
+        self.v_proj = parallelize_module(self._original_mod.v_proj, tp_mesh, {"w1": ColwiseParallel()})
         self.o_proj = self._original_mod.o_proj
 
     def projection(self, hidden_states) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -714,7 +717,7 @@ class DecoderOnlyAttention(nn.Module):
         )
 
         attn_outputs = self.o_proj(attn_output)
-        return attn_outputs
+        return torch.distributed.all_reduce(attn_outputs)
 
 
 class AttentionOp(nn.Module):
@@ -979,7 +982,7 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
         )
 
         attn_outputs = self.o_proj(attn_output)
-        return attn_outputs
+        return torch.distributed.all_reduce(attn_outputs)
 
 
 class FlashAttentionOp(AttentionOp):
