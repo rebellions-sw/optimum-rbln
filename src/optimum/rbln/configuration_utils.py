@@ -19,7 +19,6 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
-import rebel
 import torch
 
 from .__version__ import __version__
@@ -755,8 +754,6 @@ class RBLNModelConfig:
         context = ContextRblnConfig.get_current_context()["create_runtimes"]
         if context is not None:
             return context
-        elif self._runtime_options["create_runtimes"] is None:
-            return rebel.npu_is_available()
         return self._runtime_options["create_runtimes"]
 
     @create_runtimes.setter
