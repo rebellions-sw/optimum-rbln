@@ -703,13 +703,18 @@ class DecoderOnlyAttention(nn.Module):
         if batch_size > 1 and self.phase == "prefill":
             raise NotImplementedError(f"batch size should be 1 if prefill phase, but got {batch_size}.")
 
+        tp_mesh = torch.distributed.tensor.init_device_mesh("cuda", (self.num_key_value_heads,))
+        head_dim = 1
+        sharded_key = torch.distributed.tensor.distribute_tensor(past_key_values[self.layer_idx][0], tp_mesh, [torch.distributed.tensor.Shard(dim=head_dim)])
+        sharded_value = torch.distributed.tensor.distribute_tensor(past_key_values[self.layer_idx][1], tp_mesh, [torch.distributed.tensor.Shard(dim=head_dim)])
+
         attn_output = self.attention(
             query_states,
             key_states,
             value_states,
             attention_mask,
-            past_key_state=past_key_values[self.layer_idx][0],
-            past_value_state=past_key_values[self.layer_idx][1],
+            past_key_state=sharded_key,
+            past_value_state=sharded_value,
             seq_position=seq_positions,
             scale=self.scale,
             block_tables=block_tables,
