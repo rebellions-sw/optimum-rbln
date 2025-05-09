@@ -26,7 +26,7 @@ from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...configurations import RBLNAutoencoderKLCosmosConfig
-from .vae import RBLNRuntimeVAEDecoder, _VAECosmosDecoder
+from .vae import RBLNRuntimeCosmosVAEEncoder, RBLNRuntimeCosmosVAEDecoder, _VAECosmosDecoder, _VAECosmosEncoder
 
 
 if TYPE_CHECKING:
@@ -47,29 +47,29 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
         super().__post_init__(**kwargs)
 
         if self.rbln_config.uses_encoder:
-            raise NotImplementedError("We currently support Text to World pipeline only.")
+            self.encoder = RBLNRuntimeCosmosVAEEncoder(runtime=self.model[0], main_input_name="x", use_slicing=self.rbln_config.use_slicing)
 
-        self.encoder = None
-        self.decoder = RBLNRuntimeVAEDecoder(runtime=self.model[-1], main_input_name="z")
+        self.decoder = RBLNRuntimeCosmosVAEDecoder(runtime=self.model[-1], main_input_name="z", use_slicing=self.rbln_config.use_slicing)
         self.image_size = self.rbln_config.image_size
 
     @classmethod
     def wrap_model_if_needed(
         cls, model: torch.nn.Module, rbln_config: RBLNAutoencoderKLCosmosConfig
     ) -> torch.nn.Module:
-        if rbln_config.uses_encoder:
-            raise NotImplementedError("We currently support Text to World pipeline only.")
-
         decoder_model = _VAECosmosDecoder(model)
         decoder_model.eval()
-        return decoder_model
+
+        if rbln_config.uses_encoder:
+            encoder_model = _VAECosmosEncoder(model)
+            encoder_model.eval()
+            return encoder_model, decoder_model
+        else:
+            return decoder_model
 
     @classmethod
     def get_compiled_model(
         cls, model, rbln_config: RBLNAutoencoderKLCosmosConfig
     ) -> Dict[str, rebel.RBLNCompiledModel]:
-        if rbln_config.uses_encoder:
-            raise NotImplementedError("We currently support Text to World pipeline only.")
 
         def replaced_forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
             if self.temporal_pad != 0:
@@ -81,12 +81,19 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
         original_forward = CosmosCausalConv3d.forward
         CosmosCausalConv3d.forward = replaced_forward
 
-        decoder_model = cls.wrap_model_if_needed(model, rbln_config)
-        dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
+        compiled_models = {}
+        if rbln_config.uses_encoder:
+            encoder_model, decoder_model = cls.wrap_model_if_needed(model, rbln_config)
+            enc_compiled_model = cls.compile(encoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
+            compiled_models["encoder"] = enc_compiled_model
+        else:
+            decoder_model = cls.wrap_model_if_needed(model, rbln_config)
+        dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[-1])
+        compiled_models["decoder"] = dec_compiled_model
 
         CosmosCausalConv3d.forward = original_forward
 
-        return {"decoder": dec_compiled_model}
+        return compiled_models
 
     @classmethod
     def update_rbln_config_using_pipe(
@@ -105,9 +112,23 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
         model_config: "PretrainedConfig",
         rbln_config: RBLNAutoencoderKLCosmosConfig,
     ) -> RBLNAutoencoderKLCosmosConfig:
+        batch_size = 1 if rbln_config.use_slicing else rbln_config.batch_size
         compile_cfgs = []
         if rbln_config.uses_encoder:
-            raise NotImplementedError("We currently support Text to World pipeline only.")
+            vae_enc_input_info = [
+                (
+                    "x",
+                    [
+                        batch_size,
+                        model_config.in_channels,
+                        rbln_config.num_frames,
+                        rbln_config.height,
+                        rbln_config.width,
+                    ],
+                    "float32",
+                ),
+            ]
+            compile_cfgs.append(RBLNCompileConfig(compiled_model_name="encoder", input_info=vae_enc_input_info))
 
         num_latent_frames = (rbln_config.num_frames - 1) // rbln_config.vae_scale_factor_temporal + 1
         latent_height = rbln_config.height // rbln_config.vae_scale_factor_spatial
@@ -117,7 +138,7 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
             (
                 "z",
                 [
-                    rbln_config.batch_size,
+                    batch_size,
                     rbln_config.num_channel_latents,
                     num_latent_frames,
                     latent_height,
@@ -141,7 +162,7 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
             # decoder
             expected_models = ["decoder"]
         else:
-            raise NotImplementedError("We currently support Text to World pipeline only.")
+            expected_models = ["encoder", "decoder"]
 
         if any(model_name not in rbln_config.device_map for model_name in expected_models):
             cls._raise_missing_compiled_file_error(expected_models)
@@ -163,19 +184,8 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
             return (posterior,)
         return AutoencoderKLOutput(latent_dist=posterior)
 
-    def _decode(self, z: torch.FloatTensor, return_dict: bool = True) -> torch.FloatTensor:
-        dec = self.decoder(z)
-
-        if not return_dict:
-            return (dec,)
-        return DecoderOutput(sample=dec)
-
     def decode(self, z: torch.FloatTensor, return_dict: bool = True) -> torch.FloatTensor:
-        if z.shape[0] > 1:
-            decoded_slices = [self._decode(z_slice).sample for z_slice in z.split(1)]
-            decoded = torch.cat(decoded_slices)
-        else:
-            decoded = self._decode(z).sample
+        decoded = self.decoder.decode(z)
 
         if not return_dict:
             return (decoded,)
