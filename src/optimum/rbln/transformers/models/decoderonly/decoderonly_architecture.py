@@ -17,6 +17,8 @@ from typing import List, Optional, Tuple, Union
 
 import torch
 from torch import nn
+from torch.distributed.tensor.parallel import parallelize_module, ColwiseParallel
+from torch.distributed.device_mesh import init_device_mesh
 from transformers import PretrainedConfig, PreTrainedModel
 
 from ....utils import logging
@@ -633,7 +635,7 @@ class DecoderOnlyAttention(nn.Module):
         self.use_attention_mask = use_attention_mask
         self.attention = self.get_attention()
         self.kvcache_block_size = kvcache_block_size
-        self.__post_init__()
+        self.__post_init__(self.num_key_value_heads)
 
     @property
     def phase(self):
@@ -647,10 +649,11 @@ class DecoderOnlyAttention(nn.Module):
     def get_attention(self):
         return AttentionOp(self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask)
 
-    def __post_init__(self):
-        self.q_proj = self._original_mod.q_proj
-        self.k_proj = self._original_mod.k_proj
-        self.v_proj = self._original_mod.v_proj
+    def __post_init__(self, num_key_value_heads: int):
+        tp_mesh = init_device_mesh("cuda", (num_key_value_heads,))
+        self.q_proj = parallelize_module(self._original_mod.q_proj, tp_mesh, {"w1": ColwiseParallel()})
+        self.k_proj = parallelize_module(self._original_mod.k_proj, tp_mesh, {"w1": ColwiseParallel()})
+        self.v_proj = parallelize_module(self._original_mod.v_proj, tp_mesh, {"w1": ColwiseParallel()})
         self.o_proj = self._original_mod.o_proj
 
     def projection(self, hidden_states) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -700,13 +703,18 @@ class DecoderOnlyAttention(nn.Module):
         if batch_size > 1 and self.phase == "prefill":
             raise NotImplementedError(f"batch size should be 1 if prefill phase, but got {batch_size}.")
 
+        tp_mesh = torch.distributed.tensor.init_device_mesh("cuda", (self.num_key_value_heads,))
+        head_dim = 1
+        sharded_key = torch.distributed.tensor.distribute_tensor(past_key_values[self.layer_idx][0], tp_mesh, [torch.distributed.tensor.Shard(dim=head_dim)])
+        sharded_value = torch.distributed.tensor.distribute_tensor(past_key_values[self.layer_idx][1], tp_mesh, [torch.distributed.tensor.Shard(dim=head_dim)])
+
         attn_output = self.attention(
             query_states,
             key_states,
             value_states,
             attention_mask,
-            past_key_state=past_key_values[self.layer_idx][0],
-            past_value_state=past_key_values[self.layer_idx][1],
+            past_key_state=sharded_key,
+            past_value_state=sharded_value,
             seq_position=seq_positions,
             scale=self.scale,
             block_tables=block_tables,
@@ -714,7 +722,7 @@ class DecoderOnlyAttention(nn.Module):
         )
 
         attn_outputs = self.o_proj(attn_output)
-        return attn_outputs
+        return torch.distributed.all_reduce(attn_outputs)
 
 
 class AttentionOp(nn.Module):
@@ -979,7 +987,7 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
         )
 
         attn_outputs = self.o_proj(attn_output)
-        return attn_outputs
+        return torch.distributed.all_reduce(attn_outputs)
 
 
 class FlashAttentionOp(AttentionOp):
