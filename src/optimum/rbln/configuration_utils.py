@@ -532,11 +532,11 @@ class RBLNModelConfig:
 
         Args:
             cls_name (Optional[str]): The class name of the configuration. Defaults to the current class name.
-            create_runtimes (Optional[bool]): Whether to create RBLN runtimes. Defaults to True if an NPU is available.
+            create_runtimes (Optional[bool]): Whether to create RBLN runtimes. Defaults to True.
             optimize_host_memory (Optional[bool]): Whether to optimize host memory usage. Defaults to True.
             device (Optional[Union[int, List[int]]]): The device(s) to load the model onto. Can be a single device ID or a list.
             device_map (Optional[Dict[str, Union[int, List[int]]]]): Mapping from compiled model names to device IDs.
-            activate_profiler (Optional[bool]): Whether to activate the profiler for performance analysis.
+            activate_profiler (Optional[bool]): Whether to activate the profiler for performance analysis Defaults to False.
             npu (Optional[str]): The NPU device name to use for compilation.
             tensor_parallel_size (Optional[int]): Size for tensor parallelism to distribute the model across devices.
             optimum_rbln_version (Optional[str]): The optimum-rbln version used for this configuration.
@@ -754,6 +754,8 @@ class RBLNModelConfig:
         context = ContextRblnConfig.get_current_context()["create_runtimes"]
         if context is not None:
             return context
+        elif self._runtime_options["create_runtimes"] is None:
+            return True
         return self._runtime_options["create_runtimes"]
 
     @create_runtimes.setter
@@ -806,6 +808,8 @@ class RBLNModelConfig:
         context = ContextRblnConfig.get_current_context()["activate_profiler"]
         if context is not None:
             return context
+        elif self._runtime_options["activate_profiler"] is None:
+            return False
         return self._runtime_options["activate_profiler"]
 
     @activate_profiler.setter
