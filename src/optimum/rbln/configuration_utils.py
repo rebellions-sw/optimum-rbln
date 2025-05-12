@@ -536,7 +536,7 @@ class RBLNModelConfig:
             optimize_host_memory (Optional[bool]): Whether to optimize host memory usage. Defaults to True.
             device (Optional[Union[int, List[int]]]): The device(s) to load the model onto. Can be a single device ID or a list.
             device_map (Optional[Dict[str, Union[int, List[int]]]]): Mapping from compiled model names to device IDs.
-            activate_profiler (Optional[bool]): Whether to activate the profiler for performance analysis Defaults to False.
+            activate_profiler (Optional[bool]): Whether to activate the profiler for performance analysis.
             npu (Optional[str]): The NPU device name to use for compilation.
             tensor_parallel_size (Optional[int]): Size for tensor parallelism to distribute the model across devices.
             optimum_rbln_version (Optional[str]): The optimum-rbln version used for this configuration.
@@ -767,6 +767,8 @@ class RBLNModelConfig:
         context = ContextRblnConfig.get_current_context()["optimize_host_memory"]
         if context is not None:
             return context
+        elif self._runtime_options["optimize_host_memory"] is None:
+            return True
         return self._runtime_options["optimize_host_memory"]
 
     @optimize_host_memory.setter
