@@ -767,8 +767,6 @@ class RBLNModelConfig:
         context = ContextRblnConfig.get_current_context()["optimize_host_memory"]
         if context is not None:
             return context
-        elif self._runtime_options["optimize_host_memory"] is None:
-            return True
         return self._runtime_options["optimize_host_memory"]
 
     @optimize_host_memory.setter
@@ -808,8 +806,6 @@ class RBLNModelConfig:
         context = ContextRblnConfig.get_current_context()["activate_profiler"]
         if context is not None:
             return context
-        elif self._runtime_options["activate_profiler"] is None:
-            return False
         return self._runtime_options["activate_profiler"]
 
     @activate_profiler.setter
