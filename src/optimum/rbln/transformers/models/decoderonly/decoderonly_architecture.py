@@ -389,7 +389,7 @@ class DecoderOnlyForCausalLM(nn.Module):
         logits = self.lm_head(hidden_states)
 
         # Apply final logit softmaxing if configured, e.g. for Gemma2
-        if getattr(self.config, "final_logit_softcapping", None):
+        if getattr(self.config, "final_logit_softcapping", None) is not None:
             logits = logits / self.config.final_logit_softcapping
             logits = torch.tanh(logits)
             logits = logits * self.config.final_logit_softcapping

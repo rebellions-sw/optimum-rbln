@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 from typing import TYPE_CHECKING, Optional, Tuple, List
 
 import torch
@@ -28,6 +29,7 @@ from ..decoderonly.decoderonly_architecture import (
     DecoderOnlyWrapper,
     DecoderOnlySlidingWindowAttention,
     slice_and_unsqueeze_cos_sin,
+    RotaryEmbedding,
 )
 
 
@@ -50,9 +52,9 @@ class Gemma3ForCausalLMWrapper(DecoderOnlyWrapper):
         self.config = causal_lm.config
 
         if use_rotary_emb:
-            self.rotary_emb = self.get_rotary_emb(max_seq_len=max_seq_len)
+            self.rotary_emb_global, self.rotary_emb_local = self.get_rotary_emb(max_seq_len=max_seq_len)
         else:
-            self.rotary_emb = None
+            self.rotary_emb_global, self.rotary_emb_local = None
 
         self.attn_impl = attn_impl
         self.kvcache_block_size = kvcache_block_size
@@ -77,6 +79,15 @@ class Gemma3ForCausalLMWrapper(DecoderOnlyWrapper):
 
         self.num_hidden_layers = getattr(self.config, "num_hidden_layers", None) or getattr(self.config, "n_layer")
         self._phase = "prefill"
+
+    def get_rotary_emb(self, max_seq_len):
+        rotary_emb_global = RotaryEmbedding(config=self.config, max_seq_len_cached=max_seq_len)
+        config = copy.deepcopy(self.config)
+        config.rope_theta = config.rope_local_base_freq
+        config.rope_scaling = {"rope_type": "default"}
+        rotary_emb_local = RotaryEmbedding(config=config, max_seq_len_cached=max_seq_len)
+
+        return (rotary_emb_global, rotary_emb_local)
 
     def convert_to_rbln_causal_lm(
         self, causal_lm: "Gemma3ForCausalLM", max_seq_len: int, sliding_window: int, sliding_window_pattern: int
@@ -110,25 +121,69 @@ class Gemma3ForCausalLMWrapper(DecoderOnlyWrapper):
             new_layer = Gemma3DecoderLayer(layer, new_self_attn)
             new_layers.append(new_layer)
 
-        new_model = DecoderOnlyModel(
-            causal_lm.model, new_layers, partition_len=self.kvcache_partition_len, max_seq_len=max_seq_len,
+        new_model = Gemma3TextModel(
+            causal_lm.model,
+            new_layers,
+            partition_len=self.kvcache_partition_len,
+            max_seq_len=max_seq_len,
         )
         new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm
 
+    def forward(self, *args):
+        if self.phase == "decode":
+            if self.use_attention_mask:
+                (
+                    input_ids_or_inputs_embeds,
+                    cache_position,
+                    attention_mask,
+                    block_tables,
+                    *past_key_values,
+                ) = args
+            else:
+                (
+                    input_ids_or_inputs_embeds,
+                    cache_position,
+                    block_tables,
+                    *past_key_values,
+                ) = args
+                attention_mask = None
+            query_position = None
+        elif self.phase == "prefill":
+            if self.use_attention_mask:
+                (
+                    input_ids_or_inputs_embeds,
+                    cache_position,
+                    attention_mask,
+                    query_position,
+                    block_tables,
+                    *past_key_values,
+                ) = args
+            else:
+                (
+                    input_ids_or_inputs_embeds,
+                    cache_position,
+                    query_position,
+                    block_tables,
+                    *past_key_values,
+                ) = args
+                attention_mask = None
+
+        else:
+            raise ValueError(f"Unknown phase: {self.phase}")
+
+        return self.forward_common(
+            input_ids_or_inputs_embeds,
+            cache_position,
+            attention_mask,
+            query_position,
+            block_tables,
+            (self.rotary_emb_global, self.rotary_emb_local),
+            *past_key_values,
+        )
+
+
 class Gemma3TextModel(DecoderOnlyModel):
-    """A modified decoder-only model implementation optimized for RBLN compilation.
-
-    Args:
-        model: Original Huggingface model to adapt
-        layers (List[DecoderOnlyLayer]): Modified transformer layers optimized for RBLN
-
-    Attributes:
-        _original_mod: Reference to original Huggingface model
-        layers: ModuleList of RBLN-optimized transformer layers
-        _phase: Current processing phase ("prefill" or "decode")
-    """
-
     def forward(
         self,
         input_ids: torch.Tensor = None,
@@ -157,8 +212,10 @@ class Gemma3TextModel(DecoderOnlyModel):
                 cos = rotary_emb[0]
                 sin = rotary_emb[1]
             else:
-                cos, sin = rotary_emb(hidden_states, self.max_seq_len)  # dtype carrier, max_seq_len
-                cos, sin = slice_and_unsqueeze_cos_sin(cos, sin, cache_position)
+                cos, sin = rotary_emb[0](hidden_states, self.max_seq_len)
+                position_embeddings_global = slice_and_unsqueeze_cos_sin(cos, sin, cache_position)
+                cos, sin = rotary_emb[1](hidden_states, self.max_seq_len)
+                position_embeddings_local = slice_and_unsqueeze_cos_sin(cos, sin, cache_position)
         else:
             batch_size = inputs_embeds.shape[0]
             if cache_position.shape[0] > 1:
@@ -181,31 +238,23 @@ class Gemma3TextModel(DecoderOnlyModel):
             )
         else:
             seq_positions = cache_position[:, :1]
-        
-        sliding_window = self._original_mod.config.sliding_window
-        sliding_window_pattern = self._original_mod.config.sliding_window_pattern
 
+        slide_window_pattern = self._original_mod.config.sliding_window_pattern
         for layer_idx, layer in enumerate(self.layers):
-            if (layer_idx + 1) % sliding_window_pattern == 0:
-                hidden_states = layer(
-                    hidden_states=hidden_states,
-                    attention_mask=None,
-                    seq_positions=seq_positions,
-                    past_key_values=past_key_values,
-                    cos=cos,
-                    sin=sin,
-                    block_tables=block_tables,
-                )
+            if (layer_idx + 1) % slide_window_pattern == 0:
+                cos, sin = position_embeddings_global
             else:
-                hidden_states = layer(
-                    hidden_states=hidden_states,
-                    attention_mask=attention_mask,
-                    seq_positions=seq_positions,
-                    past_key_values=past_key_values,
-                    cos=cos,
-                    sin=sin,
-                    block_tables=block_tables,
-                )
+                cos, sin = position_embeddings_local
+
+            hidden_states = layer(
+                hidden_states=hidden_states,
+                attention_mask=attention_mask,
+                seq_positions=seq_positions,
+                past_key_values=past_key_values,
+                cos=cos,
+                sin=sin,
+                block_tables=block_tables,
+            )
 
         hidden_states = self.get_last_layernorm()(hidden_states)
         return hidden_states
@@ -263,7 +312,7 @@ class Gemma3Attention(DecoderOnlyAttention):
 
     def get_attn_scale(self):
         return self._original_mod.config.query_pre_attn_scalar**-0.5
-    
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -274,7 +323,6 @@ class Gemma3Attention(DecoderOnlyAttention):
         sin: Optional[torch.Tensor] = None,
         block_tables: Optional[torch.Tensor] = None,
     ):
-                
         batch_size, query_length, _ = hidden_states.size()
 
         query_states, key_states, value_states = self.projection(hidden_states=hidden_states)

@@ -228,10 +228,9 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     self.dec_attn_mask[b_idx, :, :, : decoding_step + 1] = 1
                 else:
                     self.dec_attn_mask[b_idx, :, :, decoding_step] = 1
-                #FIXME: adhoc for gemma3 sliding window attn test
-                if self.sliding_window and decoding_step > self.sliding_window:
-                    self.dec_attn_mask[:, :, :, :decoding_step - self.sliding_window] = 0
-                
+                # FIXME: adhoc for gemma3 sliding window attn test
+                if self.sliding_window and decoding_step >= self.sliding_window:
+                    self.dec_attn_mask[:, :, :, : decoding_step - self.sliding_window + 1] = 0
 
             attention_mask = self.dec_attn_mask
 
@@ -326,10 +325,10 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 if step >= self.prefill_chunk_size:
                     chunked_attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
                 chunked_attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
-                #FIXME: adhoc for gemma3 sliding window attn test
-                if self.sliding_window and step > self.sliding_window:
-                    chunked_attention_mask[:, :, :, :step - self.sliding_window] = 0
-
+                # FIXME: adhoc for gemma3 sliding window attn test
+                if self.sliding_window and step >= self.sliding_window:
+                    for i in range(self.prefill_chunk_size):
+                        chunked_attention_mask[:, :, i, : step + i - self.sliding_window + 1] = 0
             # Define query position
             query_position = torch.tensor((query_length - 1) % self.prefill_chunk_size, dtype=torch.int16)
 
