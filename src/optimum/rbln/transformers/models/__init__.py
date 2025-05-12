@@ -72,6 +72,7 @@ _import_structure = {
     ],
     "exaone": ["RBLNExaoneForCausalLM", "RBLNExaoneForCausalLMConfig"],
     "gemma": ["RBLNGemmaForCausalLM", "RBLNGemmaForCausalLMConfig"],
+    "gemma3": ["RBLNGemma3ForCausalLM", "RBLNGemma3ForCausalLMConfig"],
     "gpt2": ["RBLNGPT2LMHeadModel", "RBLNGPT2LMHeadModelConfig"],
     "idefics3": [
         "RBLNIdefics3VisionTransformer",
@@ -149,6 +150,7 @@ if TYPE_CHECKING:
     )
     from .exaone import RBLNExaoneForCausalLM, RBLNExaoneForCausalLMConfig
     from .gemma import RBLNGemmaForCausalLM, RBLNGemmaForCausalLMConfig
+    from .gemma3 import RBLNGemma3ForCausalLM, RBLNGemma3ForCausalLMConfig
     from .gpt2 import RBLNGPT2LMHeadModel, RBLNGPT2LMHeadModelConfig
     from .idefics3 import (
         RBLNIdefics3ForConditionalGeneration,

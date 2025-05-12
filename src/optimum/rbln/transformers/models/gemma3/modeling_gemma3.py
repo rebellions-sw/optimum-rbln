@@ -201,8 +201,8 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             num_hidden_layers=num_hidden_layers,
             hidden_size=hidden_size,
             head_dim=head_dim,
-            sliding_window=sliding_window,
-            sliding_window_pattern=sliding_window_pattern,
+            # sliding_window=sliding_window,
+            # sliding_window_pattern=sliding_window_pattern,
         )
         dec_input_info = cls.get_input_info(
             batch_size=rbln_config.batch_size,
@@ -216,8 +216,8 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             num_hidden_layers=num_hidden_layers,
             hidden_size=hidden_size,
             head_dim=head_dim,
-            sliding_window=sliding_window,
-            sliding_window_pattern=sliding_window_pattern,
+            # sliding_window=sliding_window,
+            # sliding_window_pattern=sliding_window_pattern,
         )
 
         prefill_compile_config = RBLNCompileConfig(compiled_model_name="prefill", input_info=prefill_input_info)

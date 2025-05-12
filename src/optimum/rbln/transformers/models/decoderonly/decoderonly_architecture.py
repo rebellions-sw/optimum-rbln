@@ -764,6 +764,7 @@ class AttentionOp(nn.Module):
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
         key_state = key_state.unsqueeze(2)  # 1, 32, 1, 128, 128
         value_state = value_state.unsqueeze(2)
+
         if self.use_attention_mask:
             attn_mask = attn_mask.unsqueeze(2)
 
