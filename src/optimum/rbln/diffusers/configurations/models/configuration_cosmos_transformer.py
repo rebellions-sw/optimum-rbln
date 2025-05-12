@@ -30,7 +30,6 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
         num_latent_frames: Optional[int] = None,
         latent_height: Optional[int] = None,
         latent_width: Optional[int] = None,
-        hidden_size: Optional[int] = None,
         embedding_dim: Optional[int] = None,
         time_proj_num_channels: Optional[int] = None,
         **kwargs,
@@ -59,7 +58,6 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
         self.num_latent_frames = num_latent_frames
         self.latent_height = latent_height
         self.latent_width = latent_width
-        self.hidden_size = hidden_size
         self.embedding_dim = embedding_dim
         self.time_proj_num_channels = time_proj_num_channels
 
