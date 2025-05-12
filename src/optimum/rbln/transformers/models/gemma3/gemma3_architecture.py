@@ -116,6 +116,100 @@ class Gemma3ForCausalLMWrapper(DecoderOnlyWrapper):
         new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm
 
+class Gemma3TextModel(DecoderOnlyModel):
+    """A modified decoder-only model implementation optimized for RBLN compilation.
+
+    Args:
+        model: Original Huggingface model to adapt
+        layers (List[DecoderOnlyLayer]): Modified transformer layers optimized for RBLN
+
+    Attributes:
+        _original_mod: Reference to original Huggingface model
+        layers: ModuleList of RBLN-optimized transformer layers
+        _phase: Current processing phase ("prefill" or "decode")
+    """
+
+    def forward(
+        self,
+        input_ids: torch.Tensor = None,
+        inputs_embeds: torch.Tensor = None,
+        attention_mask: torch.Tensor = None,
+        cache_position: torch.Tensor = None,
+        past_key_values: Tuple[Tuple[torch.Tensor]] = None,
+        rotary_emb: torch.nn.Module = None,
+        block_tables: Optional[torch.Tensor] = None,
+    ):
+        # retrieve input_ids and inputs_embeds
+        if (input_ids is None) ^ (inputs_embeds is not None):
+            raise ValueError(
+                "You cannot specify both input_ids and inputs_embeds at the same time, and must specify either one"
+            )
+
+        # embed positions
+        if inputs_embeds is None:
+            inputs_embeds = self.get_embedding()(input_ids)
+
+        hidden_states = inputs_embeds * self.hidden_multiplier
+
+        # get cos,sin vector if needed
+        if rotary_emb is not None:
+            if isinstance(rotary_emb, torch.Tensor):
+                cos = rotary_emb[0]
+                sin = rotary_emb[1]
+            else:
+                cos, sin = rotary_emb(hidden_states, self.max_seq_len)  # dtype carrier, max_seq_len
+                cos, sin = slice_and_unsqueeze_cos_sin(cos, sin, cache_position)
+        else:
+            batch_size = inputs_embeds.shape[0]
+            if cache_position.shape[0] > 1:
+                position_embeds = []
+                for b_idx in range(batch_size):
+                    position_embed = self.get_pos_embedding()(cache_position[b_idx])
+                    position_embeds.append(position_embed)
+
+                position_embeds = torch.cat(position_embeds, dim=0).unsqueeze(1)
+            else:
+                position_embeds = self.get_pos_embedding()(cache_position)
+            hidden_states = hidden_states + position_embeds
+            cos, sin = None, None
+
+        # (batch, seq_len) -> (batch,)
+        if self.attn_impl == "flash_attn":
+            seq_positions = cache_position[:, 0]
+            seq_positions = self.convert_sequence_positions_for_flash_attn(
+                seq_positions=seq_positions, max_seq_len=self.max_seq_len
+            )
+        else:
+            seq_positions = cache_position[:, :1]
+        
+        sliding_window = self._original_mod.config.sliding_window
+        sliding_window_pattern = self._original_mod.config.sliding_window_pattern
+
+        for layer_idx, layer in enumerate(self.layers):
+            if (layer_idx + 1) % sliding_window_pattern == 0:
+                hidden_states = layer(
+                    hidden_states=hidden_states,
+                    attention_mask=None,
+                    seq_positions=seq_positions,
+                    past_key_values=past_key_values,
+                    cos=cos,
+                    sin=sin,
+                    block_tables=block_tables,
+                )
+            else:
+                hidden_states = layer(
+                    hidden_states=hidden_states,
+                    attention_mask=attention_mask,
+                    seq_positions=seq_positions,
+                    past_key_values=past_key_values,
+                    cos=cos,
+                    sin=sin,
+                    block_tables=block_tables,
+                )
+
+        hidden_states = self.get_last_layernorm()(hidden_states)
+        return hidden_states
+
 
 class Gemma3DecoderLayer(DecoderOnlyLayer):
     def get_pre_feedforward_layernorm(self) -> Gemma3RMSNorm:

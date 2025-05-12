@@ -59,6 +59,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         kvcache_block_size: int,
         use_attention_mask: bool,
         attn_impl: str,
+        sliding_window: int,
         **kwargs: Any,
     ) -> None:
         super().__init__(runtime, **kwargs)
@@ -76,6 +77,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         self.kvcache_block_size = kvcache_block_size
         self.empty_block = -1
         self.attn_impl = attn_impl
+        self.sliding_window = sliding_window
 
         if self.phase == "prefill":
             vocab_size = kwargs.pop("vocab_size")
@@ -226,6 +228,10 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     self.dec_attn_mask[b_idx, :, :, : decoding_step + 1] = 1
                 else:
                     self.dec_attn_mask[b_idx, :, :, decoding_step] = 1
+                #FIXME: adhoc for gemma3 sliding window attn test
+                if self.sliding_window and decoding_step > self.sliding_window:
+                    self.dec_attn_mask[:, :, :, :decoding_step - self.sliding_window] = 0
+                
 
             attention_mask = self.dec_attn_mask
 
@@ -320,6 +326,9 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 if step >= self.prefill_chunk_size:
                     chunked_attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
                 chunked_attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
+                #FIXME: adhoc for gemma3 sliding window attn test
+                if self.sliding_window and step > self.sliding_window:
+                    chunked_attention_mask[:, :, :, :step - self.sliding_window] = 0
 
             # Define query position
             query_position = torch.tensor((query_length - 1) % self.prefill_chunk_size, dtype=torch.int16)
@@ -416,6 +425,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             max_seq_len=self.rbln_config.max_seq_len,
             use_attention_mask=self.rbln_config.use_attention_mask,
             attn_impl=self.rbln_config.attn_impl,
+            sliding_window=self.config.sliding_window,
         )
         self.decoder = RBLNRuntimeModel(
             runtime=self.model[1],
@@ -429,6 +439,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             kvcache_block_size=self.rbln_config.kvcache_block_size,
             use_attention_mask=self.rbln_config.use_attention_mask,
             attn_impl=self.rbln_config.attn_impl,
+            sliding_window=self.config.sliding_window,
         )
 
     @classmethod
