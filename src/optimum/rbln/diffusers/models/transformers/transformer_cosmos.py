@@ -193,13 +193,9 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         rbln_config.transformer.num_latent_frames = (
             rbln_config.transformer.num_frames - 1
         ) // pipe.vae_scale_factor_temporal + 1
-        rbln_config.transformer.latent_height = rbln_config.transformer.height // pipe.vae_scale_factor_temporal
-        rbln_config.transformer.latent_width = rbln_config.transformer.width // pipe.vae_scale_factor_temporal
-        rbln_config.transformer.hidden_size = (
-            pipe.transformer.config.num_attention_heads * pipe.transformer.config.attention_head_dim
-        )
+        rbln_config.transformer.latent_height = rbln_config.transformer.height // pipe.vae_scale_factor_spatial
+        rbln_config.transformer.latent_width = rbln_config.transformer.width // pipe.vae_scale_factor_spatial
         rbln_config.transformer.embedding_dim = pipe.text_encoder.encoder.embed_tokens.embedding_dim
-        rbln_config.transformer.time_proj_num_channels = pipe.transformer.time_embed.time_proj.num_channels
 
         return rbln_config
 
@@ -234,13 +230,16 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
             * (rbln_config.latent_width // p_w)
         )
         attention_head_dim = model_config.attention_head_dim
+        hidden_size = (
+            model.config.num_attention_heads * model.config.attention_head_dim
+        )
         input_info = [
             (
                 "hidden_states",
                 [
                     rbln_config.batch_size,
                     hidden_dim,
-                    rbln_config.hidden_size,
+                    hidden_size,
                 ],
                 "float32",
             ),
@@ -253,11 +252,11 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
                 ],
                 "float32",
             ),
-            ("embedded_timestep", [rbln_config.batch_size, rbln_config.hidden_size], "float32"),
-            ("temb", [1, rbln_config.hidden_size * 3], "float32"),
-            ("image_roatry_emb_0", [hidden_dim, attention_head_dim], "float32"),
-            ("image_roatry_emb_1", [hidden_dim, attention_head_dim], "float32"),
-            ("extra_pos_emb", [rbln_config.batch_size, hidden_dim, rbln_config.hidden_size], "float32"),
+            ("embedded_timestep", [rbln_config.batch_size, hidden_size], "float32"),
+            ("temb", [1, hidden_size * 3], "float32"),
+            ("image_rotary_emb_0", [hidden_dim, attention_head_dim], "float32"),
+            ("image_rotary_emb_1", [hidden_dim, attention_head_dim], "float32"),
+            ("extra_pos_emb", [rbln_config.batch_size, hidden_dim, hidden_size], "float32"),
         ]
 
         compile_config = RBLNCompileConfig(input_info=input_info)
