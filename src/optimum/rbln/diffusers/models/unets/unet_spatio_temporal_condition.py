@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Tuple, Union, Optional
 
 import torch
-from diffusers.models.unets.unet_spatio_temporal_condition import UNetSpatioTemporalConditionModel
+from diffusers.models.unets.unet_spatio_temporal_condition import UNetSpatioTemporalConditionModel, UNetSpatioTemporalConditionOutput
 from transformers import PretrainedConfig
 
 from ....configuration_utils import RBLNCompileConfig
@@ -57,6 +57,9 @@ class _UNet_STCM(torch.nn.Module):
 class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
     hf_library_name = "diffusers"
     auto_model_class = UNetSpatioTemporalConditionModel
+    _rbln_config_class = RBLNUNetSpatioTemporalConditionModelConfig
+    output_class = UNetSpatioTemporalConditionOutput
+    output_key = "sample"
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
@@ -75,7 +78,21 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
 
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNUNetSpatioTemporalConditionModelConfig) -> torch.nn.Module:
-        return _UNet_STCM(model).eval()
+        # return _UNet_STCM(model).eval()
+    
+        class testmodel(torch.nn.Module):
+            def __init__(self, model, size=64):
+                super().__init__()
+                self.model = model
+                self.size = size
+                self.batch_size=None
+                self.linear = torch.nn.Linear(8, 4)
+                
+            def forward(self, sample):
+                x = sample.transpose(2,4)
+                x = self.linear(x).transpose(2,4)
+                return x
+        return testmodel(model).eval()
 
     @classmethod
     def get_unet_sample_size(
@@ -85,7 +102,7 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
         image_size: Optional[Tuple[int, int]] = None,
     ) -> Union[int, Tuple[int, int]]:
         scale_factor = pipe.vae_scale_factor
-        
+
         if image_size is None:
             vae_sample_size = pipe.vae.config.sample_size
             if isinstance(vae_sample_size, int):
@@ -122,9 +139,9 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
 
         input_info = [
             ("sample", [rbln_config.batch_size, rbln_config.num_frames, model_config.in_channels, rbln_config.sample_size[0], rbln_config.sample_size[1]], "float32"),
-            ("timestep", [], "float32"),
-            ("encoder_hidden_states", [rbln_config.batch_size, 1, model_config.cross_attention_dim], "float32"),
-            ("added_time_ids", [rbln_config.batch_size, 3], "float32"),
+            # ("timestep", [], "float32"),
+            # ("encoder_hidden_states", [rbln_config.batch_size, 1, model_config.cross_attention_dim], "float32"),
+            # ("added_time_ids", [rbln_config.batch_size, 3], "float32"),
         ]
 
         if hasattr(model_config, "addition_time_embed_dim"):
@@ -147,7 +164,7 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
         added_time_ids: torch.Tensor,
         return_dict: bool = True,
         **kwargs,
-    ):
+    ) -> Union[UNetSpatioTemporalConditionOutput, Tuple]:
         sample_batch_size = sample.size()[0]
         compiled_batch_size = self.compiled_batch_size
         if sample_batch_size != compiled_batch_size and (
@@ -159,12 +176,11 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
                 "Adjust the batch size during compilation or modify the 'guidance scale' to match the compiled batch size.\n\n"
                 "For details, see: https://docs.rbln.ai/software/optimum/model_api.html#stable-diffusion"
             )
-
-        return (
-            super().forward(
-                sample.contiguous(),
-                timestep.float(),
-                encoder_hidden_states,
-                added_time_ids,
-            ),
-        )
+        return super().forward(
+                    sample.contiguous(),
+                    # timestep.float(),
+                    # encoder_hidden_states,
+                    # added_time_ids,
+                    return_dict=return_dict,
+                    )
+        
