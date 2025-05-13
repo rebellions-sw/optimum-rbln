@@ -12,6 +12,13 @@ import transformers
 from diffusers import DiffusionPipeline
 from transformers import AutoConfig, CLIPConfig
 
+from optimum.rbln import __version__
+from optimum.rbln.configuration_utils import ContextRblnConfig
+
+
+def test_version_is_str():
+    assert isinstance(__version__, str)
+
 
 class TestLevel(Enum):
     ESSENTIAL = 1
@@ -178,14 +185,14 @@ class BaseTest:
                     output = self.model.generate(**inputs)
                 else:
                     # encoder-only, resnet, etc..
-                    output = self.model(**inputs)
+                    output = self.model(**inputs)[0]
 
             output = self.postprocess(inputs, output)
             if self.EXPECTED_OUTPUT:
                 self.assertEqual(output, self.EXPECTED_OUTPUT)
 
-        def test_save_load(self):
-            with tempfile.TemporaryDirectory() as tmpdir:
+        def _inner_test_save_load(self, tmpdir):
+            with ContextRblnConfig(create_runtimes=False):
                 with self.subTest():
                     self.model.save_pretrained(tmpdir)
                     config_path = os.path.join(tmpdir, self.RBLN_CLASS.config_name)
@@ -196,7 +203,6 @@ class BaseTest:
                     _ = self.RBLN_CLASS.from_pretrained(
                         tmpdir,
                         export=False,
-                        rbln_create_runtimes=False,
                         **self.HF_CONFIG_KWARGS,
                     )
 
@@ -210,14 +216,19 @@ class BaseTest:
                         **self.HF_CONFIG_KWARGS,
                     )
 
+        def test_save_load(self):
+            with tempfile.TemporaryDirectory() as tmpdir:
+                self._inner_test_save_load(tmpdir)
+
         def test_model_save_dir_load(self):
-            # Test model_save_dir
-            _ = self.RBLN_CLASS.from_pretrained(
-                self.get_rbln_local_dir(),
-                export=False,
-                rbln_create_runtimes=False,
-                **self.HF_CONFIG_KWARGS,
-            )
+            with ContextRblnConfig(create_runtimes=False):
+                # Test model_save_dir
+                _ = self.RBLN_CLASS.from_pretrained(
+                    self.get_rbln_local_dir(),
+                    export=False,
+                    rbln_create_runtimes=False,
+                    **self.HF_CONFIG_KWARGS,
+                )
 
         def test_automap(self):
             if self.RBLN_AUTO_CLASS is None:

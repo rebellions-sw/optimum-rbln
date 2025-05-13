@@ -18,10 +18,10 @@ RBLN_PREFIX = "RBLN"
 
 def convert_hf_to_rbln_model_name(hf_model_name: str):
     """
-    Convert Hugging Face model name to RBLN model name.
+    Convert HuggingFace model name to RBLN model name.
 
     Args:
-        hf_model_name (str): The Hugging Face model name.
+        hf_model_name (str): The HuggingFace model name.
 
     Returns:
         str: The corresponding RBLN model name.
@@ -31,13 +31,13 @@ def convert_hf_to_rbln_model_name(hf_model_name: str):
 
 def convert_rbln_to_hf_model_name(rbln_model_name: str):
     """
-    Convert RBLN model name to Hugging Face model name.
+    Convert RBLN model name to HuggingFace model name.
 
     Args:
         rbln_model_name (str): The RBLN model name.
 
     Returns:
-        str: The corresponding Hugging Face model name.
+        str: The corresponding HuggingFace model name.
     """
 
     return rbln_model_name.removeprefix(RBLN_PREFIX)

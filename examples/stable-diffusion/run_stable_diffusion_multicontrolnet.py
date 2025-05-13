@@ -75,6 +75,7 @@ def main(
         images,
         negative_prompt=negative_prompt,
         num_inference_steps=20,
+        guidance_scale=0.0,
         controlnet_conditioning_scale=[1.0, 0.8],
         generator=torch.Generator(device="cpu").manual_seed(42),
     ).images[0]

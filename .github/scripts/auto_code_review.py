@@ -22,8 +22,7 @@ from github import Github
 
 model_name = os.environ["GOOGLE_MODEL_ID"]
 genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
-max_context_token = 100000
-force_review = False
+max_context_token = 500000
 
 
 def get_pr_diff():
@@ -37,7 +36,7 @@ def get_pr_diff():
 
 
 def get_prompt(diff, pr):
-    system_prompt = """You are an experienced software engineer specializing in code reviews for deep learning libraries. Your task is to review code changes and related pull request (PR) information for `optimum-rbln`, a Python library that optimizes Hugging Face models for execution on RBLN NPUs.
+    system_prompt = """You are an experienced software engineer specializing in code reviews for deep learning libraries. Your task is to review code changes and related pull request (PR) information for `optimum-rbln`, a Python library that optimizes HuggingFace models for execution on RBLN NPUs.
 
 Focus on providing actionable and constructive feedback. Don't make generalized suggestions."""
 
@@ -56,19 +55,6 @@ Review the following code changes(GIT DIFF) along with the pull request (PR) det
 </GIT_DIFF>
 """
     return system_prompt, prompt
-
-
-def translate_review(review):
-    model = genai.GenerativeModel(
-        model_name,
-        system_instruction="You are a professional translator specializing in technical and software-related content. Keep the technical words in English, but understand the whole sentence and rephrase it in Korean.",
-    )
-    prompt = f"""Translate the following English text into Korean, maintaining technical accuracy and clarity. Include ONLY the translation, NO OTHER EXPLANATIONS or RESPONSES as a chatbot. :
-
-{review}"""
-    response = model.generate_content(prompt)
-
-    return response.text
 
 
 def review_code(system_prompt, prompt):
@@ -125,7 +111,7 @@ def main():
     system_prompt, prompt = get_prompt(diff, pr)
     model = genai.GenerativeModel(model_name=model_name, system_instruction=system_prompt)
     num_tokens = model.count_tokens(prompt).total_tokens
-    if num_tokens > max_context_token and not force_review:
+    if num_tokens > max_context_token:
         msg = f"Diff ({len(diff)}) exceeds maximum allowed tokens ({max_context_token}) > ({num_tokens}). Skipping review."
         print(msg)
         pr.create_issue_comment(msg)
@@ -133,14 +119,10 @@ def main():
 
     # Get Auto review
     review = review_code(system_prompt, prompt)
-    translation = translate_review(review)
 
     # Post comment on PR
-    pr.create_issue_comment(f"""# Auto Code Review
-
-- [참고] Auto Code Review를 invoke하려면, commit message의 시작을 [autoreview]로 시작하거나, "/autoreview" 를 comment로 작성한 후,
-해당 commit의 github action에서 code review를 re-run 하시면 됩니다.
-\n\n{review}\n\n{translation}""")
+    pr.create_issue_comment(f"""# Auto Code Review by {model_name}
+\n\n{review}""")
 
 
 if __name__ == "__main__":

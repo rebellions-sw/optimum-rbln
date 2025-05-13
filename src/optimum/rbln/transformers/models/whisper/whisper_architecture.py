@@ -16,26 +16,19 @@ from typing import Optional, Tuple, Union
 
 import torch
 from torch import nn
-from transformers.modeling_attn_mask_utils import (
-    _prepare_4d_causal_attention_mask,
-)
-from transformers.modeling_outputs import (
-    BaseModelOutput,
-    Seq2SeqLMOutput,
-)
+from transformers.modeling_outputs import BaseModelOutput, Seq2SeqLMOutput
 from transformers.utils import logging
-
-from ....ops import register_rbln_custom_cache_update
 
 
 logger = logging.get_logger(__name__)
 
 
 class WhisperWrapper:
-    def __init__(self, model, rbln_token_timestamps):
-        register_rbln_custom_cache_update()
+    def __init__(self, model, use_attention_mask, rbln_token_timestamps):
         self.encoder = WhisperEncoderWrapper(model)
-        self.decoder = WhisperDecoderWrapper(model, output_attentions=rbln_token_timestamps)
+        self.decoder = WhisperDecoderWrapper(
+            model, use_attention_mask=use_attention_mask, output_attentions=rbln_token_timestamps
+        )
 
 
 class WhisperEncoderWrapper(torch.nn.Module):
@@ -56,6 +49,7 @@ class WhisperEncoderWrapper(torch.nn.Module):
     def forward(
         self,
         input_features: Optional[torch.LongTensor],
+        b_idx: torch.Tensor,
         cross_key_values: torch.Tensor,
     ) -> Union[Tuple[torch.FloatTensor], BaseModelOutput]:
         # 1. get encoder last_hidden_states
@@ -75,21 +69,31 @@ class WhisperEncoderWrapper(torch.nn.Module):
         cross_kv = torch.stack(cross_kv, dim=0)
 
         # 3. update cross_attention's past_key_value to the device-dram for optimization.
-        bidx = torch.tensor(0, dtype=torch.int16)
-        axis = torch.tensor(1, dtype=torch.int16)
-        cross_key_values = torch.ops.rbln_custom_ops.rbln_cache_update(cross_key_values, cross_kv, bidx, axis)
+        batch_axis = torch.tensor(1, dtype=torch.int16)
+        cross_key_values = torch.ops.rbln_custom_ops.rbln_cache_update(
+            cross_key_values, cross_kv, b_idx[0], batch_axis
+        )
 
         return cross_key_values
 
 
 class WhisperDecoderWrapper(torch.nn.Module):
-    def __init__(self, model, output_attentions: bool = False):
+    def __init__(self, model, use_attention_mask: bool = True, output_attentions: bool = False, **kwargs):
         super().__init__()
         self.config = model.config
-        self.num_layers = self.config.decoder_layers
         self.proj_out = model.proj_out
-        self.decoder = self.convert_to_rbln_conditional_generation(model)
+        self.use_attention_mask = use_attention_mask
         self.output_attentions = output_attentions
+        self.__post_init__(model, **kwargs)
+
+    def __post_init__(self, model: nn.Module, **kwargs):
+        """
+        Post-initialization to extract and configure encoder-related attributes.
+        It is inspired by the BART architecture, but it is designed to be flexible and can be overridden
+        by subclasses to modify or add custom attributes as necessary.
+        """
+        self.num_layers = self.config.decoder_layers
+        self.decoder = self.convert_to_rbln_conditional_generation(model)
 
     def convert_to_rbln_conditional_generation(self, model: nn.Module):
         new_layers = []
@@ -104,12 +108,21 @@ class WhisperDecoderWrapper(torch.nn.Module):
 
     def forward(
         self,
-        decoder_input_ids: torch.Tensor,
-        decoder_attention_mask: torch.Tensor,
-        cache_position: torch.Tensor,
-        cross_kv_cache: torch.Tensor,
-        *self_kv_cache: torch.Tensor,
+        *args,
     ) -> Union[Tuple[torch.FloatTensor], Seq2SeqLMOutput]:
+        if self.use_attention_mask:
+            (
+                decoder_input_ids,
+                decoder_attention_mask,
+                cache_position,
+                block_tables,
+                cross_kv_cache,
+                *self_kv_cache,
+            ) = args
+        else:
+            decoder_attention_mask = None
+            (decoder_input_ids, cache_position, block_tables, cross_kv_cache, *self_kv_cache) = args
+
         # prepare past_key_values
         self_past_key_values = ()
         cross_past_key_values = ()
@@ -118,18 +131,17 @@ class WhisperDecoderWrapper(torch.nn.Module):
             cross_past_key_values = cross_past_key_values + ((cross_kv_cache[i], cross_kv_cache[i + 1]),)
 
         # Decode
-        sequence_output, self_present_key_values, cross_attentions = self.decoder(
+        sequence_output, cross_attentions = self.decoder(
             input_ids=decoder_input_ids,
             attention_mask=decoder_attention_mask,
             cache_position=cache_position,
             self_past_key_values=self_past_key_values,
             cross_past_key_values=cross_past_key_values,
+            block_tables=block_tables,
         )
 
         lm_logits = self.proj_out(sequence_output)
-
         outputs = (lm_logits,)
-        outputs += self_present_key_values
 
         if self.output_attentions:
             # deocder's cross attention is used for token_timestamps
@@ -155,38 +167,44 @@ class WhisperDecoder(nn.Module):
         self_past_key_values: Optional[torch.Tensor] = None,
         cross_past_key_values: Optional[torch.Tensor] = None,
         cache_position: Optional[torch.Tensor] = None,
+        block_tables: Optional[torch.Tensor] = None,
     ):
         input_shape = input_ids.size()
         input_ids = input_ids.view(-1, input_shape[-1])
 
         # positional embeding
         inputs_embeds = self.embed_tokens(input_ids)
-        positions = self.embed_positions(input_ids, position_ids=cache_position)
-        hidden_states = inputs_embeds + positions
+        all_hiddens = []
+        for i in range(inputs_embeds.shape[0]):
+            position_id = cache_position[i]
+            position = self.embed_positions.weight[position_id]
+            batch_hidden = position + inputs_embeds[i]
+            all_hiddens.append(batch_hidden)
 
-        # prepare casual_attn_mask
-        attention_mask = _prepare_4d_causal_attention_mask(attention_mask, input_shape, inputs_embeds, cache_position)
+        hidden_states = torch.cat(all_hiddens, dim=0).unsqueeze(1)
 
-        self_present_key_values = ()
+        # prepare attn mask (normal attention - masked)
+        if attention_mask is not None:
+            attention_mask = attention_mask[:, None, None, :]
+
         cross_attentions = ()
         # iterate decoder_layer
         for self_past_key_value, cross_past_key_value, decoder_layer in zip(
             self_past_key_values, cross_past_key_values, self.layers
         ):
-            layer_outputs = decoder_layer(
+            hidden_states, cross_attn_weights = decoder_layer(
                 hidden_states,
                 attention_mask=attention_mask,
                 self_past_key_value=self_past_key_value,
                 cross_past_key_value=cross_past_key_value,
                 cache_position=cache_position,
+                block_tables=block_tables,
             )
-            hidden_states = layer_outputs[0]
-            self_present_key_values += layer_outputs[1]
-            cross_attentions += (layer_outputs[2],)
+            cross_attentions += (cross_attn_weights,)
 
         hidden_states = self.layer_norm(hidden_states)
 
-        return hidden_states, self_present_key_values, cross_attentions
+        return hidden_states, cross_attentions
 
 
 class WhisperDecoderLayer(nn.Module):
@@ -209,22 +227,24 @@ class WhisperDecoderLayer(nn.Module):
         self_past_key_value: Optional[Tuple[torch.Tensor]] = None,
         cross_past_key_value: Optional[Tuple[torch.Tensor]] = None,
         cache_position: Optional[torch.Tensor] = None,
+        block_tables: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         # Self Attention Block
         residual = hidden_states
         hidden_states = self.self_attn_layer_norm(hidden_states)
-        hidden_states, _, self_present_key_value = self.self_attn(
+        hidden_states = self.self_attn(
             hidden_states=hidden_states,
             past_key_value=self_past_key_value,
             attention_mask=attention_mask,
             cache_position=cache_position,
+            block_tables=block_tables,
         )
         hidden_states = residual + hidden_states
 
         # Cross-Attention Block
         residual = hidden_states
         hidden_states = self.encoder_attn_layer_norm(hidden_states)
-        hidden_states, cross_attn_weights, cross_present_key_value = self.encoder_attn(
+        hidden_states, cross_attn_weights = self.encoder_attn(
             hidden_states=hidden_states,
             past_key_value=cross_past_key_value,
         )
@@ -237,7 +257,7 @@ class WhisperDecoderLayer(nn.Module):
         hidden_states = self.fc2(hidden_states)
         hidden_states = residual + hidden_states
 
-        return hidden_states, self_present_key_value, cross_attn_weights
+        return hidden_states, cross_attn_weights
 
 
 class WhisperAttention(nn.Module):
@@ -258,19 +278,8 @@ class WhisperAttention(nn.Module):
 
 
 class WhisperSelfAttention(WhisperAttention):
-    def rbln_cache_update(
-        self,
-        past_key_value: torch.Tensor,
-        key_states: torch.Tensor,
-        value_states: torch.Tensor,
-        cache_position: torch.Tensor,
-    ):
-        s_idx = torch.tensor(cache_position, dtype=torch.int16)
-        axis = torch.tensor(2, dtype=torch.int16)
-
-        key_states = torch.ops.rbln_custom_ops.rbln_cache_update(past_key_value[0], key_states, s_idx, axis)
-        value_states = torch.ops.rbln_custom_ops.rbln_cache_update(past_key_value[1], value_states, s_idx, axis)
-        return key_states, value_states
+    def _shape(self, tensor: torch.Tensor, seq_len: int, bsz: int) -> torch.Tensor:
+        return tensor.view(bsz, seq_len, 1, self.num_heads, self.head_dim).transpose(1, 3)
 
     def forward(
         self,
@@ -278,6 +287,7 @@ class WhisperSelfAttention(WhisperAttention):
         past_key_value: Optional[Tuple[torch.Tensor]] = None,
         attention_mask: Optional[torch.Tensor] = None,
         cache_position: Optional[torch.Tensor] = None,
+        block_tables: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         bsz, tgt_len, _ = hidden_states.size()
         query_states = self._shape(self.q_proj(hidden_states), tgt_len, bsz)
@@ -285,22 +295,35 @@ class WhisperSelfAttention(WhisperAttention):
 
         key_states = self._shape(self.k_proj(hidden_states), -1, bsz)
         value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
-        key_states, value_states = self.rbln_cache_update(past_key_value, key_states, value_states, cache_position)
+        block_size = past_key_value[0].shape[-2]
 
-        attn_weights = torch.matmul(query_states, key_states.transpose(2, 3))
-        attn_weights = attn_weights + attention_mask
-        attn_weights = nn.functional.softmax(attn_weights, dim=-1)
+        args = {
+            "q": query_states,
+            "k": key_states,
+            "v": value_states,
+            "kcache": past_key_value[0].view(bsz, self.num_heads, 1, -1, self.head_dim),
+            "vcache": past_key_value[1].view(bsz, self.num_heads, 1, -1, self.head_dim),
+            "seq": cache_position.expand(bsz, 1),
+            "scale": torch.tensor(1.0, dtype=torch.float32),
+            "block_table": block_tables,
+            "block_size": block_size,
+        }
 
-        attn_output = torch.matmul(attn_weights, value_states)
+        if attention_mask is not None:
+            args["mask"] = attention_mask.unsqueeze(2)
+            attn_output = torch.ops.rbln_custom_ops.paged_attn_decode(**args)
+        else:
+            attn_output = torch.ops.rbln_custom_ops.paged_causal_attn_decode(**args)
+
         attn_output = attn_output.view(bsz, self.num_heads, tgt_len, self.head_dim)
         attn_output = attn_output.transpose(1, 2)
         attn_output = attn_output.reshape(bsz, tgt_len, self.embed_dim)
         attn_output = self.out_proj(attn_output)
 
-        return attn_output, attn_weights, (key_states, value_states)
+        return attn_output
 
 
-class WhisperCrossAttention(WhisperSelfAttention):
+class WhisperCrossAttention(WhisperAttention):
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -322,4 +345,4 @@ class WhisperCrossAttention(WhisperSelfAttention):
         attn_output = attn_output.reshape(batch_size, query_len, self.embed_dim)
         attn_output = self.out_proj(attn_output)
 
-        return attn_output, attn_weights, (key_states, value_states)
+        return attn_output, attn_weights

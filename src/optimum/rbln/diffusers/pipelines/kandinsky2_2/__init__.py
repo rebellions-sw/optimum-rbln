@@ -12,6 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .pipeline_kandinsky2_2_combined import RBLNKandinskyV22InpaintCombinedPipeline
+from .pipeline_kandinsky2_2 import RBLNKandinskyV22Pipeline
+from .pipeline_kandinsky2_2_combined import (
+    RBLNKandinskyV22CombinedPipeline,
+    RBLNKandinskyV22Img2ImgCombinedPipeline,
+    RBLNKandinskyV22InpaintCombinedPipeline,
+)
+from .pipeline_kandinsky2_2_img2img import RBLNKandinskyV22Img2ImgPipeline
 from .pipeline_kandinsky2_2_inpaint import RBLNKandinskyV22InpaintPipeline
 from .pipeline_kandinsky2_2_prior import RBLNKandinskyV22PriorPipeline

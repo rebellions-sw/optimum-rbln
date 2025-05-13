@@ -14,6 +14,8 @@
 
 from diffusers import (
     DDPMScheduler,
+    KandinskyV22CombinedPipeline,
+    KandinskyV22Img2ImgCombinedPipeline,
     KandinskyV22InpaintCombinedPipeline,
     PriorTransformer,
     UnCLIPScheduler,
@@ -27,15 +29,121 @@ from transformers import (
     CLIPVisionModelWithProjection,
 )
 
+from ...configurations import RBLNKandinskyV22CombinedPipelineConfig
 from ...modeling_diffusers import RBLNDiffusionMixin
+from .pipeline_kandinsky2_2 import RBLNKandinskyV22Pipeline
+from .pipeline_kandinsky2_2_img2img import RBLNKandinskyV22Img2ImgPipeline
 from .pipeline_kandinsky2_2_inpaint import RBLNKandinskyV22InpaintPipeline
 from .pipeline_kandinsky2_2_prior import RBLNKandinskyV22PriorPipeline
+
+
+class RBLNKandinskyV22CombinedPipeline(RBLNDiffusionMixin, KandinskyV22CombinedPipeline):
+    original_class = KandinskyV22CombinedPipeline
+    _rbln_config_class = RBLNKandinskyV22CombinedPipelineConfig
+    _connected_classes = {"prior_pipe": RBLNKandinskyV22PriorPipeline, "decoder_pipe": RBLNKandinskyV22Pipeline}
+    _submodules = ["prior_image_encoder", "prior_text_encoder", "prior_prior", "unet", "movq"]
+    _prefix = {"prior_pipe": "prior_"}
+
+    def __init__(
+        self,
+        unet: "UNet2DConditionModel",
+        scheduler: "DDPMScheduler",
+        movq: "VQModel",
+        prior_prior: "PriorTransformer",
+        prior_image_encoder: "CLIPVisionModelWithProjection",
+        prior_text_encoder: "CLIPTextModelWithProjection",
+        prior_tokenizer: "CLIPTokenizer",
+        prior_scheduler: "UnCLIPScheduler",
+        prior_image_processor: "CLIPImageProcessor",
+    ):
+        RBLNDiffusionMixin.__init__(self)
+        super(KandinskyV22CombinedPipeline, self).__init__()
+
+        self.register_modules(
+            unet=unet,
+            scheduler=scheduler,
+            movq=movq,
+            prior_prior=prior_prior,
+            prior_image_encoder=prior_image_encoder,
+            prior_text_encoder=prior_text_encoder,
+            prior_tokenizer=prior_tokenizer,
+            prior_scheduler=prior_scheduler,
+            prior_image_processor=prior_image_processor,
+        )
+
+        self.prior_pipe = RBLNKandinskyV22PriorPipeline(
+            prior=prior_prior,
+            image_encoder=prior_image_encoder,
+            text_encoder=prior_text_encoder,
+            tokenizer=prior_tokenizer,
+            scheduler=prior_scheduler,
+            image_processor=prior_image_processor,
+        )
+        self.decoder_pipe = RBLNKandinskyV22Pipeline(
+            unet=unet,
+            scheduler=scheduler,
+            movq=movq,
+        )
+
+    def get_compiled_image_size(self):
+        return self.movq.image_size
+
+
+class RBLNKandinskyV22Img2ImgCombinedPipeline(RBLNDiffusionMixin, KandinskyV22Img2ImgCombinedPipeline):
+    original_class = KandinskyV22Img2ImgCombinedPipeline
+    _connected_classes = {"prior_pipe": RBLNKandinskyV22PriorPipeline, "decoder_pipe": RBLNKandinskyV22Img2ImgPipeline}
+    _submodules = ["prior_image_encoder", "prior_text_encoder", "prior_prior", "unet", "movq"]
+    _prefix = {"prior_pipe": "prior_"}
+
+    def __init__(
+        self,
+        unet: "UNet2DConditionModel",
+        scheduler: "DDPMScheduler",
+        movq: "VQModel",
+        prior_prior: "PriorTransformer",
+        prior_image_encoder: "CLIPVisionModelWithProjection",
+        prior_text_encoder: "CLIPTextModelWithProjection",
+        prior_tokenizer: "CLIPTokenizer",
+        prior_scheduler: "UnCLIPScheduler",
+        prior_image_processor: "CLIPImageProcessor",
+    ):
+        RBLNDiffusionMixin.__init__(self)
+        super(KandinskyV22Img2ImgCombinedPipeline, self).__init__()
+
+        self.register_modules(
+            unet=unet,
+            scheduler=scheduler,
+            movq=movq,
+            prior_prior=prior_prior,
+            prior_image_encoder=prior_image_encoder,
+            prior_text_encoder=prior_text_encoder,
+            prior_tokenizer=prior_tokenizer,
+            prior_scheduler=prior_scheduler,
+            prior_image_processor=prior_image_processor,
+        )
+
+        self.prior_pipe = RBLNKandinskyV22PriorPipeline(
+            prior=prior_prior,
+            image_encoder=prior_image_encoder,
+            text_encoder=prior_text_encoder,
+            tokenizer=prior_tokenizer,
+            scheduler=prior_scheduler,
+            image_processor=prior_image_processor,
+        )
+        self.decoder_pipe = RBLNKandinskyV22Img2ImgPipeline(
+            unet=unet,
+            scheduler=scheduler,
+            movq=movq,
+        )
+
+    def get_compiled_image_size(self):
+        return self.movq.image_size
 
 
 class RBLNKandinskyV22InpaintCombinedPipeline(RBLNDiffusionMixin, KandinskyV22InpaintCombinedPipeline):
     original_class = KandinskyV22InpaintCombinedPipeline
     _connected_classes = {"prior_pipe": RBLNKandinskyV22PriorPipeline, "decoder_pipe": RBLNKandinskyV22InpaintPipeline}
-    _submodules = ["prior_pipe", "decoder_pipe"]
+    _submodules = ["prior_image_encoder", "prior_text_encoder", "prior_prior", "unet", "movq"]
     _prefix = {"prior_pipe": "prior_"}
 
     def __init__(

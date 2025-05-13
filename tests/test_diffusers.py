@@ -4,7 +4,7 @@ import torch
 from diffusers import ControlNetModel
 
 from optimum.rbln import (
-    RBLNKandinskyV22InpaintCombinedPipeline,
+    RBLNKandinskyV22CombinedPipeline,
     RBLNStableDiffusion3Img2ImgPipeline,
     RBLNStableDiffusion3Pipeline,
     RBLNStableDiffusionControlNetPipeline,
@@ -55,6 +55,7 @@ class TestSDModelBatch(BaseTest.TestModel):
                 "sample_size": (64, 64),
             },
         },
+        "rbln_guidance_scale": 0.0,
     }
 
 
@@ -69,9 +70,10 @@ class TestSDXLModel(BaseTest.TestModel):
     # Fix incorrect tiny-sd-pipe-xl's vae config.json sample_size
     RBLN_CLASS_KWARGS = {
         "rbln_config": {
+            "unet": {"batch_size": 2},
             "vae": {
                 "sample_size": (64, 64),
-            }
+            },
         }
     }
 
@@ -91,7 +93,10 @@ class TestSDImg2ImgModel(BaseTest.TestModel):
         "rbln_config": {
             "vae": {
                 "sample_size": (64, 64),
-            }
+            },
+            "unet": {
+                "batch_size": 2,
+            },
         },
         "rbln_img_width": 64,
         "rbln_img_height": 64,
@@ -110,6 +115,14 @@ class TestSDControlNetModel(BaseTest.TestModel):
     RBLN_CLASS_KWARGS = {
         "rbln_img_width": 64,
         "rbln_img_height": 64,
+        "rbln_config": {
+            "controlnet": {
+                "batch_size": 2,
+            },
+            "unet": {
+                "batch_size": 2,
+            },
+        },
     }
 
     @classmethod
@@ -132,6 +145,14 @@ class TestSDXLControlNetModel(BaseTest.TestModel):
     RBLN_CLASS_KWARGS = {
         "rbln_img_width": 64,
         "rbln_img_height": 64,
+        "rbln_config": {
+            "unet": {
+                "batch_size": 2,
+            },
+            "controlnet": {
+                "batch_size": 2,
+            },
+        },
     }
 
     @classmethod
@@ -151,12 +172,10 @@ class TestSD3Model(BaseTest.TestModel):
     }
     RBLN_CLASS_KWARGS = {
         "rbln_config": {
-            "text_encoder": {"rbln_device": 0},
-            "text_encoder_2": {"rbln_device": 0},
-            "text_encoder_3": {"rbln_device": -1},
-            "transformer": {"rbln_device": 0},
-            "vae": {"rbln_device": 0},
-        },
+            "transformer": {
+                "batch_size": 2,
+            }
+        }
     }
 
 
@@ -170,14 +189,9 @@ class TestSD3Img2ImgModel(BaseTest.TestModel):
         "image": torch.randn(1, 3, 64, 64, generator=torch.manual_seed(42)),
     }
     RBLN_CLASS_KWARGS = {
-        "rbln_img_width": 64,
-        "rbln_img_height": 64,
         "rbln_config": {
-            "text_encoder": {"rbln_device": 0},
-            "text_encoder_2": {"rbln_device": 0},
-            "text_encoder_3": {"rbln_device": -1},
-            "transformer": {"rbln_device": 0},
-            "vae": {"rbln_device": 0},
+            "image_size": (64, 64),
+            "transformer": {"batch_size": 2},
         },
     }
 
@@ -199,6 +213,14 @@ class TestSDMultiControlNetModel(BaseTest.TestModel):
     RBLN_CLASS_KWARGS = {
         "rbln_img_width": 64,
         "rbln_img_height": 64,
+        "rbln_config": {
+            "controlnet": {
+                "batch_size": 2,
+            },
+            "unet": {
+                "batch_size": 2,
+            },
+        },
     }
 
     @classmethod
@@ -210,20 +232,50 @@ class TestSDMultiControlNetModel(BaseTest.TestModel):
         return super().setUpClass()
 
 
-class TestKandinskyV22InpaintingModel(BaseTest.TestModel):
-    RBLN_CLASS = RBLNKandinskyV22InpaintCombinedPipeline
-    # HF_MODEL_ID = "hf-internal-testing/tiny-random-kandinsky-v22-decoder"
-    HF_MODEL_ID = "kandinsky-community/kandinsky-2-2-decoder-inpaint"
+class TestKandinskyV22Model(BaseTest.TestModel):
+    RBLN_CLASS = RBLNKandinskyV22CombinedPipeline
+    HF_MODEL_ID = "hf-internal-testing/tiny-random-kandinsky-v22-decoder"
     GENERATION_KWARGS = {
-        "prompt": "concept art digital painting of an elven castle, inspired by lord of the rings, highly detailed, 8k",
+        "prompt": "red cat, 4k photo",
         "generator": torch.manual_seed(42),
-        "image": torch.FloatTensor(1, 3, 512, 512).uniform_(-1, 1),
-        "mask_image": torch.randn(1, 1, 512, 512).uniform_(0, 1),
+        "num_inference_steps": 3,
     }
     RBLN_CLASS_KWARGS = {
-        "rbln_img_width": 512,
-        "rbln_img_height": 512,
+        "rbln_img_width": 64,
+        "rbln_img_height": 64,
+        "rbln_config": {
+            "prior_pipe": {"prior": {"batch_size": 2}},
+            "decoder_pipe": {"unet": {"batch_size": 2}},
+        },
     }
+
+    def test_complicate_config(self):
+        rbln_config = {
+            "prior_pipe": {
+                "text_encoder": {
+                    "batch_size": 2,
+                },
+            },
+            "prior_prior": {
+                "batch_size": 4,
+            },
+            "unet": {
+                "batch_size": 2,
+            },
+            "batch_size": 1,
+        }
+        rbln_class_kwargs_copy = self.RBLN_CLASS_KWARGS.copy()
+        rbln_class_kwargs_copy["rbln_config"] = rbln_config
+        with self.subTest():
+            _ = self.RBLN_CLASS.from_pretrained(
+                model_id=self.HF_MODEL_ID,
+                export=True,
+                **rbln_class_kwargs_copy,
+            )
+        with self.subTest():
+            self.assertEqual(_.prior_text_encoder.rbln_config.batch_size, 2)
+            self.assertEqual(_.prior_prior.rbln_config.batch_size, 4)
+            self.assertEqual(_.unet.rbln_config.batch_size, 2)
 
 
 if __name__ == "__main__":

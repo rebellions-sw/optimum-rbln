@@ -12,87 +12,165 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from functools import lru_cache
-
 import torch
-from packaging import version
+from torch import Tensor
 
 
-if version.parse(torch.__version__) > version.parse("2.4.0"):
-    register_fake = torch.library.register_fake
-else:
-    register_fake = torch.library.impl_abstract
+@torch.library.custom_op(
+    "rbln_custom_ops::paged_flash_attn_decode",
+    mutates_args=(["kcache", "vcache"]),
+)
+def paged_flash_attn_decode(
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    mask: Tensor,
+    kcache: Tensor,
+    vcache: Tensor,
+    seq: Tensor,
+    scale: Tensor,
+    block_table: Tensor,
+    block_size: int,
+    partition: int,
+) -> Tensor:
+    """Defines the computation pattern for fused flash attention with KV cache for decoding.
+
+    Returns a tensor with the same shape as q.
+    """
+    return torch.empty_like(q)
 
 
-@lru_cache
-def register_rbln_custom_paged_flash_attention():
-    torch.library.define(
-        "rbln_custom_ops::paged_flash_attn_decode",
-        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f, int g) -> Tensor[]",
-    )
-
-    @torch.library.impl("rbln_custom_ops::paged_flash_attn_decode", "cpu")
-    def flash_attn_decode_cpu(q, k, v, mask, kcache, vcache, seq, scale, block_table, block_size, partition):
-        return (
-            q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
-        )
-
-    @register_fake("rbln_custom_ops::paged_flash_attn_decode")
-    def flash_attn_decode_abstract(q, k, v, m, kcache, vcache, seq, scale, block_table, block_size, partition):
-        return (
-            q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
-        )
-
-    torch.library.define(
-        "rbln_custom_ops::paged_flash_attn_prefill",
-        "(Tensor x, Tensor y, Tensor z, Tensor w, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f, int g) -> Tensor[]",
-    )
-
-    @torch.library.impl("rbln_custom_ops::flash_attn_prefill", "cpu")
-    def flash_attn_prefill_cpu(q, k, v, mask, kcache, vcache, seq, scale, block_table, block_size, partition):
-        return q, kcache, vcache
-
-    @register_fake("rbln_custom_ops::paged_flash_attn_prefill")
-    def flash_attn_prefill_abstract(q, k, v, m, kcache, vcache, seq, scale, block_table, block_size, partition):
-        return q, kcache, vcache
+@paged_flash_attn_decode.register_fake
+def paged_flash_attn_decode_fake(
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    mask: Tensor,
+    kcache: Tensor,
+    vcache: Tensor,
+    seq: Tensor,
+    scale: Tensor,
+    block_table: Tensor,
+    block_size: int,
+    partition: int,
+) -> Tensor:
+    return torch.empty_like(q)
 
 
-@lru_cache
-def register_rbln_custom_paged_flash_causal_attention():
-    torch.library.define(
-        "rbln_custom_ops::paged_flash_causal_attn_decode",
-        "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f, int g) -> Tensor[]",
-    )
+@torch.library.custom_op(
+    "rbln_custom_ops::paged_flash_attn_prefill",
+    mutates_args=(["kcache", "vcache"]),
+)
+def paged_flash_attn_prefill(
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    mask: Tensor,
+    kcache: Tensor,
+    vcache: Tensor,
+    seq: Tensor,
+    scale: Tensor,
+    block_table: Tensor,
+    block_size: int,
+    partition: int,
+) -> Tensor:
+    """Defines the computation pattern for fused flash attention with KV cache for prefill.
 
-    @torch.library.impl("rbln_custom_ops::paged_flash_causal_attn_decode", "cpu")
-    def flash_attn_decode_cpu(q, k, v, kcache, vcache, seq, scale, block_table, block_size, partition):
-        return (
-            q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
-        )
+    Returns a tensor with the same shape as q.
+    """
+    return torch.empty_like(q)
 
-    @register_fake("rbln_custom_ops::paged_flash_causal_attn_decode")
-    def flash_attn_decode_abstract(q, k, v, kcache, vcache, seq, scale, block_table, block_size, partition):
-        return (
-            q,
-            torch.empty(*kcache.shape, device=kcache.device),
-            torch.empty(*vcache.shape, device=vcache.device),
-        )
 
-    torch.library.define(
-        "rbln_custom_ops::paged_flash_causal_attn_prefill",
-        "(Tensor x, Tensor y, Tensor z, Tensor a, Tensor b, Tensor c, Tensor d, Tensor e, int f, int g) -> Tensor[]",
-    )
+@paged_flash_attn_prefill.register_fake
+def paged_flash_attn_prefill_fake(
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    mask: Tensor,
+    kcache: Tensor,
+    vcache: Tensor,
+    seq: Tensor,
+    scale: Tensor,
+    block_table: Tensor,
+    block_size: int,
+    partition: int,
+) -> Tensor:
+    return torch.empty_like(q)
 
-    @torch.library.impl("rbln_custom_ops::paged_flash_causal_attn_prefill", "cpu")
-    def flash_attn_prefill_cpu(q, k, v, kcache, vcache, seq, scale, block_table, block_size, partition):
-        return q, kcache, vcache
 
-    @register_fake("rbln_custom_ops::paged_flash_causal_attn_prefill")
-    def flash_attn_prefill_abstract(q, k, v, kcache, vcache, seq, scale, block_table, block_size, partition):
-        return q, kcache, vcache
+@torch.library.custom_op(
+    "rbln_custom_ops::paged_flash_causal_attn_decode",
+    mutates_args=(["kcache", "vcache"]),
+)
+def paged_flash_causal_attn_decode(
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    kcache: Tensor,
+    vcache: Tensor,
+    seq: Tensor,
+    scale: Tensor,
+    block_table: Tensor,
+    block_size: int,
+    partition: int,
+) -> Tensor:
+    """Defines the computation pattern for fused causal flash attention with KV cache for decoding.
+
+    Returns a tensor with the same shape as q.
+    """
+    return torch.empty_like(q)
+
+
+@paged_flash_causal_attn_decode.register_fake
+def paged_flash_causal_attn_decode_fake(
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    kcache: Tensor,
+    vcache: Tensor,
+    seq: Tensor,
+    scale: Tensor,
+    block_table: Tensor,
+    block_size: int,
+    partition: int,
+) -> Tensor:
+    return torch.empty_like(q)
+
+
+@torch.library.custom_op(
+    "rbln_custom_ops::paged_flash_causal_attn_prefill",
+    mutates_args=(["kcache", "vcache"]),
+)
+def paged_flash_causal_attn_prefill(
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    kcache: Tensor,
+    vcache: Tensor,
+    seq: Tensor,
+    scale: Tensor,
+    block_table: Tensor,
+    block_size: int,
+    partition: int,
+) -> Tensor:
+    """Defines the computation pattern for fused causal flash attention with KV cache for prefill.
+
+    Returns a tensor with the same shape as q.
+    """
+    return torch.empty_like(q)
+
+
+@paged_flash_causal_attn_prefill.register_fake
+def paged_flash_causal_attn_prefill_fake(
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    kcache: Tensor,
+    vcache: Tensor,
+    seq: Tensor,
+    scale: Tensor,
+    block_table: Tensor,
+    block_size: int,
+    partition: int,
+) -> Tensor:
+    return torch.empty_like(q)
