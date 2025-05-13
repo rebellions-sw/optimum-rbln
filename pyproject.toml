@@ -33,7 +33,7 @@ dependencies = [
     "torchvision<=0.21.0",
     "accelerate>=1.0.1",
     "transformers==4.50.3",
-    "diffusers<=0.34.0.dev0",
+    "diffusers @ git+https://github.com/huggingface/diffusers.git@311503582624ce3cedb21a887b8b77ae516cb0fc",
     "packaging>=24.1",
 ]
 
@@ -77,6 +77,9 @@ version-file = "src/optimum/rbln/__version__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/optimum"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.uv]
 environments = [
