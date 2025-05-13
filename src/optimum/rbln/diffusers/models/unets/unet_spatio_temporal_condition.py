@@ -78,21 +78,7 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
 
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNUNetSpatioTemporalConditionModelConfig) -> torch.nn.Module:
-        # return _UNet_STCM(model).eval()
-    
-        class testmodel(torch.nn.Module):
-            def __init__(self, model, size=64):
-                super().__init__()
-                self.model = model
-                self.size = size
-                self.batch_size=None
-                self.linear = torch.nn.Linear(8, 4)
-                
-            def forward(self, sample):
-                x = sample.transpose(2,4)
-                x = self.linear(x).transpose(2,4)
-                return x
-        return testmodel(model).eval()
+        return _UNet_STCM(model).eval()
 
     @classmethod
     def get_unet_sample_size(
@@ -139,9 +125,9 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
 
         input_info = [
             ("sample", [rbln_config.batch_size, rbln_config.num_frames, model_config.in_channels, rbln_config.sample_size[0], rbln_config.sample_size[1]], "float32"),
-            # ("timestep", [], "float32"),
-            # ("encoder_hidden_states", [rbln_config.batch_size, 1, model_config.cross_attention_dim], "float32"),
-            # ("added_time_ids", [rbln_config.batch_size, 3], "float32"),
+            ("timestep", [], "float32"),
+            ("encoder_hidden_states", [rbln_config.batch_size, 1, model_config.cross_attention_dim], "float32"),
+            ("added_time_ids", [rbln_config.batch_size, 3], "float32"),
         ]
 
         if hasattr(model_config, "addition_time_embed_dim"):
@@ -178,9 +164,9 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
             )
         return super().forward(
                     sample.contiguous(),
-                    # timestep.float(),
-                    # encoder_hidden_states,
-                    # added_time_ids,
+                    timestep.float(),
+                    encoder_hidden_states,
+                    added_time_ids,
                     return_dict=return_dict,
                     )
         

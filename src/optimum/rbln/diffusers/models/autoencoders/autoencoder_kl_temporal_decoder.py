@@ -46,8 +46,8 @@ logger = get_logger(__name__)
 
 class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
     auto_model_class = AutoencoderKLTemporalDecoder
-    config_name = "config.json"
     hf_library_name = "diffusers"
+    _rbln_config_class = RBLNAutoencoderKLTemporalDecoderConfig
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
@@ -63,36 +63,10 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
         compiled_models = {}
         for i, model_name in enumerate(expected_models):
             if model_name == "encoder":
-                # wrapped_model = _VAEEncoder(model)
-                class testmodel(torch.nn.Module):
-                    def __init__(self, model, size=64):
-                        super().__init__()
-                        self.model = model
-                        self.size = size
-                        self.linear = torch.nn.Linear(self.size*self.size*3, self.size//8 * self.size//8 * 8)
-                        
-                    def forward(self, x):
-                        x = x.reshape(1,-1)
-                        x = self.linear(x).reshape(1, 8, self.size//8, self.size//8)
-                        return x
-                wrapped_model = testmodel(model, 64)
+                wrapped_model = _VAEEncoder(model)
             else:
-                # wrapped_model = _VAETemporalDecoder(model)
-                # wrapped_model.num_frames = rbln_config.decode_chunk_size
-                class testmodel(torch.nn.Module):
-                    def __init__(self, model, size=64):
-                        super().__init__()
-                        self.model = model
-                        self.size = size
-                        self.batch_size=None
-                        self.linear = torch.nn.Linear(self.size//8 * self.size//8 * 4, self.size * self.size * 3)
-                        
-                    def forward(self, x):
-                        x = x.reshape(self.batch_size,-1)
-                        x = self.linear(x).reshape(self.batch_size, 3, self.size, self.size)
-                        return x
-                wrapped_model = testmodel(model, 64)
-                wrapped_model.batch_size = rbln_config.decode_chunk_size
+                wrapped_model = _VAETemporalDecoder(model)
+                wrapped_model.num_frames = rbln_config.decode_chunk_size
             wrapped_model.eval()
             compiled_models[model_name] = cls.compile(wrapped_model, rbln_compile_config=rbln_config.compile_cfgs[i])
   
