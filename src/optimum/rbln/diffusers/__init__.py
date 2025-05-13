@@ -50,6 +50,9 @@ _import_structure = {
         "RBLNSD3Transformer2DModelConfig",
         "RBLNUNet2DConditionModelConfig",
         "RBLNVQModelConfig",
+        "RBLNUNetSpatioTemporalConditionModelConfig",
+        "RBLNStableVideoDiffusionPipelineConfig",
+        "RBLNAutoencoderKLTemporalDecoderConfig",
     ],
     "pipelines": [
         "RBLNKandinskyV22CombinedPipeline",
@@ -119,6 +122,9 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLPipelineConfig,
         RBLNUNet2DConditionModelConfig,
         RBLNVQModelConfig,
+        RBLNUNetSpatioTemporalConditionModelConfig,
+        RBLNStableVideoDiffusionPipelineConfig,
+        RBLNAutoencoderKLTemporalDecoderConfig,
     )
     from .modeling_diffusers import RBLNDiffusionMixin
     from .models import (
