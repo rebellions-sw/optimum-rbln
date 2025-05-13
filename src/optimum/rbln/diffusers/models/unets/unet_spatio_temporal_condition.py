@@ -13,20 +13,24 @@
 # limitations under the License.
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
 
 import torch
-from diffusers.models.unets.unet_spatio_temporal_condition import UNetSpatioTemporalConditionModel
+from diffusers.models.unets.unet_spatio_temporal_condition import (
+    UNetSpatioTemporalConditionModel,
+    UNetSpatioTemporalConditionOutput,
+)
 from transformers import PretrainedConfig
 
+from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
-from ...modeling_diffusers import RBLNDiffusionMixin
+from ...configurations import RBLNUNetSpatioTemporalConditionModelConfig
+from ...modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 
 
 if TYPE_CHECKING:
-    from transformers import AutoFeatureExtractor, AutoProcessor
+    from transformers import AutoFeatureExtractor, AutoProcessor, PreTrainedModel
 
 logger = get_logger(__name__)
 
@@ -56,10 +60,13 @@ class _UNet_STCM(torch.nn.Module):
 class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
     hf_library_name = "diffusers"
     auto_model_class = UNetSpatioTemporalConditionModel
+    _rbln_config_class = RBLNUNetSpatioTemporalConditionModelConfig
+    output_class = UNetSpatioTemporalConditionOutput
+    output_key = "sample"
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
-        self.in_features = self.rbln_config.model_cfg.get("in_features", None)
+        self.in_features = self.rbln_config.in_features
         if self.in_features is not None:
 
             @dataclass
@@ -73,105 +80,78 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
             self.add_embedding = ADDEMBEDDING(LINEAR1(self.in_features))
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNConfig) -> torch.nn.Module:
+    def wrap_model_if_needed(
+        cls, model: torch.nn.Module, rbln_config: RBLNUNetSpatioTemporalConditionModelConfig
+    ) -> torch.nn.Module:
         return _UNet_STCM(model).eval()
 
     @classmethod
     def get_unet_sample_size(
-        cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]
+        cls,
+        pipe: RBLNDiffusionMixin,
+        rbln_config: RBLNUNetSpatioTemporalConditionModelConfig,
+        image_size: Optional[Tuple[int, int]] = None,
     ) -> Union[int, Tuple[int, int]]:
-        image_size = (rbln_config.get("img_height"), rbln_config.get("img_width"))
-        if (image_size[0] is None) != (image_size[1] is None):
-            raise ValueError("Both image height and image width must be given or not given")
-        elif image_size[0] is None and image_size[1] is None:
-            if rbln_config["img2vid_pipeline"]:
-                # In case of img2vid, sample size of unet is determined by vae encoder.
-                vae_sample_size = pipe.vae.config.sample_size
-                if isinstance(vae_sample_size, int):
-                    sample_size = vae_sample_size // pipe.vae_scale_factor
-                else:
-                    sample_size = (
-                        vae_sample_size[0] // pipe.vae_scale_factor,
-                        vae_sample_size[1] // pipe.vae_scale_factor,
-                    )
-            else:
-                sample_size = pipe.unet.config.sample_size
+        scale_factor = pipe.vae_scale_factor
+
+        if image_size is None:
+            vae_sample_size = pipe.vae.config.sample_size
+            if isinstance(vae_sample_size, int):
+                vae_sample_size = (vae_sample_size, vae_sample_size)
+
+            sample_size = (
+                vae_sample_size[0] // scale_factor,
+                vae_sample_size[1] // scale_factor,
+            )
         else:
-            sample_size = (image_size[0] // pipe.vae_scale_factor, image_size[1] // pipe.vae_scale_factor)
+            sample_size = (image_size[0] // scale_factor, image_size[1] // scale_factor)
         return sample_size
 
     @classmethod
-    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: Dict[str, Any]) -> Dict[str, Any]:
-        batch_size = rbln_config.get("batch_size")
-        if not batch_size:
-            if rbln_config.get("img2vid_pipeline"):
-                do_classifier_free_guidance = True
-            else:
-                do_classifier_free_guidance = (
-                    rbln_config.get("guidance_scale", 5.0) > 1.0 and pipe.unet.config.time_cond_proj_dim is None
-                )
-            batch_size = 2 if do_classifier_free_guidance else 1
-        else:
-            if rbln_config.get("guidance_scale"):
-                logger.warning(
-                    "guidance_scale is ignored because batch size is explicitly specified. "
-                    "To ensure consistent behavior, consider removing the guidance scale or "
-                    "adjusting the batch size configuration as needed."
-                )
-
-        rbln_config.update(
-            {
-                "sample_size": cls.get_unet_sample_size(pipe, rbln_config),
-                "batch_size": batch_size,
-            }
+    def update_rbln_config_using_pipe(
+        cls, pipe: RBLNDiffusionMixin, rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
+    ) -> Dict[str, Any]:
+        rbln_config.unet.sample_size = cls.get_unet_sample_size(
+            pipe, rbln_config.unet, image_size=rbln_config.image_size
         )
-
-        if rbln_config.get("img2vid_pipeline"):
-            if rbln_config["num_frames"] is None:
-                rbln_config["num_frames"] = pipe.unet.config.num_frames
-
         return rbln_config
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor"],
+        model: "PreTrainedModel",
         model_config: "PretrainedConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
-        batch_size = rbln_kwargs.get("batch_size")
-        sample_size = rbln_kwargs.get("sample_size")
-        num_frames = rbln_kwargs.get("num_frames")
-        rbln_in_features = None
+        rbln_config: RBLNUNetSpatioTemporalConditionModelConfig,
+    ) -> RBLNUNetSpatioTemporalConditionModelConfig:
+        if rbln_config.num_frames is None:
+            rbln_config.num_frames = model_config.num_frames
 
-        if batch_size is None:
-            batch_size = 1
-
-        if sample_size is None:
-            sample_size = model_config.sample_size
-
-        if isinstance(sample_size, int):
-            sample_size = (sample_size, sample_size)
+        if rbln_config.sample_size is None:
+            rbln_config.sample_size = model_config.sample_size
 
         input_info = [
-            ("sample", [batch_size, num_frames, model_config.in_channels, sample_size[0], sample_size[1]], "float32"),
+            (
+                "sample",
+                [
+                    rbln_config.batch_size,
+                    rbln_config.num_frames,
+                    model_config.in_channels,
+                    rbln_config.sample_size[0],
+                    rbln_config.sample_size[1],
+                ],
+                "float32",
+            ),
             ("timestep", [], "float32"),
-            ("encoder_hidden_states", [batch_size, 1, model_config.cross_attention_dim], "float32"),
-            ("added_time_ids", [batch_size, 3], "float32"),
+            ("encoder_hidden_states", [rbln_config.batch_size, 1, model_config.cross_attention_dim], "float32"),
+            ("added_time_ids", [rbln_config.batch_size, 3], "float32"),
         ]
 
         if hasattr(model_config, "addition_time_embed_dim"):
-            rbln_in_features = model_config.projection_class_embeddings_input_dim
+            rbln_config.in_features = model_config.projection_class_embeddings_input_dim
 
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
-        rbln_config = RBLNConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[rbln_compile_config],
-            rbln_kwargs=rbln_kwargs,
-        )
-
-        if rbln_in_features is not None:
-            rbln_config.model_cfg["in_features"] = rbln_in_features
+        rbln_config.set_compile_cfgs([rbln_compile_config])
 
         return rbln_config
 
@@ -187,7 +167,7 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
         added_time_ids: torch.Tensor,
         return_dict: bool = True,
         **kwargs,
-    ):
+    ) -> Union[UNetSpatioTemporalConditionOutput, Tuple]:
         sample_batch_size = sample.size()[0]
         compiled_batch_size = self.compiled_batch_size
         if sample_batch_size != compiled_batch_size and (
@@ -199,12 +179,10 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
                 "Adjust the batch size during compilation or modify the 'guidance scale' to match the compiled batch size.\n\n"
                 "For details, see: https://docs.rbln.ai/software/optimum/model_api.html#stable-diffusion"
             )
-
-        return (
-            super().forward(
-                sample.contiguous(),
-                timestep.float(),
-                encoder_hidden_states,
-                added_time_ids,
-            ),
+        return super().forward(
+            sample.contiguous(),
+            timestep.float(),
+            encoder_hidden_states,
+            added_time_ids,
+            return_dict=return_dict,
         )

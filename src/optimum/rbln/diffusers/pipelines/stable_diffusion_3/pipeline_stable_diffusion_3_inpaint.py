@@ -14,9 +14,11 @@
 
 from diffusers import StableDiffusion3InpaintPipeline
 
+from ...configurations import RBLNStableDiffusion3InpaintPipelineConfig
 from ...modeling_diffusers import RBLNDiffusionMixin
 
 
 class RBLNStableDiffusion3InpaintPipeline(RBLNDiffusionMixin, StableDiffusion3InpaintPipeline):
     original_class = StableDiffusion3InpaintPipeline
+    _rbln_config_class = RBLNStableDiffusion3InpaintPipelineConfig
     _submodules = ["transformer", "text_encoder_3", "text_encoder", "text_encoder_2", "vae"]
