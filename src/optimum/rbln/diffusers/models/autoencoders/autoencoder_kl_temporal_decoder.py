@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Dict, List, Tuple, Union
 
 import rebel
 import torch  # noqa: I001
@@ -25,20 +25,19 @@ from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...configurations import RBLNAutoencoderKLTemporalDecoderConfig
 from ...modeling_diffusers import RBLNDiffusionMixin
-
 from .vae import (
-    RBLNRuntimeVAEEncoder,
+    DecoderOutput,
+    DiagonalGaussianDistribution,
     RBLNRuntimeVAEDecoder,
+    RBLNRuntimeVAEEncoder,
     _VAEEncoder,
     _VAETemporalDecoder,
-    DiagonalGaussianDistribution,
-    DecoderOutput
 )
 
 
 if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig, PreTrainedModel
-    
+
     from ...modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 
 logger = get_logger(__name__)
@@ -57,9 +56,11 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
         self.image_size = self.rbln_config.image_size
 
     @classmethod
-    def get_compiled_model(cls, model, rbln_config: RBLNAutoencoderKLTemporalDecoderConfig) -> Dict[str, rebel.RBLNCompiledModel]:        
+    def get_compiled_model(
+        cls, model, rbln_config: RBLNAutoencoderKLTemporalDecoderConfig
+    ) -> Dict[str, rebel.RBLNCompiledModel]:
         expected_models = ["encoder", "decoder"]
-        
+
         compiled_models = {}
         for i, model_name in enumerate(expected_models):
             if model_name == "encoder":
@@ -69,12 +70,15 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
                 wrapped_model.num_frames = rbln_config.decode_chunk_size
             wrapped_model.eval()
             compiled_models[model_name] = cls.compile(wrapped_model, rbln_compile_config=rbln_config.compile_cfgs[i])
-  
+
         return compiled_models
 
     @classmethod
     def get_vae_sample_size(
-        cls, pipe: "RBLNDiffusionMixin", rbln_config: RBLNAutoencoderKLTemporalDecoderConfig, return_vae_scale_factor: bool = False
+        cls,
+        pipe: "RBLNDiffusionMixin",
+        rbln_config: RBLNAutoencoderKLTemporalDecoderConfig,
+        return_vae_scale_factor: bool = False,
     ) -> Tuple[int, int]:
         sample_size = rbln_config.sample_size
         vae_scale_factor = (
@@ -101,7 +105,7 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
         rbln_config.vae.sample_size, rbln_config.vae.vae_scale_factor = cls.get_vae_sample_size(
             pipe, rbln_config.vae, return_vae_scale_factor=True
         )
-        
+
         if rbln_config.vae.num_frames is None:
             if hasattr(pipe.unet.config, "num_frames"):
                 rbln_config.vae.num_frames = pipe.unet.config.num_frames
@@ -133,7 +137,6 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
         model_config: "PretrainedConfig",
         rbln_config: RBLNAutoencoderKLTemporalDecoderConfig,
     ) -> RBLNAutoencoderKLTemporalDecoderConfig:
-
         if rbln_config.batch_size is None:
             rbln_config.batch_size = 1
 
@@ -142,7 +145,7 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
 
         if isinstance(rbln_config.sample_size, int):
             rbln_config.sample_size = (rbln_config.sample_size, rbln_config.sample_size)
-            
+
         if rbln_config.vae_scale_factor is None:
             if hasattr(model_config, "block_out_channels"):
                 rbln_config.vae_scale_factor = 2 ** (len(model_config.block_out_channels) - 1)
@@ -150,12 +153,12 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
                 # vae image processor default value 8 (int)
                 rbln_config.vae_scale_factor = 8
 
-        compile_cfgs=[]
+        compile_cfgs = []
         vae_enc_input_info = [
             (
                 "x",
                 [
-                    rbln_config.batch_size, 
+                    rbln_config.batch_size,
                     model_config.in_channels,
                     rbln_config.sample_size[0],
                     rbln_config.sample_size[1],
@@ -164,7 +167,7 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
             )
         ]
         compile_cfgs.append(RBLNCompileConfig(compiled_model_name="encoder", input_info=vae_enc_input_info))
-        
+
         decode_batch_size = rbln_config.batch_size * rbln_config.decode_chunk_size
         vae_dec_input_info = [
             (
@@ -205,19 +208,20 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
             for compiled_model, device_val in zip(compiled_models, device_vals)
         ]
 
-    def encode(self, x: torch.FloatTensor, return_dict=True, **kwargs
-               ) -> Union[AutoencoderKLOutput, Tuple[DiagonalGaussianDistribution]]:
+    def encode(
+        self, x: torch.FloatTensor, return_dict=True, **kwargs
+    ) -> Union[AutoencoderKLOutput, Tuple[DiagonalGaussianDistribution]]:
         posterior = self.encoder.encode(x)
-        
+
         if not return_dict:
             return (posterior,)
 
         return AutoencoderKLOutput(latent_dist=posterior)
 
-    def decode(self, z: torch.FloatTensor, return_dict = True, **kwargs) -> torch.FloatTensor:
+    def decode(self, z: torch.FloatTensor, return_dict=True, **kwargs) -> torch.FloatTensor:
         decoded = self.decoder.decode(z)
-        
+
         if not return_dict:
-                return (decoded,)
+            return (decoded,)
 
         return DecoderOutput(sample=decoded)

@@ -1,12 +1,12 @@
 from .models import (
     RBLNAutoencoderKLConfig,
+    RBLNAutoencoderKLTemporalDecoderConfig,
     RBLNControlNetModelConfig,
     RBLNPriorTransformerConfig,
     RBLNSD3Transformer2DModelConfig,
     RBLNUNet2DConditionModelConfig,
-    RBLNVQModelConfig,
     RBLNUNetSpatioTemporalConditionModelConfig,
-    RBLNAutoencoderKLTemporalDecoderConfig,
+    RBLNVQModelConfig,
 )
 from .pipelines import (
     RBLNKandinskyV22CombinedPipelineConfig,

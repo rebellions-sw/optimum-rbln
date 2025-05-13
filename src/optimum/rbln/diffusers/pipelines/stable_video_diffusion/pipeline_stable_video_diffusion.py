@@ -12,12 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Union
 
-import torch
 from diffusers import StableVideoDiffusionPipeline
-from diffusers.image_processor import PipelineImageInput
-from diffusers.pipelines.stable_video_diffusion.pipeline_stable_video_diffusion import _resize_with_antialiasing
 
 from ....utils.logging import get_logger
 from ...configurations import RBLNStableVideoDiffusionPipelineConfig
@@ -52,4 +48,3 @@ class RBLNStableVideoDiffusionPipeline(RBLNDiffusionMixin, StableVideoDiffusionP
         if compiled_decode_chunk_size is not None:
             kwargs["decode_chunk_size"] = compiled_decode_chunk_size
         return kwargs
-

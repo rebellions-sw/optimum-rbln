@@ -13,10 +13,13 @@
 # limitations under the License.
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, Tuple, Union, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
 
 import torch
-from diffusers.models.unets.unet_spatio_temporal_condition import UNetSpatioTemporalConditionModel, UNetSpatioTemporalConditionOutput
+from diffusers.models.unets.unet_spatio_temporal_condition import (
+    UNetSpatioTemporalConditionModel,
+    UNetSpatioTemporalConditionOutput,
+)
 from transformers import PretrainedConfig
 
 from ....configuration_utils import RBLNCompileConfig
@@ -77,7 +80,9 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
             self.add_embedding = ADDEMBEDDING(LINEAR1(self.in_features))
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNUNetSpatioTemporalConditionModelConfig) -> torch.nn.Module:
+    def wrap_model_if_needed(
+        cls, model: torch.nn.Module, rbln_config: RBLNUNetSpatioTemporalConditionModelConfig
+    ) -> torch.nn.Module:
         return _UNet_STCM(model).eval()
 
     @classmethod
@@ -93,7 +98,7 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
             vae_sample_size = pipe.vae.config.sample_size
             if isinstance(vae_sample_size, int):
                 vae_sample_size = (vae_sample_size, vae_sample_size)
-            
+
             sample_size = (
                 vae_sample_size[0] // scale_factor,
                 vae_sample_size[1] // scale_factor,
@@ -103,9 +108,12 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
         return sample_size
 
     @classmethod
-    def update_rbln_config_using_pipe(cls, pipe: RBLNDiffusionMixin, rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
+    def update_rbln_config_using_pipe(
+        cls, pipe: RBLNDiffusionMixin, rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
     ) -> Dict[str, Any]:
-        rbln_config.unet.sample_size = cls.get_unet_sample_size(pipe, rbln_config.unet, image_size=rbln_config.image_size)
+        rbln_config.unet.sample_size = cls.get_unet_sample_size(
+            pipe, rbln_config.unet, image_size=rbln_config.image_size
+        )
         return rbln_config
 
     @classmethod
@@ -116,7 +124,6 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
         model_config: "PretrainedConfig",
         rbln_config: RBLNUNetSpatioTemporalConditionModelConfig,
     ) -> RBLNUNetSpatioTemporalConditionModelConfig:
-        
         if rbln_config.num_frames is None:
             rbln_config.num_frames = model_config.num_frames
 
@@ -124,7 +131,17 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
             rbln_config.sample_size = model_config.sample_size
 
         input_info = [
-            ("sample", [rbln_config.batch_size, rbln_config.num_frames, model_config.in_channels, rbln_config.sample_size[0], rbln_config.sample_size[1]], "float32"),
+            (
+                "sample",
+                [
+                    rbln_config.batch_size,
+                    rbln_config.num_frames,
+                    model_config.in_channels,
+                    rbln_config.sample_size[0],
+                    rbln_config.sample_size[1],
+                ],
+                "float32",
+            ),
             ("timestep", [], "float32"),
             ("encoder_hidden_states", [rbln_config.batch_size, 1, model_config.cross_attention_dim], "float32"),
             ("added_time_ids", [rbln_config.batch_size, 3], "float32"),
@@ -163,10 +180,9 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
                 "For details, see: https://docs.rbln.ai/software/optimum/model_api.html#stable-diffusion"
             )
         return super().forward(
-                    sample.contiguous(),
-                    timestep.float(),
-                    encoder_hidden_states,
-                    added_time_ids,
-                    return_dict=return_dict,
-                    )
-        
+            sample.contiguous(),
+            timestep.float(),
+            encoder_hidden_states,
+            added_time_ids,
+            return_dict=return_dict,
+        )

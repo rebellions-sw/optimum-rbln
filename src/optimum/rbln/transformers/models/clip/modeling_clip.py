@@ -22,7 +22,6 @@ from transformers import (
     CLIPVisionModel,
     CLIPVisionModelWithProjection,
 )
-from transformers.modeling_outputs import BaseModelOutputWithPooling
 from transformers.models.clip.modeling_clip import CLIPTextModelOutput, CLIPVisionModelOutput
 
 from ....configuration_utils import RBLNCompileConfig
@@ -120,11 +119,12 @@ class _VisionEncoderWithProjection(torch.nn.Module):
     def __init__(self, enc: CLIPVisionModelWithProjection):
         super().__init__()
         self.enc = enc
-        
+
     def forward(self, inp):
         enc_out = self.enc(inp, return_dict=False)
         return enc_out
-    
+
+
 class RBLNCLIPVisionModel(RBLNModel):
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNCLIPVisionModelConfig) -> torch.nn.Module:

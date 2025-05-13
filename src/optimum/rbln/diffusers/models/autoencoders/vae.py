@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, List, Union
 
 import torch  # noqa: I001
 from diffusers import AutoencoderKL, AutoencoderKLTemporalDecoder, VQModel
-from diffusers.models.autoencoders.vae import DecoderOutput, DiagonalGaussianDistribution
 from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
 
 from ....utils.logging import get_logger

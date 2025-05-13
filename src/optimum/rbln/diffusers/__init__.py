@@ -97,6 +97,7 @@ _import_structure = {
 if TYPE_CHECKING:
     from .configurations import (
         RBLNAutoencoderKLConfig,
+        RBLNAutoencoderKLTemporalDecoderConfig,
         RBLNControlNetModelConfig,
         RBLNKandinskyV22CombinedPipelineConfig,
         RBLNKandinskyV22Img2ImgCombinedPipelineConfig,
@@ -120,11 +121,10 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLImg2ImgPipelineConfig,
         RBLNStableDiffusionXLInpaintPipelineConfig,
         RBLNStableDiffusionXLPipelineConfig,
-        RBLNUNet2DConditionModelConfig,
-        RBLNVQModelConfig,
-        RBLNUNetSpatioTemporalConditionModelConfig,
         RBLNStableVideoDiffusionPipelineConfig,
-        RBLNAutoencoderKLTemporalDecoderConfig,
+        RBLNUNet2DConditionModelConfig,
+        RBLNUNetSpatioTemporalConditionModelConfig,
+        RBLNVQModelConfig,
     )
     from .modeling_diffusers import RBLNDiffusionMixin
     from .models import (
