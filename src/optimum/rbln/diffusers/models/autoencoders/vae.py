@@ -41,12 +41,6 @@ class RBLNRuntimeVAEDecoder(RBLNPytorchRuntime):
         return self.forward(z)
 
 
-class RBLNRuntimeVAETemporalDecoder(RBLNPytorchRuntime):
-    def decode(self, z: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
-        decoded = self.forward(z)
-        return DecoderOutput(sample=decoded)
-
-
 class _VAEDecoder(torch.nn.Module):
     def __init__(self, vae: "AutoencoderKL"):
         super().__init__()
