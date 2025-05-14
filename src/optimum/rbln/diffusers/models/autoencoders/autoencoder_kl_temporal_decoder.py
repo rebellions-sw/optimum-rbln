@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING, Dict, List, Tuple, Union
 import rebel
 import torch  # noqa: I001
 from diffusers import AutoencoderKLTemporalDecoder
-from diffusers.models.modeling_outputs import AutoencoderKLOutput
 from diffusers.models.autoencoders.vae import DecoderOutput
+from diffusers.models.modeling_outputs import AutoencoderKLOutput
 from transformers import PretrainedConfig
 
 from ....configuration_utils import RBLNCompileConfig
