@@ -491,6 +491,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
         prepare_model_for_quantization(model, model_id, kwargs.get("num_hidden_layers"))
 
+        # torchscript should be True for jit to work
+        model.config.torchscript_backup = model.config.torchscript
+        model.config.torchscript = True
         return model
 
     def __getattr__(self, __name: str) -> Any:
