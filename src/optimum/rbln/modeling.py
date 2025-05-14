@@ -150,6 +150,10 @@ class RBLNModel(RBLNBaseModel):
             preprocessors=preprocessors, model=model, model_config=config, rbln_config=rbln_config
         )
 
+        # torchscript should be True for jit to work
+        torchscript_backup = model.config.torchscript
+        model.config.torchscript = True
+
         compiled_model: Union[rebel.RBLNCompiledModel, Dict[str, rebel.RBLNCompiledModel]] = cls.get_compiled_model(
             model, rbln_config=rbln_config
         )
@@ -164,8 +168,7 @@ class RBLNModel(RBLNBaseModel):
             cm.save(save_dir_path / subfolder / f"{compiled_model_name}.rbln")
         rbln_config.save(save_dir_path / subfolder)
 
-        config.torchscript = config.torchscript_backup
-        del config.torchscript_backup
+        config.torchscript = torchscript_backup
         config.save_pretrained(save_dir_path / subfolder)
 
         # Save torch artifacts (e.g. embedding matrix if needed.)
@@ -199,7 +202,7 @@ class RBLNModel(RBLNBaseModel):
         **kwargs,
     ) -> "PreTrainedModel":
         kwargs = cls.update_kwargs(kwargs)
-        model = cls.get_hf_class().from_pretrained(
+        return cls.get_hf_class().from_pretrained(
             model_id,
             subfolder=subfolder,
             revision=revision,
@@ -210,11 +213,6 @@ class RBLNModel(RBLNBaseModel):
             trust_remote_code=trust_remote_code,
             **kwargs,
         )
-
-        # torchscript should be True for jit to work
-        model.config.torchscript_backup = model.config.torchscript
-        model.config.torchscript = True
-        return model
 
     @classmethod
     def _create_runtimes(
