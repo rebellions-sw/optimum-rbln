@@ -151,8 +151,8 @@ class RBLNModel(RBLNBaseModel):
         )
 
         # torchscript should be True for jit to work
-        torchscript_backup = model.config.torchscript
-        model.config.torchscript = True
+        torchscript_backup = config.torchscript
+        config.torchscript = True
 
         compiled_model: Union[rebel.RBLNCompiledModel, Dict[str, rebel.RBLNCompiledModel]] = cls.get_compiled_model(
             model, rbln_config=rbln_config
