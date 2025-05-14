@@ -72,7 +72,12 @@ _import_structure = {
     ],
     "exaone": ["RBLNExaoneForCausalLM", "RBLNExaoneForCausalLMConfig"],
     "gemma": ["RBLNGemmaForCausalLM", "RBLNGemmaForCausalLMConfig"],
-    "gemma3": ["RBLNGemma3ForCausalLM", "RBLNGemma3ForCausalLMConfig"],
+    "gemma3": [
+        "RBLNGemma3ForCausalLM",
+        "RBLNGemma3ForCausalLMConfig",
+        "RBLNGemma3ForConditionalGeneration",
+        "RBLNGemma3ForConditionalGenerationConfig",
+    ],
     "gpt2": ["RBLNGPT2LMHeadModel", "RBLNGPT2LMHeadModelConfig"],
     "idefics3": [
         "RBLNIdefics3VisionTransformer",
@@ -80,7 +85,10 @@ _import_structure = {
         "RBLNIdefics3ForConditionalGenerationConfig",
         "RBLNIdefics3VisionTransformerConfig",
     ],
-    "llama": ["RBLNLlamaForCausalLM", "RBLNLlamaForCausalLMConfig"],
+    "llama": [
+        "RBLNLlamaForCausalLM",
+        "RBLNLlamaForCausalLMConfig",
+    ],
     "llava_next": ["RBLNLlavaNextForConditionalGeneration", "RBLNLlavaNextForConditionalGenerationConfig"],
     "midm": ["RBLNMidmLMHeadModel", "RBLNMidmLMHeadModelConfig"],
     "mistral": ["RBLNMistralForCausalLM", "RBLNMistralForCausalLMConfig"],
@@ -154,7 +162,12 @@ if TYPE_CHECKING:
     )
     from .exaone import RBLNExaoneForCausalLM, RBLNExaoneForCausalLMConfig
     from .gemma import RBLNGemmaForCausalLM, RBLNGemmaForCausalLMConfig
-    from .gemma3 import RBLNGemma3ForCausalLM, RBLNGemma3ForCausalLMConfig
+    from .gemma3 import (
+        RBLNGemma3ForCausalLM,
+        RBLNGemma3ForCausalLMConfig,
+        RBLNGemma3ForConditionalGeneration,
+        RBLNGemma3ForConditionalGenerationConfig,
+    )
     from .gpt2 import RBLNGPT2LMHeadModel, RBLNGPT2LMHeadModelConfig
     from .idefics3 import (
         RBLNIdefics3ForConditionalGeneration,

@@ -25,8 +25,8 @@ class RBLNSiglipVisionModelConfig(RBLNModelConfig):
         self,
         batch_size: Optional[int] = None,
         image_size: Optional[int] = None,
-        use_head: Optional[bool] = None,
         interpolate_pos_encoding: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
         **kwargs,
     ):
         """
@@ -34,8 +34,8 @@ class RBLNSiglipVisionModelConfig(RBLNModelConfig):
             batch_size (Optional[int]): The batch size for image processing. Defaults to 1.
             image_size (Optional[int]): The size of input images. Can be an integer for square images,
                 a tuple/list (height, width), or a dictionary with 'height' and 'width' keys.
-            use_head (Optional[bool]): Whether to use the head for image processing. Defaults to False.
-            interpolate_pos_encoding (Optional[bool]): Whether to interpolate the position encoding. Defaults to False.
+            interpolate_pos_encoding (Optional[bool]): Whether to interpolate the position encoding.
+            output_hidden_states: (Optional[bool]): Whether to return hidden states.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -48,6 +48,7 @@ class RBLNSiglipVisionModelConfig(RBLNModelConfig):
 
         self.image_size = image_size
         self.interpolate_pos_encoding = interpolate_pos_encoding
+        self.output_hidden_states = output_hidden_states
 
     @property
     def image_width(self):

@@ -34,22 +34,25 @@ if TYPE_CHECKING:
 
 
 class _SiglipVisionModel(torch.nn.Module):
-    def __init__(self, model: SiglipVisionModel, interpolate_pos_encoding: bool):
+    def __init__(self, model: SiglipVisionModel, interpolate_pos_encoding: bool, output_hidden_states: bool):
         super().__init__()
         self.vision_model = model.vision_model
         self.interpolate_pos_encoding = interpolate_pos_encoding
+        self.output_hidden_states = output_hidden_states
 
     def forward(self, inp):
         enc_out = self.vision_model(
-            inp, output_hidden_states=False, return_dict=False, interpolate_pos_encoding=self.interpolate_pos_encoding
+            inp, output_hidden_states=self.output_hidden_states, return_dict=False, interpolate_pos_encoding=self.interpolate_pos_encoding
         )
         return tuple(x for x in enc_out if x is not None)
+
 
 class RBLNSiglipVisionModel(RBLNModel):
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNSiglipVisionModelConfig) -> torch.nn.Module:
         wrapper_cfg = {
             "interpolate_pos_encoding": rbln_config.interpolate_pos_encoding,
+            "output_hidden_states": rbln_config.output_hidden_states
         }
         return _SiglipVisionModel(model, **wrapper_cfg).eval()
 
@@ -76,6 +79,9 @@ class RBLNSiglipVisionModel(RBLNModel):
         if rbln_config.interpolate_pos_encoding is None:
             logger.warning("interpolate_pos_encoding is not set, using False by default")
             rbln_config.interpolate_pos_encoding = False
+        
+        if rbln_config.output_hidden_states is None:
+            rbln_config.output_hidden_states = model_config.output_hidden_states
 
         if rbln_config.image_size is None:
             raise ValueError("`rbln_image_size` should be specified!")
@@ -126,5 +132,6 @@ class RBLNSiglipVisionModel(RBLNModel):
         else:
             return BaseModelOutputWithPooling(
                 last_hidden_state=output[0],
-                pooler_output=output[1] if len(output) > 1 else None,
+                pooler_output=output[1] if len(output) > 2 else None,
+                hidden_states=output[2:] if len(output) > 2 else output[1:],
             )

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import copy
-from typing import TYPE_CHECKING, Optional, Tuple, List
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import torch
 from transformers import PreTrainedModel
@@ -27,9 +27,8 @@ from ..decoderonly.decoderonly_architecture import (
     DecoderOnlyLayer,
     DecoderOnlyModel,
     DecoderOnlyWrapper,
-    DecoderOnlySlidingWindowAttention,
-    slice_and_unsqueeze_cos_sin,
     RotaryEmbedding,
+    slice_and_unsqueeze_cos_sin,
 )
 
 

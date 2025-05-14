@@ -11,19 +11,29 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import TYPE_CHECKING, Optional, Union
+import inspect
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple, Union
 
-from transformers import PretrainedConfig, PreTrainedModel
+import torch
+from transformers import (
+    AutoModelForVision2Seq,
+    Gemma3ForConditionalGeneration,
+    PretrainedConfig,
+    PreTrainedModel,
+)
 
-from ....configuration_utils import RBLNCompileConfig
+from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
+from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ..decoderonly.decoderonly_architecture import (
     set_default_values,
     validate_attention_method,
 )
-from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM
+from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyOutput
 from .configuration_gemma3 import RBLNGemma3ForCausalLMConfig
 from .gemma3_architecture import Gemma3ForCausalLMWrapper
+from transformers.modeling_outputs import BaseModelOutputWithPooling
 
 
 logger = get_logger()
@@ -31,6 +41,239 @@ logger = get_logger()
 
 if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
+
+
+class LoopVisionTower:
+    def __init__(self, vision_tower: RBLNModel) -> None:
+        self.vision_tower = vision_tower
+
+    def forward(self, *args, **kwargs):
+        # Loop instead of batch
+        # shape of pixel_values : [batch, num_channel, height, width]
+        pixel_values = args[0]
+
+        batch_size = pixel_values.shape[0]
+        outputs = []
+        for i in range(batch_size):
+            outputs.append(self.vision_tower(pixel_values=pixel_values[i : i + 1], return_dict=True))
+
+        last_hidden_states = [output.last_hidden_state for output in outputs]
+        pooler_output = [output.pooler_output for output in outputs]
+
+        # FIXME:: This can be optimized using out= API of rbln runtime.
+        last_hidden_states = torch.cat(last_hidden_states, dim=0)
+        pooler_output = torch.cat(pooler_output, dim=0)
+
+        hidden_states = [output.hidden_states for output in outputs]  # batch x (hidden x 1)
+
+        hidden_states = tuple(
+            torch.cat(tuple((hidden_states[n][i] for n in range(batch_size))), dim=0)
+            for i in range(len(hidden_states[0]))
+        )  # hidden x (batch,)
+
+        return BaseModelOutputWithPooling(
+            last_hidden_state=last_hidden_states,
+            pooler_output=pooler_output,
+            hidden_states=hidden_states,
+        )
+
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        return self.forward(*args, **kwds)
+
+    def __repr__(self) -> str:
+        return repr(self.vision_tower)
+
+
+class LoopProjector:
+    def __init__(self, multi_modal_projector) -> None:
+        self.multi_modal_projector = multi_modal_projector
+
+    def forward(self, *args, **kwargs):
+        # Loop instead of batch
+        image_feature = args[0]
+
+        batch_size = image_feature.shape[0]
+        outputs = []
+        for i in range(batch_size):
+            outputs.append(self.multi_modal_projector(image_feature[i : i + 1]))
+
+        # FIXME:: This can be optimized using out= API of rbln runtime.
+        outputs = torch.cat(outputs, dim=0)
+        return outputs
+
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        return self.forward(*args, **kwds)
+
+    def __repr__(self) -> str:
+        return repr(self.multi_modal_projector)
+
+
+class RBLNGemma3ForConditionalGeneration(RBLNModel):
+    auto_model_class = AutoModelForVision2Seq
+    _rbln_submodules = [
+        {"name": "vision_tower"},
+        {"name": "language_model"},
+    ]
+
+    def __getattr__(self, __name: str) -> Any:
+        def redirect(func):
+            return lambda *pargs, **kwargs: func(self, *pargs, **kwargs)
+
+        val = getattr(Gemma3ForConditionalGeneration, __name)
+
+        if isinstance(val, Callable) and "self" in set(inspect.signature(val).parameters):
+            return redirect(val)
+        return val
+
+    def can_generate(self):
+        return True
+
+    def __post_init__(self, **kwargs):
+        self.vision_tower = LoopVisionTower(self.rbln_submodules[0])
+        self.language_model = self.rbln_submodules[1]
+        self.multi_modal_projector = LoopProjector(self.model[0])
+        self.vocab_size = self.config.text_config.vocab_size
+
+        # Copied from the original class
+        self.pad_token_id = self.config.pad_token_id if self.config.pad_token_id is not None else -1
+        return super().__post_init__(**kwargs)
+
+    def get_attn_impl(self) -> str:
+        return self.rbln_config.language_model.attn_impl
+
+    def get_kvcache_num_blocks(self) -> int:
+        return self.rbln_config.language_model.kvcache_num_blocks
+
+    def get_input_embeddings(self):
+        return self.language_model.get_input_embeddings()
+
+    @classmethod
+    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
+        return model.multi_modal_projector
+
+    @classmethod
+    def _update_rbln_config(
+        cls,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+        model: Optional["PreTrainedModel"] = None,
+        model_config: Optional["PretrainedConfig"] = None,
+        rbln_config: Optional[RBLNModelConfig] = None,
+    ) -> RBLNModelConfig:
+        image_feature_dim = (model_config.vision_config.image_size // model_config.vision_config.patch_size) ** 2
+        feature_size = model_config.vision_config.hidden_size
+
+        input_info = [("image_features", [rbln_config.batch_size, image_feature_dim, feature_size], "float32")]
+        rbln_compile_config = RBLNCompileConfig(input_info=input_info)
+        rbln_config.set_compile_cfgs([rbln_compile_config])
+        return rbln_config
+
+    def prepare_inputs_for_generation(
+        self,
+        input_ids,
+        inputs_embeds=None,
+        pixel_values=None,
+        image_sizes=None,
+        attention_mask=None,
+        generate_idx=None,
+        **kwargs,
+    ):
+        # Prepare HF generation
+        is_prefill_phase = generate_idx is None
+        batch_size = input_ids.shape[0]
+
+        model_inputs = self.language_model.prepare_inputs_for_generation(
+            input_ids=input_ids,
+            inputs_embeds=inputs_embeds,
+            generate_idx=generate_idx,  # Not affect
+            attention_mask=attention_mask,
+            **kwargs,
+        )
+
+        if is_prefill_phase:
+            model_inputs["generate_idx"] = torch.zeros((batch_size, 1), dtype=torch.int32)
+            model_inputs.update(
+                {
+                    "pixel_values": pixel_values,
+                    "image_sizes": image_sizes,
+                }
+            )
+
+        model_inputs["attention_mask"] = attention_mask
+        return model_inputs
+
+    def _update_model_kwargs_for_generation(
+        self,
+        outputs: RBLNDecoderOnlyOutput,
+        model_kwargs: Dict[str, Any],
+        **kwargs,
+    ) -> Dict[str, Any]:
+        # update generate_idx
+        model_kwargs["generate_idx"] = outputs.generate_idx
+
+        return model_kwargs
+
+    def get_image_features(self, pixel_values: torch.Tensor):
+        """
+        Projects the last hidden state from the vision model into language model space.
+
+        Args:
+            pixel_values (`torch.FloatTensor]` of shape `(batch_size, channels, height, width)`)
+               The tensors corresponding to the input images.
+        Returns:
+            image_features (`torch.Tensor`): Image feature tensor of shape `(num_images, image_length, embed_dim)`).
+        """
+        vision_outputs = self.vision_tower(pixel_values=pixel_values).last_hidden_state
+        image_features = self.multi_modal_projector(vision_outputs)
+        return image_features
+
+    def forward(
+        self,
+        input_ids: torch.LongTensor = None,
+        pixel_values: torch.FloatTensor = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        token_type_ids: Optional[torch.LongTensor] = None,
+        cache_position: Optional[torch.LongTensor] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        return_dict: Optional[bool] = None,
+        generate_idx: Optional[torch.Tensor] = None,
+        **lm_kwargs,
+    ) -> Union[Tuple, RBLNDecoderOnlyOutput]:
+        if (input_ids is None) ^ (inputs_embeds is not None):
+            raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
+
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
+        # Replace image id woth PAD if the image token if OOV, to avoid index-errors
+        if input_ids is not None and self.config.image_token_index >= self.vocab_size:
+            special_image_mask = input_ids == self.config.image_token_index
+            llm_input_ids = input_ids.clone()
+            llm_input_ids[special_image_mask] = 0
+        else:
+            llm_input_ids = input_ids
+
+        if inputs_embeds is None:
+            inputs_embeds = self.get_input_embeddings()(llm_input_ids)
+
+        # Merge text and images
+        if pixel_values is not None:
+            image_features = self.get_image_features(pixel_values)
+            special_image_mask = (input_ids == self.config.image_token_index).unsqueeze(-1)
+            special_image_mask = special_image_mask.expand_as(inputs_embeds).to(inputs_embeds.device)
+
+            image_features = image_features.to(inputs_embeds.device, inputs_embeds.dtype)
+            inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, image_features)
+
+        outputs = self.language_model(
+            inputs_embeds=inputs_embeds,
+            attention_mask=attention_mask,
+            return_dict=return_dict,
+            cache_position=cache_position,
+            token_type_ids=token_type_ids,  # TODO: take care of this in image token case
+        )
+
+        logits = outputs.logits
+
+        return RBLNDecoderOnlyOutput(logits=logits, generate_idx=generate_idx)
 
 
 class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
