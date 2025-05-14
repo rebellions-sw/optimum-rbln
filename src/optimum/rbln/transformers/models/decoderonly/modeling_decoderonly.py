@@ -382,18 +382,14 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
     _decoder_wrapper_cls = DecoderOnlyWrapper
     _use_rotary_emb = True
 
+
     def __post_init__(self, **kwargs):
         main_input_name = self.main_input_name
 
         if self.rbln_config.use_inputs_embeds:
             main_input_name = "inputs_embeds"
             artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
-            with no_init_weights():
-                self.embed_tokens = torch.nn.Embedding(
-                    self.config.vocab_size,
-                    self.config.hidden_size,
-                    self.config.pad_token_id,
-                )
+            self.embed_tokens = self._embedding_instance()
             self.embed_tokens.load_state_dict(artifacts["embed_tokens"])
         else:
             self.embed_tokens = None
@@ -457,6 +453,15 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             save_dict = {}
             save_dict["embed_tokens"] = model.get_input_embeddings().state_dict()
             torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
+    
+    def _embedding_instance(self):
+        with no_init_weights():
+            embed_tokens = torch.nn.Embedding(
+                self.config.vocab_size,
+                self.config.hidden_size,
+                self.config.pad_token_id,
+            )
+        return embed_tokens
 
     def get_input_embeddings(self):
         return self.embed_tokens

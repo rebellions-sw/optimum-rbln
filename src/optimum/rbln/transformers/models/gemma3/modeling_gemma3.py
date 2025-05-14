@@ -21,7 +21,9 @@ from transformers import (
     PretrainedConfig,
     PreTrainedModel,
 )
+from transformers.models.gemma3.modeling_gemma3 import Gemma3TextScaledWordEmbedding
 from transformers.modeling_outputs import BaseModelOutputWithPooling
+from transformers.modeling_utils import no_init_weights
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
@@ -275,6 +277,16 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     """
 
     _decoder_wrapper_cls = Gemma3ForCausalLMWrapper
+
+    def _embedding_instance(self):
+        with no_init_weights():
+            embed_tokens = Gemma3TextScaledWordEmbedding(
+                self.config.vocab_size,
+                self.config.hidden_size,
+                self.config.pad_token_id,
+                embed_scale=self.config.hidden_size**0.5,
+            )
+        return embed_tokens
 
     # @classmethod
     # def get_input_info(

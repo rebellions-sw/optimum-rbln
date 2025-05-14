@@ -47,7 +47,7 @@ def get_inputs(batch_size):
 def main(
     compile: bool = False,
     diff: bool = False,
-    batch_size: int = 2,
+    batch_size: int = 1,
     kv_partition_len: Optional[int] = None,
     tensor_parallel_size: int = 4,
     n_layers: Optional[int] = None,
@@ -63,18 +63,15 @@ def main(
         hf_kwargs = {"text_config": text_config}
 
     if compile:
-        kwargs = {}
         rbln_config = {
             "language_model": {
                 "use_attention_mask": True,
                 "max_seq_len": 32768,
-                # "kvcache_partition_len": kv_partition_len,
                 "batch_size": batch_size,
                 "tensor_parallel_size": tensor_parallel_size,
                 "use_inputs_embeds": True,
             }
         }
-
         if kv_partition_len is not None:
             rbln_config["language_model"].update({"kvcache_partition_len": kv_partition_len})
 
@@ -82,7 +79,7 @@ def main(
             model_id,
             export=True,
             rbln_config=rbln_config,
-            **hf_kwargs,
+            # **hf_kwargs,
             # config=hf_config,
             # TODO RBLNGemma3ForConditionalGeneration의 batch_size가 CausalLM으로 넘겨받는 식이 되어야하는가? X
         )
@@ -125,21 +122,21 @@ def main(
         print("--Golden Result--")
         print(decoded)
 
-        # from scipy import stats
+        from scipy import stats
 
-        # pearsonr = stats.pearsonr(
-        #     rbln_logits[0].numpy().reshape(-1),
-        #     golden_logits[0].numpy().reshape(-1),
-        # )
-        # print("prefill pearsonr")
-        # print(pearsonr.statistic)
-        # print("decoder pearsonr")
-        # # breakpoint()
-        # pearsonr = stats.pearsonr(
-        #     rbln_logits[10].numpy().reshape(-1),
-        #     golden_logits[10].numpy().reshape(-1),
-        # )
-        # print(pearsonr.statistic)
+        pearsonr = stats.pearsonr(
+            rbln_logits[0].numpy().reshape(-1),
+            golden_logits[0].numpy().reshape(-1),
+        )
+        print("prefill pearsonr")
+        print(pearsonr.statistic)
+        print("decoder pearsonr")
+        # breakpoint()
+        pearsonr = stats.pearsonr(
+            rbln_logits[10].numpy().reshape(-1),
+            golden_logits[10].numpy().reshape(-1),
+        )
+        print(pearsonr.statistic)
 
 
 # breakpoint()

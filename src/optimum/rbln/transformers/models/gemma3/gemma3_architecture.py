@@ -203,7 +203,7 @@ class Gemma3TextModel(DecoderOnlyModel):
         if inputs_embeds is None:
             inputs_embeds = self.get_embedding()(input_ids)
 
-        hidden_states = inputs_embeds * self.hidden_multiplier
+        hidden_states = inputs_embeds
 
         # get cos,sin vector if needed
         if rotary_emb is not None:
