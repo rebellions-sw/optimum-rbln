@@ -56,11 +56,7 @@ class RBLNModel(RBLNBaseModel):
     def update_kwargs(cls, kwargs):
         """
         Update user-given kwargs to get proper pytorch model.
-
-        For example, `torchscript`=True should be set because torch.jit
-        does not support `transformers` output instances as module output;
         """
-        kwargs.update({"torchscript": True})
         return kwargs
 
     @classmethod
@@ -168,7 +164,8 @@ class RBLNModel(RBLNBaseModel):
             cm.save(save_dir_path / subfolder / f"{compiled_model_name}.rbln")
         rbln_config.save(save_dir_path / subfolder)
 
-        config.torchscript = False  # it was modified by update_kwargs, so we need to restore it
+        config.torchscript = config.torchscript_backup
+        del config.torchscript_backup
         config.save_pretrained(save_dir_path / subfolder)
 
         # Save torch artifacts (e.g. embedding matrix if needed.)
@@ -202,7 +199,7 @@ class RBLNModel(RBLNBaseModel):
         **kwargs,
     ) -> "PreTrainedModel":
         kwargs = cls.update_kwargs(kwargs)
-        return cls.get_hf_class().from_pretrained(
+        model = cls.get_hf_class().from_pretrained(
             model_id,
             subfolder=subfolder,
             revision=revision,
@@ -213,6 +210,11 @@ class RBLNModel(RBLNBaseModel):
             trust_remote_code=trust_remote_code,
             **kwargs,
         )
+
+        # torchscript should be True for jit to work
+        model.config.torchscript_backup = model.config.torchscript
+        model.config.torchscript = True
+        return model
 
     @classmethod
     def _create_runtimes(
