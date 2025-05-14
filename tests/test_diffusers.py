@@ -299,9 +299,9 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
         "rbln_num_frames": 2,
         "rbln_decode_chunk_size": 2,
         "rbln_config": {
-            "image_encoder": {"rbln_device": 0},
-            "unet": {"rbln_device": 0},
-            "vae": {"rbln_device": -1},
+            "image_encoder": {"device": 0},
+            "unet": {"device": 0},
+            "vae": {"device": -1},
         },
     }
 
