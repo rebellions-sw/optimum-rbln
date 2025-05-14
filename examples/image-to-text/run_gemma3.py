@@ -24,14 +24,14 @@ def get_inputs(batch_size):
             {
                 "role": "user",
                 "content": [
-                    {"type": "image", "image": dataset[i]["image"]},
+                    # {"type": "image", "image": dataset[i]["image"]},
                     {"type": "text", "text": dataset[i]["question"]},
                 ],
             },
         ]
         for i in range(batch_size)
     ]
-    images = [[dataset[i]["image"]] for i in range(batch_size)]
+    # images = [[dataset[i]["image"]] for i in range(batch_size)]
 
     text = processor.apply_chat_template(
         messages,
@@ -39,7 +39,7 @@ def get_inputs(batch_size):
         tokenize=False,
     )
 
-    inputs = processor(text=text, images=images, return_tensors="pt", padding=True)
+    inputs = processor(text=text, return_tensors="pt", padding=True)
 
     return inputs
 
@@ -49,7 +49,7 @@ def main(
     diff: bool = False,
     batch_size: int = 2,
     kv_partition_len: Optional[int] = None,
-    tensor_parallel_size: int = 1,
+    tensor_parallel_size: int = 4,
     n_layers: Optional[int] = None,
 ):
     inputs = get_inputs(batch_size)

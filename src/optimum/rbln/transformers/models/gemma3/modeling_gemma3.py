@@ -56,8 +56,6 @@ class LoopVisionTower:
         for i in range(batch_size):
             outputs.append(self.vision_tower(pixel_values=pixel_values[i : i + 1], return_dict=True))
 
-        breakpoint()
-
         last_hidden_states = [output.last_hidden_state for output in outputs]
 
         # FIXME:: This can be optimized using out= API of rbln runtime.
@@ -180,7 +178,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         )
 
         if is_prefill_phase:
-            model_inputs["generate_idx"] = torch.zeros((batch_size, 1), dtype=torch.int32)
+            # model_inputs["generate_idx"] = torch.zeros((batch_size, 1), dtype=torch.int32)
             model_inputs.update(
                 {
                     "pixel_values": pixel_values,
@@ -259,11 +257,10 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
             return_dict=return_dict,
             cache_position=cache_position,
             token_type_ids=token_type_ids,  # TODO: take care of this in image token case
+            generate_idx=generate_idx,
         )
 
-        logits = outputs.logits
-
-        return RBLNDecoderOnlyOutput(logits=logits, generate_idx=generate_idx)
+        return outputs
 
 
 class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
