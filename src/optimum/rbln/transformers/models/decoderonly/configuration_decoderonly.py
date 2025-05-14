@@ -88,7 +88,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         self.kvcache_partition_len = kvcache_partition_len
         self.kvcache_block_size = kvcache_block_size
         self.quantization = quantization or {}
-        if self.quantization:
+        if self.quantization and isinstance(self.quantization, dict):
             self.quantization = RBLNQuantizationConfig(**self.quantization)
 
         self.prefill_chunk_size = prefill_chunk_size or 128
