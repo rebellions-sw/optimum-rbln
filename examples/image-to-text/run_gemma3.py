@@ -1,10 +1,11 @@
-from typing import Optional
-import os
 import json
+import os
+from typing import Optional
 
 import fire
 from datasets import load_dataset
 from transformers import AutoProcessor, Gemma3Config, Gemma3ForConditionalGeneration
+
 from optimum.rbln import RBLNGemma3ForConditionalGeneration
 
 
@@ -23,10 +24,7 @@ def get_inputs(batch_size):
             {
                 "role": "user",
                 "content": [
-                    {
-                        "type": "image",
-                        "image": dataset[i]["image"]
-                    },
+                    {"type": "image", "image": dataset[i]["image"]},
                     {"type": "text", "text": dataset[i]["question"]},
                 ],
             },
@@ -57,17 +55,16 @@ def main(
     inputs = get_inputs(batch_size)
 
     input_len = inputs["input_ids"].shape[-1]
-    hf_kwargs ={}
+    hf_kwargs = {}
     if n_layers is not None:
         hf_config = Gemma3Config.from_pretrained(model_id)
         text_config = json.loads(hf_config.text_config.to_json_string())
         text_config["num_hidden_layers"] = n_layers
         hf_kwargs = {"text_config": text_config}
 
-
     if compile:
         kwargs = {}
-        rbln_config={
+        rbln_config = {
             "language_model": {
                 "use_attention_mask": True,
                 "max_seq_len": 32768,
@@ -77,7 +74,7 @@ def main(
                 "use_inputs_embeds": True,
             }
         }
-        
+
         if kv_partition_len is not None:
             rbln_config["language_model"].update({"kvcache_partition_len": kv_partition_len})
 
@@ -97,7 +94,7 @@ def main(
         )
 
     if diff:
-        model = Gemma3ForConditionalGeneration.from_pretrained(model_id,**hf_kwargs).eval()
+        model = Gemma3ForConditionalGeneration.from_pretrained(model_id, **hf_kwargs).eval()
 
         output = rbln_model.generate(
             **inputs,

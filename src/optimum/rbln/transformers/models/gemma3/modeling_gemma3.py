@@ -56,24 +56,15 @@ class LoopVisionTower:
         for i in range(batch_size):
             outputs.append(self.vision_tower(pixel_values=pixel_values[i : i + 1], return_dict=True))
 
+        breakpoint()
+
         last_hidden_states = [output.last_hidden_state for output in outputs]
-        pooler_output = [output.pooler_output for output in outputs]
 
         # FIXME:: This can be optimized using out= API of rbln runtime.
         last_hidden_states = torch.cat(last_hidden_states, dim=0)
-        pooler_output = torch.cat(pooler_output, dim=0)
-
-        hidden_states = [output.hidden_states for output in outputs]  # batch x (hidden x 1)
-
-        hidden_states = tuple(
-            torch.cat(tuple((hidden_states[n][i] for n in range(batch_size))), dim=0)
-            for i in range(len(hidden_states[0]))
-        )  # hidden x (batch,)
 
         return BaseModelOutputWithPooling(
             last_hidden_state=last_hidden_states,
-            pooler_output=pooler_output,
-            hidden_states=hidden_states,
         )
 
     def __call__(self, *args: Any, **kwds: Any) -> Any:
@@ -221,7 +212,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         Returns:
             image_features (`torch.Tensor`): Image feature tensor of shape `(num_images, image_length, embed_dim)`).
         """
-        vision_outputs = self.vision_tower(pixel_values=pixel_values).last_hidden_state
+        vision_outputs = self.vision_tower(pixel_values).last_hidden_state
         image_features = self.multi_modal_projector(vision_outputs)
         return image_features
 
@@ -249,8 +240,6 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
             llm_input_ids[special_image_mask] = 0
         else:
             llm_input_ids = input_ids
-
-        breakpoint()
 
         if inputs_embeds is None:
             inputs_embeds = self.get_input_embeddings()(llm_input_ids)
