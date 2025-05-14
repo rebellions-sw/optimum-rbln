@@ -130,8 +130,14 @@ class RBLNSiglipVisionModel(RBLNModel):
         if not return_dict:
             return (output,) if not isinstance(output, (tuple, list)) else output
         else:
+            pooler_output = output[1] if self.rbln_config.interpolate_pos_encoding else None
+            if self.rbln_config.output_hidden_states:
+                hidden_states =output[2:] if self.rbln_config.interpolate_pos_encoding else output[1:],
+            else:
+                hidden_states = None
+
             return BaseModelOutputWithPooling(
                 last_hidden_state=output[0],
-                pooler_output=output[1] if len(output) > 2 else None,
-                hidden_states=output[2:] if len(output) > 2 else output[1:],
+                pooler_output=pooler_output,
+                hidden_states=hidden_states,
             )
