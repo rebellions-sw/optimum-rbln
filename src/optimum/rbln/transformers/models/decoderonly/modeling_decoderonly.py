@@ -632,8 +632,11 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         alloc_memory_by_key: Dict[str, int] = {
             key: sum(memory_per_node) for key, memory_per_node in alloc_memory_per_node_by_key.items()
         }
-        for key, memory_per_node in compiled_models["decoder"].get_alloc_per_node_by_key().items():
-            alloc_memory_by_key[key] += sum(memory_per_node)
+        for batch_size in rbln_config.decoder_batch_sizes:
+            for key, memory_per_node in (
+                compiled_models[f"decoder_batch_{batch_size}"].get_alloc_per_node_by_key().items()
+            ):
+                alloc_memory_by_key[key] += sum(memory_per_node)
         alloc_memory_by_key.pop("PortRecur")  # kv-cache
         kernel_size = alloc_memory_by_key.pop("Kernel")  # model weight
 
@@ -669,6 +672,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         n_model_params: Optional[int] = None,
         kernel_size: Optional[int] = None,
         buffer: Optional[int] = None,
+        num_runtimes: int = 2,
     ) -> int:
         """
         We are finding max_n_blocks(x) that satisfies the following equation:
@@ -740,7 +744,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
         if buffer is None:
             # TODO: Accurate buffer estimation
-            buffer_per_core = 2**29  # 500MB per npu
+            buffer_per_runtime_per_core = 2**28  # 256MB per runtime
+            buffer_per_core = buffer_per_runtime_per_core * num_runtimes  # 1 for prefill, 1 for decoder
             buffer = buffer_per_core * tensor_parallel_size
         available_dram -= buffer
 
@@ -858,6 +863,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 kvcache_block_size=rbln_config.kvcache_block_size,
                 nbits_per_param=16 if not rbln_config.quantization else 4,  # TODO(jongho): FIX Ad-hoc
                 n_model_params=sum(p.numel() for p in model.parameters()),
+                num_runtimes=1 + len(rbln_config.decoder_batch_sizes),
             )
 
             max_num_blocks = min(max_num_blocks, estimated_max_num_blocks)
