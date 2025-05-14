@@ -50,6 +50,9 @@ _import_structure = {
         "RBLNSD3Transformer2DModelConfig",
         "RBLNUNet2DConditionModelConfig",
         "RBLNVQModelConfig",
+        "RBLNUNetSpatioTemporalConditionModelConfig",
+        "RBLNStableVideoDiffusionPipelineConfig",
+        "RBLNAutoencoderKLTemporalDecoderConfig",
     ],
     "pipelines": [
         "RBLNKandinskyV22CombinedPipeline",
@@ -73,12 +76,16 @@ _import_structure = {
         "RBLNStableDiffusion3Pipeline",
         "RBLNStableDiffusion3Img2ImgPipeline",
         "RBLNStableDiffusion3InpaintPipeline",
+        "RBLNStableVideoDiffusionPipeline",
     ],
     "models": [
         "RBLNAutoencoderKL",
         "RBLNUNet2DConditionModel",
+        "RBLNUNetSpatioTemporalConditionModel",
         "RBLNControlNetModel",
         "RBLNSD3Transformer2DModel",
+        "RBLNAutoencoderKLTemporalDecoder",
+        "RBLNUNetSpatioTemporalConditionModel",
         "RBLNPriorTransformer",
         "RBLNVQModel",
     ],
@@ -90,6 +97,7 @@ _import_structure = {
 if TYPE_CHECKING:
     from .configurations import (
         RBLNAutoencoderKLConfig,
+        RBLNAutoencoderKLTemporalDecoderConfig,
         RBLNControlNetModelConfig,
         RBLNKandinskyV22CombinedPipelineConfig,
         RBLNKandinskyV22Img2ImgCombinedPipelineConfig,
@@ -113,16 +121,20 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLImg2ImgPipelineConfig,
         RBLNStableDiffusionXLInpaintPipelineConfig,
         RBLNStableDiffusionXLPipelineConfig,
+        RBLNStableVideoDiffusionPipelineConfig,
         RBLNUNet2DConditionModelConfig,
+        RBLNUNetSpatioTemporalConditionModelConfig,
         RBLNVQModelConfig,
     )
     from .modeling_diffusers import RBLNDiffusionMixin
     from .models import (
         RBLNAutoencoderKL,
+        RBLNAutoencoderKLTemporalDecoder,
         RBLNControlNetModel,
         RBLNPriorTransformer,
         RBLNSD3Transformer2DModel,
         RBLNUNet2DConditionModel,
+        RBLNUNetSpatioTemporalConditionModel,
         RBLNVQModel,
     )
     from .pipelines import (
@@ -147,6 +159,7 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLImg2ImgPipeline,
         RBLNStableDiffusionXLInpaintPipeline,
         RBLNStableDiffusionXLPipeline,
+        RBLNStableVideoDiffusionPipeline,
     )
 else:
     import sys
