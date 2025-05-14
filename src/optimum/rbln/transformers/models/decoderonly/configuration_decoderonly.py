@@ -18,7 +18,7 @@ import rebel
 
 from ....configuration_utils import RBLNModelConfig
 from ....utils.logging import get_logger
-from ...utils.rbln_quantization import QuantizationManager
+from ...utils.rbln_quantization import RBLNQuantizationConfig
 
 
 logger = get_logger()
@@ -77,7 +77,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
 
         self.use_attention_mask = use_attention_mask
         npu = self.npu or rebel.get_npu_name()
-        if npu == "RBLN-CA02":
+        if npu == "RBLN-CA02" or npu.startswith("RBLN-CR"):
             if self.use_attention_mask is False:
                 logger.warning("Attention mask should be used with RBLN-CA02. Setting use_attention_mask to True.")
             self.use_attention_mask = True
@@ -89,7 +89,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         self.kvcache_block_size = kvcache_block_size
         self.quantization = quantization or {}
         if self.quantization:
-            QuantizationManager.validate_quantization_config(self.quantization)
+            self.quantization = RBLNQuantizationConfig(**self.quantization)
 
         self.prefill_chunk_size = prefill_chunk_size or 128
         if self.prefill_chunk_size % 64 != 0 or self.prefill_chunk_size <= 0:
