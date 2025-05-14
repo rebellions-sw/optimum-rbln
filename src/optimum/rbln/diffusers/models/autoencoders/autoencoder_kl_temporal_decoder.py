@@ -18,6 +18,7 @@ import rebel
 import torch  # noqa: I001
 from diffusers import AutoencoderKLTemporalDecoder
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
+from diffusers.models.autoencoders.vae import DecoderOutput
 from transformers import PretrainedConfig
 
 from ....configuration_utils import RBLNCompileConfig
@@ -26,7 +27,6 @@ from ....utils.logging import get_logger
 from ...configurations import RBLNAutoencoderKLTemporalDecoderConfig
 from ...modeling_diffusers import RBLNDiffusionMixin
 from .vae import (
-    DecoderOutput,
     DiagonalGaussianDistribution,
     RBLNRuntimeVAEDecoder,
     RBLNRuntimeVAEEncoder,
