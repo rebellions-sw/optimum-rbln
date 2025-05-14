@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import inspect
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple, Union
 
 import torch
@@ -22,6 +21,7 @@ from transformers import (
     PretrainedConfig,
     PreTrainedModel,
 )
+from transformers.modeling_outputs import BaseModelOutputWithPooling
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
@@ -33,7 +33,6 @@ from ..decoderonly.decoderonly_architecture import (
 from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyOutput
 from .configuration_gemma3 import RBLNGemma3ForCausalLMConfig
 from .gemma3_architecture import Gemma3ForCausalLMWrapper
-from transformers.modeling_outputs import BaseModelOutputWithPooling
 
 
 logger = get_logger()
@@ -250,6 +249,8 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
             llm_input_ids[special_image_mask] = 0
         else:
             llm_input_ids = input_ids
+
+        breakpoint()
 
         if inputs_embeds is None:
             inputs_embeds = self.get_input_embeddings()(llm_input_ids)
