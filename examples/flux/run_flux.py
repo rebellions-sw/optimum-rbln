@@ -2,8 +2,8 @@ import os
 
 import fire
 import torch
+
 from optimum.rbln import RBLNFluxPipeline
-from diffusers import FluxPipeline
 
 
 def main(
@@ -16,27 +16,22 @@ def main(
     # image = original_model(prompt, num_inference_steps=2, max_sequence_length=512, guidance_scale=3.5, generator=torch.manual_seed(0)).images[0]
     # image.save("original.png")
     # exit()
-    
+
     if from_diffusers:
         pipe = RBLNFluxPipeline.from_pretrained(
             model_id=model_id,
             export=True,
             rbln_guidance_scale=3.5,
             rbln_batch_size=1,
-            rbln_config={
-                "transformer" : {
-                    "tensor_parallel_size": 4
-                }
-            }
+            rbln_config={"transformer": {"tensor_parallel_size": 4}},
         )
         pipe.save_pretrained(os.path.basename(model_id))
     else:
-        pipe = RBLNFluxPipeline.from_pretrained(
-            model_id=os.path.basename(model_id),
-            export=False
-        )
+        pipe = RBLNFluxPipeline.from_pretrained(model_id=os.path.basename(model_id), export=False)
 
-    image = pipe(prompt, num_inference_steps=2, max_sequence_length=512, guidance_scale=3.5, generator=torch.manual_seed(0)).images[0]
+    image = pipe(
+        prompt, num_inference_steps=2, max_sequence_length=512, guidance_scale=3.5, generator=torch.manual_seed(0)
+    ).images[0]
     image.save(f"{prompt}.png")
 
 
