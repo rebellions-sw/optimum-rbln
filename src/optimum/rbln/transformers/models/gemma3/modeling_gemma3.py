@@ -318,6 +318,80 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             )
         return embed_tokens
 
+    # @classmethod
+    # def get_input_info(
+    #     cls,
+    #     batch_size: int,
+    #     query_length: int,
+    #     use_inputs_embeds: bool,
+    #     use_attention_mask: bool,
+    #     max_seq_len: int,
+    #     kvcache_block_size: int,
+    #     kvcache_num_blocks: int,
+    #     num_key_value_heads: int,
+    #     num_hidden_layers: int,
+    #     hidden_size: int,
+    #     head_dim: int,
+    #     sliding_window: int,
+    #     sliding_window_pattern: int,
+    # ):
+    #     if use_inputs_embeds:
+    #         main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
+    #     else:
+    #         main_input = ("input_ids", [batch_size, query_length], "int64")
+
+    #     input_info = [
+    #         main_input,
+    #         (
+    #             "cache_position",
+    #             [batch_size, query_length],
+    #             "int32",
+    #         ),
+    #     ]
+
+    #     if use_attention_mask:
+    #         input_info.extend(
+    #             [
+    #                 ("attention_mask", [batch_size, 1, query_length, max_seq_len], "float32"),
+    #             ]
+    #         )
+
+    #     if query_length > 1:
+    #         input_info.extend(
+    #             [
+    #                 ("query_position", [], "int16"),
+    #             ]
+    #         )
+
+    #     # different from the RBLNDecoderOnlyModelForCausalLM
+    #     # local_kvcache_block_size = 1024
+    #     # max_local_block_cnt = model_config.sliding_window // local_kvcache_block_size + 1
+    #     max_global_block_cnt = max_seq_len // kvcache_block_size
+    #     if query_length > 1:
+    #         input_info.extend([("block_tables", [max_global_block_cnt], "int16")])
+    #         input_info.extend([("local_block_tables", [1], "int16")])
+    #     else:
+    #         input_info.extend([("block_tables", [batch_size, max_global_block_cnt], "int16")])
+    #         input_info.extend([("local_block_tables", [batch_size, 1], "int16")])
+
+    #     def is_sliding(layer_idx: int) -> bool:
+    #         return bool((layer_idx + 1) % sliding_window_pattern)
+
+    #     local_kvcache_shape = [batch_size, num_key_value_heads, sliding_window, head_dim]
+    #     global_kvcache_shape = [kvcache_num_blocks, num_key_value_heads, kvcache_block_size, head_dim]
+    #     input_info.extend(
+    #         [
+    #             (
+    #                 f"past_key_values_{i}",
+    #                 local_kvcache_shape if is_sliding(i // 2) else global_kvcache_shape,
+    #                 "float32",
+    #             )
+    #             for i in range(num_hidden_layers * 2)
+    #         ]
+    #     )
+
+    #     return input_info
+
     @classmethod
     def _update_rbln_config(
         cls,
@@ -399,6 +473,8 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             num_hidden_layers=num_hidden_layers,
             hidden_size=hidden_size,
             head_dim=head_dim,
+            # sliding_window=sliding_window,
+            # sliding_window_pattern=sliding_window_pattern,
         )
         dec_input_info = cls.get_input_info(
             batch_size=rbln_config.batch_size,
@@ -412,6 +488,8 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             num_hidden_layers=num_hidden_layers,
             hidden_size=hidden_size,
             head_dim=head_dim,
+            # sliding_window=sliding_window,
+            # sliding_window_pattern=sliding_window_pattern,
         )
 
         prefill_compile_config = RBLNCompileConfig(compiled_model_name="prefill", input_info=prefill_input_info)

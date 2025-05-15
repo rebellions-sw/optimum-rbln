@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Optional
 
 import torch
 from torch import Tensor
@@ -125,6 +126,8 @@ def paged_causal_attn_decode(
     scale: Tensor,
     block_table: Tensor,
     block_size: int,
+    is_bidirectional: bool,
+    mask: Optional[Tensor],
 ) -> Tensor:
     """Defines the computation pattern for fused attention with KV cache updates.
 
@@ -165,6 +168,8 @@ def paged_causal_attn_decode_fake(
     scale: Tensor,
     block_table: Tensor,
     block_size: int,
+    is_bidirectional: bool,
+    mask: Optional[Tensor],
 ) -> Tensor:
     return torch.empty_like(q)
 
@@ -183,6 +188,8 @@ def paged_causal_attn_prefill(
     scale: Tensor,
     block_table: Tensor,
     block_size: int,
+    is_bidirectional: bool,
+    mask: Optional[Tensor],
 ) -> Tensor:
     """Defines the computation pattern for prefill phase attention with KV cache updates.
 
@@ -222,6 +229,8 @@ def paged_causal_attn_prefill_fake(
     scale: Tensor,
     block_table: Tensor,
     block_size: int,
+    is_bidirectional: bool,
+    mask: Optional[Tensor],
 ) -> Tensor:
     return torch.empty_like(q)
 
