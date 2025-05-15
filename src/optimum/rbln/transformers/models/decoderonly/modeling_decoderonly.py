@@ -501,7 +501,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             model = AutoModelForCausalLM.from_config(config)
 
         prepare_model_for_quantization(model, model_id, kwargs.get("num_hidden_layers"))
-
         return model
 
     def __getattr__(self, __name: str) -> Any:
