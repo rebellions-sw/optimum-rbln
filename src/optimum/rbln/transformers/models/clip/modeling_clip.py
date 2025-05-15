@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import torch
 from transformers import CLIPTextConfig, CLIPTextModel, CLIPVisionConfig, CLIPVisionModel
+from transformers.modeling_outputs import BaseModelOutputWithPooling
 from transformers.models.clip.modeling_clip import CLIPTextModelOutput, CLIPVisionModelOutput
 
 from ....configuration_utils import RBLNCompileConfig
@@ -88,15 +89,29 @@ class RBLNCLIPTextModel(RBLNModel):
         if not return_dict:
             return (output,) if not isinstance(output, (tuple, list)) else output
         else:
-            return CLIPTextModelOutput(
-                text_embeds=output[0],
-                last_hidden_state=output[1],
+            return BaseModelOutputWithPooling(
+                last_hidden_state=output[0],
+                pooler_output=output[1],
                 hidden_states=output[2:],
             )
 
 
 class RBLNCLIPTextModelWithProjection(RBLNCLIPTextModel):
-    pass
+    def forward(
+        self,
+        input_ids: Optional[torch.FloatTensor] = None,
+        **kwargs,
+    ) -> Union[Tuple, CLIPTextModelOutput]:
+        output = super().forward(input_ids)
+        text_embeds = output[0]
+        last_hidden_state = output[1]
+        hidden_states = output[2:]
+
+        return CLIPTextModelOutput(
+            text_embeds=text_embeds,
+            last_hidden_state=last_hidden_state,
+            hidden_states=hidden_states,
+        )
 
 
 class _VisionEncoder(torch.nn.Module):

@@ -49,6 +49,9 @@ _import_structure = {
         "RBLNStableDiffusion3Img2ImgPipeline",
         "RBLNStableDiffusion3InpaintPipeline",
     ],
+    "flux": [
+        "RBLNFluxPipeline",
+    ],
 }
 if TYPE_CHECKING:
     from .controlnet import (
@@ -57,6 +60,9 @@ if TYPE_CHECKING:
         RBLNStableDiffusionControlNetPipeline,
         RBLNStableDiffusionXLControlNetImg2ImgPipeline,
         RBLNStableDiffusionXLControlNetPipeline,
+    )
+    from .flux import (
+        RBLNFluxPipeline,
     )
     from .kandinsky2_2 import (
         RBLNKandinskyV22CombinedPipeline,
