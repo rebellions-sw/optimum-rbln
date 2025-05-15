@@ -226,8 +226,6 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         if (input_ids is None) ^ (inputs_embeds is not None):
             raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
 
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-
         # Replace image id woth PAD if the image token if OOV, to avoid index-errors
         if input_ids is not None and self.config.image_token_index >= self.vocab_size:
             special_image_mask = input_ids == self.config.image_token_index
@@ -247,9 +245,9 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
 
             image_features = image_features.to(inputs_embeds.device, inputs_embeds.dtype)
             inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, image_features)
-            
+
         return inputs_embeds
-        
+
     def forward(
         self,
         input_ids: torch.LongTensor = None,
@@ -258,15 +256,15 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         cache_position: Optional[torch.LongTensor] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
         generate_idx: Optional[torch.Tensor] = None,
+        token_type_ids: Optional[torch.Tensor] = None,
         **lm_kwargs,
     ) -> Union[Tuple, RBLNDecoderOnlyOutput]:
-
         # prefill
         if cache_position is None:
             logits = []
             inputs_embeds = self._preprocess_prefill(input_ids, inputs_embeds, pixel_values)
             batch_size = inputs_embeds.shape[0]
-            
+
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
                 logit = self.language_model.prefill_decoder(
@@ -282,7 +280,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         else:
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
             batch_size = inputs.shape[0]
-            
+
             logits = self.language_model.decoders[batch_size](
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
@@ -400,23 +398,26 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             hidden_size=hidden_size,
             head_dim=head_dim,
         )
-        dec_input_info = cls.get_input_info(
-            batch_size=rbln_config.batch_size,
-            query_length=1,
-            use_inputs_embeds=rbln_config.use_inputs_embeds,
-            use_attention_mask=rbln_config.use_attention_mask,
-            max_seq_len=rbln_config.max_seq_len,
-            kvcache_block_size=rbln_config.kvcache_block_size,
-            kvcache_num_blocks=rbln_config.kvcache_num_blocks,
-            num_key_value_heads=num_key_value_heads,
-            num_hidden_layers=num_hidden_layers,
-            hidden_size=hidden_size,
-            head_dim=head_dim,
-        )
-
         prefill_compile_config = RBLNCompileConfig(compiled_model_name="prefill", input_info=prefill_input_info)
-        dec_compile_config = RBLNCompileConfig(compiled_model_name="decoder", input_info=dec_input_info)
 
-        rbln_config.set_compile_cfgs([prefill_compile_config, dec_compile_config])
+        dec_compile_configs = []
+        for batch_size in rbln_config.decoder_batch_sizes:
+            dec_input_info = cls.get_input_info(
+                batch_size=batch_size,
+                query_length=1,
+                use_inputs_embeds=rbln_config.use_inputs_embeds,
+                use_attention_mask=rbln_config.use_attention_mask,
+                max_seq_len=rbln_config.max_seq_len,
+                kvcache_block_size=rbln_config.kvcache_block_size,
+                kvcache_num_blocks=rbln_config.kvcache_num_blocks,
+                num_key_value_heads=num_key_value_heads,
+                num_hidden_layers=num_hidden_layers,
+                hidden_size=hidden_size,
+                head_dim=head_dim,
+            )
+            dec_compile_configs.append(
+                RBLNCompileConfig(compiled_model_name=f"decoder_batch_{batch_size}", input_info=dec_input_info)
+            )
+        rbln_config.set_compile_cfgs([prefill_compile_config, *dec_compile_configs])
 
         return rbln_config
