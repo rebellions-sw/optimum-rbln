@@ -139,6 +139,8 @@ _import_structure = {
         "RBLNKandinskyV22PipelineConfig",
         "RBLNKandinskyV22PriorPipeline",
         "RBLNKandinskyV22PriorPipelineConfig",
+        "RBLNFluxTransformer2DModelConfig",
+        "RBLNFluxPipelineConfig",
         "RBLNMultiControlNetModel",
         "RBLNPriorTransformer",
         "RBLNPriorTransformerConfig",
@@ -186,13 +188,12 @@ if TYPE_CHECKING:
         RBLNAutoencoderKL,
         RBLNAutoencoderKLConfig,
         RBLNControlNetModel,
-<<<<<<< HEAD
-        RBLNFluxPipeline,
-        RBLNFluxTransformer2DModel,
-=======
         RBLNControlNetModelConfig,
->>>>>>> 22ffe70d3c815b75f24ad678597fc91f4eed6bdf
         RBLNDiffusionMixin,
+        RBLNFluxPipeline,
+        RBLNFluxPipelineConfig,
+        RBLNFluxTransformer2DModel,
+        RBLNFluxTransformer2DModelConfig,
         RBLNKandinskyV22CombinedPipeline,
         RBLNKandinskyV22CombinedPipelineConfig,
         RBLNKandinskyV22Img2ImgCombinedPipeline,

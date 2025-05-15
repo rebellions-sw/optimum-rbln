@@ -1,26 +1,34 @@
-from typing import Any, Dict, Union, Tuple
-import torch
-import numpy as np
+# Copyright 2025 Rebellions Inc. All rights reserved.
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from diffusers import FluxPipeline
-from diffusers.models.embeddings import FluxPosEmbed
-from diffusers.models import AutoencoderKL, FluxTransformer2DModel
-from transformers import T5EncoderModel, CLIPTextModel
-from diffusers.schedulers import FlowMatchEulerDiscreteScheduler
-from transformers import CLIPTokenizer, T5TokenizerFast
-from diffusers.image_processor import VaeImageProcessor
+
+from ...configurations import RBLNFluxPipelineConfig
 from ...modeling_diffusers import RBLNDiffusionMixin
 
 
 class RBLNFluxPipeline(RBLNDiffusionMixin, FluxPipeline):
     original_class = FluxPipeline
+    _rbln_config_class = RBLNFluxPipelineConfig
     _submodules = ["transformer"]
     # _submodules = ["text_encoder", "text_encoder_2"] -> verification done
     # _submodules = ["text_encoder_2"]
     # _submodules = ["vae"] -> verification done
-    
+
     # text_encoder_2 -> t5 encoder model
     # text_encoder -> clip text model
-    
+
     # for sin, cos into relay graph
     # def __init__(
     #     self,
@@ -41,8 +49,7 @@ class RBLNFluxPipeline(RBLNDiffusionMixin, FluxPipeline):
     #         tokenizer_2=tokenizer_2,
     #         transformer=transformer,
     #     )
-        
-        
+
     #     # if transformer is not None:
     #     #     axes_dims_rope = transformer.config.axes_dims_rope
     #     #     transformer.pos_embed = CustomFluxPosEmbed(theta=10000, axes_dim=axes_dims_rope)

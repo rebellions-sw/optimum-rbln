@@ -13,5 +13,5 @@
 # limitations under the License.
 
 from .prior_transformer import RBLNPriorTransformer
-from .transformer_sd3 import RBLNSD3Transformer2DModel
 from .transformer_flux import RBLNFluxTransformer2DModel
+from .transformer_sd3 import RBLNSD3Transformer2DModel

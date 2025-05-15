@@ -21,10 +21,13 @@ def main(
         pipe = RBLNFluxPipeline.from_pretrained(
             model_id=model_id,
             export=True,
-            rbln_max_sequence_length=512,
             rbln_guidance_scale=3.5,
             rbln_batch_size=1,
-            rbln_tensor_parallel_size=4,
+            rbln_config={
+                "transformer" : {
+                    "tensor_parallel_size": 4
+                }
+            }
         )
         pipe.save_pretrained(os.path.basename(model_id))
     else:

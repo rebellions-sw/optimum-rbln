@@ -50,6 +50,8 @@ _import_structure = {
         "RBLNSD3Transformer2DModelConfig",
         "RBLNUNet2DConditionModelConfig",
         "RBLNVQModelConfig",
+        "RBLNFluxTransformer2DModelConfig",
+        "RBLNFluxPipelineConfig",
     ],
     "pipelines": [
         "RBLNFluxPipeline",
@@ -93,6 +95,8 @@ if TYPE_CHECKING:
     from .configurations import (
         RBLNAutoencoderKLConfig,
         RBLNControlNetModelConfig,
+        RBLNFluxPipelineConfig,
+        RBLNFluxTransformer2DModelConfig,
         RBLNKandinskyV22CombinedPipelineConfig,
         RBLNKandinskyV22Img2ImgCombinedPipelineConfig,
         RBLNKandinskyV22Img2ImgPipelineConfig,
