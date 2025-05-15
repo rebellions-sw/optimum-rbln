@@ -48,6 +48,7 @@ def main(
     compile: bool = False,
     diff: bool = False,
     batch_size: int = 1,
+    max_seq_len: Optional[int] = 32768,
     kv_partition_len: Optional[int] = None,
     tensor_parallel_size: int = 4,
     n_layers: Optional[int] = None,
@@ -59,14 +60,16 @@ def main(
     if n_layers is not None:
         hf_config = Gemma3Config.from_pretrained(model_id)
         text_config = json.loads(hf_config.text_config.to_json_string())
+        vision_config = json.loads(hf_config.vision_config.to_json_string())
         text_config["num_hidden_layers"] = n_layers
-        hf_kwargs = {"text_config": text_config}
+        vision_config["num_hidden_layers"] = n_layers
+        hf_kwargs = {"text_config": text_config, "vision_config": vision_config}
 
     if compile:
         rbln_config = {
             "language_model": {
                 "use_attention_mask": True,
-                "max_seq_len": 32768,
+                "max_seq_len": max_seq_len,
                 "batch_size": batch_size,
                 "tensor_parallel_size": tensor_parallel_size,
                 "use_inputs_embeds": True,
@@ -79,7 +82,7 @@ def main(
             model_id,
             export=True,
             rbln_config=rbln_config,
-            # **hf_kwargs,
+            **hf_kwargs,
             # config=hf_config,
             # TODO RBLNGemma3ForConditionalGeneration의 batch_size가 CausalLM으로 넘겨받는 식이 되어야하는가? X
         )
