@@ -90,8 +90,8 @@ class RBLNCLIPTextModel(RBLNModel):
             return (output,) if not isinstance(output, (tuple, list)) else output
         else:
             return BaseModelOutputWithPooling(
-                text_embeds=output[0],
-                last_hidden_state=output[1],
+                last_hidden_state=output[0],
+                pooler_output=output[1],
                 hidden_states=output[2:],
             )
 
