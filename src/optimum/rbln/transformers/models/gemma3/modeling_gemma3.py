@@ -216,18 +216,13 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         image_features = self.multi_modal_projector(vision_outputs)
         return image_features
 
-    def forward(
+    def _preprocess_prefill(
         self,
-        input_ids: torch.LongTensor = None,
-        pixel_values: torch.FloatTensor = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        token_type_ids: Optional[torch.LongTensor] = None,
-        cache_position: Optional[torch.LongTensor] = None,
+        input_ids: Optional[torch.LongTensor] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
-        return_dict: Optional[bool] = None,
-        generate_idx: Optional[torch.Tensor] = None,
-        **lm_kwargs,
-    ) -> Union[Tuple, RBLNDecoderOnlyOutput]:
+        pixel_values: Optional[torch.FloatTensor] = None,
+        **kwargs,
+    ):
         if (input_ids is None) ^ (inputs_embeds is not None):
             raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
 
@@ -252,17 +247,52 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
 
             image_features = image_features.to(inputs_embeds.device, inputs_embeds.dtype)
             inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, image_features)
+            
+        return inputs_embeds
+        
+    def forward(
+        self,
+        input_ids: torch.LongTensor = None,
+        pixel_values: torch.FloatTensor = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        cache_position: Optional[torch.LongTensor] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        generate_idx: Optional[torch.Tensor] = None,
+        **lm_kwargs,
+    ) -> Union[Tuple, RBLNDecoderOnlyOutput]:
 
-        outputs = self.language_model(
-            inputs_embeds=inputs_embeds,
-            attention_mask=attention_mask,
-            return_dict=return_dict,
-            cache_position=cache_position,
-            token_type_ids=token_type_ids,  # TODO: take care of this in image token case
+        # prefill
+        if cache_position is None:
+            logits = []
+            inputs_embeds = self._preprocess_prefill(input_ids, inputs_embeds, pixel_values)
+            batch_size = inputs_embeds.shape[0]
+            
+            for b_idx in range(batch_size):
+                cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
+                logit = self.language_model.prefill_decoder(
+                    inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
+                    attention_mask=attention_mask[b_idx],
+                    cache_position=cache_position,
+                    batch_idx=b_idx,
+                )
+                logits.append(logit)
+
+            logits = torch.cat(logits, dim=0)
+        # decoder
+        else:
+            inputs = inputs_embeds if inputs_embeds is not None else input_ids
+            batch_size = inputs.shape[0]
+            
+            logits = self.language_model.decoders[batch_size](
+                input_ids=input_ids,
+                inputs_embeds=inputs_embeds,
+                cache_position=cache_position,
+            )
+
+        return RBLNDecoderOnlyOutput(
+            logits=logits,
             generate_idx=generate_idx,
         )
-
-        return outputs
 
 
 class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
@@ -287,80 +317,6 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
                 embed_scale=self.config.hidden_size**0.5,
             )
         return embed_tokens
-
-    # @classmethod
-    # def get_input_info(
-    #     cls,
-    #     batch_size: int,
-    #     query_length: int,
-    #     use_inputs_embeds: bool,
-    #     use_attention_mask: bool,
-    #     max_seq_len: int,
-    #     kvcache_block_size: int,
-    #     kvcache_num_blocks: int,
-    #     num_key_value_heads: int,
-    #     num_hidden_layers: int,
-    #     hidden_size: int,
-    #     head_dim: int,
-    #     sliding_window: int,
-    #     sliding_window_pattern: int,
-    # ):
-    #     if use_inputs_embeds:
-    #         main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
-    #     else:
-    #         main_input = ("input_ids", [batch_size, query_length], "int64")
-
-    #     input_info = [
-    #         main_input,
-    #         (
-    #             "cache_position",
-    #             [batch_size, query_length],
-    #             "int32",
-    #         ),
-    #     ]
-
-    #     if use_attention_mask:
-    #         input_info.extend(
-    #             [
-    #                 ("attention_mask", [batch_size, 1, query_length, max_seq_len], "float32"),
-    #             ]
-    #         )
-
-    #     if query_length > 1:
-    #         input_info.extend(
-    #             [
-    #                 ("query_position", [], "int16"),
-    #             ]
-    #         )
-
-    #     # different from the RBLNDecoderOnlyModelForCausalLM
-    #     # local_kvcache_block_size = 1024
-    #     # max_local_block_cnt = model_config.sliding_window // local_kvcache_block_size + 1
-    #     max_global_block_cnt = max_seq_len // kvcache_block_size
-    #     if query_length > 1:
-    #         input_info.extend([("block_tables", [max_global_block_cnt], "int16")])
-    #         input_info.extend([("local_block_tables", [1], "int16")])
-    #     else:
-    #         input_info.extend([("block_tables", [batch_size, max_global_block_cnt], "int16")])
-    #         input_info.extend([("local_block_tables", [batch_size, 1], "int16")])
-
-    #     def is_sliding(layer_idx: int) -> bool:
-    #         return bool((layer_idx + 1) % sliding_window_pattern)
-
-    #     local_kvcache_shape = [batch_size, num_key_value_heads, sliding_window, head_dim]
-    #     global_kvcache_shape = [kvcache_num_blocks, num_key_value_heads, kvcache_block_size, head_dim]
-    #     input_info.extend(
-    #         [
-    #             (
-    #                 f"past_key_values_{i}",
-    #                 local_kvcache_shape if is_sliding(i // 2) else global_kvcache_shape,
-    #                 "float32",
-    #             )
-    #             for i in range(num_hidden_layers * 2)
-    #         ]
-    #     )
-
-    #     return input_info
 
     @classmethod
     def _update_rbln_config(
@@ -443,8 +399,6 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             num_hidden_layers=num_hidden_layers,
             hidden_size=hidden_size,
             head_dim=head_dim,
-            # sliding_window=sliding_window,
-            # sliding_window_pattern=sliding_window_pattern,
         )
         dec_input_info = cls.get_input_info(
             batch_size=rbln_config.batch_size,
@@ -458,8 +412,6 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             num_hidden_layers=num_hidden_layers,
             hidden_size=hidden_size,
             head_dim=head_dim,
-            # sliding_window=sliding_window,
-            # sliding_window_pattern=sliding_window_pattern,
         )
 
         prefill_compile_config = RBLNCompileConfig(compiled_model_name="prefill", input_info=prefill_input_info)
