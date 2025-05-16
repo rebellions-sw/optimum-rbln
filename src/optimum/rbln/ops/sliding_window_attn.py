@@ -49,7 +49,7 @@ def sliding_window_attn_prefill(
     - vcache: [batch_size, n_heads, 1, max_seq_len, head_dim] - Value cache
     - batch_idx: [] -- Batch index for cache access
     - cache_seq_len: [] - the sequence length of the cached states that were seen by the model
-    - cache_offset: [] - The valid length in the combined sequence of the KV cache and the current projected key states. 
+    - cache_offset: [] - The valid length in the combined sequence of the KV cache and the current projected key states.
     - scale: [] - Attention scale factor
 
     Returns:
@@ -88,6 +88,7 @@ def sliding_window_attn_decode(
     scale: Tensor,
 ) -> Tensor:
     return torch.empty_like(q)
+
 
 @sliding_window_attn_decode.register_fake
 def sliding_window_attn_decode_fake(

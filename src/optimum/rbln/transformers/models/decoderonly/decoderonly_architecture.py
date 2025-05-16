@@ -1120,13 +1120,12 @@ class SlidingWindowAttentionOp(AttentionOp):
         query_state: torch.Tensor,
         key_state: torch.Tensor,
         value_state: torch.Tensor,
-        attn_mask: torch.Tensor,
         past_key_state: torch.Tensor,
         past_value_state: torch.Tensor,
-        seq_position: torch.Tensor,
+        batch_position: torch.Tensor,
+        cache_seq_len: torch.Tensor,
+        cache_offset: torch.Tensor,
         scale: torch.Tensor,
-        block_tables: torch.Tensor,
-        block_size: int,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
         key_state = key_state.unsqueeze(2)
@@ -1138,7 +1137,7 @@ class SlidingWindowAttentionOp(AttentionOp):
             batch_size = key_state.shape[0]
         else:
             batch_size = 1
-
+            
         query_state = query_state.view(
             batch_size,
             self.num_key_value_heads,
@@ -1148,61 +1147,30 @@ class SlidingWindowAttentionOp(AttentionOp):
         )
 
         if self.phase == "decode":
-            if self.use_attention_mask:
-                attn_output = torch.ops.rbln_custom_ops.paged_attn_decode(
-                    q=query_state,
-                    k=key_state,
-                    v=value_state,
-                    mask=attn_mask,
-                    kcache=past_key_state.unsqueeze(2),
-                    vcache=past_value_state.unsqueeze(2),
-                    seq=seq_position,
-                    scale=scale,
-                    block_table=block_tables,
-                    block_size=block_size,
-                    sliding_window_size=block_size,
-                )
-            else:
-                attn_output = torch.ops.rbln_custom_ops.paged_causal_attn_decode(
-                    q=query_state,
-                    k=key_state,
-                    v=value_state,
-                    kcache=past_key_state.unsqueeze(2),
-                    vcache=past_value_state.unsqueeze(2),
-                    seq=seq_position,
-                    scale=scale,
-                    block_table=block_tables,
-                    block_size=block_size,
-                    sliding_window_size=block_size,
-                )
+            attn_output = torch.ops.rbln_custom_ops.sliding_window_attn_decode(
+                q=query_state,
+                k=key_state,
+                v=value_state,
+                mask=attn_mask,
+                kcache=past_key_state.unsqueeze(2),
+                vcache=past_value_state.unsqueeze(2),
+                cache_seq_len=cache_seq_len,
+                cache_offset=cache_offset,
+                scale=scale,
+            )
         else:
-            if self.use_attention_mask:
-                attn_output = torch.ops.rbln_custom_ops.paged_attn_prefill(
-                    q=query_state,
-                    k=key_state,
-                    v=value_state,
-                    mask=attn_mask,
-                    kcache=past_key_state.unsqueeze(2),
-                    vcache=past_value_state.unsqueeze(2),
-                    seq=seq_position,
-                    scale=scale,
-                    block_table=block_tables,
-                    block_size=block_size,
-                    sliding_window_size=block_size,
-                )
-            else:
-                attn_output = torch.ops.rbln_custom_ops.paged_causal_attn_prefill(
-                    q=query_state,
-                    k=key_state,
-                    v=value_state,
-                    kcache=past_key_state.unsqueeze(2),
-                    vcache=past_value_state.unsqueeze(2),
-                    seq=seq_position,
-                    scale=scale,
-                    block_table=block_tables,
-                    block_size=block_size,
-                    sliding_window_size=block_size,
-                )
+            attn_output = torch.ops.rbln_custom_ops.sliding_window_attn_prefill(
+                q=query_state,
+                k=key_state,
+                v=value_state,
+                mask=attn_mask,
+                kcache=past_key_state.unsqueeze(2),
+                vcache=past_value_state.unsqueeze(2),
+                batch_idx=batch_position,
+                cache_seq_len=cache_seq_len,
+                cache_offset=cache_offset,
+                scale=scale,
+            )
 
         # reshape for removing repeat_kv
         attn_output = attn_output.view(batch_size, self.num_heads, -1, self.head_dim)
