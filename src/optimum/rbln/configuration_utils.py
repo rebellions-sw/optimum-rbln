@@ -145,13 +145,13 @@ RUNTIME_KEYWORDS = ["create_runtimes", "optimize_host_memory", "device", "device
 CONFIG_MAPPING: Dict[str, Type["RBLNModelConfig"]] = {}
 
 
-def get_rbln_config_class(cls_name: str) -> Type["RBLNModelConfig"]:
-    cls = getattr(importlib.import_module("optimum.rbln"), cls_name, None)
+def get_rbln_config_class(rbln_config_class_name: str) -> Type["RBLNModelConfig"]:
+    cls = getattr(importlib.import_module("optimum.rbln"), rbln_config_class_name, None)
     if cls is None:
-        if cls_name in CONFIG_MAPPING:
-            cls = CONFIG_MAPPING[cls_name]
+        if rbln_config_class_name in CONFIG_MAPPING:
+            cls = CONFIG_MAPPING[rbln_config_class_name]
         else:
-            raise ValueError(f"Configuration for {cls_name} not found.")
+            raise ValueError(f"Configuration for {rbln_config_class_name} not found.")
     return cls
 
 

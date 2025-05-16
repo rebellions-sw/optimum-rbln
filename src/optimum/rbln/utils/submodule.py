@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import importlib
 from typing import TYPE_CHECKING, Any, Dict, List, Type
 
 from ..configuration_utils import RBLNModelConfig
@@ -87,10 +86,7 @@ class SubModulesMixin:
             submodule_rbln_config = getattr(rbln_config, submodule_name)
 
             # RBLNModelConfig -> RBLNModel
-            submodule_cls: "RBLNBaseModel" = getattr(
-                importlib.import_module("optimum.rbln"), submodule_rbln_config.rbln_model_cls_name
-            )
-
+            submodule_cls = get_rbln_model_class(submodule_rbln_config.rbln_model_cls_name)
             rbln_submodule = submodule_cls._from_pretrained(
                 model_id=model_save_dir,
                 config=None,
