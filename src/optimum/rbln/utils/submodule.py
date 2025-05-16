@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import importlib
 from typing import TYPE_CHECKING, Any, Dict, List, Type
 
 from ..configuration_utils import RBLNModelConfig
+from ..utils.model_utils import get_rbln_model_class
 
 
 if TYPE_CHECKING:
@@ -54,7 +54,7 @@ class SubModulesMixin:
                 torch_submodule: PreTrainedModel = getattr(model, submodule_name)
 
             cls_name = torch_submodule.__class__.__name__
-            submodule_cls: Type["RBLNBaseModel"] = getattr(importlib.import_module("optimum.rbln"), f"RBLN{cls_name}")
+            submodule_cls: Type["RBLNBaseModel"] = get_rbln_model_class(f"RBLN{cls_name}")
             submodule_rbln_config = getattr(rbln_config, submodule_name) or {}
 
             if isinstance(submodule_rbln_config, dict):
@@ -86,10 +86,7 @@ class SubModulesMixin:
             submodule_rbln_config = getattr(rbln_config, submodule_name)
 
             # RBLNModelConfig -> RBLNModel
-            submodule_cls: "RBLNBaseModel" = getattr(
-                importlib.import_module("optimum.rbln"), submodule_rbln_config.rbln_model_cls_name
-            )
-
+            submodule_cls = get_rbln_model_class(submodule_rbln_config.rbln_model_cls_name)
             rbln_submodule = submodule_cls._from_pretrained(
                 model_id=model_save_dir,
                 config=None,
