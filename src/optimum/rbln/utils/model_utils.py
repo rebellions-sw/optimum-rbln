@@ -59,5 +59,5 @@ def get_rbln_model_class(cls_name: str) -> Type["RBLNBaseModel"]:
         if cls_name in MODEL_MAPPING:
             cls = MODEL_MAPPING[cls_name]
         else:
-            raise ValueError(f"Model for {cls_name} not found.")
+            raise AttributeError(f"Model for {cls_name} not found.")
     return cls
