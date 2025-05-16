@@ -19,7 +19,6 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
-import rebel
 import torch
 
 from .__version__ import __version__
@@ -559,7 +558,7 @@ class RBLNModelConfig:
 
         Args:
             cls_name (Optional[str]): The class name of the configuration. Defaults to the current class name.
-            create_runtimes (Optional[bool]): Whether to create RBLN runtimes. Defaults to True if an NPU is available.
+            create_runtimes (Optional[bool]): Whether to create RBLN runtimes. Defaults to True.
             optimize_host_memory (Optional[bool]): Whether to optimize host memory usage. Defaults to True.
             device (Optional[Union[int, List[int]]]): The device(s) to load the model onto. Can be a single device ID or a list.
             device_map (Optional[Dict[str, Union[int, List[int]]]]): Mapping from compiled model names to device IDs.
@@ -782,7 +781,7 @@ class RBLNModelConfig:
         if context is not None:
             return context
         elif self._runtime_options["create_runtimes"] is None:
-            return rebel.npu_is_available()
+            return True
         return self._runtime_options["create_runtimes"]
 
     @create_runtimes.setter
