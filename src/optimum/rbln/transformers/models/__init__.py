@@ -46,6 +46,12 @@ _import_structure = {
         "RBLNBertForMaskedLM",
         "RBLNBertForMaskedLMConfig",
     ],
+    "blip_2": [
+        "RBLNBlip2VisionModelConfig",
+        "RBLNBlip2VisionModel",
+        "RBLNBlip2ForConditionalGeneration",
+        "RBLNBlip2ForConditionalGenerationConfig",
+    ],
     "clip": [
         "RBLNCLIPTextModel",
         "RBLNCLIPTextModelConfig",
@@ -129,6 +135,12 @@ if TYPE_CHECKING:
         RBLNBertForQuestionAnsweringConfig,
         RBLNBertModel,
         RBLNBertModelConfig,
+    )
+    from .blip_2 import (
+        RBLNBlip2ForConditionalGeneration,
+        RBLNBlip2ForConditionalGenerationConfig,
+        RBLNBlip2VisionModel,
+        RBLNBlip2VisionModelConfig,
     )
     from .clip import (
         RBLNCLIPTextModel,
