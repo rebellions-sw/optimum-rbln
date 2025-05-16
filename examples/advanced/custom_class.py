@@ -32,12 +32,6 @@ import torch
 from transformers import ResNetModel  # noqa: F401
 from transformers.models.resnet.modeling_resnet import BaseModelOutputWithPoolingAndNoAttention
 
-# Import necessary components from optimum-rbln
-# - RBLNAutoConfig: Auto configuration class for RBLN models
-# - RBLNAutoModel: Auto model class for RBLN models
-# - RBLNCompileConfig: Configuration for RBLN compilation
-# - RBLNModel: Base class for all RBLN models
-# - RBLNModelConfig: Base configuration class for RBLN models
 from optimum.rbln import RBLNAutoConfig, RBLNAutoModel, RBLNCompileConfig, RBLNModel, RBLNModelConfig
 
 
@@ -133,22 +127,7 @@ class RBLNResNetModel(RBLNModel):
 # -----------------------------------------------------------------------
 # Custom configuration class must follow the pattern: RBLN<OriginalModelName>Config
 class RBLNResNetModelConfig(RBLNModelConfig):
-    """
-    Configuration class for RBLNResNetModel.
-
-    The naming convention is important: RBLN<OriginalModelName>Config
-    This class extends RBLNModelConfig and adds ResNet-specific configuration options.
-    """
-
     def __init__(self, batch_size: int = None, image_size: Optional[Tuple[int, int]] = None, **kwargs):
-        """
-        Initialize RBLNResNetModelConfig.
-
-        Args:
-            batch_size: Batch size for inference (default: 1)
-            image_size: Tuple of (height, width) for input images (default: (224, 224))
-            **kwargs: Additional configuration parameters passed to the parent class
-        """
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
         self.image_size = image_size or (224, 224)
@@ -166,7 +145,6 @@ RBLNAutoConfig.register(RBLNResNetModelConfig)
 
 # STEP 4: Usage Example - Creating and using the custom RBLN model
 # ----------------------------------------------------------------
-
 # Initialize the model from a pretrained HuggingFace model
 # The 'export=True' parameter triggers the model compilation process
 # rbln_image_size and rbln_batch_size are passed to the custom configuration
