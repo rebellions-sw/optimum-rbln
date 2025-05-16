@@ -39,20 +39,22 @@ if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig, PreTrainedModel
 
 
+# --------------------------------------------------------
 # STEP 1: Create a custom model class that extends RBLNModel
-# ---------------------------------------------------------
-# Custom RBLNModel class must follow the naming pattern: RBLN<OriginalModelName>
-# In this case, the original model is ResNetModel from transformers
+# --------------------------------------------------------
+# A custom RBLN model class must:
+# - Follow the naming pattern: RBLN<OriginalModelName>
+# - Implement the _update_rbln_config method (required)
+# - Define a proper forward method matching the original model's inputs/outputs
+#
+# The _update_rbln_config method is critical - it sets up the input tensor
+# specifications and other compilation parameters needed for the RBLN compiler.
+#
+# For our ResNet example, we need to:
+# 1. Specify the input tensor shape for images (batch_size, channels, height, width)
+# 2. Set the proper configuration options
+# 3. Return the updated RBLN configuration
 class RBLNResNetModel(RBLNModel):
-    """
-    Custom RBLN implementation for ResNet model.
-
-    The naming convention is important: RBLN<OriginalModelName> where OriginalModelName
-    is the name of the model from transformers or diffusers library.
-
-    This class extends RBLNModel, which is the base class for all RBLN models.
-    """
-
     @classmethod
     def _update_rbln_config(
         cls,
@@ -61,22 +63,7 @@ class RBLNResNetModel(RBLNModel):
         model_config: Optional["PretrainedConfig"] = None,
         rbln_config: Optional["RBLNResNetModelConfig"] = None,
     ) -> "RBLNResNetModelConfig":
-        """
-        Updates the RBLN configuration with model-specific settings.
-
-        This method is required and is called during model initialization to properly configure
-        the RBLN model for compilation.
-
-        Args:
-            preprocessors: Preprocessors from transformers (feature extractor, processor, tokenizer)
-            model: The original HuggingFace model
-            model_config: Configuration of the original model
-            rbln_config: RBLN-specific configuration
-
-        Returns:
-            Updated RBLN configuration
-        """
-        # Set image_size if not provided, obtaining it from the model_config
+        # Set image_size if not provided
         if rbln_config.image_size is None:
             if rbln_config.image_size is None:
                 rbln_config.image_size = model_config.image_size
@@ -84,9 +71,8 @@ class RBLNResNetModel(RBLNModel):
             if rbln_config.image_size is None:
                 raise ValueError("`image_size` should be specified!")
 
-        # Define the input information for the RBLN compiler
-        # For ResNet, the input is 'pixel_values' with shape [batch_size, 3, height, width]
-        # The '3' represents RGB channels
+        # Define input tensor specification for the compiler
+        # Format: (tensor_name, tensor_shape, dtype)
         input_info = [
             (
                 "pixel_values",
@@ -95,37 +81,36 @@ class RBLNResNetModel(RBLNModel):
             )
         ]
 
-        # Set the compilation configuration with the defined input info
+        # Configure compilation settings
         rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
         return rbln_config
 
     def forward(self, pixel_values, return_dict: Optional[bool] = None, **kwargs):
-        """
-        Args:
-            pixel_values: Input image tensor of shape [batch_size, 3, height, width]
-            return_dict: Whether to return output as a dictionary
-
-        Returns:
-            Either the raw output tensors or a BaseModelOutputWithPoolingAndNoAttention object
-        """
+        # Determine output format
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        # Execute the compiled RBLN model
+        # Run the compiled model
         # self.model is a list of rebel.Runtime objects
         # See https://docs.rbln.ai/software/api/python/python_api.html#rebel.rebel_runtime.Runtime for more details
         output = self.model[0](pixel_values)
 
-        # Format the output according to the return_dict flag
-        # This ensures compatibility with the original model's output format
+        # Format output based on return_dict parameter
         if not return_dict:
             return output
         else:
             return BaseModelOutputWithPoolingAndNoAttention(last_hidden_state=output[0], pooler_output=output[1])
 
 
+# ----------------------------------------------------------------
 # STEP 2: Create a custom configuration class that extends RBLNModelConfig
-# -----------------------------------------------------------------------
-# Custom configuration class must follow the pattern: RBLN<OriginalModelName>Config
+# ----------------------------------------------------------------
+# The configuration class must:
+# - Follow the naming pattern: RBLN<OriginalModelName>Config
+# - Define model-specific parameters needed for compilation
+#
+# For ResNet, we need:
+# - batch_size: Batch size for inference
+# - image_size: Input image dimensions (height, width)
 class RBLNResNetModelConfig(RBLNModelConfig):
     def __init__(self, batch_size: int = None, image_size: Optional[Tuple[int, int]] = None, **kwargs):
         super().__init__(**kwargs)
@@ -133,16 +118,18 @@ class RBLNResNetModelConfig(RBLNModelConfig):
         self.image_size = image_size or (224, 224)
 
 
+# ----------------------------------------------------------------
 # STEP 3: Register both classes with the auto registration system
-# --------------------------------------------------------------
-# This registration is crucial for the following reasons:
-# 1. It enables the RBLN auto-discovery system to find and instantiate our custom classes
-# 2. It allows using RBLNAutoModel.from_pretrained() with our custom model type
-# 3. It connects our configuration class to the model class in the internal mappings
+# ----------------------------------------------------------------
+# Registration is essential for the RBLN framework to:
+# 1. Discover your custom classes when needed
+# 2. Enable using RBLNAutoModel.from_pretrained() with your model type
+# 3. Connect your configuration class to the model class in the framework
 RBLNAutoModel.register(RBLNResNetModel)
 RBLNAutoConfig.register(RBLNResNetModelConfig)
 
 
+# ----------------------------------------------------------------
 # STEP 4: Usage Example - Creating and using the custom RBLN model
 # ----------------------------------------------------------------
 # Initialize the model from a pretrained HuggingFace model
@@ -167,8 +154,9 @@ for key, value in output.items():
     print(key, value)
 
 
+# ----------------------------------------------------------------
 # STEP 5: Loading a saved RBLN model
-# ----------------------------------
+# ----------------------------------------------------------------
 # Load the model we just saved - no need to recompile
 my_model_reloaded = RBLNResNetModel.from_pretrained("my_resnet_model_saved")
 print(my_model_reloaded)
