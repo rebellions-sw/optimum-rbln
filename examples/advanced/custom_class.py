@@ -86,15 +86,12 @@ class RBLNResNetModel(RBLNModel):
         return rbln_config
 
     def forward(self, pixel_values, return_dict: Optional[bool] = None, **kwargs):
-        # Determine output format
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        # Run the compiled model
         # self.model is a list of rebel.Runtime objects
         # See https://docs.rbln.ai/software/api/python/python_api.html#rebel.rebel_runtime.Runtime for more details
         output = self.model[0](pixel_values)
 
-        # Format output based on return_dict parameter
         if not return_dict:
             return output
         else:
