@@ -14,7 +14,9 @@
 import inspect
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple, Union
 
+import rebel
 import torch
+from rebel.compile_context import CompileContext
 from transformers import (
     AutoModelForVision2Seq,
     Gemma3ForConditionalGeneration,
@@ -32,6 +34,7 @@ from ..decoderonly.decoderonly_architecture import (
     set_default_values,
     validate_attention_method,
 )
+from ...utils.rbln_quantization import QuantizationManager
 from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyOutput
 from .configuration_gemma3 import RBLNGemma3ForCausalLMConfig
 from .gemma3_architecture import Gemma3ForCausalLMWrapper
@@ -180,7 +183,6 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         )
 
         if is_prefill_phase:
-            # model_inputs["generate_idx"] = torch.zeros((batch_size, 1), dtype=torch.int32)
             model_inputs.update(
                 {
                     "pixel_values": pixel_values,
@@ -338,12 +340,13 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         else:
             main_input = ("input_ids", [batch_size, query_length], "int64")
 
+        # FIXME: thkim, change the name 'use_attention_mask' as 'attention_mask_type': Enum['2d','4d','None']
         input_info = [
             main_input,
             (
                 "attention_mask",
-                [batch_size, max_seq_len],
-                "int32",
+                [batch_size, 1, query_length, max_seq_len] if use_attention_mask else [batch_size, max_seq_len],
+                "float32",
             ),
             (
                 "cache_position",
@@ -357,28 +360,21 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             ),
         ]
 
-        if use_attention_mask:
-            input_info.extend(
-                [
-                    ("attention_mask", [batch_size, 1, query_length, max_seq_len], "float32"),
-                ]
-            )
-
         if query_length > 1:
             input_info.extend(
                 [
                     ("query_position", [], "int16"),
-                    ("batch_position", [], "int16"),
                 ]
             )
 
-        # local_kvcache_block_size = 1024
-        # max_local_block_cnt = model_config.sliding_window // local_kvcache_block_size + 1
-        max_global_block_cnt = max_seq_len // kvcache_block_size
+        max_block_cnt = max_seq_len // kvcache_block_size
+
         if query_length > 1:
-            input_info.extend([("block_tables", [max_global_block_cnt], "int16")])
+            input_info.extend([("global_block_tables", [max_block_cnt], "int16")])
+            input_info.extend([("local_block_tables", [1], "int16")])
         else:
-            input_info.extend([("block_tables", [batch_size, max_global_block_cnt], "int16")])
+            input_info.extend([("global_block_tables", [batch_size, max_block_cnt], "int16")])
+            input_info.extend([("local_block_tables", [batch_size, 1], "int16")])
 
         def is_sliding(layer_idx: int) -> bool:
             return bool((layer_idx + 1) % sliding_window_pattern)
@@ -406,6 +402,8 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         model_config: Optional["PretrainedConfig"] = None,
         rbln_config: Optional[RBLNGemma3ForCausalLMConfig] = None,
     ) -> RBLNGemma3ForCausalLMConfig:
+        rbln_config.prefill_chunk_size = 256  # FIXME: Hard-coded
+
         if rbln_config.max_seq_len is None:
             rbln_config.max_seq_len = getattr(model_config, "max_position_embeddings", None)
         if rbln_config.max_seq_len is None:
@@ -430,15 +428,15 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
         if rbln_config.attn_impl == "flash_attn":
             # TODO(taehoon): override the get_maximum_num_blocks function
-            estimated_max_num_blocks = cls.get_maximum_num_blocks(
-                config=model_config,
-                tensor_parallel_size=rbln_config.tensor_parallel_size or 1,
-                kvcache_block_size=rbln_config.kvcache_block_size,
-                nbits_per_param=16 if not rbln_config.quantization else 4,  # TODO(jongho): FIX Ad-hoc
-                n_model_params=sum(p.numel() for p in model.parameters()),
-            )
+            # estimated_max_num_blocks = cls.get_maximum_num_blocks(
+            #     config=model_config,
+            #     tensor_parallel_size=rbln_config.tensor_parallel_size or 1,
+            #     kvcache_block_size=rbln_config.kvcache_block_size,
+            #     nbits_per_param=16 if not rbln_config.quantization else 4,  # TODO(jongho): FIX Ad-hoc
+            #     n_model_params=sum(p.numel() for p in model.parameters()),
+            # )
 
-            max_num_blocks = min(max_num_blocks, estimated_max_num_blocks)
+            # max_num_blocks = min(max_num_blocks, estimated_max_num_blocks)
 
             flash_min_blocks = rbln_config.max_seq_len // rbln_config.kvcache_block_size + 1
             if max_num_blocks < flash_min_blocks:
@@ -459,6 +457,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
                 "This can cause a failure during model compilation."
             )
         logger.info(f"[KVCache] Compiling with num_blocks: {rbln_config.kvcache_num_blocks}")
+
         num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
         num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
         num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
@@ -482,7 +481,10 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             sliding_window=sliding_window,
             sliding_window_pattern=sliding_window_pattern,
         )
-        prefill_compile_config = RBLNCompileConfig(compiled_model_name="prefill", input_info=prefill_input_info)
+        prefill_compile_config = RBLNCompileConfig(compiled_model_name="text_prefill", input_info=prefill_input_info)
+        image_prefill_compile_config = RBLNCompileConfig(
+            compiled_model_name="image_prefill", input_info=prefill_input_info
+        )
 
         dec_compile_configs = []
         for batch_size in rbln_config.decoder_batch_sizes:
@@ -498,10 +500,92 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
                 num_hidden_layers=num_hidden_layers,
                 hidden_size=hidden_size,
                 head_dim=head_dim,
+                sliding_window=sliding_window,
+                sliding_window_pattern=sliding_window_pattern,
             )
             dec_compile_configs.append(
                 RBLNCompileConfig(compiled_model_name=f"decoder_batch_{batch_size}", input_info=dec_input_info)
             )
-        rbln_config.set_compile_cfgs([prefill_compile_config, *dec_compile_configs])
+        rbln_config.set_compile_cfgs([prefill_compile_config, image_prefill_compile_config, *dec_compile_configs])
 
         return rbln_config
+
+    @classmethod
+    @torch.inference_mode()
+    def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNGemma3ForCausalLMConfig):
+        wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
+
+        rbln_compile_configs = rbln_config.compile_cfgs
+        prefill_compile_config = rbln_compile_configs[0]
+
+        context = CompileContext(use_weight_sharing=True)
+
+        # Here we use meta tensor, for the memory efficiency.
+        meta_tensor_names = [name for name, _, _ in prefill_compile_config.input_info if "past_key_values" in name]
+        prefill_example_inputs = prefill_compile_config.get_dummy_inputs(fill=0, meta_tensor_names=meta_tensor_names)
+
+        # Mark static tensors (self kv states)
+        static_tensors = {}
+        for (name, _, _), tensor in zip(prefill_compile_config.input_info, prefill_example_inputs):
+            if "past_key_values" in name:
+                static_tensors[name] = tensor
+                context.mark_static_address(tensor)
+
+        @QuantizationManager.with_quantization_env
+        def compile_model(wrapped_model, compile_config, example_inputs, compile_context, **kwargs):
+            try:
+                original_linear = torch.nn.functional.linear
+                torch.nn.functional.linear = torch.ops.rbln_custom_ops.linear
+                compiled_model = RBLNModel.compile(
+                    wrapped_model,
+                    compile_config,
+                    example_inputs=example_inputs,
+                    compile_context=compile_context,
+                )
+                return compiled_model
+            finally:
+                torch.nn.functional.linear = original_linear
+
+        wrapped_model.phase = "text_prefill"
+        compiled_prefill = compile_model(
+            wrapped_model,
+            prefill_compile_config,
+            prefill_example_inputs,
+            context,
+            quantize_config=rbln_config.quantization,
+        )
+
+        image_prefill_compile_config = rbln_compile_configs[1]
+        wrapped_model.phase = "image_prefill"
+        compiled_image_prefill = compile_model(
+            wrapped_model,
+            image_prefill_compile_config,
+            prefill_example_inputs,
+            context,
+            quantize_config=rbln_config.quantization,
+        )
+
+        wrapped_model.phase = "decode"
+        compiled_models = {"text_prefill": compiled_prefill, "image_prefill": compiled_image_prefill}
+        for batch_size, dec_compile_config in zip(rbln_config.decoder_batch_sizes, rbln_compile_configs[2:]):
+            dec_example_inputs = dec_compile_config.get_dummy_inputs(fill=0, static_tensors=static_tensors)
+            compiled_decoder = compile_model(
+                wrapped_model,
+                dec_compile_config,
+                dec_example_inputs,
+                context,
+                quantize_config=rbln_config.quantization,
+            )
+            compiled_models[f"decoder_batch_{batch_size}"] = compiled_decoder
+
+        # TODO overide maybe_suggest_kvcache_num_blocks
+        # check if the memory is enough to have additional blocks
+        # required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
+        # if rbln_config.kvcache_num_blocks < required_num_blocks:
+        #     cls.maybe_suggest_kvcache_num_blocks(
+        #         compiled_models=compiled_models,
+        #         model_config=model.config,
+        #         rbln_config=rbln_config,
+        #     )
+
+        return compiled_models

@@ -154,7 +154,11 @@ class DecoderOnlyWrapper(nn.Module):
         self.config = causal_lm.config
 
         if use_rotary_emb:
-            self.rotary_emb = self.get_rotary_emb(max_seq_len=max_seq_len)
+            rotary_embs = self.get_rotary_emb(max_seq_len=max_seq_len)
+            if isinstance(rotary_embs, tuple):
+                self.rotary_emb_global, self.rotary_emb_local = rotary_embs
+            else:
+                self.rotary_emb = rotary_embs
         else:
             self.rotary_emb = None
 
@@ -833,6 +837,8 @@ class AttentionOp(nn.Module):
                     scale=scale,
                     block_table=block_tables,
                     block_size=block_size,
+                    is_bidirectional=True if self.phase == "image_prefill" else False, # FIXME, Hard-coded for Gemma3.
+                    mask=attn_mask                     
                 )
 
         attn_output = attn_output.view(batch_size, self.num_heads, -1, self.head_dim)
@@ -1023,7 +1029,7 @@ class FlashAttentionOp(AttentionOp):
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
         key_state = key_state.unsqueeze(2)
         value_state = value_state.unsqueeze(2)
-        if self.use_attention_mask:
+        if self.use_attention_mask and attn_mask.dim() == 4:
             attn_mask = attn_mask.unsqueeze(2)
 
         if self.phase == "decode":
@@ -1094,6 +1100,8 @@ class FlashAttentionOp(AttentionOp):
                     block_table=block_tables,
                     block_size=kvcache_block_size,
                     partition=self.kvcache_partition_size,
+                    is_bidirectional=True if self.phase == "image_prefill" else False, # FIXME, Hard-coded for Gemma3.
+                    mask=attn_mask 
                 )
 
         # reshape for removing repeat_kv
@@ -1120,24 +1128,25 @@ class SlidingWindowAttentionOp(AttentionOp):
         query_state: torch.Tensor,
         key_state: torch.Tensor,
         value_state: torch.Tensor,
+        attn_mask: torch.Tensor,
         past_key_state: torch.Tensor,
         past_value_state: torch.Tensor,
-        batch_position: torch.Tensor,
-        cache_seq_len: torch.Tensor,
-        cache_offset: torch.Tensor,
+        seq_position: Tuple[torch.Tensor],
         scale: torch.Tensor,
+        block_tables: torch.Tensor,
+        block_size: int,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
         key_state = key_state.unsqueeze(2)
         value_state = value_state.unsqueeze(2)
-        if self.use_attention_mask:
-            attn_mask = attn_mask.unsqueeze(2)
+        # if self.use_attention_mask:
+        #     attn_mask = attn_mask.unsqueeze(2)
 
         if self.phase == "decode":
             batch_size = key_state.shape[0]
         else:
             batch_size = 1
-            
+
         query_state = query_state.view(
             batch_size,
             self.num_key_value_heads,
@@ -1151,12 +1160,13 @@ class SlidingWindowAttentionOp(AttentionOp):
                 q=query_state,
                 k=key_state,
                 v=value_state,
-                mask=attn_mask,
                 kcache=past_key_state.unsqueeze(2),
                 vcache=past_value_state.unsqueeze(2),
-                cache_seq_len=cache_seq_len,
-                cache_offset=cache_offset,
+                cache_seq_len=seq_position[0],
+                cache_offset=seq_position[1],
                 scale=scale,
+                block_table=block_tables,
+                block_size=block_size,
             )
         else:
             attn_output = torch.ops.rbln_custom_ops.sliding_window_attn_prefill(
@@ -1166,10 +1176,11 @@ class SlidingWindowAttentionOp(AttentionOp):
                 mask=attn_mask,
                 kcache=past_key_state.unsqueeze(2),
                 vcache=past_value_state.unsqueeze(2),
-                batch_idx=batch_position,
-                cache_seq_len=cache_seq_len,
-                cache_offset=cache_offset,
+                cache_seq_len=seq_position[0],
+                cache_offset=seq_position[1],
                 scale=scale,
+                block_table=block_tables,
+                block_size=block_size,
             )
 
         # reshape for removing repeat_kv

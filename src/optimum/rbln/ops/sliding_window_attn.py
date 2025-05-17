@@ -18,19 +18,20 @@ from torch import Tensor
 
 
 @torch.library.custom_op(
-    "rbln_custom_ops::sliding_window_attn_prefill",
+    "rbln_custom_ops::paged_sliding_window_attn_prefill",
     mutates_args=(["kcache", "vcache"]),
 )
-def sliding_window_attn_prefill(
+def paged_sliding_window_attn_prefill(
     q: Tensor,
     k: Tensor,
     v: Tensor,
     kcache: Tensor,
     vcache: Tensor,
-    batch_idx: Tensor,
     cache_seq_len: Tensor,
     cache_offset: Tensor,
     scale: Tensor,
+    block_table: Tensor,
+    block_size: Tensor,
 ) -> Tensor:
     """Defines the computation pattern for prefill phase attention with KV cache updates.
 
@@ -47,7 +48,6 @@ def sliding_window_attn_prefill(
     - v: [batch=1, n_heads, 1, seq_len, head_dim] - Value states for current input
     - kcache: [batch_size, n_heads, 1, max_seq_len, head_dim] - Key cache
     - vcache: [batch_size, n_heads, 1, max_seq_len, head_dim] - Value cache
-    - batch_idx: [] -- Batch index for cache access
     - cache_seq_len: [] - the sequence length of the cached states that were seen by the model
     - cache_offset: [] - The valid length in the combined sequence of the KV cache and the current projected key states.
     - scale: [] - Attention scale factor
@@ -58,26 +58,27 @@ def sliding_window_attn_prefill(
     return torch.empty_like(q)
 
 
-@sliding_window_attn_prefill.register_fake
-def sliding_window_attn_prefill_fake(
+@paged_sliding_window_attn_prefill.register_fake
+def paged_sliding_window_attn_prefill_fake(
     q: Tensor,
     k: Tensor,
     v: Tensor,
     kcache: Tensor,
     vcache: Tensor,
-    batch_idx: Tensor,
     cache_seq_len: Tensor,
     cache_offset: Tensor,
     scale: Tensor,
+    block_table: Tensor,
+    block_size: Tensor,
 ) -> Tensor:
     return torch.empty_like(q)
 
 
 @torch.library.custom_op(
-    "rbln_custom_ops::sliding_window_attn_decode",
+    "rbln_custom_ops::paged_sliding_window_attn_decode",
     mutates_args=(["kcache", "vcache"]),
 )
-def sliding_window_attn_decode(
+def paged_sliding_window_attn_decode(
     q: Tensor,
     k: Tensor,
     v: Tensor,
@@ -86,12 +87,14 @@ def sliding_window_attn_decode(
     cache_seq_len: Tensor,
     cache_offset: Tensor,
     scale: Tensor,
+    block_table: Tensor,
+    block_size: Tensor,
 ) -> Tensor:
     return torch.empty_like(q)
 
 
-@sliding_window_attn_decode.register_fake
-def sliding_window_attn_decode_fake(
+@paged_sliding_window_attn_decode.register_fake
+def paged_sliding_window_attn_decode_fake(
     q: Tensor,
     k: Tensor,
     v: Tensor,
@@ -100,5 +103,7 @@ def sliding_window_attn_decode_fake(
     cache_seq_len: Tensor,
     cache_offset: Tensor,
     scale: Tensor,
+    block_table: Tensor,
+    block_size: Tensor,
 ) -> Tensor:
     return torch.empty_like(q)
