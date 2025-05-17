@@ -810,6 +810,7 @@ class AttentionOp(nn.Module):
                     scale=scale,
                     block_table=block_tables,
                     block_size=block_size,
+                    mask=attn_mask   
                 )
 
         else:
@@ -1072,6 +1073,7 @@ class FlashAttentionOp(AttentionOp):
                     block_table=block_tables,
                     block_size=kvcache_block_size,
                     partition=self.kvcache_partition_size,
+                    mask=attn_mask
                 )
         else:
             if self.use_attention_mask:
@@ -1156,7 +1158,7 @@ class SlidingWindowAttentionOp(AttentionOp):
         )
 
         if self.phase == "decode":
-            attn_output = torch.ops.rbln_custom_ops.sliding_window_attn_decode(
+            attn_output = torch.ops.rbln_custom_ops.paged_sliding_window_attn_decode(
                 q=query_state,
                 k=key_state,
                 v=value_state,
@@ -1169,11 +1171,10 @@ class SlidingWindowAttentionOp(AttentionOp):
                 block_size=block_size,
             )
         else:
-            attn_output = torch.ops.rbln_custom_ops.sliding_window_attn_prefill(
+            attn_output = torch.ops.rbln_custom_ops.paged_sliding_window_attn_prefill(
                 q=query_state,
                 k=key_state,
                 v=value_state,
-                mask=attn_mask,
                 kcache=past_key_state.unsqueeze(2),
                 vcache=past_value_state.unsqueeze(2),
                 cache_seq_len=seq_position[0],

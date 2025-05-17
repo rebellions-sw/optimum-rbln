@@ -334,6 +334,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         head_dim: int,
         sliding_window: int,
         sliding_window_pattern: int,
+        dec_batch_size:int,
     ):
         if use_inputs_embeds:
             main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
@@ -379,7 +380,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         def is_sliding(layer_idx: int) -> bool:
             return bool((layer_idx + 1) % sliding_window_pattern)
 
-        local_kvcache_shape = [batch_size, num_key_value_heads, sliding_window, head_dim]
+        local_kvcache_shape = [dec_batch_size, num_key_value_heads, sliding_window, head_dim]
         global_kvcache_shape = [kvcache_num_blocks, num_key_value_heads, kvcache_block_size, head_dim]
         input_info.extend(
             [
@@ -480,6 +481,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             head_dim=head_dim,
             sliding_window=sliding_window,
             sliding_window_pattern=sliding_window_pattern,
+            dec_batch_size=max(rbln_config.decoder_batch_sizes),
         )
         prefill_compile_config = RBLNCompileConfig(compiled_model_name="text_prefill", input_info=prefill_input_info)
         image_prefill_compile_config = RBLNCompileConfig(
@@ -502,6 +504,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
                 head_dim=head_dim,
                 sliding_window=sliding_window,
                 sliding_window_pattern=sliding_window_pattern,
+                dec_batch_size=max(rbln_config.decoder_batch_sizes),
             )
             dec_compile_configs.append(
                 RBLNCompileConfig(compiled_model_name=f"decoder_batch_{batch_size}", input_info=dec_input_info)
@@ -565,8 +568,8 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             quantize_config=rbln_config.quantization,
         )
 
-        wrapped_model.phase = "decode"
         compiled_models = {"text_prefill": compiled_prefill, "image_prefill": compiled_image_prefill}
+        wrapped_model.phase = "decode"
         for batch_size, dec_compile_config in zip(rbln_config.decoder_batch_sizes, rbln_compile_configs[2:]):
             dec_example_inputs = dec_compile_config.get_dummy_inputs(fill=0, static_tensors=static_tensors)
             compiled_decoder = compile_model(

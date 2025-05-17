@@ -52,7 +52,7 @@ class Gemma3ForCausalLMWrapper(DecoderOnlyWrapper):
 
     def convert_to_rbln_causal_lm(self, causal_lm: "Gemma3ForCausalLM", max_seq_len: int):
         new_layers = []
-        for layer in enumerate(causal_lm.model.layers):
+        for layer in causal_lm.model.layers:
             if layer.is_sliding:
                 new_self_attn = Gemma3Attention(
                     layer.self_attn,
@@ -281,10 +281,7 @@ class Gemma3TextModel(DecoderOnlyModel):
 
 class Gemma3DecoderLayer(DecoderOnlyLayer):
     def __init__(self, layer, self_attn: "DecoderOnlyAttention"):
-        super().__init__()
-        self._original_mod = layer
-        self.self_attn = self_attn
-        self._phase = "text_prefill"
+        super().__init__(layer,self_attn)
         self.is_sliding = self._original_mod.is_sliding
 
     def get_pre_feedforward_layernorm(self) -> Gemma3RMSNorm:
@@ -336,7 +333,7 @@ class Gemma3Attention(DecoderOnlyAttention):
         return self._original_mod.config.query_pre_attn_scalar**-0.5
 
     def get_attention(self):
-        if self.is_sliding:
+        if self._original_mod.is_sliding:
             return SlidingWindowAttentionOp(
                 self.num_heads,
                 self.head_dim,
