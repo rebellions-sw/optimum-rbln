@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Optional
+
 import torch
 from torch import Tensor
 
@@ -113,6 +115,7 @@ def paged_flash_causal_attn_decode(
     block_table: Tensor,
     block_size: int,
     partition: int,
+    mask: Optional[Tensor],
 ) -> Tensor:
     """Defines the computation pattern for fused causal flash attention with KV cache for decoding.
 
@@ -133,6 +136,7 @@ def paged_flash_causal_attn_decode_fake(
     block_table: Tensor,
     block_size: int,
     partition: int,
+    mask: Optional[Tensor],
 ) -> Tensor:
     return torch.empty_like(q)
 
@@ -152,6 +156,8 @@ def paged_flash_causal_attn_prefill(
     block_table: Tensor,
     block_size: int,
     partition: int,
+    is_bidirectional: bool,
+    mask: Optional[Tensor],
 ) -> Tensor:
     """Defines the computation pattern for fused causal flash attention with KV cache for prefill.
 
@@ -172,5 +178,7 @@ def paged_flash_causal_attn_prefill_fake(
     block_table: Tensor,
     block_size: int,
     partition: int,
+    is_bidirectional: Optional[bool],
+    mask: Optional[Tensor],
 ) -> Tensor:
     return torch.empty_like(q)

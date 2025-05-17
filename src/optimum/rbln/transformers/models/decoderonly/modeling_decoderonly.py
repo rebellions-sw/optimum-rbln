@@ -77,7 +77,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         self.kvcache_block_size = kvcache_block_size
         self.empty_block = -1
         self.attn_impl = attn_impl
-        self.sliding_window = sliding_window
 
         if self.phase == "prefill":
             vocab_size = kwargs.pop("vocab_size")
