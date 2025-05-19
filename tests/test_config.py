@@ -166,7 +166,7 @@ def test_custom_class(model_id):
     RBLNAutoModel.register(RBLNResNetModel)
     RBLNAutoConfig.register(RBLNResNetModelConfig)
     my_model = RBLNResNetModel.from_pretrained(model_id, export=True, rbln_device=-1)
-    random_image_input = torch.randn(1, 3, 224, 224)
+    random_image_input = torch.randn(1, 3, 64, 64)
     _ = my_model(random_image_input)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
