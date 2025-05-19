@@ -172,7 +172,6 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
     ):
         # Prepare HF generation
         is_prefill_phase = generate_idx is None
-        batch_size = input_ids.shape[0]
 
         model_inputs = self.language_model.prepare_inputs_for_generation(
             input_ids=input_ids,
@@ -191,6 +190,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
             )
 
         model_inputs["attention_mask"] = attention_mask
+
         return model_inputs
 
     def _update_model_kwargs_for_generation(
@@ -334,7 +334,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         head_dim: int,
         sliding_window: int,
         sliding_window_pattern: int,
-        dec_batch_size:int,
+        dec_batch_size: int,
     ):
         if use_inputs_embeds:
             main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")

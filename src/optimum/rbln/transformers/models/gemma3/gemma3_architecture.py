@@ -281,7 +281,7 @@ class Gemma3TextModel(DecoderOnlyModel):
 
 class Gemma3DecoderLayer(DecoderOnlyLayer):
     def __init__(self, layer, self_attn: "DecoderOnlyAttention"):
-        super().__init__(layer,self_attn)
+        super().__init__(layer, self_attn)
         self.is_sliding = self._original_mod.is_sliding
 
     def get_pre_feedforward_layernorm(self) -> Gemma3RMSNorm:
@@ -340,7 +340,7 @@ class Gemma3Attention(DecoderOnlyAttention):
                 self.num_key_value_heads,
                 self.use_attention_mask,
             )
-        else:    
+        else:
             return AttentionOp(self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask)
 
     def forward(
