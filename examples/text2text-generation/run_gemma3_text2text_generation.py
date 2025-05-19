@@ -3,12 +3,12 @@ import os
 from typing import Optional
 
 import fire
-from transformers import AutoTokenizer, Gemma3ForCausalLM, Gemma3ForConditionalGeneration, Gemma3Config
+from transformers import AutoTokenizer, Gemma3ForCausalLM
 
 from optimum.rbln import RBLNGemma3ForCausalLM
 
 
-model_id = "google/gemma-3-4b-it"
+model_id = "google/gemma-3-1b-it"
 tokenizer = AutoTokenizer.from_pretrained(model_id, padding_side="left")
 
 
@@ -55,19 +55,11 @@ def main(
     tensor_parallel_size: int = 1,
     n_layers: Optional[int] = None,
     use_inputs_embeds: bool = False,
+    use_attention_mask: bool = False,
 ):
     inputs = get_inputs(batch_size)
 
     input_len = inputs["input_ids"].shape[-1]
-
-    hf_kwargs = {}
-    if n_layers is not None:
-        hf_config = Gemma3Config.from_pretrained(model_id)
-        text_config = json.loads(hf_config.text_config.to_json_string())
-        text_config["num_hidden_layers"] = n_layers
-        hf_kwargs = {"text_config": text_config}
-
-    model = Gemma3ForConditionalGeneration.from_pretrained(model_id, **hf_kwargs).language_model.eval()
 
     if compile:
         kwargs = {}
@@ -77,13 +69,12 @@ def main(
         if n_layers is not None:
             kwargs.update({"num_hidden_layers": n_layers})
 
-        rbln_model = RBLNGemma3ForCausalLM.from_model(
-            model,
-            # model_id,
-            # export=True,
+        rbln_model = RBLNGemma3ForCausalLM.from_pretrained(
+            model_id,
+            export=True,
             rbln_max_seq_len=32768,
             rbln_batch_size=batch_size,
-            rbln_use_attention_mask=True,
+            rbln_use_attention_mask=use_attention_mask,
             rbln_tensor_parallel_size=tensor_parallel_size,
             rbln_use_inputs_embeds=use_inputs_embeds,
             **kwargs,
@@ -96,10 +87,10 @@ def main(
         )
 
     if diff:
-        # model = Gemma3ForCausalLM.from_pretrained(
-        #     model_id,
-        #     # num_hidden_layers=6,
-        # ).eval()
+        model = Gemma3ForCausalLM.from_pretrained(
+            model_id,
+            num_hidden_layers=6,
+        ).eval()
 
         output = rbln_model.generate(
             **inputs,
