@@ -280,7 +280,7 @@ class RBLNDiffusionMixin:
             if getattr(rbln_config, submodule_name, None) is None:
                 raise ValueError(f"RBLN config for submodule {submodule_name} is not provided.")
 
-            submodule_rbln_cls: Type[RBLNModel] = get_rbln_model_cls(f"RBLN{submodule.__class__.__name__}")
+            submodule_rbln_cls: Type[RBLNModel] = getattr(rbln_config, submodule_name).rbln_model_cls
             rbln_config = submodule_rbln_cls.update_rbln_config_using_pipe(model, rbln_config, submodule_name)
 
             if submodule is None:
