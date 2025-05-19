@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Type
 
 
 if TYPE_CHECKING:
-    from ..modeling_base import RBLNBaseModel
+    from ..modeling import RBLNModel
 
 # Prefix used for RBLN model class names
 RBLN_PREFIX = "RBLN"
@@ -53,7 +53,7 @@ def convert_rbln_to_hf_model_name(rbln_model_name: str):
     return rbln_model_name.removeprefix(RBLN_PREFIX)
 
 
-def get_rbln_model_class(cls_name: str) -> Type["RBLNBaseModel"]:
+def get_rbln_model_cls(cls_name: str) -> Type["RBLNModel"]:
     cls = getattr(importlib.import_module("optimum.rbln"), cls_name, None)
     if cls is None:
         if cls_name in MODEL_MAPPING:

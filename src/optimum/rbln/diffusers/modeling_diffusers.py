@@ -23,7 +23,7 @@ from ..configuration_utils import ContextRblnConfig, RBLNModelConfig, get_rbln_c
 from ..modeling import RBLNModel
 from ..utils.decorator_utils import remove_compile_time_kwargs
 from ..utils.logging import get_logger
-from ..utils.model_utils import get_rbln_model_class
+from ..utils.model_utils import get_rbln_model_cls
 
 
 logger = get_logger(__name__)
@@ -205,7 +205,7 @@ class RBLNDiffusionMixin:
                         "Expected 'optimum.rbln'. Please check the model_index.json configuration."
                     )
 
-                submodule_cls = get_rbln_model_class(class_name)
+                submodule_cls = get_rbln_model_cls(class_name)
                 submodule_config = getattr(rbln_config, submodule_name)
                 submodule = submodule_cls.from_pretrained(
                     model_id, export=False, subfolder=submodule_name, rbln_config=submodule_config
@@ -280,7 +280,7 @@ class RBLNDiffusionMixin:
             if getattr(rbln_config, submodule_name, None) is None:
                 raise ValueError(f"RBLN config for submodule {submodule_name} is not provided.")
 
-            submodule_rbln_cls: Type[RBLNModel] = getattr(rbln_config, submodule_name).rbln_model_cls
+            submodule_rbln_cls: Type[RBLNModel] = get_rbln_model_cls(f"RBLN{submodule.__class__.__name__}")
             rbln_config = submodule_rbln_cls.update_rbln_config_using_pipe(model, rbln_config, submodule_name)
 
             if submodule is None:
@@ -288,7 +288,6 @@ class RBLNDiffusionMixin:
             elif isinstance(submodule, RBLNModel):
                 pass
             elif submodule_name == "controlnet" and hasattr(submodule, "nets"):
-                # In case of multicontrolnet
                 submodule = cls._compile_multicontrolnet(
                     controlnets=submodule,
                     model_save_dir=model_save_dir,
@@ -296,10 +295,8 @@ class RBLNDiffusionMixin:
                     prefix=prefix,
                 )
             elif isinstance(submodule, torch.nn.Module):
-                submodule_cls = get_rbln_model_class(f"RBLN{submodule.__class__.__name__}")
                 subfolder = prefix + submodule_name
-                subfolder = prefix + submodule_name
-                submodule = submodule_cls.from_model(
+                submodule = submodule_rbln_cls.from_model(
                     model=submodule,
                     subfolder=subfolder,
                     model_save_dir=model_save_dir,

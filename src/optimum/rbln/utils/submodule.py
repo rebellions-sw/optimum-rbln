@@ -15,13 +15,13 @@
 from typing import TYPE_CHECKING, Any, Dict, List, Type
 
 from ..configuration_utils import RBLNModelConfig
-from ..utils.model_utils import get_rbln_model_class
+from ..utils.model_utils import get_rbln_model_cls
 
 
 if TYPE_CHECKING:
     from transformers import PreTrainedModel
 
-    from ..modeling_base import RBLNBaseModel
+    from ..modeling import RBLNModel
 
 
 class SubModulesMixin:
@@ -34,14 +34,14 @@ class SubModulesMixin:
 
     _rbln_submodules: List[Dict[str, Any]] = []
 
-    def __init__(self, *, rbln_submodules: List["RBLNBaseModel"] = [], **kwargs) -> None:
+    def __init__(self, *, rbln_submodules: List["RBLNModel"] = [], **kwargs) -> None:
         for submodule_meta, submodule in zip(self._rbln_submodules, rbln_submodules):
             setattr(self, submodule_meta["name"], submodule)
 
     @classmethod
     def _export_submodules_from_model(
         cls, model: "PreTrainedModel", model_save_dir: str, rbln_config: RBLNModelConfig, **kwargs
-    ) -> List["RBLNBaseModel"]:
+    ) -> List["RBLNModel"]:
         rbln_submodules = []
         submodule_prefix = getattr(cls, "_rbln_submodule_prefix", None)
 
@@ -54,7 +54,7 @@ class SubModulesMixin:
                 torch_submodule: PreTrainedModel = getattr(model, submodule_name)
 
             cls_name = torch_submodule.__class__.__name__
-            submodule_cls: Type["RBLNBaseModel"] = get_rbln_model_class(f"RBLN{cls_name}")
+            submodule_cls: Type["RBLNModel"] = get_rbln_model_cls(f"RBLN{cls_name}")
             submodule_rbln_config = getattr(rbln_config, submodule_name) or {}
 
             if isinstance(submodule_rbln_config, dict):
@@ -86,7 +86,7 @@ class SubModulesMixin:
             submodule_rbln_config = getattr(rbln_config, submodule_name)
 
             # RBLNModelConfig -> RBLNModel
-            submodule_cls = get_rbln_model_class(submodule_rbln_config.rbln_model_cls_name)
+            submodule_cls = get_rbln_model_cls(submodule_rbln_config.rbln_model_cls_name)
             rbln_submodule = submodule_cls._from_pretrained(
                 model_id=model_save_dir,
                 config=None,

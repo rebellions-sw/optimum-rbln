@@ -26,7 +26,7 @@ from optimum.rbln.utils.model_utils import (
     MODEL_MAPPING,
     convert_hf_to_rbln_model_name,
     convert_rbln_to_hf_model_name,
-    get_rbln_model_class,
+    get_rbln_model_cls,
 )
 
 
@@ -63,7 +63,7 @@ class _BaseAutoModelClass:
             hf_model_class = cls.infer_hf_model_class(pretrained_model_name_or_path, **kwargs)
             rbln_class_name = convert_hf_to_rbln_model_name(hf_model_class.__name__)
         else:
-            rbln_class_name = cls.get_rbln_model_class_name(pretrained_model_name_or_path, **kwargs)
+            rbln_class_name = cls.get_rbln_model_cls_name(pretrained_model_name_or_path, **kwargs)
 
             if convert_rbln_to_hf_model_name(rbln_class_name) not in cls._model_mapping_names.values():
                 raise ValueError(
@@ -73,7 +73,7 @@ class _BaseAutoModelClass:
                 )
 
         try:
-            rbln_cls = get_rbln_model_class(rbln_class_name)
+            rbln_cls = get_rbln_model_cls(rbln_class_name)
         except AttributeError as e:
             raise AttributeError(
                 f"Class '{rbln_class_name}' not found in 'optimum.rbln' module for model ID '{pretrained_model_name_or_path}'. "
@@ -140,7 +140,7 @@ class _BaseAutoModelClass:
         return model_class
 
     @classmethod
-    def get_rbln_model_class_name(cls, pretrained_model_name_or_path, **kwargs):
+    def get_rbln_model_cls_name(cls, pretrained_model_name_or_path, **kwargs):
         """
         Retrieve the path to the compiled model directory for a given RBLN model.
 
