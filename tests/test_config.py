@@ -1,10 +1,20 @@
 import os
 import shutil
+import tempfile
+from typing import Optional, Tuple
 
 import pytest
+import torch
 
-from optimum.rbln import RBLNResNetForImageClassification, RBLNResNetForImageClassificationConfig
-from optimum.rbln.configuration_utils import RBLNCompileConfig
+from optimum.rbln import (
+    RBLNAutoConfig,
+    RBLNAutoModel,
+    RBLNCompileConfig,
+    RBLNModel,
+    RBLNModelConfig,
+    RBLNResNetForImageClassification,
+    RBLNResNetForImageClassificationConfig,
+)
 
 
 @pytest.fixture
@@ -126,6 +136,42 @@ def test_invalid_config_parameters(model_id, invalid_param):
     """Test robust handling of various invalid configuration parameters."""
     with pytest.raises((ValueError, TypeError)):
         _ = RBLNResNetForImageClassification.from_pretrained(model_id, export=True, **invalid_param)
+
+
+def test_custom_class(model_id):
+    class RBLNResNetModel(RBLNModel):
+        @classmethod
+        def _update_rbln_config(cls, *, rbln_config=None, **kwargs):
+            input_info = [
+                (
+                    "pixel_values",
+                    [rbln_config.batch_size, 3, rbln_config.image_size[0], rbln_config.image_size[1]],
+                    "float32",
+                )
+            ]
+
+            # Configure compilation settings
+            rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
+            return rbln_config
+
+    def forward(self, pixel_values, **kwargs):
+        return self.model[0](pixel_values)
+
+    class RBLNResNetModelConfig(RBLNModelConfig):
+        def __init__(self, batch_size: int = None, image_size: Optional[Tuple[int, int]] = None, **kwargs):
+            super().__init__(**kwargs)
+            self.batch_size = batch_size or 1
+            self.image_size = image_size or (64, 64)
+
+    RBLNAutoModel.register(RBLNResNetModel)
+    RBLNAutoConfig.register(RBLNResNetModelConfig)
+    my_model = RBLNResNetModel.from_pretrained(model_id, export=True, rbln_device=-1)
+    random_image_input = torch.randn(1, 3, 224, 224)
+    _ = my_model(random_image_input)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        my_model.save_pretrained(tmp_dir)
+        _ = RBLNResNetModel.from_pretrained(tmp_dir, export=False)
 
 
 if __name__ == "__main__":
