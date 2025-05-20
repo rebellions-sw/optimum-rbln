@@ -359,7 +359,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_ids,
             position_embed,
             padded_cache_lengths,
-            query_length
+            query_length,
         ) = self._prepare_prefill_inputs(inputs, cache_position, attention_mask, position_embed)
 
         # Process input in chunks of size `prefill_chunk_size`
