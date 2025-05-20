@@ -19,7 +19,11 @@ from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausa
 
 
 class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
-    pass
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # always use position ids and attention mask
+        self.use_position_ids = True
+        self.use_attention_mask = True
 
 
 class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):

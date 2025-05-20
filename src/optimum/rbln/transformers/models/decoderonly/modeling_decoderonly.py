@@ -167,6 +167,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         block_tables: Optional[torch.Tensor] = None,
         position_embed: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
+        token_type_ids: Optional[torch.Tensor] = None,
     ):
         if input_ids is None and inputs_embeds is None:
             raise ValueError("Either `input_ids` or `inputs_embeds` must be provided.")
@@ -202,6 +203,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 batch_idx,
                 block_tables,
                 position_embed=position_embed,
+                token_type_ids=token_type_ids,
             )
 
     def decode_forward(
@@ -236,9 +238,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     self.dec_attn_mask[b_idx, :, :, : decoding_step + 1] = 1
                 else:
                     self.dec_attn_mask[b_idx, :, :, decoding_step] = 1
-                # FIXME: adhoc for gemma3 sliding window attn test
-                if self.sliding_window and decoding_step >= self.sliding_window:
-                    self.dec_attn_mask[:, :, :, : decoding_step - self.sliding_window + 1] = 0
 
             attention_mask = self.dec_attn_mask
 
@@ -348,6 +347,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         block_tables: torch.Tensor = None,
         is_external_block_tables: bool = None,
         position_embed: Optional[torch.Tensor] = None,
+        token_type_ids: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         """
         Performs chunked prefill for efficient KV-cache updates and memory optimization.
@@ -362,8 +362,10 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_ids,
             position_embed,
             padded_cache_lengths,
-            query_length
-        ) = self._prepare_prefill_inputs(inputs, cache_position, attention_mask, position_embed)
+            query_length,
+        ) = self._prepare_prefill_inputs(
+            inputs, cache_position, attention_mask, position_embed, token_type_ids=token_type_ids
+        )
 
         # Process input in chunks of size `prefill_chunk_size`
         for step in range(0, query_length, self.prefill_chunk_size):
@@ -376,15 +378,12 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             if position_embed is not None:
                 position_embed_chunk = position_embed[:, :, :, step : step + self.prefill_chunk_size, :]
 
-            if self.use_attention_mask:
+            if self.use_attention_mask and not self.use_position_ids:
                 # Update attention mask to ensure proper causal behavior
                 if step >= self.prefill_chunk_size:
                     chunked_attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
                 chunked_attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
-                # FIXME: adhoc for gemma3 sliding window attn test
-                if self.sliding_window and step >= self.sliding_window:
-                    for i in range(self.prefill_chunk_size):
-                        chunked_attention_mask[:, :, i, : step + i - self.sliding_window + 1] = 0
+
             # Define query position
             query_position = torch.tensor((query_length - 1) % self.prefill_chunk_size, dtype=torch.int16)
 
@@ -395,7 +394,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 block_tables,
                 query_position,
                 chunked_attention_mask if self.use_attention_mask else None,
-                position_ids_chunk if position_ids is not None else None,
+                position_ids_chunk if self.use_position_ids else None,
                 position_embed_chunk if position_embed is not None else None,
                 out=out_buffers,
             )
@@ -446,7 +445,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         if self.rbln_config.use_inputs_embeds:
             main_input_name = "inputs_embeds"
             artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
-            self.embed_tokens = self._embedding_instance()
+            self.embed_tokens = self._create_embedding_layer()
             self.embed_tokens.load_state_dict(artifacts["embed_tokens"])
         else:
             self.embed_tokens = None
@@ -517,7 +516,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             save_dict["embed_tokens"] = model.get_input_embeddings().state_dict()
             torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
-    def _embedding_instance(self):
+    def _create_embedding_layer(self):
         with no_init_weights():
             embed_tokens = torch.nn.Embedding(
                 self.config.vocab_size,

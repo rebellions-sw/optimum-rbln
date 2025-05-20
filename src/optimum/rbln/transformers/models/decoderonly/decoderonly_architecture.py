@@ -831,7 +831,7 @@ class AttentionOp(nn.Module):
                     scale=scale,
                     block_table=block_tables,
                     block_size=block_size,
-                    mask=attn_mask   
+                    mask=attn_mask,
                 )
 
         else:
@@ -859,8 +859,8 @@ class AttentionOp(nn.Module):
                     scale=scale,
                     block_table=block_tables,
                     block_size=block_size,
-                    is_bidirectional=True if self.phase == "image_prefill" else False, # FIXME, Hard-coded for Gemma3.
-                    mask=attn_mask                     
+                    is_bidirectional=True if self.phase == "image_prefill" else False,  # FIXME, Hard-coded for Gemma3.
+                    mask=attn_mask,
                 )
 
         attn_output = attn_output.view(batch_size, self.num_heads, -1, self.head_dim)
@@ -1094,7 +1094,7 @@ class FlashAttentionOp(AttentionOp):
                     block_table=block_tables,
                     block_size=kvcache_block_size,
                     partition=self.kvcache_partition_size,
-                    mask=attn_mask
+                    mask=attn_mask,
                 )
         else:
             if self.use_attention_mask:
@@ -1123,8 +1123,8 @@ class FlashAttentionOp(AttentionOp):
                     block_table=block_tables,
                     block_size=kvcache_block_size,
                     partition=self.kvcache_partition_size,
-                    is_bidirectional=True if self.phase == "image_prefill" else False, # FIXME, Hard-coded for Gemma3.
-                    mask=attn_mask 
+                    is_bidirectional=True if self.phase == "image_prefill" else False,  # FIXME, Hard-coded for Gemma3.
+                    mask=attn_mask,
                 )
 
         # reshape for removing repeat_kv
