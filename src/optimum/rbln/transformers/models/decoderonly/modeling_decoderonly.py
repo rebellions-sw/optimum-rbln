@@ -262,7 +262,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         cache_position: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         position_embed: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ):
         """
         Prepare inputs for prefill phase.
         """
@@ -333,6 +333,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_ids,
             position_embed,
             padded_cache_lengths,
+            query_length,
         )
 
     def prefill_forward(
@@ -350,7 +351,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         Instead of processing the entire sequence at once, the input is divided into chunks of size `prefill_chunk_size`,
         and each chunk is processed sequentially. This allows for better memory utilization and compatibility with continuous batching.
         """
-        query_length = inputs.shape[1]
         (
             inputs,
             cache_position,
@@ -359,6 +359,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_ids,
             position_embed,
             padded_cache_lengths,
+            query_length
         ) = self._prepare_prefill_inputs(inputs, cache_position, attention_mask, position_embed)
 
         # Process input in chunks of size `prefill_chunk_size`
