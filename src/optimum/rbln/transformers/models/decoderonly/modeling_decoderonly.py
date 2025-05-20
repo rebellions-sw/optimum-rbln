@@ -311,7 +311,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     cache_position,
                     torch.arange(
                         query_length,
-                        query_length + self.prefill_chunk_size,
+                        query_length + padding_size,
                         dtype=torch.int32,
                     ).unsqueeze(0),
                 ],
