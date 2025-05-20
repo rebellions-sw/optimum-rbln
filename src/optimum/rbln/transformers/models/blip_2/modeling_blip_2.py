@@ -71,11 +71,10 @@ class RBLNBlip2VisionModel(RBLNModel):
             (
                 "pixel_values",
                 [
-                    # rbln_config.batch_size,
-                    1,
+                    rbln_config.batch_size,
                     model_config.num_channels,
-                    224,
-                    224,
+                    model_config.image_size,
+                    model_config.image_size,
                 ],
                 "float32",
             ),
@@ -138,6 +137,18 @@ class RBLNBlip2QFormerModel(RBLNModel):
         return Blip2QFormerModelWrapper(model).eval()
 
     @classmethod
+    def update_rbln_config_using_conditional_generation(
+        cls, model: "PreTrainedModel", rbln_config: "RBLNModelConfig", submodule_name: str
+    ) -> "RBLNModelConfig":
+        if rbln_config.num_query_tokens is None:
+            rbln_config.num_query_tokens = model.config.num_query_tokens
+
+        if rbln_config.image_text_hidden_size is None:
+            rbln_config.image_text_hidden_size = model.config.image_text_hidden_size
+
+        return rbln_config
+
+    @classmethod
     def _update_rbln_config(
         cls,
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
@@ -149,8 +160,8 @@ class RBLNBlip2QFormerModel(RBLNModel):
             (
                 "query_embeds",
                 [
-                    1,
-                    32,
+                    rbln_config.batch_size,
+                    rbln_config.num_query_tokens,
                     model_config.hidden_size,
                 ],
                 "float32",
@@ -158,15 +169,16 @@ class RBLNBlip2QFormerModel(RBLNModel):
             (
                 "encoder_hidden_states",
                 [
-                    1,
-                    257,
+                    rbln_config.batch_size,
+                    # image_text_hidden_size + cls token
+                    rbln_config.image_text_hidden_size + 1,
                     model_config.encoder_hidden_size,
                 ],
                 "float32",
             ),
             (
                 "encoder_attention_mask",
-                [1, 257],
+                [rbln_config.batch_size, rbln_config.image_text_hidden_size + 1],
                 "int64",
             ),
         ]
@@ -209,7 +221,6 @@ class RBLNBlip2QFormerModel(RBLNModel):
 class RBLNBlip2ForConditionalGeneration(RBLNModel):
     auto_model_class = AutoModelForVisualQuestionAnswering
     _rbln_submodules = [{"name": "vision_model"}, {"name": "qformer"}, {"name": "language_model"}]
-    # _rbln_submodules = [{"name": "language_model"}]
 
     def __getattr__(self, __name: str) -> Any:
         def redirect(func):
@@ -273,7 +284,11 @@ class RBLNBlip2ForConditionalGeneration(RBLNModel):
         input_info = [
             (
                 "query_output",
-                [1, 32, 768],
+                [
+                    rbln_config.batch_size,
+                    model_config.num_query_tokens,
+                    model_config.qformer_config.hidden_size,
+                ],
                 "float32",
             ),
         ]
