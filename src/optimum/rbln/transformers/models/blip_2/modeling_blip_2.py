@@ -18,13 +18,14 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, Union
 
 import torch
 from transformers import (
-    AutoModelForVision2Seq,
+    AutoModelForVisualQuestionAnswering,
     Blip2ForConditionalGeneration,
+    Blip2QFormerModel,
     Blip2VisionModel,
     PretrainedConfig,
     PreTrainedModel,
 )
-from transformers.modeling_outputs import BaseModelOutputWithPooling
+from transformers.modeling_outputs import BaseModelOutputWithPooling, BaseModelOutputWithPoolingAndCrossAttentions
 from transformers.utils import logging
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
@@ -109,10 +110,106 @@ class RBLNBlip2VisionModel(RBLNModel):
             )
 
 
+class RBLNBlip2QFormerModel(RBLNModel):
+    def get_input_embeddings(self):
+        return self.embeddings.word_embeddings
+
+    @classmethod
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
+        class Blip2QFormerModelWrapper(torch.nn.Module):
+            def __init__(self, model: "Blip2QFormerModel"):
+                super().__init__()
+                self.model = model
+
+            def forward(
+                self,
+                query_embeds: torch.FloatTensor,
+                encoder_hidden_states: Optional[torch.FloatTensor] = None,
+                encoder_attention_mask: Optional[torch.FloatTensor] = None,
+            ) -> torch.Tensor:
+                qformer_out = self.model(
+                    query_embeds=query_embeds,
+                    encoder_hidden_states=encoder_hidden_states,
+                    encoder_attention_mask=encoder_attention_mask,
+                    return_dict=False,
+                )
+                return qformer_out
+
+        return Blip2QFormerModelWrapper(model).eval()
+
+    @classmethod
+    def _update_rbln_config(
+        cls,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+        model: Optional["PreTrainedModel"] = None,
+        model_config: Optional["PretrainedConfig"] = None,
+        rbln_config: Optional[RBLNModelConfig] = None,
+    ) -> RBLNModelConfig:
+        input_info = [
+            (
+                "query_embeds",
+                [
+                    1,
+                    32,
+                    model_config.hidden_size,
+                ],
+                "float32",
+            ),
+            (
+                "encoder_hidden_states",
+                [
+                    1,
+                    257,
+                    model_config.encoder_hidden_size,
+                ],
+                "float32",
+            ),
+            (
+                "encoder_attention_mask",
+                [1, 257],
+                "int64",
+            ),
+        ]
+
+        rbln_compile_config = RBLNCompileConfig(input_info=input_info)
+        rbln_config.set_compile_cfgs([rbln_compile_config])
+        return rbln_config
+
+    def forward(
+        self,
+        query_embeds: torch.FloatTensor,
+        query_length: Optional[int] = None,
+        attention_mask: Optional[torch.FloatTensor] = None,
+        head_mask: Optional[torch.FloatTensor] = None,
+        encoder_hidden_states: Optional[torch.FloatTensor] = None,
+        encoder_attention_mask: Optional[torch.FloatTensor] = None,
+        past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None,
+        use_cache: Optional[bool] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+    ) -> Union[Tuple[torch.Tensor], BaseModelOutputWithPoolingAndCrossAttentions]:
+        output = super().forward(query_embeds, encoder_hidden_states, encoder_attention_mask, return_dict=return_dict)
+        return output
+
+    def _prepare_output(self, output, return_dict):
+        """
+        Prepare model output based on return_dict flag.
+        This method can be overridden by subclasses to provide task-specific output handling.
+        """
+        if not return_dict:
+            return (output,) if not isinstance(output, (tuple, list)) else output
+        else:
+            return BaseModelOutputWithPoolingAndCrossAttentions(
+                last_hidden_state=output[0],
+                pooler_output=output[1],
+            )
+
+
 class RBLNBlip2ForConditionalGeneration(RBLNModel):
-    auto_model_class = AutoModelForVision2Seq
-    # _rbln_submodules = [{"name": "vision_model"}, {"name": "language_projection"}, {"name": "language_model"}]
-    _rbln_submodules = [{"name": "language_model"}]
+    auto_model_class = AutoModelForVisualQuestionAnswering
+    _rbln_submodules = [{"name": "vision_model"}, {"name": "qformer"}, {"name": "language_model"}]
+    # _rbln_submodules = [{"name": "language_model"}]
 
     def __getattr__(self, __name: str) -> Any:
         def redirect(func):
@@ -141,14 +238,15 @@ class RBLNBlip2ForConditionalGeneration(RBLNModel):
         """
         save_dict = {}
         save_dict["query_tokens"] = model.query_tokens
-        torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
+        torch.save(save_dict, save_dir_path / subfolder / "query_tokens.pth")
 
     def __post_init__(self, **kwargs):
-        # self.vision_model = self.rbln_submodules[0]
-        self.language_model = self.rbln_submodules[0]
-        self.qformer = self.model[0]
+        self.vision_model = self.rbln_submodules[0]
+        self.language_model = self.rbln_submodules[2]
+        self.qformer = self.rbln_submodules[1]
+        self.language_projection = self.model[0]
 
-        artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
+        artifacts = torch.load(self.model_save_dir / self.subfolder / "query_tokens.pth", weights_only=False)
         self.query_tokens = artifacts["query_tokens"]
 
     def get_attn_impl(self) -> str:
@@ -162,7 +260,7 @@ class RBLNBlip2ForConditionalGeneration(RBLNModel):
 
     @classmethod
     def wrap_model_if_needed(cls, model, rbln_config):
-        return model.qformer
+        return model.language_projection
 
     @classmethod
     def _update_rbln_config(
@@ -174,26 +272,9 @@ class RBLNBlip2ForConditionalGeneration(RBLNModel):
     ) -> RBLNModelConfig:
         input_info = [
             (
-                "query_embeds",
-                [1, model_config.num_query_tokens, 768],
+                "query_output",
+                [1, 32, 768],
                 "float32",
-            ),
-            (
-                "encoder_hidden_states",
-                [
-                    1,
-                    257,
-                    1408,
-                ],
-                "float32",
-            ),
-            (
-                "encoder_attention_mask",
-                [
-                    1,
-                    257,
-                ],
-                "int64",
             ),
         ]
 
@@ -201,10 +282,6 @@ class RBLNBlip2ForConditionalGeneration(RBLNModel):
         rbln_config.set_compile_cfgs([rbln_compile_config])
 
         return rbln_config
-
-    # def _update_model_kwargs_for_generation(self, outputs, model_kwargs, is_encoder_decoder, **kwargs):
-    #     model_kwargs["generate_idx"] = outputs.generate_idx
-    #     return model_kwargs
 
     @torch.no_grad()
     def generate(
@@ -248,7 +325,6 @@ class RBLNBlip2ForConditionalGeneration(RBLNModel):
         )
         query_output = query_outputs.last_hidden_state
 
-        # Qformer is kept in fp32, we downcast the output back if needed
         if query_output.dtype != image_embeds.dtype:
             query_output = query_output.to(image_embeds.dtype)
 
@@ -268,8 +344,6 @@ class RBLNBlip2ForConditionalGeneration(RBLNModel):
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids)
 
-        # if the model already has "image_token_index" then the input is expanded to account for image embeds
-        # otherwise we expand manually by concatenating
         if getattr(self.config, "image_token_index", None) is not None:
             special_image_mask = (input_ids == self.config.image_token_index).unsqueeze(-1).expand_as(inputs_embeds)
             inputs_embeds[special_image_mask] = language_model_inputs.flatten()
@@ -283,10 +357,6 @@ class RBLNBlip2ForConditionalGeneration(RBLNModel):
             attention_mask = torch.cat(
                 [language_attention_mask, attention_mask.to(language_attention_mask.device)], dim=1
             )
-
-            # add image_embeds length to max_length, so that the final max_length in counted only on token embeds
-            # -1 is to account for the prepended BOS after `generate.`
-            # TODO (joao, raushan): refactor `generate` to avoid these operations with VLMs
             if not self.language_model.config.is_encoder_decoder:
                 generate_kwargs["max_length"] = (
                     generate_kwargs.get("max_length", 20) + language_model_inputs.shape[1] - 1

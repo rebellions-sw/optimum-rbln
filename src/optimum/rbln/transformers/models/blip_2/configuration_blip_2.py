@@ -21,14 +21,19 @@ class RBLNBlip2VisionModelConfig(RBLNModelConfig):
     pass
 
 
+class RBLNBlip2QFormerModelConfig(RBLNModelConfig):
+    pass
+
+
 class RBLNBlip2ForConditionalGenerationConfig(RBLNModelConfig):
-    # submodules = ["vision_model", "language_model"]
-    submodules = ["language_model"]
+    submodules = ["vision_model", "qformer", "language_model"]
+    # submodules = ["qformer"]
 
     def __init__(
         self,
         batch_size: Optional[int] = None,
-        # vision_model: Optional[RBLNModelConfig] = None,
+        vision_model: Optional[RBLNModelConfig] = None,
+        qformer: Optional[RBLNModelConfig] = None,
         language_model: Optional[RBLNModelConfig] = None,
         **kwargs,
     ):
@@ -47,5 +52,6 @@ class RBLNBlip2ForConditionalGenerationConfig(RBLNModelConfig):
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
-        # self.vision_model = vision_model
+        self.vision_model = vision_model
         self.language_model = language_model
+        self.qformer = qformer

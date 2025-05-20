@@ -12,5 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .configuration_blip_2 import RBLNBlip2ForConditionalGenerationConfig, RBLNBlip2VisionModelConfig
-from .modeling_blip_2 import RBLNBlip2ForConditionalGeneration, RBLNBlip2VisionModel
+from .configuration_blip_2 import (
+    RBLNBlip2ForConditionalGenerationConfig,
+    RBLNBlip2QFormerModelConfig,
+    RBLNBlip2VisionModelConfig,
+)
+from .modeling_blip_2 import RBLNBlip2ForConditionalGeneration, RBLNBlip2QFormerModel, RBLNBlip2VisionModel

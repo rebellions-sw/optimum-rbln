@@ -51,6 +51,8 @@ _import_structure = {
         "RBLNBlip2VisionModel",
         "RBLNBlip2ForConditionalGeneration",
         "RBLNBlip2ForConditionalGenerationConfig",
+        "RBLNBlip2QFormerModel",
+        "RBLNBlip2QFormerModelConfig",
     ],
     "clip": [
         "RBLNCLIPTextModel",
@@ -139,6 +141,8 @@ if TYPE_CHECKING:
     from .blip_2 import (
         RBLNBlip2ForConditionalGeneration,
         RBLNBlip2ForConditionalGenerationConfig,
+        RBLNBlip2QFormerModel,
+        RBLNBlip2QFormerModelConfig,
         RBLNBlip2VisionModel,
         RBLNBlip2VisionModelConfig,
     )
