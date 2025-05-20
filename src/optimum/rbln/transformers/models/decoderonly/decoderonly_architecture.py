@@ -247,31 +247,31 @@ class DecoderOnlyWrapper(nn.Module):
         if self.phase not in ["decode", "prefill"]:
             raise ValueError(f"Unknown phase: {self.phase}")
 
-        (input_ids_or_inputs_embeds, cache_position, block_tables, *flexible_args) = args
+        (input_ids_or_inputs_embeds, cache_position, block_tables, *conditional_args) = args
+
         query_position = None
         attention_mask = None
         position_ids = None
         arg_idx = 0
-
         if self.phase == "prefill":
-            if arg_idx >= len(flexible_args):
+            if arg_idx >= len(conditional_args) - (2 * self.num_hidden_layers):
                 raise ValueError("Missing query_position for prefill phase")
-            query_position = flexible_args[arg_idx]
+            query_position = conditional_args[arg_idx]
             arg_idx += 1
 
         if self.use_attention_mask:
-            if arg_idx >= len(flexible_args):
+            if arg_idx >= len(conditional_args) - (2 * self.num_hidden_layers):
                 raise ValueError("Missing attention_mask when use_attention_mask is True")
-            attention_mask = flexible_args[arg_idx]
+            attention_mask = conditional_args[arg_idx]
             arg_idx += 1
 
         if self.use_position_ids:
-            if arg_idx >= len(flexible_args):
+            if arg_idx >= len(conditional_args) - (2 * self.num_hidden_layers):
                 raise ValueError("Missing position_ids when use_position_ids is True")
-            position_ids = flexible_args[arg_idx]
+            position_ids = conditional_args[arg_idx]
             arg_idx += 1
 
-        past_key_values = flexible_args[arg_idx:]
+        past_key_values = conditional_args[arg_idx:]
         if len(past_key_values) != 2 * self.num_hidden_layers:
             raise ValueError(
                 f"Different past_key_values to model's config. {len(past_key_values)} != {2 * self.num_hidden_layers}"

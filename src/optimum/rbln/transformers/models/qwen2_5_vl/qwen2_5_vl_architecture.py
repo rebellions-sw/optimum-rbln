@@ -181,28 +181,27 @@ class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
         if self.phase not in ["decode", "prefill"]:
             raise ValueError(f"Unknown phase: {self.phase}")
 
-        (input_ids_or_inputs_embeds, cache_position, block_tables, position_embeds, *flexible_args) = args
+        (input_ids_or_inputs_embeds, cache_position, block_tables, position_embeds, *conditional_args) = args
         query_position = None
         attention_mask = None
         position_ids = None
         arg_idx = 0
 
         if self.phase == "prefill":
-            if arg_idx >= len(flexible_args):
+            if arg_idx >= len(conditional_args) - (2 * self.num_hidden_layers):
                 raise ValueError("Missing query_position for prefill phase")
-            query_position = flexible_args[arg_idx]
+            query_position = conditional_args[arg_idx]
             arg_idx += 1
 
         if self.use_attention_mask:
-            if arg_idx >= len(flexible_args):
+            if arg_idx >= len(conditional_args) - (2 * self.num_hidden_layers):
                 raise ValueError("Missing attention_mask when use_attention_mask is True")
-            attention_mask = flexible_args[arg_idx]
+            attention_mask = conditional_args[arg_idx]
             arg_idx += 1
 
-        rotary_emb = flexible_args[arg_idx]
         arg_idx += 1
 
-        past_key_values = flexible_args[arg_idx:]
+        past_key_values = conditional_args[arg_idx:]
         if len(past_key_values) != 2 * self.num_hidden_layers:
             raise ValueError(
                 f"Different past_key_values to model's config. {len(past_key_values)} != {2 * self.num_hidden_layers}"
@@ -216,5 +215,5 @@ class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
             attention_mask,
             position_ids,
             past_key_values,
-            rotary_emb,
+            position_embeds,
         )
