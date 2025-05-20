@@ -1057,7 +1057,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
             input_ids = input_ids[:, -1:]
             position_ids = generate_idx
-            cache_position = generate_idx + padded_cache_lengths
+            cache_position = generate_idx + padded_cache_lengths if padded_cache_lengths is not None else generate_idx
             generate_idx = generate_idx + 1
             model_inputs.update({"input_ids": input_ids})
 
@@ -1126,9 +1126,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     cache_position=cache_position,
                     batch_idx=b_idx,
                 )
-
+                padded_cache_lengths[b_idx] += output.padded_cache_lengths
                 logits.append(output.logits)
-            logits=torch.cat(logits, dim=0)
+            logits = torch.cat(logits, dim=0)
         # Decoder
         else:
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
@@ -1146,4 +1146,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 position_ids=position_ids if self.rbln_config.use_position_ids else None,
             ).logits
 
-        return RBLNDecoderOnlyOutput(logits=logits,generate_idx=generate_idx,padded_cache_lengths=padded_cache_lengths)
+        return RBLNDecoderOnlyOutput(
+            logits=logits, generate_idx=generate_idx, padded_cache_lengths=padded_cache_lengths
+        )
