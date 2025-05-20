@@ -255,7 +255,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_ids if self.use_position_ids else None,
         )
 
-        return logits
+        return RBLNDecoderOnlyOutput(logits=logits)
 
     def _prepare_prefill_inputs(
         self,
@@ -322,9 +322,19 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             if position_embed is not None:
                 position_embed = torch.nn.functional.pad(position_embed, (0, 0, 0, padding_size))
 
+        # Overwrite position_ids and padded_cache_lengths
         position_ids = None
+        padded_cache_lengths = 0
 
-        return inputs, cache_position, chunked_attention_mask, out_buffers, position_ids, position_embed
+        return (
+            inputs,
+            cache_position,
+            chunked_attention_mask,
+            out_buffers,
+            position_ids,
+            position_embed,
+            padded_cache_lengths,
+        )
 
     def prefill_forward(
         self,
@@ -343,9 +353,15 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         """
 
         query_length = inputs.shape[1]
-        inputs, cache_position, chunked_attention_mask, out_buffers, position_ids, position_embed = (
-            self._prepare_prefill_inputs(inputs, cache_position, attention_mask, position_embed)
-        )
+        (
+            inputs,
+            cache_position,
+            chunked_attention_mask,
+            out_buffers,
+            position_ids,
+            position_embed,
+            padded_cache_lengths,
+        ) = self._prepare_prefill_inputs(inputs, cache_position, attention_mask, position_embed)
 
         # Process input in chunks of size `prefill_chunk_size`
         for step in range(0, query_length, self.prefill_chunk_size):
@@ -384,7 +400,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             self.dec_attn_mask[batch_idx].fill_(0)
             self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
 
-        return logits
+        return RBLNDecoderOnlyOutput(logits=logits, padded_cache_lengths=padded_cache_lengths)
 
 
 @dataclass
@@ -1113,15 +1129,10 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     cache_position=cache_position,
                     batch_idx=b_idx,
                 )
-                if self.rbln_config.use_position_ids:
-                    logit, padded_len = output
-                    padded_cache_lengths[b_idx] += padded_len
-                else:
-                    logit = output
 
-                logits.append(logit)
+                logits.append(output.logits)
 
-            logits = torch.cat(logits, dim=0)
+            output = RBLNDecoderOnlyOutput(logits=torch.cat(logits, dim=0))
         # Decoder
         else:
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
@@ -1138,10 +1149,5 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 cache_position=cache_position,
                 position_ids=position_ids if self.rbln_config.use_position_ids else None,
             )
-            logits = output if self.rbln_config.use_position_ids else output[0]
 
-        return RBLNDecoderOnlyOutput(
-            logits=logits,
-            generate_idx=generate_idx,
-            padded_cache_lengths=padded_cache_lengths,
-        )
+        return output
