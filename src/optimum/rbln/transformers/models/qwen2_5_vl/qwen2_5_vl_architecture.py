@@ -157,58 +157,64 @@ class Qwen2_5_VLVisionWindowAttention(nn.Module):
 
 
 class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
-    def forward(self, *args):
-        if self.phase == "decode":
-            if self.use_attention_mask:
-                (
-                    input_ids_or_inputs_embeds,
-                    cache_position,
-                    attention_mask,
-                    block_tables,
-                    position_emb,
-                    *past_key_values,
-                ) = args
-            else:
-                (
-                    input_ids_or_inputs_embeds,
-                    cache_position,
-                    block_tables,
-                    position_emb,
-                    *past_key_values,
-                ) = args
-                attention_mask = None
-            query_position = None
-        elif self.phase == "prefill":
-            if self.use_attention_mask:
-                (
-                    input_ids_or_inputs_embeds,
-                    cache_position,
-                    attention_mask,
-                    query_position,
-                    block_tables,
-                    position_emb,
-                    *past_key_values,
-                ) = args
-            else:
-                (
-                    input_ids_or_inputs_embeds,
-                    cache_position,
-                    query_position,
-                    block_tables,
-                    position_emb,
-                    *past_key_values,
-                ) = args
-                attention_mask = None
+    def convert_args(self, *args):
+        """Converts variable input arguments into a standardized tuple for the forward pass.
 
-        else:
+        Args:
+            *args: Variable arguments in the following order:
+                - input_ids_or_inputs_embeds
+                - cache_position
+                - block_tables
+                - position_embeds
+                - (query_position, if phase == "prefill")
+                - (attention_mask, if use_attention_mask is True)
+                - (position_ids, if use_position_ids is True)
+                - *past_key_values (remaining arguments)
+
+        Returns:
+            tuple: (input_ids_or_inputs_embeds, cache_position, block_tables, query_position,
+                    attention_mask, position_ids, past_key_values, rotary_emb)
+
+        Raises:
+            ValueError: If phase is invalid or required arguments are missing.
+        """
+        if self.phase not in ["decode", "prefill"]:
             raise ValueError(f"Unknown phase: {self.phase}")
 
-        return self.forward_common(
+        (input_ids_or_inputs_embeds, cache_position, block_tables, position_embeds, *flexible_args) = args
+        query_position = None
+        attention_mask = None
+        position_ids = None
+        arg_idx = 0
+
+        if self.phase == "prefill":
+            if arg_idx >= len(flexible_args):
+                raise ValueError("Missing query_position for prefill phase")
+            query_position = flexible_args[arg_idx]
+            arg_idx += 1
+
+        if self.use_attention_mask:
+            if arg_idx >= len(flexible_args):
+                raise ValueError("Missing attention_mask when use_attention_mask is True")
+            attention_mask = flexible_args[arg_idx]
+            arg_idx += 1
+
+        rotary_emb = flexible_args[arg_idx]
+        arg_idx += 1
+
+        past_key_values = flexible_args[arg_idx:]
+        if len(past_key_values) != 2 * self.num_hidden_layers:
+            raise ValueError(
+                f"Different past_key_values to model's config. {len(past_key_values)} != {2 * self.num_hidden_layers}"
+            )
+
+        return (
             input_ids_or_inputs_embeds,
             cache_position,
-            attention_mask,
-            query_position,
             block_tables,
-            position_emb,
-            *past_key_values,
+            query_position,
+            attention_mask,
+            position_ids,
+            past_key_values,
+            rotary_emb,
         )

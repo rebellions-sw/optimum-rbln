@@ -59,6 +59,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         kvcache_block_size: int,
         use_attention_mask: bool,
         attn_impl: str,
+        use_position_ids: bool,
         **kwargs: Any,
     ) -> None:
         super().__init__(runtime, **kwargs)
@@ -72,6 +73,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         self.dec_attn_mask = dec_attn_mask
         self.block_tables = block_tables
         self.free_block_pool = free_block_pool
+        self.use_position_ids = use_position_ids
 
         self.kvcache_block_size = kvcache_block_size
         self.empty_block = -1
@@ -164,6 +166,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         batch_idx: Optional[int] = None,
         block_tables: Optional[torch.Tensor] = None,
         position_embed: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
     ):
         if input_ids is None and inputs_embeds is None:
             raise ValueError("Either `input_ids` or `inputs_embeds` must be provided.")
@@ -189,10 +192,17 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 is_external_block_tables,
                 attention_mask=attention_mask,
                 position_embed=position_embed,
+                position_ids=position_ids,
             )
         else:
             return self.prefill_forward(
-                inputs, cache_position, attention_mask, batch_idx, block_tables, position_embed=position_embed
+                inputs,
+                cache_position,
+                attention_mask,
+                batch_idx,
+                block_tables,
+                position_embed=position_embed,
+                position_ids=position_ids,
             )
 
     def decode_forward(
@@ -203,6 +213,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         is_external_block_tables: bool = None,
         attention_mask: Optional[torch.Tensor] = None,
         position_embed: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         batch_size = inputs.shape[0]
         if batch_size != self.batch_size:
@@ -238,12 +249,82 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         logits = super().forward(
             inputs,
             cache_position,
-            attention_mask if self.use_attention_mask else None,
             block_tables,
             position_embed,
+            attention_mask if self.use_attention_mask else None,
+            position_ids if self.use_position_ids else None,
         )
 
         return logits
+
+    def _prepare_prefill_inputs(
+        self,
+        inputs: torch.Tensor,
+        cache_position: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_embed: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Prepare inputs for prefill phase.
+        """
+        # Handle continuous batching in a compiled graph by extracting valid inputs
+        # If an attention mask is provided, select only the valid (non-masked) inputs
+        inputs = inputs[:, attention_mask.bool()] if attention_mask is not None else inputs
+        if position_embed is not None:
+            position_embed = (
+                position_embed[:, :, :, attention_mask.bool(), :] if attention_mask is not None else position_embed
+            )
+
+        query_length = inputs.shape[1]
+        if query_length > self.max_seq_len:
+            raise ValueError(
+                f"Input length ({query_length}) exceeds the maximum allowed sequence length ({self.max_seq_len})."
+            )
+
+        # Initialize attention mask for chunked processing
+        chunked_attention_mask = (
+            torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
+            if self.use_attention_mask
+            else None
+        )
+
+        # Buffer for storing output logits
+        out_buffers = [
+            torch.empty(
+                size=self.output_size,
+                dtype=torch.float32,
+                device="cpu",
+            )
+        ]
+
+        # Pad input and cache_position if the last chunk is smaller than `prefill_chunk_size`
+        if query_length % self.prefill_chunk_size != 0:
+            padding_size = self.prefill_chunk_size - query_length % self.prefill_chunk_size
+            # inputs_embeds
+            if inputs.dim() == 3:
+                inputs = torch.nn.functional.pad(inputs, (0, 0, 0, padding_size))
+            # inputs_ids
+            else:
+                inputs = torch.nn.functional.pad(inputs, (0, padding_size))
+
+            cache_position = torch.cat(
+                [
+                    cache_position,
+                    torch.arange(
+                        query_length,
+                        query_length + self.prefill_chunk_size,
+                        dtype=torch.int32,
+                    ).unsqueeze(0),
+                ],
+                dim=-1,
+            )
+
+            if position_embed is not None:
+                position_embed = torch.nn.functional.pad(position_embed, (0, 0, 0, padding_size))
+
+        position_ids = None
+
+        return inputs, cache_position, chunked_attention_mask, out_buffers, position_ids, position_embed
 
     def prefill_forward(
         self,
@@ -261,63 +342,19 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         and each chunk is processed sequentially. This allows for better memory utilization and compatibility with continuous batching.
         """
 
-        # Handle continuous batching in a compiled graph by extracting valid inputs
-        # If an attention mask is provided, select only the valid (non-masked) inputs
-        inputs = inputs[:, attention_mask.bool()] if attention_mask is not None else inputs
-        if position_embed is not None:
-            position_embed = (
-                position_embed[:, :, :, attention_mask.bool(), :] if attention_mask is not None else position_embed
-            )
-
         query_length = inputs.shape[1]
-        if query_length > self.max_seq_len:
-            raise ValueError(
-                f"Input length ({query_length}) exceeds the maximum allowed sequence length ({self.max_seq_len})."
-            )
-
-        # Initialize attention mask for chunked processing
-        if self.use_attention_mask:
-            chunked_attention_mask = torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
-
-        # Buffer for storing output logits
-        out_buffers = [
-            torch.empty(
-                size=self.output_size,
-                dtype=torch.float32,
-                device="cpu",
-            )
-        ]
+        inputs, cache_position, chunked_attention_mask, out_buffers, position_ids, position_embed = (
+            self._prepare_prefill_inputs(inputs, cache_position, attention_mask, position_embed)
+        )
 
         # Process input in chunks of size `prefill_chunk_size`
         for step in range(0, query_length, self.prefill_chunk_size):
-            # Pad input and cache_position if the last chunk is smaller than `prefill_chunk_size`
-            if (step + self.prefill_chunk_size) > query_length:
-                padding_size = step + self.prefill_chunk_size - query_length
-                # inputs_embeds
-                if inputs.dim() == 3:
-                    inputs = torch.nn.functional.pad(inputs, (0, 0, 0, padding_size))
-                # inputs_ids
-                else:
-                    inputs = torch.nn.functional.pad(inputs, (0, padding_size))
-
-                cache_position = torch.cat(
-                    [
-                        cache_position,
-                        torch.arange(
-                            query_length,
-                            step + self.prefill_chunk_size,
-                            dtype=torch.int32,
-                        ).unsqueeze(0),
-                    ],
-                    dim=-1,
-                )
-
-                if position_embed is not None:
-                    position_embed = torch.nn.functional.pad(position_embed, (0, 0, 0, padding_size))
-
             # Extract the current chunk of inputs and cache positions
             input_chunk = inputs[:, step : step + self.prefill_chunk_size]
             cache_pos_chunk = cache_position[:, step : step + self.prefill_chunk_size]
+            position_ids_chunk = (
+                position_ids[:, step : step + self.prefill_chunk_size] if position_ids is not None else None
+            )
             if position_embed is not None:
                 position_embed_chunk = position_embed[:, :, :, step : step + self.prefill_chunk_size, :]
 
@@ -334,9 +371,10 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             logits = super().forward(
                 input_chunk,
                 cache_pos_chunk,
-                chunked_attention_mask if self.use_attention_mask else None,
-                query_position,
                 block_tables,
+                query_position,
+                chunked_attention_mask if self.use_attention_mask else None,
+                position_ids_chunk if position_ids is not None else None,
                 position_embed_chunk if position_embed is not None else None,
                 out=out_buffers,
             )
@@ -353,6 +391,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 class RBLNDecoderOnlyOutput(ModelOutput):
     logits: torch.FloatTensor = None
     generate_idx: torch.Tensor = None
+    padded_cache_lengths: int = None
 
 
 class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
@@ -422,6 +461,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             max_seq_len=self.rbln_config.max_seq_len,
             use_attention_mask=self.rbln_config.use_attention_mask,
             attn_impl=self.rbln_config.attn_impl,
+            use_position_ids=self.rbln_config.use_position_ids,
         )
         self.decoders = {}
         for i, batch_size in enumerate(self.rbln_config.decoder_batch_sizes):
@@ -437,6 +477,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 kvcache_block_size=self.rbln_config.kvcache_block_size,
                 use_attention_mask=self.rbln_config.use_attention_mask,
                 attn_impl=self.rbln_config.attn_impl,
+                use_position_ids=self.rbln_config.use_position_ids,
             )
 
         # NOTE(eunji): Use a decoder whose batch size matches the model's main batch size for compatibility.
@@ -547,6 +588,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             "kvcache_block_size": rbln_config.kvcache_block_size,
             "use_rotary_emb": cls._use_rotary_emb,
             "use_attention_mask": rbln_config.use_attention_mask,
+            "use_position_ids": rbln_config.use_position_ids,
         }
         return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
 
@@ -762,6 +804,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         query_length: int,
         use_inputs_embeds: bool,
         use_attention_mask: bool,
+        use_position_ids: bool,
         max_seq_len: int,
         kvcache_block_size: int,
         kvcache_num_blocks: int,
@@ -770,6 +813,10 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         hidden_size: int,
         head_dim: int,
     ):
+        # Input order: Fixed inputs (input_ids_or_inputs_embeds, cache_position, block_tables),
+        # followed by conditional inputs (query_position, attention_mask, position_ids),
+        # and finally past_key_values. This aligns with `DecoderOnlyWrapper.convert_args`.
+
         if use_inputs_embeds:
             main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
         else:
@@ -784,12 +831,12 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             ),
         ]
 
-        if use_attention_mask:
-            input_info.extend(
-                [
-                    ("attention_mask", [batch_size, 1, query_length, max_seq_len], "float32"),
-                ]
-            )
+        max_block_cnt = max_seq_len // kvcache_block_size
+
+        if query_length > 1:
+            input_info.extend([("block_tables", [max_block_cnt], "int16")])
+        else:
+            input_info.extend([("block_tables", [batch_size, max_block_cnt], "int16")])
 
         if query_length > 1:
             input_info.extend(
@@ -797,13 +844,14 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     ("query_position", [], "int16"),
                 ]
             )
-
-        max_block_cnt = max_seq_len // kvcache_block_size
-
-        if query_length > 1:
-            input_info.extend([("block_tables", [max_block_cnt], "int16")])
-        else:
-            input_info.extend([("block_tables", [batch_size, max_block_cnt], "int16")])
+        if use_attention_mask:
+            input_info.extend(
+                [
+                    ("attention_mask", [batch_size, 1, query_length, max_seq_len], "float32"),
+                ]
+            )
+        if use_position_ids:
+            input_info.append(("position_ids", [batch_size, query_length], "int32"))
 
         input_info.extend(
             [
@@ -897,6 +945,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             query_length=rbln_config.prefill_chunk_size,
             use_inputs_embeds=rbln_config.use_inputs_embeds,
             use_attention_mask=rbln_config.use_attention_mask,
+            use_position_ids=rbln_config.use_position_ids,
             max_seq_len=rbln_config.max_seq_len,
             kvcache_block_size=rbln_config.kvcache_block_size,
             kvcache_num_blocks=rbln_config.kvcache_num_blocks,
@@ -915,6 +964,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 query_length=1,
                 use_inputs_embeds=rbln_config.use_inputs_embeds,
                 use_attention_mask=rbln_config.use_attention_mask,
+                use_position_ids=rbln_config.use_position_ids,
                 max_seq_len=rbln_config.max_seq_len,
                 kvcache_block_size=rbln_config.kvcache_block_size,
                 kvcache_num_blocks=rbln_config.kvcache_num_blocks,
@@ -976,6 +1026,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         generate_idx: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.LongTensor] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
+        padded_cache_lengths: Optional[torch.Tensor] = None,
         **kwargs,
     ):
         model_inputs = {}
@@ -983,13 +1034,16 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
         if is_prefill_phase:
             generate_idx = attention_mask.sum(dim=-1, keepdim=True).int()
+            padded_cache_lengths = torch.zeros_like(generate_idx)
             cache_position = None
+            position_ids = None
         else:
             if inputs_embeds is not None:
                 raise NotImplementedError("Specifying inputs_embeds in decoder phase is not supported.")
 
             input_ids = input_ids[:, -1:]
-            cache_position = generate_idx
+            position_ids = generate_idx
+            cache_position = generate_idx + padded_cache_lengths
             generate_idx = generate_idx + 1
             model_inputs.update({"input_ids": input_ids})
 
@@ -1008,6 +1062,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 "attention_mask": attention_mask,
                 "cache_position": cache_position,
                 "generate_idx": generate_idx,
+                "position_ids": position_ids,
+                "padded_cache_lengths": padded_cache_lengths,
             }
         )
 
@@ -1021,6 +1077,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
     ) -> Dict[str, Any]:
         # update generate_idx
         model_kwargs["generate_idx"] = outputs.generate_idx
+        model_kwargs["padded_cache_lengths"] = outputs.padded_cache_lengths
 
         return model_kwargs
 
@@ -1031,6 +1088,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         cache_position: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.LongTensor] = None,
         generate_idx: Optional[torch.Tensor] = None,
+        padded_cache_lengths: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
         """
@@ -1047,13 +1106,19 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
-                logit = self.prefill_decoder(
+                output = self.prefill_decoder(
                     input_ids=inputs[b_idx : b_idx + 1] if inputs_embeds is None else None,
                     inputs_embeds=inputs[b_idx : b_idx + 1] if inputs_embeds is not None else None,
                     attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                     cache_position=cache_position,
                     batch_idx=b_idx,
                 )
+                if self.rbln_config.use_position_ids:
+                    logit, padded_len = output
+                    padded_cache_lengths[b_idx] += padded_len
+                else:
+                    logit = output
+
                 logits.append(logit)
 
             logits = torch.cat(logits, dim=0)
@@ -1067,13 +1132,16 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     f"Available batch sizes are: {list(self.decoders.keys())}. "
                     f"Please run your model with one of these batch sizes or add support for batch size {batch_size}."
                 )
-            logits = self.decoders[batch_size](
+            output = self.decoders[batch_size](
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
+                position_ids=position_ids if self.rbln_config.use_position_ids else None,
             )
+            logits = output if self.rbln_config.use_position_ids else output[0]
 
         return RBLNDecoderOnlyOutput(
             logits=logits,
             generate_idx=generate_idx,
+            padded_cache_lengths=padded_cache_lengths,
         )

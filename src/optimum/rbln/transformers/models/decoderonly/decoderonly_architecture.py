@@ -147,6 +147,7 @@ class DecoderOnlyWrapper(nn.Module):
         use_rotary_emb: bool,
         attn_impl: str,
         use_attention_mask: bool,
+        use_position_ids: bool,
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
     ):
@@ -161,6 +162,7 @@ class DecoderOnlyWrapper(nn.Module):
         self.attn_impl = attn_impl
         self.kvcache_block_size = kvcache_block_size
         self.use_attention_mask = use_attention_mask
+        self.use_position_ids = use_position_ids
         if self.attn_impl == "flash_attn":
             self.kvcache_partition_len = kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
         elif self.attn_impl == "eager":
@@ -222,16 +224,82 @@ class DecoderOnlyWrapper(nn.Module):
         self._phase = phase
         self.causal_lm.phase = phase
 
-    def forward_common(
-        self,
-        input_ids_or_inputs_embeds: torch.Tensor,
-        cache_position: torch.Tensor,
-        attention_mask: torch.Tensor,
-        query_position: torch.Tensor,
-        block_tables: torch.Tensor,
-        rotary_emb: Union[nn.Module, torch.Tensor],
-        *past_key_values: List[torch.Tensor],
-    ):
+    def convert_args(self, *args):
+        """Converts variable input arguments into a standardized tuple for the forward pass.
+
+        Args:
+            *args: Variable arguments in the following order:
+                - input_ids_or_inputs_embeds
+                - cache_position
+                - block_tables
+                - (query_position, if phase == "prefill")
+                - (attention_mask, if use_attention_mask is True)
+                - (position_ids, if use_position_ids is True)
+                - *past_key_values (remaining arguments)
+
+        Returns:
+            tuple: (input_ids_or_inputs_embeds, cache_position, block_tables, query_position,
+                    attention_mask, position_ids, past_key_values, rotary_emb)
+
+        Raises:
+            ValueError: If phase is invalid or required arguments are missing.
+        """
+        if self.phase not in ["decode", "prefill"]:
+            raise ValueError(f"Unknown phase: {self.phase}")
+
+        (input_ids_or_inputs_embeds, cache_position, block_tables, *flexible_args) = args
+        query_position = None
+        attention_mask = None
+        position_ids = None
+        arg_idx = 0
+
+        if self.phase == "prefill":
+            if arg_idx >= len(flexible_args):
+                raise ValueError("Missing query_position for prefill phase")
+            query_position = flexible_args[arg_idx]
+            arg_idx += 1
+
+        if self.use_attention_mask:
+            if arg_idx >= len(flexible_args):
+                raise ValueError("Missing attention_mask when use_attention_mask is True")
+            attention_mask = flexible_args[arg_idx]
+            arg_idx += 1
+
+        if self.use_position_ids:
+            if arg_idx >= len(flexible_args):
+                raise ValueError("Missing position_ids when use_position_ids is True")
+            position_ids = flexible_args[arg_idx]
+            arg_idx += 1
+
+        past_key_values = flexible_args[arg_idx:]
+        if len(past_key_values) != 2 * self.num_hidden_layers:
+            raise ValueError(
+                f"Different past_key_values to model's config. {len(past_key_values)} != {2 * self.num_hidden_layers}"
+            )
+
+        return (
+            input_ids_or_inputs_embeds,
+            cache_position,
+            block_tables,
+            query_position,
+            attention_mask,
+            position_ids,
+            past_key_values,
+            self.rotary_emb,
+        )
+
+    def forward(self, *args):
+        (
+            input_ids_or_inputs_embeds,
+            cache_position,
+            block_tables,
+            query_position,
+            attention_mask,
+            position_ids,
+            past_key_values,
+            rotary_emb,
+        ) = self.convert_args(*args)
+
         if input_ids_or_inputs_embeds.ndim == 2:
             input_ids = input_ids_or_inputs_embeds
             inputs_embeds = None
@@ -261,6 +329,7 @@ class DecoderOnlyWrapper(nn.Module):
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
             cache_position=cache_position,
+            position_ids=position_ids,
             query_position=query_position,
             past_key_values=past_key_values,
             rotary_emb=rotary_emb,
@@ -268,58 +337,6 @@ class DecoderOnlyWrapper(nn.Module):
         )
 
         return logit
-
-    def forward(self, *args):
-        if self.phase == "decode":
-            if self.use_attention_mask:
-                (
-                    input_ids_or_inputs_embeds,
-                    cache_position,
-                    attention_mask,
-                    block_tables,
-                    *past_key_values,
-                ) = args
-            else:
-                (
-                    input_ids_or_inputs_embeds,
-                    cache_position,
-                    block_tables,
-                    *past_key_values,
-                ) = args
-                attention_mask = None
-            query_position = None
-        elif self.phase == "prefill":
-            if self.use_attention_mask:
-                (
-                    input_ids_or_inputs_embeds,
-                    cache_position,
-                    attention_mask,
-                    query_position,
-                    block_tables,
-                    *past_key_values,
-                ) = args
-            else:
-                (
-                    input_ids_or_inputs_embeds,
-                    cache_position,
-                    query_position,
-                    block_tables,
-                    *past_key_values,
-                ) = args
-                attention_mask = None
-
-        else:
-            raise ValueError(f"Unknown phase: {self.phase}")
-
-        return self.forward_common(
-            input_ids_or_inputs_embeds,
-            cache_position,
-            attention_mask,
-            query_position,
-            block_tables,
-            self.rotary_emb,
-            *past_key_values,
-        )
 
 
 class DecoderOnlyForCausalLM(nn.Module):
@@ -367,6 +384,7 @@ class DecoderOnlyForCausalLM(nn.Module):
         inputs_embeds: torch.Tensor = None,
         attention_mask: torch.Tensor = None,
         cache_position: torch.Tensor = None,
+        position_ids: torch.Tensor = None,
         query_position: torch.Tensor = None,
         past_key_values: Tuple[Tuple[torch.Tensor]] = None,
         rotary_emb: nn.Module = None,
@@ -378,6 +396,7 @@ class DecoderOnlyForCausalLM(nn.Module):
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
             cache_position=cache_position,
+            position_ids=position_ids,
             past_key_values=past_key_values,
             rotary_emb=rotary_emb,
             block_tables=block_tables,
@@ -457,11 +476,12 @@ class DecoderOnlyModel(nn.Module):
     def forward(
         self,
         input_ids: torch.Tensor = None,
-        inputs_embeds: torch.Tensor = None,
+        inputs_embeds: Optional[torch.Tensor] = None,
         attention_mask: torch.Tensor = None,
         cache_position: torch.Tensor = None,
+        position_ids: torch.Tensor = None,
         past_key_values: Tuple[Tuple[torch.Tensor]] = None,
-        rotary_emb: nn.Module = None,
+        rotary_emb: Optional[Union[nn.Module, torch.Tensor]] = None,
         block_tables: Optional[torch.Tensor] = None,
     ):
         # retrieve input_ids and inputs_embeds
@@ -477,24 +497,25 @@ class DecoderOnlyModel(nn.Module):
         hidden_states = inputs_embeds * self.hidden_multiplier
 
         # get cos,sin vector if needed
+        position_ids = position_ids if position_ids is not None else cache_position
         if rotary_emb is not None:
             if isinstance(rotary_emb, torch.Tensor):
                 cos = rotary_emb[0]
                 sin = rotary_emb[1]
             else:
                 cos, sin = rotary_emb(hidden_states, self.max_seq_len)  # dtype carrier, max_seq_len
-                cos, sin = slice_and_unsqueeze_cos_sin(cos, sin, cache_position)
+                cos, sin = slice_and_unsqueeze_cos_sin(cos, sin, position_ids)
         else:
             batch_size = inputs_embeds.shape[0]
-            if cache_position.shape[0] > 1:
+            if position_ids.shape[0] > 1:
                 position_embeds = []
                 for b_idx in range(batch_size):
-                    position_embed = self.get_pos_embedding()(cache_position[b_idx])
+                    position_embed = self.get_pos_embedding()(position_ids[b_idx])
                     position_embeds.append(position_embed)
 
                 position_embeds = torch.cat(position_embeds, dim=0).unsqueeze(1)
             else:
-                position_embeds = self.get_pos_embedding()(cache_position)
+                position_embeds = self.get_pos_embedding()(position_ids)
             hidden_states = hidden_states + position_embeds
             cos, sin = None, None
 
