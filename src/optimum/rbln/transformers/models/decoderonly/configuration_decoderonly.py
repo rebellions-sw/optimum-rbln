@@ -48,7 +48,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
             use_inputs_embeds (Optional[bool]): Whether to use input embeddings directly. Defaults to False.
             use_attention_mask (Optional[bool]): Whether to use attention masks. This is automatically set to True
                 for RBLN-CA02 devices.
-            use_position_ids (Optional[bool]): Whether to use position ids. Defaults to False.
+            use_position_ids (Optional[bool]): Whether to use position IDs. Defaults to False.
             attn_impl (Optional[str]): The attention implementation to use.
             kvcache_partition_len (Optional[int]): The length of each KV cache partition.
             kvcache_block_size (Optional[int]): The block size for KV cache.
@@ -76,7 +76,12 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
 
         self.max_seq_len = max_seq_len
         self.use_inputs_embeds = use_inputs_embeds or False
+        self.use_position_ids = use_position_ids or False
         self.use_attention_mask = use_attention_mask
+
+        if self.use_position_ids and not self.use_attention_mask:
+            raise ValueError("Position IDs should be used with attention mask. Setting use_attention_mask to True.")
+
         npu = self.npu or rebel.get_npu_name()
         if npu == "RBLN-CA02":
             if self.use_attention_mask is False:

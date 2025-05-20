@@ -392,8 +392,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             hidden_size,
             head_dim,
         )
-        pos_idx = 5 if query_length > 1 else 4
-        pos_idx = pos_idx if use_attention_mask else pos_idx - 1
+        pos_idx = 3
         input_info.insert(pos_idx, ("position_emb", [2, batch_size, 1, query_length, head_dim], "float32"))
 
         return input_info
@@ -584,24 +583,24 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
 
-                logit = self.prefill_decoder(
+                output = self.prefill_decoder(
                     inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
                     attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                     cache_position=cache_position,
                     batch_idx=b_idx,
                     position_embed=position_embed[:, b_idx : b_idx + 1],
                 )
-                logits.append(logit)
+                logits.append(output.logits)
             logits = torch.cat(logits, dim=0)
         # Decoder
         else:
             inputs_embeds, position_embed = self._preprocess_decoder(input_ids, cache_position)
-            logits = self.decoder(
+            output = self.decoder(
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
                 position_embed=position_embed,
             )
-
+            logits = output.logits
         return RBLNDecoderOnlyOutput(
             logits=logits,
             generate_idx=generate_idx,
