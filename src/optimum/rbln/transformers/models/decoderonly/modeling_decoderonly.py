@@ -202,7 +202,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 batch_idx,
                 block_tables,
                 position_embed=position_embed,
-                position_ids=position_ids,
             )
 
     def decode_forward(
@@ -351,7 +350,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         Instead of processing the entire sequence at once, the input is divided into chunks of size `prefill_chunk_size`,
         and each chunk is processed sequentially. This allows for better memory utilization and compatibility with continuous batching.
         """
-
         query_length = inputs.shape[1]
         (
             inputs,
@@ -1119,7 +1117,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             logits = []
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
             batch_size = inputs.shape[0]
-
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
                 output = self.prefill_decoder(
@@ -1131,8 +1128,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 )
 
                 logits.append(output.logits)
-
-            output = RBLNDecoderOnlyOutput(logits=torch.cat(logits, dim=0))
+            logits=torch.cat(logits, dim=0)
         # Decoder
         else:
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
@@ -1143,11 +1139,11 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     f"Available batch sizes are: {list(self.decoders.keys())}. "
                     f"Please run your model with one of these batch sizes or add support for batch size {batch_size}."
                 )
-            output = self.decoders[batch_size](
+            logits = self.decoders[batch_size](
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
                 position_ids=position_ids if self.rbln_config.use_position_ids else None,
-            )
+            ).logits
 
-        return output
+        return RBLNDecoderOnlyOutput(logits=logits,generate_idx=generate_idx,padded_cache_lengths=padded_cache_lengths)
