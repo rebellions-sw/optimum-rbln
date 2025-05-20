@@ -232,7 +232,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         if self.batch_size < block_tables.shape[0]:
             block_tables = block_tables[: self.batch_size]
 
-        if self.batch_size < attention_mask.shape[0]:
+        if attention_mask is not None and self.batch_size < attention_mask.shape[0]:
             attention_mask = attention_mask[: self.batch_size]
 
         logits = super().forward(
