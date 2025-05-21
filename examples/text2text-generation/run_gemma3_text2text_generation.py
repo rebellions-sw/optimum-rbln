@@ -31,7 +31,7 @@ def get_inputs(batch_size):
             },
             {
                 "role": "user",
-                "content": [{"type": "text", "text": "Describe the following text."}],
+                "content": [{"type": "text", "text": restored_texts[-i][:8192]}],
             },
         ]
         for i in range(batch_size)
@@ -43,6 +43,7 @@ def get_inputs(batch_size):
         tokenize=False,
     )
     inputs = tokenizer(texts, padding=True, return_tensors="pt")
+
     return inputs
 
 

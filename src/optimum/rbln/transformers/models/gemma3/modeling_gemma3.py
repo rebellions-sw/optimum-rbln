@@ -569,7 +569,12 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                     chunked_attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
 
             # Define query position
-            query_position = torch.tensor((query_length - 1) % self.prefill_chunk_size, dtype=torch.int16)
+            query_position = (
+                torch.sum(
+                    chunked_attention_mask[0][step : step + self.prefill_chunk_size], dim=-1, dtype=torch.int16
+                ).squeeze(0)
+                - 1
+            )
             if token_type_ids_padded[:, step] == 1:
                 if torch.any(
                     token_type_ids_padded[:, step : step + self.prefill_chunk_size] == 0
