@@ -55,6 +55,7 @@ class Gemma3ForCausalLMWrapper(DecoderOnlyWrapper):
                 new_self_attn = Gemma3Attention(
                     layer.self_attn,
                     use_attention_mask=None,  # FIXME: no use in SWA
+                    use_position_ids=self.use_position_ids,
                     kvcache_block_size=self.config.sliding_window,
                 )
             else:
@@ -62,6 +63,7 @@ class Gemma3ForCausalLMWrapper(DecoderOnlyWrapper):
                     new_self_attn = Gemma3Attention(
                         layer.self_attn,
                         use_attention_mask=self.use_attention_mask,
+                        use_position_ids=self.use_position_ids,
                         kvcache_block_size=self.kvcache_block_size,
                     )
                 elif self.attn_impl == "flash_attn":
@@ -70,6 +72,7 @@ class Gemma3ForCausalLMWrapper(DecoderOnlyWrapper):
                         kvcache_partition_len=self.kvcache_partition_len,
                         use_attention_mask=self.use_attention_mask,
                         kvcache_block_size=self.kvcache_block_size,
+                        use_position_ids=self.use_position_ids,
                     )
                 else:
                     raise NotImplementedError(f"Unknwon attn : {self.attn_impl}")
@@ -337,9 +340,10 @@ class Gemma3Attention(DecoderOnlyAttention):
                 self.head_dim,
                 self.num_key_value_heads,
                 self.use_attention_mask,
+                self.use_position_ids,
             )
         else:
-            return AttentionOp(self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask)
+            return AttentionOp(self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask, self.use_position_ids)
 
     def forward(
         self,

@@ -194,7 +194,7 @@ class DecoderOnlyWrapper(nn.Module):
         for layer in causal_lm.model.layers:
             if self.attn_impl == "eager":
                 new_self_attn = DecoderOnlyAttention(
-                    layer.self_attn, self.use_attention_mask, kvcache_block_size=self.kvcache_block_size
+                    layer.self_attn, self.use_attention_mask, self.use_position_ids, kvcache_block_size=self.kvcache_block_size
                 )
             elif self.attn_impl == "flash_attn":
                 new_self_attn = DecoderOnlyFlashAttention(
@@ -202,6 +202,7 @@ class DecoderOnlyWrapper(nn.Module):
                     kvcache_partition_len=self.kvcache_partition_len,
                     kvcache_block_size=self.kvcache_block_size,
                     use_attention_mask=self.use_attention_mask,
+                    use_position_ids=self.use_position_ids,
                 )
             else:
                 raise NotImplementedError(f"Unknwon attn : {self.attn_impl}")
@@ -644,7 +645,7 @@ class DecoderOnlyAttention(nn.Module):
         self_attn: Original attention module from the base model
     """
 
-    def __init__(self, self_attn, use_attention_mask, kvcache_block_size):
+    def __init__(self, self_attn, use_attention_mask, use_position_ids, kvcache_block_size):
         super().__init__()
         self._original_mod = self_attn
         self.layer_idx = self_attn.layer_idx
@@ -663,6 +664,7 @@ class DecoderOnlyAttention(nn.Module):
             self.num_key_value_heads = self.num_heads
 
         self.use_attention_mask = use_attention_mask
+        self.use_position_ids = use_position_ids
         self.attention = self.get_attention()
         self.kvcache_block_size = kvcache_block_size
         self.__post_init__()
@@ -677,7 +679,7 @@ class DecoderOnlyAttention(nn.Module):
         self.attention.phase = phase
 
     def get_attention(self):
-        return AttentionOp(self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask)
+        return AttentionOp(self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask, self.use_position_ids)
 
     def __post_init__(self):
         self.q_proj = self._original_mod.q_proj
@@ -750,13 +752,14 @@ class DecoderOnlyAttention(nn.Module):
 
 
 class AttentionOp(nn.Module):
-    def __init__(self, num_heads: int, head_dim: int, num_key_value_heads: int, use_attention_mask: bool):
+    def __init__(self, num_heads: int, head_dim: int, num_key_value_heads: int, use_attention_mask: bool, use_position_ids: bool):
         super().__init__()
         self.num_heads = num_heads
         self.head_dim = head_dim
         self.num_key_value_heads = num_key_value_heads
         self.phase = "prefill"
         self.use_attention_mask = use_attention_mask
+        self.use_position_ids = use_position_ids
 
     def forward(
         self,
@@ -807,7 +810,7 @@ class AttentionOp(nn.Module):
         )
 
         if self.phase == "decode":
-            if self.use_attention_mask:
+            if self.use_attention_mask and not self.use_position_ids:
                 attn_output = torch.ops.rbln_custom_ops.paged_attn_decode(
                     q=query_state,
                     k=key_state,
@@ -831,11 +834,11 @@ class AttentionOp(nn.Module):
                     scale=scale,
                     block_table=block_tables,
                     block_size=block_size,
-                    mask=attn_mask,
+                    mask=attn_mask if self.use_position_ids else None,
                 )
 
         else:
-            if self.use_attention_mask:
+            if self.use_attention_mask and not self.use_position_ids:
                 attn_output = torch.ops.rbln_custom_ops.paged_attn_prefill(
                     q=query_state,
                     k=key_state,
@@ -860,7 +863,7 @@ class AttentionOp(nn.Module):
                     block_table=block_tables,
                     block_size=block_size,
                     is_bidirectional=True if self.phase == "image_prefill" else False,  # FIXME, Hard-coded for Gemma3.
-                    mask=attn_mask,
+                    mask=attn_mask if self.use_position_ids else None,
                 )
 
         attn_output = attn_output.view(batch_size, self.num_heads, -1, self.head_dim)
@@ -962,10 +965,10 @@ class RotaryEmbedding(nn.Module):
 
 
 class DecoderOnlyFlashAttention(DecoderOnlyAttention):
-    def __init__(self, self_attn, kvcache_partition_len, kvcache_block_size, use_attention_mask):
+    def __init__(self, self_attn, kvcache_partition_len, kvcache_block_size, use_attention_mask, use_position_ids):
         self.kvcache_partition_size = kvcache_partition_len
         super().__init__(
-            self_attn=self_attn, use_attention_mask=use_attention_mask, kvcache_block_size=kvcache_block_size
+            self_attn=self_attn, use_attention_mask=use_attention_mask, use_position_ids=use_position_ids, kvcache_block_size=kvcache_block_size
         )
 
     def get_attention(self):
@@ -975,6 +978,7 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
             self.num_key_value_heads,
             self.kvcache_partition_size,
             self.use_attention_mask,
+            self.use_position_ids,
         )
 
     def forward(
@@ -1026,12 +1030,14 @@ class FlashAttentionOp(AttentionOp):
         num_key_value_heads: int,
         kvcache_partition_len: int,
         use_attention_mask: bool,
+        use_position_ids: bool,
     ):
         super().__init__(
             num_heads=num_heads,
             head_dim=head_dim,
             num_key_value_heads=num_key_value_heads,
             use_attention_mask=use_attention_mask,
+            use_position_ids=use_position_ids,
         )
         self.kvcache_partition_size = kvcache_partition_len
 
@@ -1068,7 +1074,7 @@ class FlashAttentionOp(AttentionOp):
         )
 
         if self.phase == "decode":
-            if self.use_attention_mask:
+            if self.use_attention_mask and not self.use_position_ids:
                 attn_output = torch.ops.rbln_custom_ops.paged_flash_attn_decode(
                     q=query_state,
                     k=key_state,
@@ -1094,10 +1100,10 @@ class FlashAttentionOp(AttentionOp):
                     block_table=block_tables,
                     block_size=kvcache_block_size,
                     partition=self.kvcache_partition_size,
-                    mask=attn_mask,
+                    mask=attn_mask if self.use_position_ids else None,
                 )
         else:
-            if self.use_attention_mask:
+            if self.use_attention_mask and not self.use_position_ids:
                 attn_output = torch.ops.rbln_custom_ops.paged_flash_attn_prefill(
                     q=query_state,
                     k=key_state,
@@ -1124,7 +1130,7 @@ class FlashAttentionOp(AttentionOp):
                     block_size=kvcache_block_size,
                     partition=self.kvcache_partition_size,
                     is_bidirectional=True if self.phase == "image_prefill" else False,  # FIXME, Hard-coded for Gemma3.
-                    mask=attn_mask,
+                    mask=attn_mask if self.use_position_ids else None,
                 )
 
         # reshape for removing repeat_kv
@@ -1142,6 +1148,7 @@ class DecoderOnlySlidingWindowAttention(DecoderOnlyAttention):
             self.head_dim,
             self.num_key_value_heads,
             self.use_attention_mask,
+            self.use_position_ids,
         )
 
 
