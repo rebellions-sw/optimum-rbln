@@ -13,7 +13,7 @@
 # limitations under the License.
 import inspect
 from collections import deque
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple, Union, List
 
 import rebel
 import torch
@@ -129,10 +129,6 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
     def __post_init__(self, **kwargs):
         self.vision_tower = LoopVisionTower(self.rbln_submodules[0])
         self.language_model = self.rbln_submodules[1]
-
-        # FIXME(taehoon): hard_corded.
-        self.language_model.image_token_index = self.config.image_token_index
-
         self.multi_modal_projector = LoopProjector(self.model[0])
         self.vocab_size = self.config.text_config.vocab_size
 
@@ -286,12 +282,11 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
                 output = self.language_model.prefill_decoder(
-                    input_ids=input_ids[b_idx : b_idx + 1],
                     inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
                     attention_mask=attention_mask[b_idx],
                     cache_position=cache_position,
                     batch_idx=b_idx,
-                    token_type_ids=token_type_ids,
+                    token_type_ids=token_type_ids[b_idx : b_idx + 1],
                 )
                 padded_cache_lengths[b_idx] += output.padded_cache_lengths
                 logits.append(output.logits)
@@ -428,6 +423,8 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         # Handle continuous batching in a compiled graph by extracting valid inputs
         # If an attention mask is provided, select only the valid (non-masked) inputs
         inputs = inputs[:, attention_mask.bool()] if attention_mask is not None else inputs
+        token_type_ids = token_type_ids[:, attention_mask.bool()] if attention_mask is not None else token_type_ids
+
         if position_embed is not None:
             position_embed = (
                 position_embed[:, :, :, attention_mask.bool(), :] if attention_mask is not None else position_embed
@@ -540,7 +537,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
             inputs, cache_position, attention_mask, position_embed, token_type_ids=token_type_ids
         )
         if not is_external_block_tables:
-            self.dec_attn_mask[batch_idx] = chunked_attention_mask
+            self.dec_attn_mask[batch_idx : batch_idx + 1] = chunked_attention_mask[:1]
             local_block_tables = torch.tensor([batch_idx], dtype=torch.int16)
 
         # Process input in chunks of size `prefill_chunk_size`
@@ -1004,3 +1001,41 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         #     )
 
         return compiled_models
+
+    @classmethod
+    def _create_runtimes(
+        cls,
+        compiled_models: List[rebel.RBLNCompiledModel],
+        rbln_config: RBLNGemma3ForCausalLMConfig,
+    ) -> List[rebel.Runtime]:
+        expected_model_names = [
+            "text_prefill",
+            "image_prefill",
+            *[f"decoder_batch_{batch_size}" for batch_size in rbln_config.decoder_batch_sizes],
+        ]
+        if any(model_name not in rbln_config.device_map for model_name in expected_model_names):
+            cls._raise_missing_compiled_file_error(expected_model_names)
+
+        return [
+            rebel.Runtime(
+                compiled_models[0],
+                tensor_type="pt",
+                device=rbln_config.device_map["text_prefill"],
+                activate_profiler=rbln_config.activate_profiler,
+            ),
+            rebel.Runtime(
+                compiled_models[1],
+                tensor_type="pt",
+                device=rbln_config.device_map["image_prefill"],
+                activate_profiler=rbln_config.activate_profiler,
+            ),
+            *[
+                rebel.Runtime(
+                    compiled_models[i + 2],
+                    tensor_type="pt",
+                    device=rbln_config.device_map[f"decoder_batch_{batch_size}"],
+                    activate_profiler=rbln_config.activate_profiler,
+                )
+                for i, batch_size in enumerate(rbln_config.decoder_batch_sizes)
+            ],
+        ]
