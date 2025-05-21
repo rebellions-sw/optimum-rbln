@@ -194,7 +194,10 @@ class DecoderOnlyWrapper(nn.Module):
         for layer in causal_lm.model.layers:
             if self.attn_impl == "eager":
                 new_self_attn = DecoderOnlyAttention(
-                    layer.self_attn, self.use_attention_mask, self.use_position_ids, kvcache_block_size=self.kvcache_block_size
+                    layer.self_attn,
+                    self.use_attention_mask,
+                    self.use_position_ids,
+                    kvcache_block_size=self.kvcache_block_size,
                 )
             elif self.attn_impl == "flash_attn":
                 new_self_attn = DecoderOnlyFlashAttention(
@@ -679,7 +682,9 @@ class DecoderOnlyAttention(nn.Module):
         self.attention.phase = phase
 
     def get_attention(self):
-        return AttentionOp(self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask, self.use_position_ids)
+        return AttentionOp(
+            self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask, self.use_position_ids
+        )
 
     def __post_init__(self):
         self.q_proj = self._original_mod.q_proj
@@ -752,7 +757,9 @@ class DecoderOnlyAttention(nn.Module):
 
 
 class AttentionOp(nn.Module):
-    def __init__(self, num_heads: int, head_dim: int, num_key_value_heads: int, use_attention_mask: bool, use_position_ids: bool):
+    def __init__(
+        self, num_heads: int, head_dim: int, num_key_value_heads: int, use_attention_mask: bool, use_position_ids: bool
+    ):
         super().__init__()
         self.num_heads = num_heads
         self.head_dim = head_dim
@@ -793,7 +800,7 @@ class AttentionOp(nn.Module):
         key_state = key_state.unsqueeze(2)  # 1, 32, 1, 128, 128
         value_state = value_state.unsqueeze(2)
 
-        if self.use_attention_mask:
+        if self.use_attention_mask and not self.use_position_ids:
             attn_mask = attn_mask.unsqueeze(2)
 
         if self.phase == "decode":
@@ -968,7 +975,10 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
     def __init__(self, self_attn, kvcache_partition_len, kvcache_block_size, use_attention_mask, use_position_ids):
         self.kvcache_partition_size = kvcache_partition_len
         super().__init__(
-            self_attn=self_attn, use_attention_mask=use_attention_mask, use_position_ids=use_position_ids, kvcache_block_size=kvcache_block_size
+            self_attn=self_attn,
+            use_attention_mask=use_attention_mask,
+            use_position_ids=use_position_ids,
+            kvcache_block_size=kvcache_block_size,
         )
 
     def get_attention(self):
@@ -1057,7 +1067,7 @@ class FlashAttentionOp(AttentionOp):
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
         key_state = key_state.unsqueeze(2)
         value_state = value_state.unsqueeze(2)
-        if self.use_attention_mask and attn_mask.dim() == 4:
+        if self.use_attention_mask and not self.use_position_ids:
             attn_mask = attn_mask.unsqueeze(2)
 
         if self.phase == "decode":
@@ -1169,8 +1179,6 @@ class SlidingWindowAttentionOp(AttentionOp):
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
         key_state = key_state.unsqueeze(2)
         value_state = value_state.unsqueeze(2)
-        # if self.use_attention_mask:
-        #     attn_mask = attn_mask.unsqueeze(2)
 
         if self.phase == "decode":
             batch_size = key_state.shape[0]

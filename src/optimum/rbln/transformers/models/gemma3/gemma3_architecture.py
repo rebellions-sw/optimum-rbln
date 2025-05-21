@@ -343,7 +343,9 @@ class Gemma3Attention(DecoderOnlyAttention):
                 self.use_position_ids,
             )
         else:
-            return AttentionOp(self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask, self.use_position_ids)
+            return AttentionOp(
+                self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask, self.use_position_ids
+            )
 
     def forward(
         self,
