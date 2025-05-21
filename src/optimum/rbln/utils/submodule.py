@@ -59,8 +59,8 @@ class SubModulesMixin:
             cls_name = torch_submodule.__class__.__name__
             submodule_cls: Type["RBLNBaseModel"] = getattr(importlib.import_module("optimum.rbln"), f"RBLN{cls_name}")
             submodule_rbln_config = getattr(rbln_config, submodule_name) or {}
-            if hasattr(submodule_cls, "update_rbln_config_using_conditional_generation"):
-                submodule_rbln_config = submodule_cls.update_rbln_config_using_conditional_generation(
+            if hasattr(submodule_cls, "update_rbln_config_using_parent_config"):
+                submodule_rbln_config = submodule_cls.update_rbln_config_using_parent_config(
                     model, submodule_rbln_config, submodule_name
                 )
 
