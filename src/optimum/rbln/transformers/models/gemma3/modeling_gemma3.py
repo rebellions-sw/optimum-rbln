@@ -383,7 +383,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                 position_ids_padded[:, dest_pos : dest_pos + length] = position_ids[:, src_pos:image_start]
                 token_type_ids_padded[:, dest_pos : dest_pos + length] = token_type_ids[:, src_pos:image_start]
                 dest_pos += length
-                last_pos_id = position_ids[0, src_pos - 1].item()
+                last_pos_id = position_ids[0, image_start - 1].item()
                 src_pos = image_start
 
             # Padding
