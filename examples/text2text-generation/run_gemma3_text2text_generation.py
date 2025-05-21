@@ -53,6 +53,7 @@ def main(
     kv_partition_len: Optional[int] = None,
     tensor_parallel_size: int = 1,
     n_layers: Optional[int] = None,
+    sliding_window_pattern: Optional[int] = None,
     use_inputs_embeds: bool = False,
     use_attention_mask: bool = False,
 ):
@@ -63,6 +64,8 @@ def main(
     hf_kwargs = {}
     if n_layers is not None:
         hf_kwargs.update({"num_hidden_layers": n_layers})
+    if sliding_window_pattern is not None:
+        hf_kwargs.update({"sliding_window_pattern": sliding_window_pattern})
 
     if compile:
         kwargs = {}
