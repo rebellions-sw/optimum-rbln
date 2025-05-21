@@ -540,9 +540,12 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         ) = self._prepare_prefill_inputs(
             inputs, cache_position, attention_mask, position_embed, token_type_ids=token_type_ids
         )
+        self.dec_attn_mask[batch_idx : batch_idx + 1] = chunked_attention_mask[:1]
         if not is_external_block_tables:
-            self.dec_attn_mask[batch_idx : batch_idx + 1] = chunked_attention_mask[:1]
             local_block_tables = torch.tensor([batch_idx], dtype=torch.int16)
+
+        if self.use_attention_mask and self.use_position_ids:
+            chunked_attention_mask = torch.zeros(1, self.max_seq_len, dtype=torch.float32)
 
         # Process input in chunks of size `prefill_chunk_size`
         for step in range(0, query_length, self.prefill_chunk_size):
@@ -554,17 +557,23 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
             )
 
             # Not used in Gemma3 yet.
-            if self.use_attention_mask and not self.use_position_ids:
-                # Update attention mask to ensure proper causal behavior
-                if step >= self.prefill_chunk_size:
-                    chunked_attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
-                chunked_attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
+            if self.use_attention_mask:
+                if self.use_position_ids:
+                    chunked_attention_mask[0, step : step + self.prefill_chunk_size] = self.dec_attn_mask[
+                        batch_idx, step : step + self.prefill_chunk_size
+                    ]
+                else:
+                    # Update attention mask to ensure proper causal behavior
+                    if step >= self.prefill_chunk_size:
+                        chunked_attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
+                    chunked_attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
 
             # Define query position
             query_position = torch.tensor((query_length - 1) % self.prefill_chunk_size, dtype=torch.int16)
-
             if token_type_ids_padded[:, step] == 1:
-                if torch.any(token_type_ids_padded[:, step : step + 256] == 0):  # FIXME(taehoon): hard-corded
+                if torch.any(
+                    token_type_ids_padded[:, step : step + self.prefill_chunk_size] == 0
+                ):  # FIXME(taehoon): hard-corded
                     raise ValueError("All tokens of image_prefill should be the same image.")
                 else:
                     logits = self.image_prefill(
@@ -644,6 +653,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
             attention_mask = attention_mask[: self.batch_size]
 
         logits = self.decode(inputs, attention_mask, cache_position, position_ids, block_tables, local_block_tables)
+        # logits = self.decode(inputs, cache_position, position_ids, block_tables, local_block_tables)
 
         return RBLNDecoderOnlyOutput(logits=logits)
 

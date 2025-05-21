@@ -31,7 +31,7 @@ def get_inputs(batch_size):
             },
             {
                 "role": "user",
-                "content": [{"type": "text", "text": restored_texts[-i][:8192]}],
+                "content": [{"type": "text", "text": "Describe the following text."}],
             },
         ]
         for i in range(batch_size)
@@ -43,7 +43,6 @@ def get_inputs(batch_size):
         tokenize=False,
     )
     inputs = tokenizer(texts, padding=True, return_tensors="pt")
-
     return inputs
 
 
@@ -60,7 +59,7 @@ def main(
     inputs = get_inputs(batch_size)
 
     input_len = inputs["input_ids"].shape[-1]
-    
+
     hf_kwargs = {}
     if n_layers is not None:
         hf_kwargs.update({"num_hidden_layers": n_layers})
@@ -78,7 +77,7 @@ def main(
             rbln_use_attention_mask=use_attention_mask,
             rbln_tensor_parallel_size=tensor_parallel_size,
             rbln_use_inputs_embeds=use_inputs_embeds,
-            **hf_kwargs
+            **hf_kwargs,
             **kwargs,
         )
         rbln_model.save_pretrained(os.path.basename(model_id) + f"_b{batch_size}")
@@ -89,10 +88,7 @@ def main(
         )
 
     if diff:
-        model = Gemma3ForCausalLM.from_pretrained(
-            model_id,
-            **hf_kwargs
-        ).eval()
+        model = Gemma3ForCausalLM.from_pretrained(model_id, **hf_kwargs).eval()
 
         output = rbln_model.generate(
             **inputs,
