@@ -17,11 +17,10 @@ from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import torch
 from torch import nn
-from transformers import PreTrainedModel
 from transformers.models.gemma3.modeling_gemma3 import Gemma3RMSNorm
 
 from ..decoderonly.decoderonly_architecture import (
-    DEFAULT_FLASH_ATTN_PARTITION_LENGTH,
+    AttentionOp,
     DecoderOnlyAttention,
     DecoderOnlyFlashAttention,
     DecoderOnlyForCausalLM,
@@ -29,9 +28,8 @@ from ..decoderonly.decoderonly_architecture import (
     DecoderOnlyModel,
     DecoderOnlyWrapper,
     RotaryEmbedding,
-    slice_and_unsqueeze_cos_sin,
-    AttentionOp,
     SlidingWindowAttentionOp,
+    slice_and_unsqueeze_cos_sin,
 )
 
 

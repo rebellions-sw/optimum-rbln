@@ -168,6 +168,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         position_embed: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
+        local_block_tables: Optional[torch.Tensor] = None,
     ):
         if input_ids is None and inputs_embeds is None:
             raise ValueError("Either `input_ids` or `inputs_embeds` must be provided.")
@@ -194,6 +195,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 attention_mask=attention_mask,
                 position_embed=position_embed,
                 position_ids=position_ids,
+                local_block_tables=local_block_tables,
             )
         else:
             return self.prefill_forward(
@@ -204,6 +206,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 block_tables,
                 position_embed=position_embed,
                 token_type_ids=token_type_ids,
+                local_block_tables=local_block_tables,
             )
 
     def decode_forward(
@@ -215,6 +218,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         attention_mask: Optional[torch.Tensor] = None,
         position_embed: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
+        local_block_tables: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         batch_size = inputs.shape[0]
         if batch_size != self.batch_size:
@@ -264,6 +268,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         cache_position: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         position_embed: Optional[torch.Tensor] = None,
+        local_block_tables: Optional[torch.Tensor] = None,
     ):
         """
         Prepare inputs for prefill phase.
