@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import rebel
 
@@ -34,7 +34,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         attn_impl: Optional[str] = None,
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
-        quantization: Optional[Dict[str, Any]] = None,
+        quantization: Optional[Union[Dict[str, Any], RBLNQuantizationConfig]] = None,
         prefill_chunk_size: Optional[int] = None,
         kvcache_num_blocks: Optional[int] = None,
         decoder_batch_sizes: Optional[List[int]] = None,
@@ -77,7 +77,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
 
         self.use_attention_mask = use_attention_mask
         npu = self.npu or rebel.get_npu_name()
-        if npu == "RBLN-CA02" or npu.startswith("RBLN-CR"):
+        if npu == "RBLN-CA02":
             if self.use_attention_mask is False:
                 logger.warning("Attention mask should be used with RBLN-CA02. Setting use_attention_mask to True.")
             self.use_attention_mask = True
