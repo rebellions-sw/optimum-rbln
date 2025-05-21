@@ -1142,7 +1142,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                     cache_position=cache_position,
                     batch_idx=b_idx,
-                    token_type_ids=token_type_ids[b_idx] if token_type_ids is not None else None,
+                    token_type_ids=token_type_ids[b_idx: b_idx + 1] if token_type_ids is not None else None,
                 )
                 padded_cache_lengths[b_idx] += output.padded_cache_lengths
                 logits.append(output.logits)
