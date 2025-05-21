@@ -1120,6 +1120,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         generate_idx: Optional[torch.Tensor] = None,
         padded_cache_lengths: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
+        token_type_ids: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
         """
@@ -1141,6 +1142,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                     cache_position=cache_position,
                     batch_idx=b_idx,
+                    token_type_ids=token_type_ids[b_idx] if token_type_ids is not None else None,
                 )
                 padded_cache_lengths[b_idx] += output.padded_cache_lengths
                 logits.append(output.logits)
@@ -1163,5 +1165,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             ).logits
 
         return RBLNDecoderOnlyOutput(
-            logits=logits, generate_idx=generate_idx, padded_cache_lengths=padded_cache_lengths
+            logits=logits,
+            generate_idx=generate_idx,
+            padded_cache_lengths=padded_cache_lengths,
         )

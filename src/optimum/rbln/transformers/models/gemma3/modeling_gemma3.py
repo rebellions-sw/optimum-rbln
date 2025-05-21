@@ -13,6 +13,7 @@
 # limitations under the License.
 import inspect
 from collections import deque
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple, Union, List
 
 import rebel
@@ -48,6 +49,7 @@ if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, Gemma3ForConditionalGeneration
 
 
+@dataclass
 class RBLNGemma3ForCausalLMOutput(RBLNDecoderOnlyOutput):
     attention_mask: Optional[torch.Tensor] = None
 
@@ -916,7 +918,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
                 head_dim=head_dim,
                 sliding_window=sliding_window,
                 sliding_window_pattern=sliding_window_pattern,
-                dec_batch_size=max(rbln_config.decoder_batch_sizes),
+                dec_batch_size=batch_size,
             )
             dec_compile_configs.append(
                 RBLNCompileConfig(compiled_model_name=f"decoder_batch_{batch_size}", input_info=dec_input_info)
@@ -1052,62 +1054,62 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
         if model_inputs["cache_position"] is None:
             model_inputs["token_type_ids"] = torch.zeros(
-                1, model_inputs["generate_idx"].max().item(), dtype=torch.long
+                model_inputs["generate_idx"].shape[0], model_inputs["generate_idx"].max().item(), dtype=torch.long
             )
 
         return model_inputs
 
-    def forward(
-        self,
-        input_ids: torch.LongTensor = None,
-        pixel_values: torch.FloatTensor = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        cache_position: Optional[torch.LongTensor] = None,
-        inputs_embeds: Optional[torch.FloatTensor] = None,
-        generate_idx: Optional[torch.Tensor] = None,
-        padded_cache_lengths: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.Tensor] = None,
-        token_type_ids: Optional[torch.Tensor] = None,
-        **lm_kwargs,
-    ) -> Union[Tuple, RBLNDecoderOnlyOutput]:
-        # prefill
-        if cache_position is None:
-            logits = []
+    # def forward(
+    #     self,
+    #     input_ids: torch.LongTensor = None,
+    #     pixel_values: torch.FloatTensor = None,
+    #     attention_mask: Optional[torch.Tensor] = None,
+    #     cache_position: Optional[torch.LongTensor] = None,
+    #     inputs_embeds: Optional[torch.FloatTensor] = None,
+    #     generate_idx: Optional[torch.Tensor] = None,
+    #     padded_cache_lengths: Optional[torch.Tensor] = None,
+    #     position_ids: Optional[torch.Tensor] = None,
+    #     token_type_ids: Optional[torch.Tensor] = None,
+    #     **lm_kwargs,
+    # ) -> Union[Tuple, RBLNDecoderOnlyOutput]:
+    #     # prefill
+    #     if cache_position is None:
+    #         logits = []
+    #         inputs = inputs_embeds if inputs_embeds is not None else input_ids
+    #         batch_size = inputs.shape[0]
+    #         for b_idx in range(batch_size):
+    #             cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
+    #             output = self.prefill_decoder(
+    #                 input_ids=inputs[b_idx : b_idx + 1] if inputs_embeds is None else None,
+    #                 inputs_embeds=inputs[b_idx : b_idx + 1] if inputs_embeds is not None else None,
+    #                 attention_mask=attention_mask[b_idx],
+    #                 cache_position=cache_position,
+    #                 batch_idx=b_idx,
+    #                 token_type_ids=token_type_ids[b_idx : b_idx + 1],
+    #             )
+    #             padded_cache_lengths[b_idx] += output.padded_cache_lengths
+    #             logits.append(output.logits)
 
-            inputs = inputs_embeds if inputs_embeds is not None else input_ids
-            batch_size = inputs.shape[0]
+    #         logits = torch.cat(logits, dim=0)
+    #     # Decoder
+    #     else:
+    #         inputs = inputs_embeds if inputs_embeds is not None else input_ids
+    #         batch_size = inputs.shape[0]
+    #         if batch_size not in self.decoders:
+    #             raise ValueError(
+    #                 f"No decoder runtime available for batch size {batch_size}. "
+    #                 f"Available batch sizes are: {list(self.decoders.keys())}. "
+    #                 f"Please run your model with one of these batch sizes or add support for batch size {batch_size}."
+    #             )
+    #         logits = self.decoders[batch_size](
+    #             input_ids=input_ids,
+    #             inputs_embeds=inputs_embeds,
+    #             cache_position=cache_position,
+    #             position_ids=position_ids if self.rbln_config.use_position_ids else None,
+    #         ).logits
 
-            for b_idx in range(batch_size):
-                cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
-                output = self.prefill_decoder(
-                    input_ids=inputs[b_idx : b_idx + 1] if inputs_embeds is None else None,
-                    inputs_embeds=inputs[b_idx : b_idx + 1] if inputs_embeds is not None else None,
-                    attention_mask=attention_mask[b_idx],
-                    cache_position=cache_position,
-                    batch_idx=b_idx,
-                    token_type_ids=torch.zeros_like(cache_position),
-                )
-                padded_cache_lengths[b_idx] += output.padded_cache_lengths
-                logits.append(output.logits)
-
-            logits = torch.cat(logits, dim=0)
-        # Decoder
-        else:
-            inputs = inputs_embeds if inputs_embeds is not None else input_ids
-            batch_size = inputs.shape[0]
-            if batch_size not in self.decoders:
-                raise ValueError(
-                    f"No decoder runtime available for batch size {batch_size}. "
-                    f"Available batch sizes are: {list(self.decoders.keys())}. "
-                    f"Please run your model with one of these batch sizes or add support for batch size {batch_size}."
-                )
-            logits = self.decoders[batch_size](
-                input_ids=input_ids,
-                inputs_embeds=inputs_embeds,
-                cache_position=cache_position,
-                position_ids=position_ids if self.rbln_config.use_position_ids else None,
-            ).logits
-
-        return RBLNDecoderOnlyOutput(
-            logits=logits, generate_idx=generate_idx, padded_cache_lengths=padded_cache_lengths
-        )
+    #     return RBLNGemma3ForCausalLMOutput(
+    #         logits=logits,
+    #         generate_idx=generate_idx,
+    #         padded_cache_lengths=padded_cache_lengths,
+    #     )
