@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 import numpy as np
@@ -67,7 +68,7 @@ class FluxTransformer2DModelWrapper(torch.nn.Module):
         # else:
         #     lora_scale = 1.0
 
-        hidden_states = self.x_embedder(hidden_states)
+        # hidden_states = self.x_embedder(hidden_states)
 
         timestep = timestep.to(hidden_states.dtype) * 1000
         if guidance is not None:
@@ -80,7 +81,7 @@ class FluxTransformer2DModelWrapper(torch.nn.Module):
             if guidance is None
             else self.time_text_embed(timestep, guidance, pooled_projections)
         )
-        encoder_hidden_states = self.context_embedder(encoder_hidden_states)
+        # encoder_hidden_states = self.context_embedder(encoder_hidden_states)
 
         for index_block, block in enumerate(self.transformer_blocks):
             encoder_hidden_states, hidden_states = block(
@@ -136,6 +137,24 @@ class FluxTransformer2DModelWrapper(torch.nn.Module):
 class RBLNFluxTransformer2DModel(RBLNModel):
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
+        self.x_embedder = torch.load(self.model_save_dir / self.subfolder / "x_embedder.pth", weights_only=False)
+        self.context_embedder = torch.load(
+            self.model_save_dir / self.subfolder / "context_embedder.pth", weights_only=False
+        )
+
+    @classmethod
+    def save_torch_artifacts(
+        cls,
+        model: "PreTrainedModel",
+        save_dir_path: Path,
+        subfolder: str,
+        rbln_config: RBLNModelConfig,
+    ):
+        save_dict = {}
+        save_dict["context_embedder"] = model.context_embedder.state_dict()
+        save_dict["x_embedder"] = model.x_embedder.state_dict()
+
+        torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
@@ -184,7 +203,7 @@ class RBLNFluxTransformer2DModel(RBLNModel):
             rbln_config.sample_size = (rbln_config.sample_size, rbln_config.sample_size)
 
         latent_shape = ((2 * int(rbln_config.sample_size[0])) // 2) * (2 * int(rbln_config.sample_size[1]) // 2)
-        num_channels_latents = model_config.in_channels // 4
+        # num_channels_latents = model_config.in_channels // 4
 
         input_info = [
             (
@@ -192,7 +211,8 @@ class RBLNFluxTransformer2DModel(RBLNModel):
                 [
                     rbln_config.batch_size,
                     latent_shape,
-                    num_channels_latents * 4,
+                    # num_channels_latents * 4,
+                    model_config.num_attention_heads * model_config.attention_head_dim,
                 ],
                 "float32",
             ),
@@ -201,7 +221,8 @@ class RBLNFluxTransformer2DModel(RBLNModel):
                 [
                     rbln_config.batch_size,
                     rbln_config.max_sequence_length,
-                    model_config.joint_attention_dim,
+                    # model_config.joint_attention_dim,
+                    model_config.num_attention_heads * model_config.attention_head_dim,
                 ],
                 "float32",
             ),
@@ -240,5 +261,7 @@ class RBLNFluxTransformer2DModel(RBLNModel):
         return_dict: bool = True,
         controlnet_blocks_repeat: bool = False,
     ):
-        output = super().forward(hidden_states, encoder_hidden_states, pooled_projections, timestep, guidance)
+        hidden_states = self.x_embedder(hidden_states)
+        encoder_hidden_states = self.context_embedder(encoder_hidden_states)
+        output = self.model[0].forward(hidden_states, encoder_hidden_states, pooled_projections, timestep, guidance)
         return Transformer2DModelOutput(sample=output)
