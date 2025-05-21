@@ -138,39 +138,3 @@ class OPTDecoderLayer(DecoderOnlyLayer):
 
     def get_post_attention_layernorm(self) -> nn.LayerNorm:
         return self._original_mod.final_layer_norm
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        attention_mask: torch.Tensor,
-        seq_positions: torch.LongTensor,
-        past_key_values: Tuple[Tuple[torch.Tensor]],
-        cos: Optional[torch.Tensor] = None,
-        sin: Optional[torch.Tensor] = None,
-        block_tables: Optional[torch.Tensor] = None,
-    ):
-        residual = hidden_states
-        hidden_states = self.get_pre_attention_layernorm()(hidden_states)
-
-        hidden_states = self.self_attn(
-            hidden_states=hidden_states,
-            attention_mask=attention_mask,
-            seq_positions=seq_positions,
-            past_key_values=past_key_values,
-            cos=cos,
-            sin=sin,
-            block_tables=block_tables,
-        )
-        hidden_states = residual + hidden_states
-
-        # Fully Connected
-        hidden_states_shape = hidden_states.shape
-        hidden_states = hidden_states.reshape(-1, hidden_states.size(-1))
-        residual = hidden_states
-        hidden_states = self.get_post_attention_layernorm()(hidden_states)
-        hidden_states = self._original_mod.fc1(hidden_states)
-        hidden_states = self._original_mod.activation_fn(hidden_states)
-        hidden_states = self._original_mod.fc2(hidden_states)
-        hidden_states = (residual + hidden_states).view(hidden_states_shape)
-
-        return hidden_states

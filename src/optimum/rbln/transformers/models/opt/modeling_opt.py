@@ -12,12 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import torch.nn as nn
+from transformers.modeling_utils import no_init_weights
+
 from ....utils import logging
 from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM
 from .opt_architecture import OPTWrapper
 
 
 logger = logging.get_logger(__name__)
+
+
+class MLP(nn.Module):
+    def __init__(self, fc1, fc2, activation_fn):
+        super(MLP, self).__init__()
+        self.fc1 = fc1
+        self.fc2 = fc2
+        self.activation_fn = activation_fn
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.activation_fn(x)
+        x = self.fc2(x)
+        return x
 
 
 class RBLNOPTForCausalLM(RBLNDecoderOnlyModelForCausalLM):
@@ -33,3 +50,22 @@ class RBLNOPTForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
     _decoder_wrapper_cls = OPTWrapper
     _use_rotary_emb = False
+
+    def modify_opt_decoder_layer(layer):
+        mlp = MLP(layer.fc1, layer.fc2, layer.activation_fn)
+        layer.mlp = mlp
+        del layer.fc1
+        del layer.fc2
+        del layer.activation_fn
+
+        return layer
+
+    @classmethod
+    def get_pytorch_model(cls, *args, **kwargs):
+        model = super().get_pytorch_model(*args, **kwargs)
+
+        with no_init_weights():
+            for i in range(len(model.model.decoder.layers)):
+                model.model.decoder.layers[i] = cls.modify_opt_decoder_layer(model.model.decoder.layers[i])
+
+        return model
