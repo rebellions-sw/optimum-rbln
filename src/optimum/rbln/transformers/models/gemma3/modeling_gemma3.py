@@ -356,7 +356,9 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         # Initialize padded tensors
         padded_input_len = seq_len
         for image_start in image_starts:
-            pad_needed = (self.prefill_chunk_size - image_start % self.prefill_chunk_size) % self.prefill_chunk_size
+            pad_needed = (
+                self.prefill_chunk_size - (image_start + padded_input_len - seq_len) % self.prefill_chunk_size
+            ) % self.prefill_chunk_size
             padded_input_len += pad_needed
         total_padding = padded_input_len - seq_len
 
@@ -381,7 +383,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                 position_ids_padded[:, dest_pos : dest_pos + length] = position_ids[:, src_pos:image_start]
                 token_type_ids_padded[:, dest_pos : dest_pos + length] = token_type_ids[:, src_pos:image_start]
                 dest_pos += length
-                last_pos_id = position_ids[0, image_start - 1].item()
+                last_pos_id = position_ids[0, src_pos - 1].item()
                 src_pos = image_start
 
             # Padding
@@ -391,7 +393,6 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                     last_pos_id + 1, last_pos_id + pad_needed + 1, dtype=position_ids.dtype
                 ).unsqueeze(0)
                 dest_pos += pad_needed
-                last_pos_id += pad_needed
 
             # Image segment
             if src_pos < seq_len and src_pos == image_start:
@@ -409,7 +410,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                 ]
                 dest_pos += self.prefill_chunk_size
                 src_pos += self.prefill_chunk_size
-                last_pos_id = position_ids[0, src_pos - 1].item()
+                last_pos_id = position_ids[0, image_start + self.prefill_chunk_size - 1].item()
 
         return inputs_padded, attention_mask_padded, position_ids_padded, total_padding, token_type_ids_padded
 

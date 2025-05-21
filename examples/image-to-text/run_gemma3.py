@@ -19,19 +19,28 @@ def get_inputs(batch_size):
         [
             {
                 "role": "system",
-                "content": [{"type": "text", "text": "You are a helpful assistant."}],
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "You are a helpful assistant. Answer the each question based on the image.",
+                    }
+                ],
             },
             {
                 "role": "user",
                 "content": [
-                    # {"type": "image", "image": dataset[i]["image"]},
+                    {"type": "image", "image": dataset[i]["image"]},
                     {"type": "text", "text": dataset[i]["question"]},
+                    # {"type": "image", "image": dataset[i + 1]["image"]},
+                    # {"type": "text", "text": dataset[i + 1]["question"]},
+                    # {"type": "image", "image": dataset[i+2]["image"]},
+                    # {"type": "text", "text": dataset[i+2]["question"]},
                 ],
             },
         ]
         for i in range(batch_size)
     ]
-    # images = [[dataset[i]["image"]] for i in range(batch_size)]
+    images = [[dataset[i]["image"]] for i in range(batch_size)]
 
     text = processor.apply_chat_template(
         messages,
@@ -39,7 +48,8 @@ def get_inputs(batch_size):
         tokenize=False,
     )
 
-    inputs = processor(text=text, return_tensors="pt", padding=True)
+    inputs = processor(text=text, images=images, return_tensors="pt", padding=True)
+    print(inputs.input_ids.shape)
 
     return inputs
 
@@ -50,8 +60,9 @@ def main(
     batch_size: int = 1,
     max_seq_len: Optional[int] = 32768,
     kv_partition_len: Optional[int] = None,
-    tensor_parallel_size: int = 4,
+    tensor_parallel_size: int = 1,
     n_layers: Optional[int] = None,
+    sliding_window_pattern: Optional[int] = 6,
 ):
     inputs = get_inputs(batch_size)
 
@@ -62,13 +73,13 @@ def main(
         text_config = json.loads(hf_config.text_config.to_json_string())
         vision_config = json.loads(hf_config.vision_config.to_json_string())
         text_config["num_hidden_layers"] = n_layers
+        text_config["sliding_window_pattern"] = sliding_window_pattern
         vision_config["num_hidden_layers"] = n_layers
         hf_kwargs = {"text_config": text_config, "vision_config": vision_config}
 
     if compile:
         rbln_config = {
             "language_model": {
-                "use_attention_mask": True,
                 "max_seq_len": max_seq_len,
                 "batch_size": batch_size,
                 "tensor_parallel_size": tensor_parallel_size,

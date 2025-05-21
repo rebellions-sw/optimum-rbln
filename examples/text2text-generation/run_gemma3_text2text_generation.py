@@ -43,7 +43,6 @@ def get_inputs(batch_size):
         tokenize=False,
     )
     inputs = tokenizer(texts, padding=True, return_tensors="pt")
-
     return inputs
 
 
