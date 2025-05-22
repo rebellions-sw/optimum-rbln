@@ -190,9 +190,6 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
             padded_cache_lengths=padded_cache_lengths,
             **kwargs,
         )
-        
-        if token_type_ids is None:
-            raise ValueError("token_type_ids is required for image-to-text generation.")
 
         if is_prefill_phase:
             model_inputs.update(
@@ -291,7 +288,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
                     attention_mask=attention_mask[b_idx],
                     cache_position=cache_position,
                     batch_idx=b_idx,
-                    token_type_ids=token_type_ids[b_idx : b_idx + 1],
+                    token_type_ids=token_type_ids[b_idx : b_idx + 1] if token_type_ids is not None else None,
                 )
                 padded_cache_lengths[b_idx] += output.padded_cache_lengths
                 logits.append(output.logits)
@@ -349,7 +346,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         """
         
         if token_type_ids is None:
-            return inputs, attention_mask, position_ids, 0, token_type_ids
+            return inputs, attention_mask, position_ids, 0, torch.zeros(inputs.shape[:2], dtype=torch.long)
         
         seq_len = inputs.shape[1]
 
@@ -435,7 +432,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         # Handle continuous batching in a compiled graph by extracting valid inputs
         # If an attention mask is provided, select only the valid (non-masked) inputs
         inputs = inputs[:, attention_mask.bool()] if attention_mask is not None else inputs
-        token_type_ids = token_type_ids[:, attention_mask.bool()] if attention_mask is not None else token_type_ids
+        token_type_ids = token_type_ids[:, attention_mask.bool()] if attention_mask is not None and token_type_ids is not None else token_type_ids
 
         if position_embed is not None:
             position_embed = (
@@ -1074,72 +1071,3 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
                 for i, batch_size in enumerate(rbln_config.decoder_batch_sizes)
             ],
         ]
-
-    def prepare_inputs_for_generation(
-        self,
-        *args,
-        **kwargs,
-    ):
-        model_inputs = super().prepare_inputs_for_generation(*args, **kwargs)
-
-        if model_inputs["cache_position"] is None:
-            model_inputs["token_type_ids"] = torch.zeros(
-                model_inputs["generate_idx"].shape[0], model_inputs["generate_idx"].max().item(), dtype=torch.long
-            )
-
-        return model_inputs
-
-    # def forward(
-    #     self,
-    #     input_ids: torch.LongTensor = None,
-    #     pixel_values: torch.FloatTensor = None,
-    #     attention_mask: Optional[torch.Tensor] = None,
-    #     cache_position: Optional[torch.LongTensor] = None,
-    #     inputs_embeds: Optional[torch.FloatTensor] = None,
-    #     generate_idx: Optional[torch.Tensor] = None,
-    #     padded_cache_lengths: Optional[torch.Tensor] = None,
-    #     position_ids: Optional[torch.Tensor] = None,
-    #     token_type_ids: Optional[torch.Tensor] = None,
-    #     **lm_kwargs,
-    # ) -> Union[Tuple, RBLNDecoderOnlyOutput]:
-    #     # prefill
-    #     if cache_position is None:
-    #         logits = []
-    #         inputs = inputs_embeds if inputs_embeds is not None else input_ids
-    #         batch_size = inputs.shape[0]
-    #         for b_idx in range(batch_size):
-    #             cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
-    #             output = self.prefill_decoder(
-    #                 input_ids=inputs[b_idx : b_idx + 1] if inputs_embeds is None else None,
-    #                 inputs_embeds=inputs[b_idx : b_idx + 1] if inputs_embeds is not None else None,
-    #                 attention_mask=attention_mask[b_idx],
-    #                 cache_position=cache_position,
-    #                 batch_idx=b_idx,
-    #                 token_type_ids=token_type_ids[b_idx : b_idx + 1],
-    #             )
-    #             padded_cache_lengths[b_idx] += output.padded_cache_lengths
-    #             logits.append(output.logits)
-
-    #         logits = torch.cat(logits, dim=0)
-    #     # Decoder
-    #     else:
-    #         inputs = inputs_embeds if inputs_embeds is not None else input_ids
-    #         batch_size = inputs.shape[0]
-    #         if batch_size not in self.decoders:
-    #             raise ValueError(
-    #                 f"No decoder runtime available for batch size {batch_size}. "
-    #                 f"Available batch sizes are: {list(self.decoders.keys())}. "
-    #                 f"Please run your model with one of these batch sizes or add support for batch size {batch_size}."
-    #             )
-    #         logits = self.decoders[batch_size](
-    #             input_ids=input_ids,
-    #             inputs_embeds=inputs_embeds,
-    #             cache_position=cache_position,
-    #             position_ids=position_ids if self.rbln_config.use_position_ids else None,
-    #         ).logits
-
-    #     return RBLNGemma3ForCausalLMOutput(
-    #         logits=logits,
-    #         generate_idx=generate_idx,
-    #         padded_cache_lengths=padded_cache_lengths,
-    #     )
