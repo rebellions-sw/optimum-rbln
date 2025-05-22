@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 import numpy as np
 import torch
+import torch.nn as nn
+from diffusers.models.embeddings import CombinedTimestepGuidanceTextProjEmbeddings, CombinedTimestepTextProjEmbeddings
 from diffusers.models.modeling_outputs import Transformer2DModelOutput
 from diffusers.models.transformers.transformer_flux import FluxTransformer2DModel
 from transformers import PretrainedConfig
@@ -52,6 +54,7 @@ class FluxTransformer2DModelWrapper(torch.nn.Module):
         self,
         hidden_states: torch.FloatTensor,
         encoder_hidden_states: torch.FloatTensor = None,
+        temb: torch.FloatTensor = None,
         pooled_projections: torch.FloatTensor = None,
         timestep: torch.LongTensor = None,
         guidance: torch.Tensor = None,
@@ -70,17 +73,17 @@ class FluxTransformer2DModelWrapper(torch.nn.Module):
 
         # hidden_states = self.x_embedder(hidden_states)
 
-        timestep = timestep.to(hidden_states.dtype) * 1000
-        if guidance is not None:
-            guidance = guidance.to(hidden_states.dtype) * 1000
-        else:
-            guidance = None
+        # timestep = timestep.to(hidden_states.dtype) * 1000
+        # if guidance is not None:
+        #     guidance = guidance.to(hidden_states.dtype) * 1000
+        # else:
+        #     guidance = None
 
-        temb = (
-            self.time_text_embed(timestep, pooled_projections)
-            if guidance is None
-            else self.time_text_embed(timestep, guidance, pooled_projections)
-        )
+        # temb = (
+        #     self.time_text_embed(timestep, pooled_projections)
+        #     if guidance is None
+        #     else self.time_text_embed(timestep, guidance, pooled_projections)
+        # )
         # encoder_hidden_states = self.context_embedder(encoder_hidden_states)
 
         for index_block, block in enumerate(self.transformer_blocks):
@@ -137,10 +140,21 @@ class FluxTransformer2DModelWrapper(torch.nn.Module):
 class RBLNFluxTransformer2DModel(RBLNModel):
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
-        self.x_embedder = torch.load(self.model_save_dir / self.subfolder / "x_embedder.pth", weights_only=False)
-        self.context_embedder = torch.load(
-            self.model_save_dir / self.subfolder / "context_embedder.pth", weights_only=False
+        artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
+        inner_dim = self.config.num_attention_heads * self.config.attention_head_dim
+        text_time_guidance_cls = (
+            CombinedTimestepGuidanceTextProjEmbeddings
+            if self.config.guidance_embeds
+            else CombinedTimestepTextProjEmbeddings
         )
+        self.time_text_embed = text_time_guidance_cls(
+            embedding_dim=inner_dim, pooled_projection_dim=self.config.pooled_projection_dim
+        )
+        self.x_embedder = nn.Linear(self.config.in_channels, self.inner_dim)
+        self.context_embedder = nn.Linear(self.config.joint_attention_dim, self.inner_dim)
+        self.time_text_embed.load_state_dict(artifacts["time_text_embed"])
+        self.x_embedder.load_state_dict(artifacts["x_embedder"])
+        self.context_embedder.load_state_dict(artifacts["context_embedder"])
 
     @classmethod
     def save_torch_artifacts(
@@ -153,6 +167,7 @@ class RBLNFluxTransformer2DModel(RBLNModel):
         save_dict = {}
         save_dict["context_embedder"] = model.context_embedder.state_dict()
         save_dict["x_embedder"] = model.x_embedder.state_dict()
+        save_dict["time_text_embed"] = model.time_text_embed.state_dict()
 
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
@@ -227,22 +242,33 @@ class RBLNFluxTransformer2DModel(RBLNModel):
                 "float32",
             ),
             (
-                "pooled_projections",
+                "temb",
                 [
                     rbln_config.batch_size,
-                    model_config.pooled_projection_dim,
+                    # rbln_config.max_sequence_length,
+                    # model_config.joint_attention_dim,
+                    model_config.num_attention_heads * model_config.attention_head_dim,
                 ],
                 "float32",
             ),
-            ("timestep", [rbln_config.batch_size], "float32"),
         ]
+        #     (
+        #         "pooled_projections",
+        #         [
+        #             rbln_config.batch_size,
+        #             model_config.pooled_projection_dim,
+        #         ],
+        #         "float32",
+        #     ),
+        #     ("timestep", [rbln_config.batch_size], "float32"),
+        # ]
 
-        if model_config.guidance_embeds:
-            input_info.extend(
-                [
-                    ("guidance", [rbln_config.batch_size], "float32"),
-                ]
-            )
+        # if model_config.guidance_embeds:
+        #     input_info.extend(
+        #         [
+        #             ("guidance", [rbln_config.batch_size], "float32"),
+        #         ]
+        #     )
 
         compile_config = RBLNCompileConfig(input_info=input_info)
         rbln_config.set_compile_cfgs([compile_config])
@@ -262,6 +288,19 @@ class RBLNFluxTransformer2DModel(RBLNModel):
         controlnet_blocks_repeat: bool = False,
     ):
         hidden_states = self.x_embedder(hidden_states)
+
+        timestep = timestep.to(hidden_states.dtype) * 1000
+        if guidance is not None:
+            guidance = guidance.to(hidden_states.dtype) * 1000
+        else:
+            guidance = None
+
+        temb = (
+            self.time_text_embed(timestep, pooled_projections)
+            if guidance is None
+            else self.time_text_embed(timestep, guidance, pooled_projections)
+        )
+
         encoder_hidden_states = self.context_embedder(encoder_hidden_states)
-        output = self.model[0].forward(hidden_states, encoder_hidden_states, pooled_projections, timestep, guidance)
+        output = self.model[0].forward(hidden_states, encoder_hidden_states, temb)
         return Transformer2DModelOutput(sample=output)
