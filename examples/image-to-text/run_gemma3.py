@@ -3,6 +3,7 @@ import os
 from typing import Optional
 
 import fire
+import torch
 from datasets import load_dataset
 from transformers import AutoProcessor, Gemma3Config, Gemma3ForConditionalGeneration
 
@@ -22,7 +23,7 @@ def get_inputs(batch_size):
                 "content": [
                     {
                         "type": "text",
-                        "text": "You are a helpful assistant. Answer the each question based on the image.",
+                        "text": "You are a helpful assistant. Answer the each question based on the image." * 10,
                     }
                 ],
             },
@@ -50,6 +51,66 @@ def get_inputs(batch_size):
 
     inputs = processor(text=text, images=images, return_tensors="pt", padding=True)
     print(inputs.input_ids.shape)
+
+    return inputs
+
+
+def get_inputs_2(batch_size):
+    dataset = load_dataset("lmms-lab/llava-bench-in-the-wild", split="train").shuffle(seed=42)
+    messages = [
+        [
+            {
+                "role": "system",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "You are a helpful assistant. Answer the each question based on the image." * 10,
+                    }
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    # {"type": "image", "image": dataset[i]["image"]},
+                    {"type": "text", "text": dataset[i]["question"] * 10},
+                    # {"type": "image", "image": dataset[i + 1]["image"]},
+                    # {"type": "text", "text": dataset[i + 1]["question"]},
+                    # {"type": "image", "image": dataset[i+2]["image"]},
+                    # {"type": "text", "text": dataset[i+2]["question"]},
+                ],
+            },
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "image", "image": dataset[i]["image"]},
+                    # {"type": "text", "text": dataset[i]["question"] * 10},
+                    # {"type": "image", "image": dataset[i + 1]["image"]},
+                    # {"type": "text", "text": dataset[i + 1]["question"]},
+                    # {"type": "image", "image": dataset[i+2]["image"]},
+                    # {"type": "text", "text": dataset[i+2]["question"]},
+                ],
+            },
+        ]
+        for i in range(batch_size)
+    ]
+    images = [[dataset[i]["image"]] for i in range(batch_size)]
+
+    text = processor.apply_chat_template(
+        messages,
+        add_generation_prompt=True,
+        tokenize=False,
+    )
+
+    inputs = processor(text=text, images=images, return_tensors="pt", padding=True)
+    print(inputs.input_ids.shape)
+
+    inputs["input_ids"] = torch.cat([inputs["input_ids"][:, :256], inputs["input_ids"][:, 272:]], dim=-1)
+    inputs["token_type_ids"] = torch.cat(
+        [inputs["token_type_ids"][:, :256], inputs["token_type_ids"][:, 272:]], dim=-1
+    )
+    inputs["attention_mask"] = torch.cat(
+        [inputs["attention_mask"][:, :256], inputs["attention_mask"][:, 272:]], dim=-1
+    )
 
     return inputs
 
@@ -109,7 +170,7 @@ def main(
 
         output = rbln_model.generate(
             **inputs,
-            max_new_tokens=100,
+            max_new_tokens=4,
             do_sample=False,
             return_dict_in_generate=True,
             output_logits=True,
@@ -147,8 +208,8 @@ def main(
         print("decoder pearsonr")
         # breakpoint()
         pearsonr = stats.pearsonr(
-            rbln_logits[10].numpy().reshape(-1),
-            golden_logits[10].numpy().reshape(-1),
+            rbln_logits[3].numpy().reshape(-1),
+            golden_logits[3].numpy().reshape(-1),
         )
         print(pearsonr.statistic)
 
