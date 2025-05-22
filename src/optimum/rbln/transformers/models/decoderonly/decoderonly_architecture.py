@@ -1218,6 +1218,7 @@ class SlidingWindowAttentionOp(AttentionOp):
                 scale=scale,
                 block_table=block_tables,
                 block_size=block_size,
+                is_bidirectional=True if self.phase == "image_prefill" else False,  # FIXME, Hard-coded for Gemma3.
             )
 
         # reshape for removing repeat_kv
