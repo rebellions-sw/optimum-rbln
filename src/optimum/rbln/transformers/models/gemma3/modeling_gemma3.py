@@ -176,7 +176,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         attention_mask=None,
         generate_idx=None,
         padded_cache_lengths=None,
-        token_type_ids: Optional[torch.LongTensor] = None,
+        token_type_ids = None,
         **kwargs,
     ):
         # Prepare HF generation
@@ -190,6 +190,9 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
             padded_cache_lengths=padded_cache_lengths,
             **kwargs,
         )
+        
+        if token_type_ids is None:
+            raise ValueError("token_type_ids is required for image-to-text generation.")
 
         if is_prefill_phase:
             model_inputs.update(

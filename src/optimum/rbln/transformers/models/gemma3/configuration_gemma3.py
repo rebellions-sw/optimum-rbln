@@ -20,11 +20,10 @@ from ..siglip.configuration_siglip import RBLNSiglipVisionModelConfig
 
 class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
         # always use position ids and attention mask
-        self.use_position_ids = True
-        self.use_attention_mask = True
-
+        kwargs["use_position_ids"] = True
+        kwargs["use_attention_mask"] = True
+        super().__init__(**kwargs)
 
 class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):
     submodules = ["vision_tower", "language_model"]
