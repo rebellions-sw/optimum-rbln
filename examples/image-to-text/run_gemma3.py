@@ -23,7 +23,7 @@ def get_inputs(batch_size):
                 "content": [
                     {
                         "type": "text",
-                        "text": "You are a helpful assistant. Answer the each question based on the image." * 10,
+                        "text": "You are a helpful assistant. Answer the each question based on the image.",
                     }
                 ],
             },
@@ -126,6 +126,7 @@ def main(
     sliding_window_pattern: Optional[int] = 6,
 ):
     inputs = get_inputs(batch_size)
+    print(inputs.token_type_ids)
 
     input_len = inputs["input_ids"].shape[-1]
     hf_kwargs = {}
