@@ -157,58 +157,35 @@ class Qwen2_5_VLVisionWindowAttention(nn.Module):
 
 
 class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
-    def convert_args(self, *args):
-        """Converts variable input arguments into a standardized tuple for the forward pass.
-
-        Args:
-            *args: Variable arguments in the following order:
-                - input_ids_or_inputs_embeds
-                - cache_position
-                - block_tables
-                - position_embeds
-                - (query_position, if phase == "prefill")
-                - (attention_mask, if use_attention_mask is True)
-                - (position_ids, if use_position_ids is True)
-                - *past_key_values (remaining arguments)
-
-        Returns:
-            tuple: (input_ids_or_inputs_embeds, cache_position, block_tables, query_position,
-                    attention_mask, position_ids, past_key_values, rotary_emb)
-
-        Raises:
-            ValueError: If phase is invalid or required arguments are missing.
-        """
-        if self.phase not in ["decode", "prefill"]:
-            raise ValueError(f"Unknown phase: {self.phase}")
-
-        (input_ids_or_inputs_embeds, cache_position, block_tables, position_embeds, *conditional_args) = args
-        query_position = None
-        attention_mask = None
+    def prepare_forward_args(self, *args):
+        input_ids = None if self.use_inputs_embeds else args.pop(0)
+        inputs_embeds = args.pop(0) if self.use_inputs_embeds else None
+        cache_position = args.pop(0)
+        block_tables = args.pop(0)
+        position_embeds = args.pop(0)
+        query_position = args.pop(0) if self.phase == "prefill" else None
         position_ids = None
-        arg_idx = 0
+        attention_mask = args.pop(0) if self.use_attention_mask else None
+        past_key_values = args
 
-        if self.phase == "prefill":
-            if arg_idx >= len(conditional_args) - (2 * self.num_hidden_layers):
-                raise ValueError("Missing query_position for prefill phase")
-            query_position = conditional_args[arg_idx]
-            arg_idx += 1
-
-        if self.use_attention_mask:
-            if arg_idx >= len(conditional_args) - (2 * self.num_hidden_layers):
-                raise ValueError("Missing attention_mask when use_attention_mask is True")
-            attention_mask = conditional_args[arg_idx]
-            arg_idx += 1
-
-        arg_idx += 1
-
-        past_key_values = conditional_args[arg_idx:]
         if len(past_key_values) != 2 * self.num_hidden_layers:
             raise ValueError(
                 f"Different past_key_values to model's config. {len(past_key_values)} != {2 * self.num_hidden_layers}"
             )
 
+        # [key, value] * n_layer -> ( (key, value) ) * n_layer
+        # cache shape : batch, n_heads, 1, max_seq_len, head_dim
+        _past_key_values = []
+        for i in range(self.config.num_hidden_layers):
+            key_states = past_key_values[i * 2]
+            value_states = past_key_values[i * 2 + 1]
+            past_key_value = [key_states, value_states]
+            _past_key_values.append(past_key_value)
+        past_key_values = _past_key_values
+
         return (
-            input_ids_or_inputs_embeds,
+            input_ids,
+            inputs_embeds,
             cache_position,
             block_tables,
             query_position,

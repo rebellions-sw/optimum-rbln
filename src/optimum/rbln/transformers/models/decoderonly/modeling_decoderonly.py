@@ -830,7 +830,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
     ):
         # Input order: Fixed inputs (input_ids_or_inputs_embeds, cache_position, block_tables),
         # followed by conditional inputs (query_position, attention_mask, position_ids),
-        # and finally past_key_values. This aligns with `DecoderOnlyWrapper.convert_args`.
+        # and finally past_key_values. This aligns with `DecoderOnlyWrapper.prepare_forward_args`.
 
         if use_inputs_embeds:
             main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")

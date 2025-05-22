@@ -79,9 +79,6 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         self.use_position_ids = use_position_ids or False
         self.use_attention_mask = use_attention_mask
 
-        if self.use_position_ids and not self.use_attention_mask:
-            raise ValueError("Position IDs should be used with attention mask. Setting use_attention_mask to True.")
-
         npu = self.npu or rebel.get_npu_name()
         if npu == "RBLN-CA02":
             if self.use_attention_mask is False:
@@ -89,6 +86,9 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
             self.use_attention_mask = True
         else:
             self.use_attention_mask = self.use_attention_mask or False
+
+        if self.use_position_ids and not self.use_attention_mask:
+            raise ValueError("Position IDs should be used with attention mask.")
 
         self.attn_impl = attn_impl
         self.kvcache_partition_len = kvcache_partition_len
