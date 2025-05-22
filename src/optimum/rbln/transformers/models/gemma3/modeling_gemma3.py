@@ -579,7 +579,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
             if token_type_ids_padded[:, step] == 1:
                 if torch.any(
                     token_type_ids_padded[:, step : step + self.prefill_chunk_size] == 0
-                ):  # FIXME(taehoon): hard-corded
+                ):
                     raise ValueError("All tokens of image_prefill should be the same image.")
                 else:
                     logits = self.image_prefill(
@@ -659,7 +659,6 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
             attention_mask = attention_mask[: self.batch_size]
 
         logits = self.decode(inputs, attention_mask, cache_position, position_ids, block_tables, local_block_tables)
-        # logits = self.decode(inputs, cache_position, position_ids, block_tables, local_block_tables)
 
         return RBLNDecoderOnlyOutput(logits=logits)
 
@@ -822,6 +821,14 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         )
 
         return input_info
+    
+    @classmethod
+    def update_rbln_config_using_parent_config(
+        cls, model: "PreTrainedModel", rbln_config: "RBLNModelConfig", submodule_name: str
+    ) -> "RBLNModelConfig":
+        rbln_config.prefill_chunk_size = model.config.mm_tokens_per_image
+
+        return rbln_config
 
     @classmethod
     def _update_rbln_config(

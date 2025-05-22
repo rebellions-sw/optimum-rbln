@@ -16,7 +16,7 @@ from typing import Optional
 
 from ....configuration_utils import RBLNModelConfig
 from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
-
+from ..siglip.configuration_siglip import RBLNSiglipVisionModelConfig
 
 class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
     def __init__(self, **kwargs):
@@ -51,5 +51,5 @@ class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
-        self.vision_tower = vision_tower
-        self.language_model = language_model
+        self.vision_tower = self.init_submodule_config(RBLNSiglipVisionModelConfig, vision_tower)
+        self.language_model = self.init_submodule_config(RBLNGemma3ForCausalLMConfig, language_model)

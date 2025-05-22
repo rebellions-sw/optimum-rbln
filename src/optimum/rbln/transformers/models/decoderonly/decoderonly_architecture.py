@@ -1139,7 +1139,7 @@ class FlashAttentionOp(AttentionOp):
                     block_table=block_tables,
                     block_size=kvcache_block_size,
                     partition=self.kvcache_partition_size,
-                    is_bidirectional=True if self.phase == "image_prefill" else False,  # FIXME, Hard-coded for Gemma3.
+                    is_bidirectional=True if self.phase == "image_prefill" else False,
                     mask=attn_mask if self.use_position_ids else None,
                 )
 
@@ -1218,7 +1218,7 @@ class SlidingWindowAttentionOp(AttentionOp):
                 scale=scale,
                 block_table=block_tables,
                 block_size=block_size,
-                is_bidirectional=True if self.phase == "image_prefill" else False,  # FIXME, Hard-coded for Gemma3.
+                is_bidirectional=True if self.phase == "image_prefill" else False,
             )
 
         # reshape for removing repeat_kv
