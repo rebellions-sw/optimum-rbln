@@ -332,7 +332,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         inputs: torch.Tensor,
         attention_mask: torch.Tensor,
         position_ids: torch.Tensor,
-        token_type_ids: torch.Tensor,
+        token_type_ids: Optional[torch.Tensor] = None,
     ):
         """
         Pads inputs, attention_mask, and position_ids so image token groups (256 tokens with token_type_ids == 1)
@@ -347,6 +347,10 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         Returns:
             Tuple: (inputs_padded, attention_mask_padded, position_ids_padded, padded_len, token_type_ids_padded).
         """
+        
+        if token_type_ids is None:
+            return inputs, attention_mask, position_ids, 0, token_type_ids
+        
         seq_len = inputs.shape[1]
 
         # Find image start positions
