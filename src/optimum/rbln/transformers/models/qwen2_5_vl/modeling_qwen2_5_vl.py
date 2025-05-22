@@ -563,7 +563,8 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         video_grid_thw: Optional[torch.LongTensor] = None,
         cache_position: Optional[torch.LongTensor] = None,
         second_per_grid_ts: Optional[torch.Tensor] = None,
-        generate_idx: torch.Tensor = None,
+        generate_idx: Optional[torch.Tensor] = None,
+        return_dict: Optional[bool] = None,
         **kwargs,
     ) -> RBLNDecoderOnlyOutput:
         # Prefill
@@ -603,7 +604,11 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 position_embed=position_embed,
             )
             logits = output.logits
-        return RBLNDecoderOnlyOutput(
-            logits=logits,
-            generate_idx=generate_idx,
-        )
+
+        if not return_dict:
+            return logits, generate_idx
+        else:
+            return RBLNDecoderOnlyOutput(
+                logits=logits,
+                generate_idx=generate_idx,
+            )

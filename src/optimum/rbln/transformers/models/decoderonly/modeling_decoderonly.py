@@ -1104,6 +1104,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         generate_idx: Optional[torch.Tensor] = None,
         padded_cache_lengths: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
+        return_dict: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
         """
@@ -1146,6 +1147,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 position_ids=position_ids if self.rbln_config.use_position_ids else None,
             ).logits
 
-        return RBLNDecoderOnlyOutput(
-            logits=logits, generate_idx=generate_idx, padded_cache_lengths=padded_cache_lengths
-        )
+        if not return_dict:
+            return logits, generate_idx, padded_cache_lengths
+        else:
+            return RBLNDecoderOnlyOutput(
+                logits=logits, generate_idx=generate_idx, padded_cache_lengths=padded_cache_lengths
+            )
