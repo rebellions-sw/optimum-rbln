@@ -49,7 +49,7 @@ class RBLNCLIPTextModel(RBLNModel):
 
     @classmethod
     def update_rbln_config_using_pipe(
-        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_config: str
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
     ) -> "RBLNDiffusionMixinConfig":
         return rbln_config
 
