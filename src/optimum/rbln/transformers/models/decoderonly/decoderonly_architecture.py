@@ -146,6 +146,7 @@ class DecoderOnlyWrapper(nn.Module):
         max_seq_len: int,
         use_rotary_emb: bool,
         attn_impl: str,
+        use_inputs_embeds: bool,
         use_attention_mask: bool,
         use_position_ids: bool,
         kvcache_partition_len: Optional[int] = None,
@@ -163,6 +164,7 @@ class DecoderOnlyWrapper(nn.Module):
         self.kvcache_block_size = kvcache_block_size
         self.use_attention_mask = use_attention_mask
         self.use_position_ids = use_position_ids
+        self.use_inputs_embeds = use_inputs_embeds
         if self.attn_impl == "flash_attn":
             self.kvcache_partition_len = kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
         elif self.attn_impl == "eager":
@@ -225,6 +227,7 @@ class DecoderOnlyWrapper(nn.Module):
         self.causal_lm.phase = phase
 
     def prepare_forward_args(self, *args):
+        args = list(args)
         input_ids = None if self.use_inputs_embeds else args.pop(0)
         inputs_embeds = args.pop(0) if self.use_inputs_embeds else None
         cache_position = args.pop(0)

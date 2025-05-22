@@ -158,6 +158,7 @@ class Qwen2_5_VLVisionWindowAttention(nn.Module):
 
 class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
     def prepare_forward_args(self, *args):
+        args = list(args)
         input_ids = None if self.use_inputs_embeds else args.pop(0)
         inputs_embeds = args.pop(0) if self.use_inputs_embeds else None
         cache_position = args.pop(0)

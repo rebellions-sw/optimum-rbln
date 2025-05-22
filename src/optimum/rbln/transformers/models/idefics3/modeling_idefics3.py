@@ -451,7 +451,7 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
-            )
+            ).logits
 
         return RBLNDecoderOnlyOutput(
             logits=logits,
