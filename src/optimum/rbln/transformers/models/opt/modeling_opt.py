@@ -71,6 +71,7 @@ class RBLNOPTForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             "use_rotary_emb": cls._use_rotary_emb,
             "use_attention_mask": rbln_config.use_attention_mask,
         }
+
         for i in range(len(model.model.decoder.layers)):
             model.model.decoder.layers[i] = cls.modify_opt_decoder_layer(model.model.decoder.layers[i])
 

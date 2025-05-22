@@ -986,8 +986,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             cache_position = None
         else:
             if inputs_embeds is not None:
+                #
                 inputs_embeds = None
-                logger.warning("Specifying inputs_embeds in decoder phase is ignored")
 
             input_ids = input_ids[:, -1:]
             cache_position = generate_idx
