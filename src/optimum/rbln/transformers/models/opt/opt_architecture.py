@@ -12,9 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING
 
-import torch
 import torch.nn as nn
 
 from ...models.decoderonly.decoderonly_architecture import (
@@ -23,7 +22,6 @@ from ...models.decoderonly.decoderonly_architecture import (
     DecoderOnlyLayer,
     DecoderOnlyModel,
     DecoderOnlyWrapper,
-    slice_and_unsqueeze_cos_sin,
 )
 
 
@@ -44,7 +42,7 @@ class OPTWrapper(DecoderOnlyWrapper):
             )
             new_layer = OPTDecoderLayer(layer, new_self_attn)
             new_layers.append(new_layer)
-        new_model = OPTModel(causal_lm.model.decoder, new_layers, max_seq_len=max_seq_len)
+        new_model = OPTModel(causal_lm.model.decoder, new_layers, max_seq_len=max_seq_len, use_learned_pos_emb=True)
         new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm
 
@@ -66,70 +64,6 @@ class OPTModel(DecoderOnlyModel):
 
     def get_last_layernorm(self) -> nn.LayerNorm:
         return self._original_mod.final_layer_norm
-
-    def forward(
-        self,
-        input_ids: torch.Tensor = None,
-        inputs_embeds: torch.Tensor = None,
-        attention_mask: torch.Tensor = None,
-        cache_position: torch.Tensor = None,
-        past_key_values: Tuple[Tuple[torch.Tensor]] = None,
-        rotary_emb: nn.Module = None,
-        block_tables: Optional[torch.Tensor] = None,
-    ):
-        # retrieve input_ids and inputs_embeds
-        if (input_ids is None) ^ (inputs_embeds is not None):
-            raise ValueError(
-                "You cannot specify both input_ids and inputs_embeds at the same time, and must specify either one"
-            )
-
-        # embed positions
-        if inputs_embeds is None:
-            inputs_embeds = self.get_embedding()(input_ids)
-
-        hidden_states = inputs_embeds * self.hidden_multiplier
-
-        # get cos,sin vector if needed
-        if rotary_emb is not None:
-            if isinstance(rotary_emb, torch.Tensor):
-                cos = rotary_emb[0]
-                sin = rotary_emb[1]
-            else:
-                cos, sin = rotary_emb(hidden_states, self.max_seq_len)  # dtype carrier, max_seq_len
-                cos, sin = slice_and_unsqueeze_cos_sin(cos, sin, cache_position)
-        else:
-            batch_size = inputs_embeds.shape[0]
-            hidden_all = []
-            for i in range(batch_size):
-                positions_idx = cache_position[i]
-                position_weight = self.get_pos_embedding().weight[2:]
-                position = position_weight[positions_idx]
-                batch_hidden = position + inputs_embeds[i]
-                hidden_all.append(batch_hidden)
-            hidden_states = torch.stack(hidden_all, dim=0)
-            cos, sin = None, None
-
-        if self.attn_impl == "flash_attn":
-            seq_positions = cache_position[:, 0]
-            seq_positions = self.convert_sequence_positions_for_flash_attn(
-                seq_positions=seq_positions, max_seq_len=self.max_seq_len
-            )
-        else:
-            seq_positions = cache_position[:, :1]
-
-        for layer in self.layers:
-            hidden_states = layer(
-                hidden_states=hidden_states,
-                attention_mask=attention_mask,
-                seq_positions=seq_positions,
-                past_key_values=past_key_values,
-                cos=cos,
-                sin=sin,
-                block_tables=block_tables,
-            )
-
-        hidden_states = self.get_last_layernorm()(hidden_states)
-        return hidden_states
 
 
 class OPTDecoderLayer(DecoderOnlyLayer):
