@@ -287,7 +287,6 @@ class _VAECogVideoXDecoder(torch.nn.Module):
         if enc :
             cov_video_dec_out, conv_cache = self.cog_video_x.decoder(z)
             conv_cache_list, _ = self._to_tuple(conv_cache)
-            import pdb; pdb.set_trace()
             return cov_video_dec_out, conv_cache_list
                 
         else :
