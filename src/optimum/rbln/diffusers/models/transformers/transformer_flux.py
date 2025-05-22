@@ -150,8 +150,8 @@ class RBLNFluxTransformer2DModel(RBLNModel):
         self.time_text_embed = text_time_guidance_cls(
             embedding_dim=inner_dim, pooled_projection_dim=self.config.pooled_projection_dim
         )
-        self.x_embedder = nn.Linear(self.config.in_channels, self.inner_dim)
-        self.context_embedder = nn.Linear(self.config.joint_attention_dim, self.inner_dim)
+        self.x_embedder = nn.Linear(self.config.in_channels, inner_dim)
+        self.context_embedder = nn.Linear(self.config.joint_attention_dim, inner_dim)
         self.time_text_embed.load_state_dict(artifacts["time_text_embed"])
         self.x_embedder.load_state_dict(artifacts["x_embedder"])
         self.context_embedder.load_state_dict(artifacts["context_embedder"])
