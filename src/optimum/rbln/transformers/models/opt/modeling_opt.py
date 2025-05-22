@@ -13,10 +13,11 @@
 # limitations under the License.
 
 import torch.nn as nn
-from transformers.modeling_utils import no_init_weights
+from transformers import PreTrainedModel
 
 from ....utils import logging
 from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM
+from ...models.decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
 from .opt_architecture import OPTWrapper
 
 
@@ -61,11 +62,16 @@ class RBLNOPTForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         return layer
 
     @classmethod
-    def get_pytorch_model(cls, *args, **kwargs):
-        model = super().get_pytorch_model(*args, **kwargs)
+    def wrap_model_if_needed(cls, model: PreTrainedModel, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig):
+        wrapper_cfg = {
+            "max_seq_len": rbln_config.max_seq_len,
+            "attn_impl": rbln_config.attn_impl,
+            "kvcache_partition_len": rbln_config.kvcache_partition_len,
+            "kvcache_block_size": rbln_config.kvcache_block_size,
+            "use_rotary_emb": cls._use_rotary_emb,
+            "use_attention_mask": rbln_config.use_attention_mask,
+        }
+        for i in range(len(model.model.decoder.layers)):
+            model.model.decoder.layers[i] = cls.modify_opt_decoder_layer(model.model.decoder.layers[i])
 
-        with no_init_weights():
-            for i in range(len(model.model.decoder.layers)):
-                model.model.decoder.layers[i] = cls.modify_opt_decoder_layer(model.model.decoder.layers[i])
-
-        return model
+        return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
