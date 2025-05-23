@@ -42,6 +42,10 @@ class SubModulesMixin:
             setattr(self, submodule_meta["name"], submodule)
 
     @classmethod
+    def _update_submodule_config(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
+        return rbln_config
+
+    @classmethod
     def _export_submodules_from_model(
         cls, model: "PreTrainedModel", model_save_dir: str, rbln_config: RBLNModelConfig, **kwargs
     ) -> List["RBLNBaseModel"]:
@@ -59,15 +63,13 @@ class SubModulesMixin:
             cls_name = torch_submodule.__class__.__name__
             submodule_cls: Type["RBLNBaseModel"] = getattr(importlib.import_module("optimum.rbln"), f"RBLN{cls_name}")
             submodule_rbln_config = getattr(rbln_config, submodule_name) or {}
-            if hasattr(submodule_cls, "update_rbln_config_using_parent_config"):
-                submodule_rbln_config = submodule_cls.update_rbln_config_using_parent_config(
-                    model, submodule_rbln_config, submodule_name
-                )
 
             if isinstance(submodule_rbln_config, dict):
                 submodule_rbln_config_class = submodule_cls.get_rbln_config_class()
                 submodule_rbln_config = submodule_rbln_config_class(**submodule_rbln_config)
                 setattr(rbln_config, submodule_name, submodule_rbln_config)
+
+            submodule_rbln_config = submodule_cls._update_submodule_config(model, submodule_rbln_config)
 
             rbln_submodule = submodule_cls.from_model(
                 model=torch_submodule,
