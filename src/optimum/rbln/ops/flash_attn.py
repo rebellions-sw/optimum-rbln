@@ -178,7 +178,7 @@ def paged_flash_causal_attn_prefill_fake(
     block_table: Tensor,
     block_size: int,
     partition: int,
-    is_bidirectional: Optional[bool],
+    is_bidirectional: bool,
     mask: Optional[Tensor],
 ) -> Tensor:
     return torch.empty_like(q)
