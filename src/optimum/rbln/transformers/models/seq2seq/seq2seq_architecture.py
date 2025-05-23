@@ -476,6 +476,8 @@ class Seq2SeqSelfAttention(nn.Module):
         ]
         if attention_mask is not None:
             args.insert(3, attention_mask.unsqueeze(2))
+        else:
+            args.append(None)
 
         attn_output = self.attn_decode(*args)
 
