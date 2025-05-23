@@ -24,6 +24,7 @@ class RBLNFluxTransformer2DModelConfig(RBLNModelConfig):
         self,
         batch_size: Optional[int] = None,
         sample_size: Optional[Union[int, Tuple[int, int]]] = None,
+        vae_scale_factor: Optional[int] = None,
         max_sequence_length: Optional[int] = None,
         **kwargs,
     ):

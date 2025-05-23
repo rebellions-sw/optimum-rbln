@@ -19,7 +19,11 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 import numpy as np
 import torch
 import torch.nn as nn
-from diffusers.models.embeddings import CombinedTimestepGuidanceTextProjEmbeddings, CombinedTimestepTextProjEmbeddings
+from diffusers.models.embeddings import (
+    CombinedTimestepGuidanceTextProjEmbeddings,
+    CombinedTimestepTextProjEmbeddings,
+    FluxPosEmbed,
+)
 from diffusers.models.modeling_outputs import Transformer2DModelOutput
 from diffusers.models.transformers.transformer_flux import FluxTransformer2DModel
 from transformers import PretrainedConfig
@@ -39,22 +43,20 @@ logger = logging.getLogger(__name__)
 
 
 class FluxTransformer2DModelWrapper(torch.nn.Module):
-    def __init__(self, model: "FluxTransformer2DModel", ids: torch.tensor) -> None:
+    def __init__(self, model: "FluxTransformer2DModel") -> None:
         super().__init__()
-        self.image_rotary_emb = model.pos_embed(ids)
-        self.x_embedder = model.x_embedder
-        self.context_embedder = model.context_embedder
         self.transformer_blocks = model.transformer_blocks
         self.single_transformer_blocks = model.single_transformer_blocks
         self.norm_out = model.norm_out
         self.proj_out = model.proj_out
-        self.time_text_embed = model.time_text_embed
 
     def forward(
         self,
         hidden_states: torch.FloatTensor,
         encoder_hidden_states: torch.FloatTensor = None,
         temb: torch.FloatTensor = None,
+        image_rotary_emb_0: torch.FloatTensor = None,
+        image_rotary_emb_1: torch.FloatTensor = None,
         pooled_projections: torch.FloatTensor = None,
         timestep: torch.LongTensor = None,
         guidance: torch.Tensor = None,
@@ -64,34 +66,14 @@ class FluxTransformer2DModelWrapper(torch.nn.Module):
         return_dict: bool = False,
         controlnet_blocks_repeat: bool = False,
     ):
-        # TODO(kblee): need to support lora (?)
-        # if joint_attention_kwargs is not None:
-        #     joint_attention_kwargs = joint_attention_kwargs.copy()
-        #     lora_scale = joint_attention_kwargs.pop("scale", 1.0)
-        # else:
-        #     lora_scale = 1.0
-
-        # hidden_states = self.x_embedder(hidden_states)
-
-        # timestep = timestep.to(hidden_states.dtype) * 1000
-        # if guidance is not None:
-        #     guidance = guidance.to(hidden_states.dtype) * 1000
-        # else:
-        #     guidance = None
-
-        # temb = (
-        #     self.time_text_embed(timestep, pooled_projections)
-        #     if guidance is None
-        #     else self.time_text_embed(timestep, guidance, pooled_projections)
-        # )
-        # encoder_hidden_states = self.context_embedder(encoder_hidden_states)
+        image_rotary_emb = [image_rotary_emb_0, image_rotary_emb_1]
 
         for index_block, block in enumerate(self.transformer_blocks):
             encoder_hidden_states, hidden_states = block(
                 hidden_states=hidden_states,
                 encoder_hidden_states=encoder_hidden_states,
                 temb=temb,
-                image_rotary_emb=self.image_rotary_emb,
+                image_rotary_emb=image_rotary_emb,
                 joint_attention_kwargs=joint_attention_kwargs,
             )
 
@@ -113,7 +95,7 @@ class FluxTransformer2DModelWrapper(torch.nn.Module):
             hidden_states = block(
                 hidden_states=hidden_states,
                 temb=temb,
-                image_rotary_emb=self.image_rotary_emb,
+                image_rotary_emb=image_rotary_emb,
                 joint_attention_kwargs=joint_attention_kwargs,
             )
 
@@ -150,11 +132,13 @@ class RBLNFluxTransformer2DModel(RBLNModel):
         self.time_text_embed = text_time_guidance_cls(
             embedding_dim=inner_dim, pooled_projection_dim=self.config.pooled_projection_dim
         )
+        self.pos_embed = FluxPosEmbed(theta=10000, axes_dim=self.config.axes_dims_rope)
         self.x_embedder = nn.Linear(self.config.in_channels, inner_dim)
         self.context_embedder = nn.Linear(self.config.joint_attention_dim, inner_dim)
         self.time_text_embed.load_state_dict(artifacts["time_text_embed"])
         self.x_embedder.load_state_dict(artifacts["x_embedder"])
         self.context_embedder.load_state_dict(artifacts["context_embedder"])
+        self.pos_embed.load_state_dict(artifacts["pos_embed"])
 
     @classmethod
     def save_torch_artifacts(
@@ -168,23 +152,13 @@ class RBLNFluxTransformer2DModel(RBLNModel):
         save_dict["context_embedder"] = model.context_embedder.state_dict()
         save_dict["x_embedder"] = model.x_embedder.state_dict()
         save_dict["time_text_embed"] = model.time_text_embed.state_dict()
+        save_dict["pos_embed"] = model.pos_embed.state_dict()
 
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
-        txt_ids = torch.zeros(rbln_config.max_sequence_length, 3)
-        height = 2 * (int(rbln_config.sample_size[0] * rbln_config.vae_scale_factor) // rbln_config.vae_scale_factor)
-        width = 2 * (int(rbln_config.sample_size[1] * rbln_config.vae_scale_factor) // rbln_config.vae_scale_factor)
-        latent_image_ids = torch.zeros(height // 2, width // 2, 3)
-        latent_image_ids[..., 1] = latent_image_ids[..., 1] + torch.arange(height // 2)[:, None]
-        latent_image_ids[..., 2] = latent_image_ids[..., 2] + torch.arange(width // 2)[None, :]
-        latent_image_id_height, latent_image_id_width, latent_image_id_channels = latent_image_ids.shape
-        latent_image_ids = latent_image_ids.reshape(
-            latent_image_id_height * latent_image_id_width, latent_image_id_channels
-        )
-        ids = torch.cat((txt_ids, latent_image_ids), dim=0)
-        return FluxTransformer2DModelWrapper(model, ids).eval()
+        return FluxTransformer2DModelWrapper(model).eval()
 
     @classmethod
     def update_rbln_config_using_pipe(
@@ -217,8 +191,7 @@ class RBLNFluxTransformer2DModel(RBLNModel):
         if isinstance(rbln_config.sample_size, int):
             rbln_config.sample_size = (rbln_config.sample_size, rbln_config.sample_size)
 
-        latent_shape = ((2 * int(rbln_config.sample_size[0])) // 2) * (2 * int(rbln_config.sample_size[1]) // 2)
-        # num_channels_latents = model_config.in_channels // 4
+        latent_shape = (rbln_config.sample_size[0] // 2) * (rbln_config.sample_size[1] // 2)
 
         input_info = [
             (
@@ -226,7 +199,6 @@ class RBLNFluxTransformer2DModel(RBLNModel):
                 [
                     rbln_config.batch_size,
                     latent_shape,
-                    # num_channels_latents * 4,
                     model_config.num_attention_heads * model_config.attention_head_dim,
                 ],
                 "float32",
@@ -236,7 +208,6 @@ class RBLNFluxTransformer2DModel(RBLNModel):
                 [
                     rbln_config.batch_size,
                     rbln_config.max_sequence_length,
-                    # model_config.joint_attention_dim,
                     model_config.num_attention_heads * model_config.attention_head_dim,
                 ],
                 "float32",
@@ -245,30 +216,27 @@ class RBLNFluxTransformer2DModel(RBLNModel):
                 "temb",
                 [
                     rbln_config.batch_size,
-                    # rbln_config.max_sequence_length,
-                    # model_config.joint_attention_dim,
                     model_config.num_attention_heads * model_config.attention_head_dim,
                 ],
                 "float32",
             ),
+            (
+                "image_rotary_emb_0",
+                [
+                    rbln_config.max_sequence_length + latent_shape,
+                    model_config.attention_head_dim,
+                ],
+                "float32",
+            ),
+            (
+                "image_rotary_emb_1",
+                [
+                    rbln_config.max_sequence_length + latent_shape,
+                    model_config.attention_head_dim,
+                ],
+                "float32",
+            ),
         ]
-        #     (
-        #         "pooled_projections",
-        #         [
-        #             rbln_config.batch_size,
-        #             model_config.pooled_projection_dim,
-        #         ],
-        #         "float32",
-        #     ),
-        #     ("timestep", [rbln_config.batch_size], "float32"),
-        # ]
-
-        # if model_config.guidance_embeds:
-        #     input_info.extend(
-        #         [
-        #             ("guidance", [rbln_config.batch_size], "float32"),
-        #         ]
-        #     )
 
         compile_config = RBLNCompileConfig(input_info=input_info)
         rbln_config.set_compile_cfgs([compile_config])
@@ -280,6 +248,8 @@ class RBLNFluxTransformer2DModel(RBLNModel):
         encoder_hidden_states: torch.Tensor = None,
         pooled_projections: torch.Tensor = None,
         timestep: torch.LongTensor = None,
+        img_ids: torch.Tensor = None,
+        txt_ids: torch.Tensor = None,
         guidance: torch.Tensor = None,
         joint_attention_kwargs: Optional[Dict[str, Any]] = None,
         controlnet_block_samples=None,
@@ -287,8 +257,14 @@ class RBLNFluxTransformer2DModel(RBLNModel):
         return_dict: bool = True,
         controlnet_blocks_repeat: bool = False,
     ):
-        hidden_states = self.x_embedder(hidden_states)
+        # Not support lora yet
+        # if joint_attention_kwargs is not None:
+        #     joint_attention_kwargs = joint_attention_kwargs.copy()
+        #     lora_scale = joint_attention_kwargs.pop("scale", 1.0)
+        # else:
+        #     lora_scale = 1.0
 
+        hidden_states = self.x_embedder(hidden_states)
         timestep = timestep.to(hidden_states.dtype) * 1000
         if guidance is not None:
             guidance = guidance.to(hidden_states.dtype) * 1000
@@ -300,7 +276,25 @@ class RBLNFluxTransformer2DModel(RBLNModel):
             if guidance is None
             else self.time_text_embed(timestep, guidance, pooled_projections)
         )
-
         encoder_hidden_states = self.context_embedder(encoder_hidden_states)
-        output = self.model[0].forward(hidden_states, encoder_hidden_states, temb)
+
+        if txt_ids.ndim == 3:
+            logger.warning(
+                "Passing `txt_ids` 3d torch.Tensor is deprecated."
+                "Please remove the batch dimension and pass it as a 2d torch Tensor"
+            )
+            txt_ids = txt_ids[0]
+        if img_ids.ndim == 3:
+            logger.warning(
+                "Passing `img_ids` 3d torch.Tensor is deprecated."
+                "Please remove the batch dimension and pass it as a 2d torch Tensor"
+            )
+            img_ids = img_ids[0]
+
+        ids = torch.cat((txt_ids, img_ids), dim=0)
+        image_rotary_emb = self.pos_embed(ids)
+
+        output = self.model[0].forward(
+            hidden_states, encoder_hidden_states, temb, image_rotary_emb[0], image_rotary_emb[1]
+        )
         return Transformer2DModelOutput(sample=output)

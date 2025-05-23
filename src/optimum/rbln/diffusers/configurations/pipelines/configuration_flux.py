@@ -36,7 +36,7 @@ class _RBLNFluxPipelineBaseConfig(RBLNModelConfig):
         sample_size: Optional[Tuple[int, int]] = None,
         image_size: Optional[Tuple[int, int]] = None,
         guidance_scale: Optional[float] = None,
-        max_sequence_length: Optional[int] = 512,
+        max_seq_len: Optional[int] = 512,
         **kwargs,
     ):
         """
@@ -56,7 +56,7 @@ class _RBLNFluxPipelineBaseConfig(RBLNModelConfig):
             image_size (Optional[Tuple[int, int]]): Alternative way to specify image dimensions.
                 Cannot be used together with img_height/img_width.
             guidance_scale (Optional[float]): Scale for classifier-free guidance.
-            max_sequence_length (Optional[int], default to 512): Maximum sequence length to use with the `prompt`
+            max_seq_len (Optional[int], default to 512): Maximum sequence length to use with the `prompt`
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -72,13 +72,13 @@ class _RBLNFluxPipelineBaseConfig(RBLNModelConfig):
 
         self.text_encoder = self.init_submodule_config(RBLNCLIPTextModelConfig, text_encoder, batch_size=batch_size)
         self.text_encoder_2 = self.init_submodule_config(
-            RBLNT5EncoderModelConfig, text_encoder_2, max_seq_len=max_sequence_length
+            RBLNT5EncoderModelConfig, text_encoder_2, max_seq_len=max_seq_len
         )
         self.transformer = self.init_submodule_config(
             RBLNFluxTransformer2DModelConfig,
             transformer,
             sample_size=sample_size,
-            max_sequence_length=max_sequence_length,
+            max_sequence_length=max_seq_len,
         )
         self.vae = self.init_submodule_config(
             RBLNAutoencoderKLConfig,
@@ -102,6 +102,10 @@ class _RBLNFluxPipelineBaseConfig(RBLNModelConfig):
     @property
     def image_size(self):
         return self.vae.sample_size
+
+    @property
+    def max_seq_len(self):
+        return self.text_encoder_2.max_seq_len
 
 
 class RBLNFluxPipelineConfig(_RBLNFluxPipelineBaseConfig):

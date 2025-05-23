@@ -92,7 +92,7 @@ class RBLNCLIPTextModel(RBLNModel):
             return BaseModelOutputWithPooling(
                 last_hidden_state=output[0],
                 pooler_output=output[1],
-                hidden_states=output[2:],
+                hidden_states=tuple(output[2:]),
             )
 
 
