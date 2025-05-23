@@ -146,6 +146,7 @@ class DecoderOnlyWrapper(nn.Module):
         max_seq_len: int,
         use_rotary_emb: bool,
         attn_impl: str,
+        use_inputs_embeds: bool,
         use_attention_mask: bool,
         use_position_ids: bool,
         kvcache_partition_len: Optional[int] = None,
@@ -167,6 +168,7 @@ class DecoderOnlyWrapper(nn.Module):
         self.kvcache_block_size = kvcache_block_size
         self.use_attention_mask = use_attention_mask
         self.use_position_ids = use_position_ids
+        self.use_inputs_embeds = use_inputs_embeds
         if self.attn_impl == "flash_attn":
             self.kvcache_partition_len = kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
         elif self.attn_impl == "eager":
@@ -232,90 +234,16 @@ class DecoderOnlyWrapper(nn.Module):
         self._phase = phase
         self.causal_lm.phase = phase
 
-    def convert_args(self, *args):
-        """Converts variable input arguments into a standardized tuple for the forward pass.
-
-        Args:
-            *args: Variable arguments in the following order:
-                - input_ids_or_inputs_embeds
-                - cache_position
-                - block_tables
-                - (query_position, if phase == "prefill")
-                - (attention_mask, if use_attention_mask is True)
-                - (position_ids, if use_position_ids is True)
-                - *past_key_values (remaining arguments)
-
-        Returns:
-            tuple: (input_ids_or_inputs_embeds, cache_position, block_tables, query_position,
-                    attention_mask, position_ids, past_key_values, rotary_emb)
-
-        Raises:
-            ValueError: If phase is invalid or required arguments are missing.
-        """
-        if self.phase not in ["decode", "prefill"]:
-            raise ValueError(f"Unknown phase: {self.phase}")
-
-        (input_ids_or_inputs_embeds, cache_position, block_tables, *conditional_args) = args
-
-        query_position = None
-        attention_mask = None
-        position_ids = None
-        arg_idx = 0
-        if self.phase == "prefill":
-            if arg_idx >= len(conditional_args) - (2 * self.num_hidden_layers):
-                raise ValueError("Missing query_position for prefill phase")
-            query_position = conditional_args[arg_idx]
-            arg_idx += 1
-
-        if self.use_attention_mask:
-            if arg_idx >= len(conditional_args) - (2 * self.num_hidden_layers):
-                raise ValueError("Missing attention_mask when use_attention_mask is True")
-            attention_mask = conditional_args[arg_idx]
-            arg_idx += 1
-
-        if self.use_position_ids:
-            if arg_idx >= len(conditional_args) - (2 * self.num_hidden_layers):
-                raise ValueError("Missing position_ids when use_position_ids is True")
-            position_ids = conditional_args[arg_idx]
-            arg_idx += 1
-
-        past_key_values = conditional_args[arg_idx:]
-        if len(past_key_values) != 2 * self.num_hidden_layers:
-            raise ValueError(
-                f"Different past_key_values to model's config. {len(past_key_values)} != {2 * self.num_hidden_layers}"
-            )
-
-        return (
-            input_ids_or_inputs_embeds,
-            cache_position,
-            block_tables,
-            query_position,
-            attention_mask,
-            position_ids,
-            past_key_values,
-            self.rotary_emb,
-        )
-
-    def forward(self, *args):
-        (
-            input_ids_or_inputs_embeds,
-            cache_position,
-            block_tables,
-            query_position,
-            attention_mask,
-            position_ids,
-            past_key_values,
-            rotary_emb,
-        ) = self.convert_args(*args)
-
-        if input_ids_or_inputs_embeds.ndim == 2:
-            input_ids = input_ids_or_inputs_embeds
-            inputs_embeds = None
-        elif input_ids_or_inputs_embeds.ndim == 3:
-            input_ids = None
-            inputs_embeds = input_ids_or_inputs_embeds
-        else:
-            raise NotImplementedError(f"Unknown ndim of input : {input_ids_or_inputs_embeds.ndim}")
+    def prepare_forward_args(self, *args):
+        args = list(args)
+        input_ids = None if self.use_inputs_embeds else args.pop(0)
+        inputs_embeds = args.pop(0) if self.use_inputs_embeds else None
+        cache_position = args.pop(0)
+        block_tables = args.pop(0)
+        query_position = args.pop(0) if self.phase == "prefill" else None
+        attention_mask = args.pop(0) if self.use_attention_mask else None
+        position_ids = args.pop(0) if self.use_position_ids else None
+        past_key_values = args
 
         if len(past_key_values) != 2 * self.num_hidden_layers:
             raise ValueError(
@@ -331,6 +259,31 @@ class DecoderOnlyWrapper(nn.Module):
             past_key_value = [key_states, value_states]
             _past_key_values.append(past_key_value)
         past_key_values = _past_key_values
+
+        return (
+            input_ids,
+            inputs_embeds,
+            cache_position,
+            block_tables,
+            query_position,
+            attention_mask,
+            position_ids,
+            past_key_values,
+            self.rotary_emb,
+        )
+
+    def forward(self, *args):
+        (
+            input_ids,
+            inputs_embeds,
+            cache_position,
+            block_tables,
+            query_position,
+            attention_mask,
+            position_ids,
+            past_key_values,
+            rotary_emb,
+        ) = self.prepare_forward_args(*args)
 
         logit = self.causal_lm(
             input_ids=input_ids,

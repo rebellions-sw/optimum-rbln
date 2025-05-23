@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import rebel
 
 from ....configuration_utils import RBLNModelConfig
 from ....utils.logging import get_logger
-from ...utils.rbln_quantization import QuantizationManager
+from ...utils.rbln_quantization import RBLNQuantizationConfig
 
 
 logger = get_logger()
@@ -35,7 +35,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         attn_impl: Optional[str] = None,
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
-        quantization: Optional[Dict[str, Any]] = None,
+        quantization: Optional[Union[Dict[str, Any], RBLNQuantizationConfig]] = None,
         prefill_chunk_size: Optional[int] = None,
         kvcache_num_blocks: Optional[int] = None,
         decoder_batch_sizes: Optional[List[int]] = None,
@@ -79,9 +79,6 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         self.use_position_ids = use_position_ids or False
         self.use_attention_mask = use_attention_mask
 
-        if self.use_position_ids and not self.use_attention_mask:
-            raise ValueError("Position IDs should be used with attention mask. Setting use_attention_mask to True.")
-
         npu = self.npu or rebel.get_npu_name()
         if npu == "RBLN-CA02":
             if self.use_attention_mask is False:
@@ -90,16 +87,15 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         else:
             self.use_attention_mask = self.use_attention_mask or False
 
-        self.use_position_ids = use_position_ids or False
         if self.use_position_ids and not self.use_attention_mask:
-            raise ValueError("Position ids should be used with attention mask. Setting use_attention_mask to True.")
+            raise ValueError("Position IDs should be used with attention mask.")
 
         self.attn_impl = attn_impl
         self.kvcache_partition_len = kvcache_partition_len
         self.kvcache_block_size = kvcache_block_size
         self.quantization = quantization or {}
-        if self.quantization:
-            QuantizationManager.validate_quantization_config(self.quantization)
+        if self.quantization and isinstance(self.quantization, dict):
+            self.quantization = RBLNQuantizationConfig(**self.quantization)
 
         self.prefill_chunk_size = prefill_chunk_size or 128
         if self.prefill_chunk_size % 64 != 0 or self.prefill_chunk_size <= 0:

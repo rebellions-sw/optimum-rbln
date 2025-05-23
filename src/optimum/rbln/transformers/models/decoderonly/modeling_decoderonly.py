@@ -30,7 +30,7 @@ from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
-from ...utils.rbln_quantization import QuantizationManager
+from ...utils.rbln_quantization import prepare_model_for_quantization
 from .configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
 from .decoderonly_architecture import (
     DecoderOnlyWrapper,
@@ -553,8 +553,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         trust_remote_code: bool = False,
         **kwargs,
     ):
-        from ...utils.rbln_quantization import prepare_model_for_quantization
-
         kwargs = cls.update_kwargs(kwargs)
 
         if config is None:
@@ -571,7 +569,16 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         with no_init_weights():
             model = AutoModelForCausalLM.from_config(config)
 
-        prepare_model_for_quantization(model, model_id, kwargs.get("num_hidden_layers"))
+        model = prepare_model_for_quantization(
+            model,
+            model_id,
+            kwargs.get("num_hidden_layers"),
+            use_auth_token=use_auth_token,
+            revision=revision,
+            cache_dir=cache_dir,
+            force_download=force_download,
+            local_files_only=local_files_only,
+        )
         return model
 
     def __getattr__(self, __name: str) -> Any:
@@ -598,11 +605,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
     def get_pytorch_model(
         cls, *args, rbln_config: Optional[RBLNDecoderOnlyModelForCausalLMConfig] = None, **kwargs
     ) -> "PreTrainedModel":
-        if (
-            rbln_config is not None
-            and "format" in rbln_config.quantization
-            and rbln_config.quantization["format"] == "rbln"
-        ):
+        if rbln_config and rbln_config.quantization:
             model = cls.get_quantized_model(*args, **kwargs)
         else:
             model = super().get_pytorch_model(*args, **kwargs)
@@ -619,6 +622,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             "use_rotary_emb": cls._use_rotary_emb,
             "use_attention_mask": rbln_config.use_attention_mask,
             "use_position_ids": rbln_config.use_position_ids,
+            "use_inputs_embeds": rbln_config.use_inputs_embeds,
         }
         return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
 
@@ -643,9 +647,10 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 static_tensors[name] = tensor
                 context.mark_static_address(tensor)
 
-        @QuantizationManager.with_quantization_env
-        def compile_model(wrapped_model, compile_config, example_inputs, compile_context, **kwargs):
+        def compile_model(wrapped_model, compile_config, example_inputs, compile_context, quantization):
             try:
+                if quantization:
+                    quantization.maybe_set_quantization_env()
                 original_linear = torch.nn.functional.linear
                 torch.nn.functional.linear = torch.ops.rbln_custom_ops.linear
                 compiled_model = RBLNModel.compile(
@@ -657,14 +662,12 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 return compiled_model
             finally:
                 torch.nn.functional.linear = original_linear
+                if quantization:
+                    quantization.maybe_reset_quantization_env()
 
         wrapped_model.phase = "prefill"
         compiled_prefill = compile_model(
-            wrapped_model,
-            prefill_compile_config,
-            prefill_example_inputs,
-            context,
-            quantize_config=rbln_config.quantization,
+            wrapped_model, prefill_compile_config, prefill_example_inputs, context, rbln_config.quantization
         )
 
         wrapped_model.phase = "decode"
@@ -672,11 +675,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         for batch_size, dec_compile_config in zip(rbln_config.decoder_batch_sizes, rbln_compile_configs[1:]):
             dec_example_inputs = dec_compile_config.get_dummy_inputs(fill=0, static_tensors=static_tensors)
             compiled_decoder = compile_model(
-                wrapped_model,
-                dec_compile_config,
-                dec_example_inputs,
-                context,
-                quantize_config=rbln_config.quantization,
+                wrapped_model, dec_compile_config, dec_example_inputs, context, rbln_config.quantization
             )
             compiled_models[f"decoder_batch_{batch_size}"] = compiled_decoder
 
@@ -843,10 +842,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         hidden_size: int,
         head_dim: int,
     ):
-        # Input order: Fixed inputs (input_ids_or_inputs_embeds, cache_position, block_tables),
-        # followed by conditional inputs (query_position, attention_mask, position_ids),
-        # and finally past_key_values. This aligns with `DecoderOnlyWrapper.convert_args`.
-
         if use_inputs_embeds:
             main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
         else:
@@ -1121,6 +1116,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         padded_cache_lengths: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
+        return_dict: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
         """
@@ -1164,8 +1160,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 position_ids=position_ids if self.rbln_config.use_position_ids else None,
             ).logits
 
-        return RBLNDecoderOnlyOutput(
-            logits=logits,
-            generate_idx=generate_idx,
-            padded_cache_lengths=padded_cache_lengths,
-        )
+        if not return_dict:
+            return logits, generate_idx, padded_cache_lengths
+        else:
+            return RBLNDecoderOnlyOutput(
+                logits=logits, generate_idx=generate_idx, padded_cache_lengths=padded_cache_lengths
+            )
