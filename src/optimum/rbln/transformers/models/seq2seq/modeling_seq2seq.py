@@ -273,12 +273,12 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
                     [
                         rbln_config.batch_size,
                         n_head,
-                        rbln_config.enc_max_seq_len,
+                        rbln_config.enc_max_seq_len, # si: encoder max seq len 만큼 kv cache 저장
                         d_kv,
                     ],
                     "float32",
                 )
-                for i in range(n_layer * 2)
+                for i in range(n_layer * 2) # si: key 따로 value 따로라서 n_layer * 2
             ]
         )
         dec_input_info.extend(
@@ -288,7 +288,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
                     [
                         rbln_config.batch_size,
                         n_head,
-                        rbln_config.dec_max_seq_len,
+                        rbln_config.dec_max_seq_len, # si: decoder max seq len 만큼 kv cache 저장
                         d_kv,
                     ],
                     "float32",
