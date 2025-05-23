@@ -87,31 +87,34 @@ class RBLNCLIPTextModel(RBLNModel):
         This method can be overridden by subclasses to provide task-specific output handling.
         """
         if not return_dict:
-            return (output,) if not isinstance(output, (tuple, list)) else output
+            return output
         else:
             return BaseModelOutputWithPooling(
                 last_hidden_state=output[0],
                 pooler_output=output[1],
-                hidden_states=tuple(output[2:]),
+                hidden_states=tuple(output[2:]) if len(output) > 2 else None,
             )
 
 
 class RBLNCLIPTextModelWithProjection(RBLNCLIPTextModel):
-    def forward(
-        self,
-        input_ids: Optional[torch.FloatTensor] = None,
-        **kwargs,
-    ) -> Union[Tuple, CLIPTextModelOutput]:
-        output = super().forward(input_ids)
-        text_embeds = output[0]
-        last_hidden_state = output[1]
-        hidden_states = output[2:]
+    def forward(self, input_ids: torch.LongTensor, return_dict: bool = None, **kwargs) -> torch.FloatTensor:
+        # To ignore using attention_mask, we override forward method.
+        output = super().forward(input_ids, return_dict=return_dict)
+        return output
 
-        return CLIPTextModelOutput(
-            text_embeds=text_embeds,
-            last_hidden_state=last_hidden_state,
-            hidden_states=hidden_states,
-        )
+    def _prepare_output(self, output, return_dict):
+        """
+        Prepare model output based on return_dict flag.
+        This method can be overridden by subclasses to provide task-specific output handling.
+        """
+        if not return_dict:
+            return (output,) if not isinstance(output, (tuple, list)) else output
+        else:
+            return CLIPTextModelOutput(
+                text_embeds=output[0],
+                last_hidden_state=output[1],
+                hidden_states=output[2:],
+            )
 
 
 class _VisionEncoder(torch.nn.Module):
