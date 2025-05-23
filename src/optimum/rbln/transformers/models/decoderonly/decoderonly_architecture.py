@@ -1103,18 +1103,6 @@ class FlashAttentionOp(AttentionOp):
 
         return attn_output
 
-
-class DecoderOnlySlidingWindowAttention(DecoderOnlyAttention):
-    def get_attention(self):
-        return SlidingWindowAttentionOp(
-            self.num_heads,
-            self.head_dim,
-            self.num_key_value_heads,
-            self.use_attention_mask,
-            self.use_position_ids,
-        )
-
-
 class SlidingWindowAttentionOp(AttentionOp):
     def forward(
         self,
