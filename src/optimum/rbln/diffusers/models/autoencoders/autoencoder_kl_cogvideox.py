@@ -111,7 +111,7 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
 
             enc_example_inputs = rbln_config.compile_cfgs[0].get_dummy_inputs(fill=0) # is it needed?
 
-            # # Mark encoder's static tensors (cross kv states) FIXME decoder_0 output conv cache
+            # # Mark encoder's static tensors (conv_cache) FIXME decoder_0 output conv cache
             static_tensors = {}
             for (name, _, _), tensor in zip(rbln_config.compile_cfgs[0].input_info, enc_example_inputs):
                 if "conv" in name:
@@ -120,10 +120,10 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
 
             dec_example_inputs = rbln_config.compile_cfgs[1].get_dummy_inputs(fill=0, static_tensors=static_tensors)
 
-            # Mark decoder's static tensors (self kv states)
+            # Mark decoder's static tensors (conv_cache)
             for (name, _, _), tensor in zip(rbln_config.compile_cfgs[1].input_info, dec_example_inputs):
                 if "conv" in name:
-                    context.mark_static_address(tensor)
+                    context.mark_static_address(tensor) # FIXME 위와 static_tensor와 전부 동일한 tensor이기 때문에 필요없음
 
             dec_compiled_model_0 = cls.compile(
                 decoder_model_0.eval(),
