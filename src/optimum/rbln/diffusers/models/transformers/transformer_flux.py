@@ -191,7 +191,10 @@ class RBLNFluxTransformer2DModel(RBLNModel):
         if isinstance(rbln_config.sample_size, int):
             rbln_config.sample_size = (rbln_config.sample_size, rbln_config.sample_size)
 
-        latent_shape = (rbln_config.sample_size[0] // 2) * (rbln_config.sample_size[1] // 2)
+        # This is for latest diffusers(0.33.1) version -> pipe.default_sample_size = 128
+        # latent_shape = (rbln_config.sample_size[0] // 2) * (rbln_config.sample_size[1] // 2)
+        # Current optimum-rbln dependency diffusers version (0.31.0) -> pipe.default_sample_size = 64
+        latent_shape = rbln_config.sample_size[0] * rbln_config.sample_size[1]
 
         input_info = [
             (
