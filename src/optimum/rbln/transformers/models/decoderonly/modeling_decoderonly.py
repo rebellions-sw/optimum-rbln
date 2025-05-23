@@ -787,6 +787,11 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         hidden_size = getattr(config, "n_embd", None) or getattr(config, "hidden_size")
         num_key_value_heads = getattr(config, "num_key_value_heads", None) or num_attention_heads
 
+        sliding_window = getattr(config, "sliding_window", None)
+        sliding_window_pattern = getattr(config, "sliding_window_pattern", 1)
+        num_global_layers = num_layers // sliding_window_pattern
+        num_local_layers = num_layers - num_global_layers
+
         # TODO(jongho): Update if target npu is REBEL.
         ATOM_DRAM_NBYTES = 16 * 2**30
         ATOM_SYS_DRAM_NBYTES = 288 * 2**20
@@ -819,8 +824,15 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             buffer = buffer_per_core * tensor_parallel_size
         available_dram -= buffer
 
+        if sliding_window is not None:
+            local_kv_cache_per_layer = (
+                sliding_window * align(head_dim, 64) * math.ceil(num_key_value_heads / tensor_parallel_size) * 2
+            )
+            total_local_kv_cache_size = local_kv_cache_per_layer * num_local_layers
+            available_dram -= total_local_kv_cache_size
+
         b = kvcache_block_size * align(head_dim, 64) * math.ceil(num_key_value_heads / tensor_parallel_size) * 2
-        c = num_layers * 2 * tensor_parallel_size
+        c = num_global_layers * 2 * tensor_parallel_size
         k = available_dram / c
         max_n_blocks = math.floor(2**21 / b * math.floor((k - 1) / 2**21))
 

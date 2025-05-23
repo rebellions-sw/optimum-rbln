@@ -14,7 +14,7 @@
 import inspect
 from collections import deque
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple, Union, List
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
 import rebel
 import torch
@@ -176,7 +176,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         attention_mask=None,
         generate_idx=None,
         padded_cache_lengths=None,
-        token_type_ids = None,
+        token_type_ids=None,
         **kwargs,
     ):
         # Prepare HF generation
@@ -344,10 +344,10 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         Returns:
             Tuple: (inputs_padded, attention_mask_padded, position_ids_padded, padded_len, token_type_ids_padded).
         """
-        
+
         if token_type_ids is None:
             return inputs, attention_mask, position_ids, 0, torch.zeros(inputs.shape[:2], dtype=torch.long)
-        
+
         seq_len = inputs.shape[1]
 
         # Find image start positions
@@ -432,7 +432,11 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         # Handle continuous batching in a compiled graph by extracting valid inputs
         # If an attention mask is provided, select only the valid (non-masked) inputs
         inputs = inputs[:, attention_mask.bool()] if attention_mask is not None else inputs
-        token_type_ids = token_type_ids[:, attention_mask.bool()] if attention_mask is not None and token_type_ids is not None else token_type_ids
+        token_type_ids = (
+            token_type_ids[:, attention_mask.bool()]
+            if attention_mask is not None and token_type_ids is not None
+            else token_type_ids
+        )
 
         if position_embed is not None:
             position_embed = (
@@ -581,9 +585,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                 - 1
             )
             if token_type_ids_padded[:, step] == 1:
-                if torch.any(
-                    token_type_ids_padded[:, step : step + self.prefill_chunk_size] == 0
-                ):
+                if torch.any(token_type_ids_padded[:, step : step + self.prefill_chunk_size] == 0):
                     raise ValueError("All tokens of image_prefill should be the same image.")
                 else:
                     logits = self.image_prefill(
@@ -825,7 +827,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         )
 
         return input_info
-    
+
     @classmethod
     def update_rbln_config_using_parent_config(
         cls, model: "PreTrainedModel", rbln_config: "RBLNModelConfig", submodule_name: str
@@ -867,16 +869,15 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         max_num_blocks = required_num_blocks
 
         if rbln_config.attn_impl == "flash_attn":
-            # TODO(taehoon): override the get_maximum_num_blocks function
-            # estimated_max_num_blocks = cls.get_maximum_num_blocks(
-            #     config=model_config,
-            #     tensor_parallel_size=rbln_config.tensor_parallel_size or 1,
-            #     kvcache_block_size=rbln_config.kvcache_block_size,
-            #     nbits_per_param=16 if not rbln_config.quantization else 4,  # TODO(jongho): FIX Ad-hoc
-            #     n_model_params=sum(p.numel() for p in model.parameters()),
-            # )
+            estimated_max_num_blocks = cls.get_maximum_num_blocks(
+                config=model_config,
+                tensor_parallel_size=rbln_config.tensor_parallel_size or 1,
+                kvcache_block_size=rbln_config.kvcache_block_size,
+                nbits_per_param=16 if not rbln_config.quantization else 4,  # TODO(jongho): FIX Ad-hoc
+                n_model_params=sum(p.numel() for p in model.parameters()),
+            )
 
-            # max_num_blocks = min(max_num_blocks, estimated_max_num_blocks)
+            max_num_blocks = min(max_num_blocks, estimated_max_num_blocks)
 
             flash_min_blocks = rbln_config.max_seq_len // rbln_config.kvcache_block_size + 1
             if max_num_blocks < flash_min_blocks:
@@ -1024,13 +1025,13 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
         # TODO overide maybe_suggest_kvcache_num_blocks
         # check if the memory is enough to have additional blocks
-        # required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
-        # if rbln_config.kvcache_num_blocks < required_num_blocks:
-        #     cls.maybe_suggest_kvcache_num_blocks(
-        #         compiled_models=compiled_models,
-        #         model_config=model.config,
-        #         rbln_config=rbln_config,
-        #     )
+        required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
+        if rbln_config.kvcache_num_blocks < required_num_blocks:
+            cls.maybe_suggest_kvcache_num_blocks(
+                compiled_models=compiled_models,
+                model_config=model.config,
+                rbln_config=rbln_config,
+            )
 
         return compiled_models
 
