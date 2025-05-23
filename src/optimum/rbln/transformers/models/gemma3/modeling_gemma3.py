@@ -1023,7 +1023,6 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             )
             compiled_models[f"decoder_batch_{batch_size}"] = compiled_decoder
 
-        # TODO overide maybe_suggest_kvcache_num_blocks
         # check if the memory is enough to have additional blocks
         required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
         if rbln_config.kvcache_num_blocks < required_num_blocks:

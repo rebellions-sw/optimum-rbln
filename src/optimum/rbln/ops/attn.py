@@ -209,6 +209,8 @@ def paged_causal_attn_prefill(
     - scale: [] - Attention scale factor
     - block_table: [batch_size, max_seq_len // block_size] - Block indices for KV cache management
     - block_size: [] - Number of tokens per block
+    - is_bidirectional: [] - Whether the attention is bidirectional at current sequence position
+    - mask: [batch=1, max_seq_len] - attention mask when use position_ids
 
     Returns:
         Tensor: attn_output: [batch=1, n_heads, n_groups, seq_len, head_dim] - Attention output
