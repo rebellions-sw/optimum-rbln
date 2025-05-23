@@ -49,6 +49,12 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
         super().__post_init__(**kwargs)
         
         self.use_slicing = True # FIXME(si) make generalization
+        self.use_tiling = False # FIXME(si) make generalization
+        self.tile_latent_min_width = 0 # FIXME(si) tmp
+        self.tile_latent_min_height = 0 # FIXME(si) tmp
+        
+        self.num_latent_frames_batch_size = 2 # FIXME
+        self.post_quant_conv = None
         
         if self.rbln_config.model_cfg.get("img2vid_pipeline"):
             self.encoder = RBLNRuntimeVAECogVideoXEncoder(runtime=self.model[0], main_input_name="x")
@@ -281,14 +287,11 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
     def _decode(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
         batch_size, num_channels, num_frames, height, width = z.shape
 
-        # if self.use_tiling and ( # FIXME
-        #     width > self.tile_latent_min_width or height > self.cog_video_x.tile_latent_min_height
-        # ):
-        #     raise ValueError("Optimum-RBLN doesn't support tiled decoding aross H,W axis")
-        #     return self.tiled_decode(z, return_dict=return_dict)
-
-        self.num_latent_frames_batch_size = 2 # FIXME
-        self.post_quant_conv = None
+        if self.use_tiling and ( # FIXME
+            width > self.tile_latent_min_width or height > self.tile_latent_min_height
+        ):
+            raise ValueError("Optimum-RBLN doesn't support tiled decoding aross H,W axis")
+            return self.tiled_decode(z, return_dict=return_dict)
         
         frame_batch_size = self.num_latent_frames_batch_size
         num_batches = max(num_frames // frame_batch_size, 1)
