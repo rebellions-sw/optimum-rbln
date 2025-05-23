@@ -822,6 +822,7 @@ class AttentionOp(nn.Module):
                     scale=scale,
                     block_table=block_tables,
                     block_size=block_size,
+                    mask=None,
                 )
 
         else:
@@ -849,6 +850,8 @@ class AttentionOp(nn.Module):
                     scale=scale,
                     block_table=block_tables,
                     block_size=block_size,
+                    is_bidirectional=False,
+                    mask=None,
                 )
 
         attn_output = attn_output.view(batch_size, self.num_heads, -1, self.head_dim)
@@ -1082,6 +1085,7 @@ class FlashAttentionOp(AttentionOp):
                     block_table=block_tables,
                     block_size=kvcache_block_size,
                     partition=self.kvcache_partition_size,
+                    mask=None,
                 )
         else:
             if self.use_attention_mask:
@@ -1110,6 +1114,8 @@ class FlashAttentionOp(AttentionOp):
                     block_table=block_tables,
                     block_size=kvcache_block_size,
                     partition=self.kvcache_partition_size,
+                    is_bidirectional=False,
+                    mask=None,
                 )
 
         # reshape for removing repeat_kv
