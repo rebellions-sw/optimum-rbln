@@ -18,14 +18,12 @@ from ....configuration_utils import RBLNModelConfig
 from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
 from ..siglip.configuration_siglip import RBLNSiglipVisionModelConfig
 
-
 class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
     def __init__(self, use_position_ids: Optional[bool] = None, use_attention_mask: Optional[bool] = None, **kwargs):
         # use_attention_mask and use_position_ids are always True for Gemma3
         use_attention_mask = use_attention_mask or True
         use_position_ids = use_position_ids or True
         super().__init__(use_attention_mask=use_attention_mask, use_position_ids=use_position_ids, **kwargs)
-
 
 class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):
     submodules = ["vision_tower", "language_model"]
