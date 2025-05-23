@@ -372,7 +372,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
             inputs_embeds = [inputs_embeds[i : i + 1, attention_mask[i].bool()] for i in range(batch_size)]
             for batch_idx in range(batch_size):
                 generate_idx[batch_idx] = inputs_embeds[batch_idx].shape[-2]
-                logit = self.language_model.prefill_decoder(
+                output = self.language_model.prefill_decoder(
                     inputs_embeds=inputs_embeds[batch_idx],
                     batch_idx=batch_idx,
                     cache_position=torch.arange(
@@ -382,14 +382,14 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
                     ).unsqueeze(0),
                 )
 
-                logits.append(logit)
+                logits.append(output.logits)
             logits = torch.cat(logits, dim=0)
         else:
-            logits = self.language_model.decoder(
+            output = self.language_model.decoder(
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
             )
-
+            logits = output.logits
         return RBLNDecoderOnlyOutput(logits=logits, generate_idx=generate_idx)
 
     # Almost copied from : https://github.com/huggingface/transformers/blob/6b550462139655d488d4c663086a63e98713c6b9/src/transformers/models/llava_next/modeling_llava_next.py
