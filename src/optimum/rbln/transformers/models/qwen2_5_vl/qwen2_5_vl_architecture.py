@@ -163,8 +163,8 @@ class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
         inputs_embeds = args.pop(0) if self.use_inputs_embeds else None
         cache_position = args.pop(0)
         block_tables = args.pop(0)
-        query_position = args.pop(0) if self.phase == "prefill" else None
         position_embeds = args.pop(0)
+        query_position = args.pop(0) if self.phase == "prefill" else None
         position_ids = None
         attention_mask = args.pop(0) if self.use_attention_mask else None
         past_key_values = args
