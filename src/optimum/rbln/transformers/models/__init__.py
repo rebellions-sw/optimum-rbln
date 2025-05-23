@@ -85,6 +85,10 @@ _import_structure = {
     "mistral": ["RBLNMistralForCausalLM", "RBLNMistralForCausalLMConfig"],
     "phi": ["RBLNPhiForCausalLM", "RBLNPhiForCausalLMConfig"],
     "qwen2": ["RBLNQwen2ForCausalLM", "RBLNQwen2ForCausalLMConfig"],
+    "siglip": [
+        "RBLNSiglipVisionModel",
+        "RBLNSiglipVisionModelConfig",
+    ],
     "time_series_transformers": [
         "RBLNTimeSeriesTransformerForPrediction",
         "RBLNTimeSeriesTransformerForPredictionConfig",
@@ -168,6 +172,7 @@ if TYPE_CHECKING:
         RBLNQwen2_5_VLForConditionalGeneration,
         RBLNQwen2_5_VLForConditionalGenerationConfig,
     )
+    from .siglip import RBLNSiglipVisionModel, RBLNSiglipVisionModelConfig
     from .t5 import (
         RBLNT5EncoderModel,
         RBLNT5EncoderModelConfig,
