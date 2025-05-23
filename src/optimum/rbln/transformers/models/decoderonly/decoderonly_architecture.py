@@ -798,6 +798,7 @@ class AttentionOp(nn.Module):
                     scale=scale,
                     block_table=block_tables,
                     block_size=block_size,
+                    mask=None,
                 )
 
         else:
@@ -1060,6 +1061,7 @@ class FlashAttentionOp(AttentionOp):
                     block_table=block_tables,
                     block_size=kvcache_block_size,
                     partition=self.kvcache_partition_size,
+                    mask=None,
                 )
         else:
             if self.use_attention_mask:
