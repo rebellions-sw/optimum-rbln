@@ -76,17 +76,16 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
             decoder_model_0 = _VAECogVideoXDecoder(model)
             decoder_model_1 = _VAECogVideoXDecoder(model)
             
+            dec_compiled_model_0 = cls.compile(
+                decoder_model_0.eval(),
+                rbln_config.compile_cfgs[0],
+            )
+            
             dec_compiled_model_1 = cls.compile(
                 decoder_model_1.eval(),
                 rbln_config.compile_cfgs[1],
             )
             
-            dec_compiled_model_0 = cls.compile(
-                decoder_model_0.eval(),
-                rbln_config.compile_cfgs[0],
-            )
-
-
             return (dec_compiled_model_0, dec_compiled_model_1)
 
         if rbln_config.model_cfg.get("img2vid_pipeline"):
@@ -147,16 +146,16 @@ class RBLNAutoencoderKLCogVideoX(RBLNModel):
         model_config: "PretrainedConfig",
         rbln_kwargs: Dict[str, Any] = {},
     ) -> RBLNConfig:
-        rbln_batch_size = rbln_kwargs.get("batch_size")
-        sample_size = rbln_kwargs.get("sample_size")
-        is_img2vid = rbln_kwargs.get("is_img2vid")
-        num_frames = rbln_kwargs.get("num_frames")
+        rbln_batch_size = rbln_kwargs.get("batch_size", 1)
+        sample_size = rbln_kwargs.get("sample_size", (480, 720))
+        is_img2vid = rbln_kwargs.get("is_img2vid", False)
+        num_frames = rbln_kwargs.get("num_frames", 49)
 
         if rbln_batch_size is None:
             rbln_batch_size = 1
 
-        vae_scale_factor_spatial = rbln_kwargs["vae_scale_factor_spatial"]
-        vae_scale_factor_temporal = rbln_kwargs["vae_scale_factor_temporal"]
+        vae_scale_factor_spatial = rbln_kwargs.get("vae_scale_factor_spatial", 8)
+        vae_scale_factor_temporal = rbln_kwargs.get("vae_scale_factor_temporal", 4)
         # https://github.com/huggingface/diffusers/blob/89e4d6219805975bd7d253a267e1951badc9f1c0/src/diffusers/models/autoencoders/autoencoder_kl_cogvideox.py#L1099
         num_latent_frames_batch_size = rbln_kwargs.get("num_latent_frames_batch_size", 2)
 
