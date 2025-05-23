@@ -32,7 +32,6 @@ from transformers.models.gemma3.modeling_gemma3 import Gemma3TextScaledWordEmbed
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from ...utils.rbln_quantization import QuantizationManager
 from ..decoderonly.decoderonly_architecture import (
     set_default_values,
     validate_attention_method,
@@ -830,7 +829,11 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
     @classmethod
     def _update_submodule_config(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
-        rbln_config.prefill_chunk_size = model.config.mm_tokens_per_image
+        if rbln_config.prefill_chunk_size is None:
+            rbln_config.prefill_chunk_size = model.config.mm_tokens_per_image
+            
+        if rbln_config.prefill_chunk_size != model.config.mm_tokens_per_image:
+            logger.warning(f"Prefill chunk size is different from mm_tokens_per_image: {rbln_config.prefill_chunk_size} != {model.config.mm_tokens_per_image}")
         return rbln_config
 
     @classmethod
@@ -841,7 +844,6 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         model_config: Optional["PretrainedConfig"] = None,
         rbln_config: Optional[RBLNGemma3ForCausalLMConfig] = None,
     ) -> RBLNGemma3ForCausalLMConfig:
-        rbln_config.prefill_chunk_size = 256  # FIXME: Hard-coded
 
         if rbln_config.max_seq_len is None:
             rbln_config.max_seq_len = getattr(model_config, "max_position_embeddings", None)
@@ -866,17 +868,6 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         max_num_blocks = required_num_blocks
 
         if rbln_config.attn_impl == "flash_attn":
-            # TODO(taehoon): override the get_maximum_num_blocks function
-            # estimated_max_num_blocks = cls.get_maximum_num_blocks(
-            #     config=model_config,
-            #     tensor_parallel_size=rbln_config.tensor_parallel_size or 1,
-            #     kvcache_block_size=rbln_config.kvcache_block_size,
-            #     nbits_per_param=16 if not rbln_config.quantization else 4,  # TODO(jongho): FIX Ad-hoc
-            #     n_model_params=sum(p.numel() for p in model.parameters()),
-            # )
-
-            # max_num_blocks = min(max_num_blocks, estimated_max_num_blocks)
-
             flash_min_blocks = rbln_config.max_seq_len // rbln_config.kvcache_block_size + 1
             if max_num_blocks < flash_min_blocks:
                 max_num_blocks = flash_min_blocks
@@ -974,9 +965,10 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
                 static_tensors[name] = tensor
                 context.mark_static_address(tensor)
 
-        @QuantizationManager.with_quantization_env
-        def compile_model(wrapped_model, compile_config, example_inputs, compile_context, **kwargs):
+        def compile_model(wrapped_model, compile_config, example_inputs, compile_context, quantization):
             try:
+                if quantization:
+                    quantization.maybe_set_quantization_env()
                 original_linear = torch.nn.functional.linear
                 torch.nn.functional.linear = torch.ops.rbln_custom_ops.linear
                 compiled_model = RBLNModel.compile(
@@ -988,6 +980,8 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
                 return compiled_model
             finally:
                 torch.nn.functional.linear = original_linear
+                if quantization:
+                    quantization.maybe_reset_quantization_env()
 
         wrapped_model.phase = "text_prefill"
         compiled_prefill = compile_model(
@@ -995,7 +989,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             prefill_compile_config,
             prefill_example_inputs,
             context,
-            quantize_config=rbln_config.quantization,
+            rbln_config.quantization,
         )
 
         image_prefill_compile_config = rbln_compile_configs[1]
@@ -1005,7 +999,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             image_prefill_compile_config,
             prefill_example_inputs,
             context,
-            quantize_config=rbln_config.quantization,
+            rbln_config.quantization,
         )
 
         compiled_models = {"text_prefill": compiled_prefill, "image_prefill": compiled_image_prefill}
@@ -1017,18 +1011,9 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
                 dec_compile_config,
                 dec_example_inputs,
                 context,
-                quantize_config=rbln_config.quantization,
+                rbln_config.quantization,
             )
             compiled_models[f"decoder_batch_{batch_size}"] = compiled_decoder
-
-        # check if the memory is enough to have additional blocks
-        # required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
-        # if rbln_config.kvcache_num_blocks < required_num_blocks:
-        #     cls.maybe_suggest_kvcache_num_blocks(
-        #         compiled_models=compiled_models,
-        #         model_config=model.config,
-        #         rbln_config=rbln_config,
-        #     )
 
         return compiled_models
 
