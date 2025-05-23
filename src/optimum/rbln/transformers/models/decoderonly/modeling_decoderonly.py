@@ -984,7 +984,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             cache_position = None
         else:
             if inputs_embeds is not None:
-                raise NotImplementedError("Specifying inputs_embeds in decoder phase is not supported.")
+                # if `inputs_embeds` are passed, only use them in the 1st generation step for every prompt.
+                inputs_embeds = None
 
             input_ids = input_ids[:, -1:]
             cache_position = generate_idx
