@@ -48,7 +48,7 @@ class RBLNSiglipVisionModelConfig(RBLNModelConfig):
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
         self.image_size = image_size
-        self.interpolate_pos_encoding = interpolate_pos_encoding
+        self.interpolate_pos_encoding = interpolate_pos_encoding or False
         self.output_hidden_states = output_hidden_states
 
     @property
