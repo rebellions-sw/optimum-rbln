@@ -126,7 +126,7 @@ def paged_causal_attn_decode(
     scale: Tensor,
     block_table: Tensor,
     block_size: int,
-    mask: Optional[Tensor],
+    mask: Optional[Tensor] = None,
 ) -> Tensor:
     """Defines the computation pattern for fused attention with KV cache updates.
 
@@ -167,7 +167,7 @@ def paged_causal_attn_decode_fake(
     scale: Tensor,
     block_table: Tensor,
     block_size: int,
-    mask: Optional[Tensor],
+    mask: Optional[Tensor] = None,
 ) -> Tensor:
     return torch.empty_like(q)
 
@@ -187,7 +187,7 @@ def paged_causal_attn_prefill(
     block_table: Tensor,
     block_size: int,
     is_bidirectional: bool,
-    mask: Optional[Tensor],
+    mask: Optional[Tensor] = None,
 ) -> Tensor:
     """Defines the computation pattern for prefill phase attention with KV cache updates.
 
@@ -230,7 +230,7 @@ def paged_causal_attn_prefill_fake(
     block_table: Tensor,
     block_size: int,
     is_bidirectional: bool,
-    mask: Optional[Tensor],
+    mask: Optional[Tensor] = None,
 ) -> Tensor:
     return torch.empty_like(q)
 
