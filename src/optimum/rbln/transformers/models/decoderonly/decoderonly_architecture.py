@@ -148,11 +148,8 @@ class DecoderOnlyWrapper(nn.Module):
         attn_impl: str,
         use_inputs_embeds: bool,
         use_attention_mask: bool,
-<<<<<<< HEAD
         use_position_ids: bool,
-=======
         use_learned_pos_emb: Optional[bool] = None,
->>>>>>> origin/main
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
     ):
@@ -167,13 +164,10 @@ class DecoderOnlyWrapper(nn.Module):
         self.attn_impl = attn_impl
         self.kvcache_block_size = kvcache_block_size
         self.use_attention_mask = use_attention_mask
-<<<<<<< HEAD
         self.use_position_ids = use_position_ids
         self.use_inputs_embeds = use_inputs_embeds
-=======
         self.use_learned_pos_emb = use_learned_pos_emb
 
->>>>>>> origin/main
         if self.attn_impl == "flash_attn":
             self.kvcache_partition_len = kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
         elif self.attn_impl == "eager":
