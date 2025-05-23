@@ -148,7 +148,11 @@ class DecoderOnlyWrapper(nn.Module):
         attn_impl: str,
         use_inputs_embeds: bool,
         use_attention_mask: bool,
+<<<<<<< HEAD
         use_position_ids: bool,
+=======
+        use_learned_pos_emb: Optional[bool] = None,
+>>>>>>> origin/main
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
     ):
@@ -163,8 +167,13 @@ class DecoderOnlyWrapper(nn.Module):
         self.attn_impl = attn_impl
         self.kvcache_block_size = kvcache_block_size
         self.use_attention_mask = use_attention_mask
+<<<<<<< HEAD
         self.use_position_ids = use_position_ids
         self.use_inputs_embeds = use_inputs_embeds
+=======
+        self.use_learned_pos_emb = use_learned_pos_emb
+
+>>>>>>> origin/main
         if self.attn_impl == "flash_attn":
             self.kvcache_partition_len = kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
         elif self.attn_impl == "eager":
@@ -213,6 +222,7 @@ class DecoderOnlyWrapper(nn.Module):
             partition_len=self.kvcache_partition_len,
             max_seq_len=max_seq_len,
             kvcache_block_size=self.kvcache_block_size,
+            use_learned_pos_emb=self.use_learned_pos_emb,
         )
         new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm
@@ -376,7 +386,13 @@ class DecoderOnlyModel(nn.Module):
     """
 
     def __init__(
-        self, model, layers: List["DecoderOnlyLayer"], partition_len=None, max_seq_len=None, kvcache_block_size=None
+        self,
+        model,
+        layers: List["DecoderOnlyLayer"],
+        partition_len=None,
+        max_seq_len=None,
+        kvcache_block_size=None,
+        use_learned_pos_emb=None,
     ):
         super().__init__()
         self._original_mod = model
@@ -385,6 +401,7 @@ class DecoderOnlyModel(nn.Module):
         self.partition_len = partition_len
         self.kvcache_block_size = kvcache_block_size
         self.max_seq_len = max_seq_len
+        self.use_learned_pos_emb = use_learned_pos_emb
 
     @property
     def phase(self):
@@ -458,6 +475,19 @@ class DecoderOnlyModel(nn.Module):
             else:
                 cos, sin = rotary_emb(hidden_states, self.max_seq_len)  # dtype carrier, max_seq_len
                 cos, sin = slice_and_unsqueeze_cos_sin(cos, sin, position_ids)
+
+        elif self.use_learned_pos_emb:
+            batch_size = inputs_embeds.shape[0]
+            hidden_all = []
+            for i in range(batch_size):
+                positions_idx = position_ids[i]
+                position_weight = self.get_pos_embedding().weight[2:]
+                position = position_weight[positions_idx]
+                batch_hidden = position + inputs_embeds[i]
+                hidden_all.append(batch_hidden)
+            hidden_states = torch.stack(hidden_all, dim=0)
+            cos, sin = None, None
+
         else:
             batch_size = inputs_embeds.shape[0]
             if position_ids.shape[0] > 1:
