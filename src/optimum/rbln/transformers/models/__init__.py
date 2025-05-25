@@ -47,6 +47,14 @@ _import_structure = {
         "RBLNBertForMaskedLM",
         "RBLNBertForMaskedLMConfig",
     ],
+    "blip_2": [
+        "RBLNBlip2VisionModelConfig",
+        "RBLNBlip2VisionModel",
+        "RBLNBlip2ForConditionalGeneration",
+        "RBLNBlip2ForConditionalGenerationConfig",
+        "RBLNBlip2QFormerModel",
+        "RBLNBlip2QFormerModelConfig",
+    ],
     "clip": [
         "RBLNCLIPTextModel",
         "RBLNCLIPTextModelConfig",
@@ -86,10 +94,8 @@ _import_structure = {
         "RBLNIdefics3ForConditionalGenerationConfig",
         "RBLNIdefics3VisionTransformerConfig",
     ],
-    "llama": [
-        "RBLNLlamaForCausalLM",
-        "RBLNLlamaForCausalLMConfig",
-    ],
+    "llama": ["RBLNLlamaForCausalLM", "RBLNLlamaForCausalLMConfig"],
+    "opt": ["RBLNOPTForCausalLM", "RBLNOPTForCausalLMConfig"],
     "llava_next": ["RBLNLlavaNextForConditionalGeneration", "RBLNLlavaNextForConditionalGenerationConfig"],
     "midm": ["RBLNMidmLMHeadModel", "RBLNMidmLMHeadModelConfig"],
     "mistral": ["RBLNMistralForCausalLM", "RBLNMistralForCausalLMConfig"],
@@ -144,6 +150,14 @@ if TYPE_CHECKING:
         RBLNBertModel,
         RBLNBertModelConfig,
     )
+    from .blip_2 import (
+        RBLNBlip2ForConditionalGeneration,
+        RBLNBlip2ForConditionalGenerationConfig,
+        RBLNBlip2QFormerModel,
+        RBLNBlip2QFormerModelConfig,
+        RBLNBlip2VisionModel,
+        RBLNBlip2VisionModelConfig,
+    )
     from .clip import (
         RBLNCLIPTextModel,
         RBLNCLIPTextModelConfig,
@@ -181,6 +195,7 @@ if TYPE_CHECKING:
     from .llava_next import RBLNLlavaNextForConditionalGeneration, RBLNLlavaNextForConditionalGenerationConfig
     from .midm import RBLNMidmLMHeadModel, RBLNMidmLMHeadModelConfig
     from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig
+    from .opt import RBLNOPTForCausalLM, RBLNOPTForCausalLMConfig
     from .phi import RBLNPhiForCausalLM, RBLNPhiForCausalLMConfig
     from .qwen2 import RBLNQwen2ForCausalLM, RBLNQwen2ForCausalLMConfig
     from .qwen2_5_vl import (

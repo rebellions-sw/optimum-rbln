@@ -78,16 +78,11 @@ class RBLNSiglipVisionModel(RBLNModel):
 
         if isinstance(rbln_config.image_size, int):
             rbln_config.image_size = (rbln_config.image_size, rbln_config.image_size)
-
-        if rbln_config.interpolate_pos_encoding is None:
-            logger.warning("interpolate_pos_encoding is not set, using False by default")
-            rbln_config.interpolate_pos_encoding = False
+        if rbln_config.image_size is None:
+            raise ValueError("`rbln_image_size` should be specified!")
 
         if rbln_config.output_hidden_states is None:
             rbln_config.output_hidden_states = model_config.output_hidden_states
-
-        if rbln_config.image_size is None:
-            raise ValueError("`rbln_image_size` should be specified!")
 
         rbln_compile_config = RBLNCompileConfig(
             input_info=[

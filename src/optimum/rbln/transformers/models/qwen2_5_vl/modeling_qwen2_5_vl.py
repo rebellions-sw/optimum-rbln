@@ -394,7 +394,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             hidden_size,
             head_dim,
         )
-        pos_idx = 3
+        pos_idx = 4 if query_length > 1 else 5
         input_info.insert(pos_idx, ("position_emb", [2, batch_size, 1, query_length, head_dim], "float32"))
 
         return input_info
@@ -606,7 +606,6 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 position_embed=position_embed,
             )
             logits = output.logits
-            print(logits.argmax(-1))
 
         if not return_dict:
             return logits, generate_idx
