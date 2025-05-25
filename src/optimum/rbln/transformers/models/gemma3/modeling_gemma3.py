@@ -20,7 +20,7 @@ import rebel
 import torch
 from rebel.compile_context import CompileContext
 from transformers import (
-    AutoModelForVision2Seq,
+    AutoModelForImageTextToText,
     Gemma3ForConditionalGeneration,
     PretrainedConfig,
     PreTrainedModel,
@@ -108,7 +108,7 @@ class LoopProjector:
 
 
 class RBLNGemma3ForConditionalGeneration(RBLNModel):
-    auto_model_class = AutoModelForVision2Seq
+    auto_model_class = AutoModelForImageTextToText
     _rbln_submodules = [
         {"name": "vision_tower"},
         {"name": "language_model"},
