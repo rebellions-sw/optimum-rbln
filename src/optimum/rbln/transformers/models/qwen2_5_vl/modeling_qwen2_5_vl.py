@@ -394,7 +394,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             hidden_size,
             head_dim,
         )
-        pos_idx = 4 if query_length > 1 else 5
+        pos_idx = 3
         input_info.insert(pos_idx, ("position_emb", [2, batch_size, 1, query_length, head_dim], "float32"))
 
         return input_info
