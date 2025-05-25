@@ -31,6 +31,7 @@ _import_structure = {
         "RBLNAutoModelForSequenceClassification",
         "RBLNAutoModelForSpeechSeq2Seq",
         "RBLNAutoModelForVision2Seq",
+        "RBLNAutoModelForImageTextToText",
     ],
     "bart": [
         "RBLNBartForConditionalGeneration",
@@ -121,6 +122,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForCTC,
         RBLNAutoModelForDepthEstimation,
         RBLNAutoModelForImageClassification,
+        RBLNAutoModelForImageTextToText,
         RBLNAutoModelForMaskedLM,
         RBLNAutoModelForQuestionAnswering,
         RBLNAutoModelForSeq2SeqLM,

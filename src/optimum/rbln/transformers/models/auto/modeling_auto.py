@@ -23,6 +23,8 @@ from transformers.models.auto.modeling_auto import (
     MODEL_FOR_DEPTH_ESTIMATION_MAPPING_NAMES,
     MODEL_FOR_IMAGE_CLASSIFICATION_MAPPING,
     MODEL_FOR_IMAGE_CLASSIFICATION_MAPPING_NAMES,
+    MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING,
+    MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING_NAMES,
     MODEL_FOR_MASKED_LM_MAPPING,
     MODEL_FOR_MASKED_LM_MAPPING_NAMES,
     MODEL_FOR_QUESTION_ANSWERING_MAPPING,
@@ -89,6 +91,9 @@ class RBLNAutoModelForVision2Seq(_BaseAutoModelClass):
     _model_mapping = MODEL_FOR_VISION_2_SEQ_MAPPING
     _model_mapping_names = MODEL_FOR_VISION_2_SEQ_MAPPING_NAMES
 
+class RBLNAutoModelForImageTextToText(_BaseAutoModelClass):
+    _model_mapping = MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING
+    _model_mapping_names = MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING_NAMES
 
 class RBLNAutoModelForMaskedLM(_BaseAutoModelClass):
     _model_mapping = MODEL_FOR_MASKED_LM_MAPPING
