@@ -91,9 +91,11 @@ class RBLNAutoModelForVision2Seq(_BaseAutoModelClass):
     _model_mapping = MODEL_FOR_VISION_2_SEQ_MAPPING
     _model_mapping_names = MODEL_FOR_VISION_2_SEQ_MAPPING_NAMES
 
+
 class RBLNAutoModelForImageTextToText(_BaseAutoModelClass):
     _model_mapping = MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING
     _model_mapping_names = MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING_NAMES
+
 
 class RBLNAutoModelForMaskedLM(_BaseAutoModelClass):
     _model_mapping = MODEL_FOR_MASKED_LM_MAPPING

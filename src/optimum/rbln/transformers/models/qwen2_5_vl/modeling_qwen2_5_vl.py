@@ -379,6 +379,9 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         num_hidden_layers: int,
         hidden_size: int,
         head_dim: int,
+        sliding_window: int,
+        sliding_window_pattern: int,
+        local_kvcache_num_blocks: int,
     ):
         input_info = super().get_input_info(
             batch_size,
@@ -393,6 +396,9 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             num_hidden_layers,
             hidden_size,
             head_dim,
+            sliding_window,
+            sliding_window_pattern,
+            local_kvcache_num_blocks,
         )
         pos_idx = 3
         input_info.insert(pos_idx, ("position_emb", [2, batch_size, 1, query_length, head_dim], "float32"))
@@ -595,10 +601,10 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 )
                 logits.append(output.logits)
             logits = torch.cat(logits, dim=0)
-        # Decoder
+            # Decoder
             from transformers import GenerationMixin
         else:
-            print(input_ids[0],cache_position[0])
+            print(input_ids[0], cache_position[0])
             inputs_embeds, position_embed = self._preprocess_decoder(input_ids, cache_position)
             output = self.decoder(
                 inputs_embeds=inputs_embeds,

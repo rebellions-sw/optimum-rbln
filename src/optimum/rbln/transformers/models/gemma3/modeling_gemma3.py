@@ -831,9 +831,11 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     def _update_submodule_config(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
         if rbln_config.prefill_chunk_size is None:
             rbln_config.prefill_chunk_size = model.config.mm_tokens_per_image
-            
+
         if rbln_config.prefill_chunk_size != model.config.mm_tokens_per_image:
-            logger.warning(f"Prefill chunk size is different from mm_tokens_per_image: {rbln_config.prefill_chunk_size} != {model.config.mm_tokens_per_image}")
+            logger.warning(
+                f"Prefill chunk size is different from mm_tokens_per_image: {rbln_config.prefill_chunk_size} != {model.config.mm_tokens_per_image}"
+            )
         return rbln_config
 
     @classmethod
@@ -844,7 +846,6 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         model_config: Optional["PretrainedConfig"] = None,
         rbln_config: Optional[RBLNGemma3ForCausalLMConfig] = None,
     ) -> RBLNGemma3ForCausalLMConfig:
-
         if rbln_config.max_seq_len is None:
             rbln_config.max_seq_len = getattr(model_config, "max_position_embeddings", None)
         if rbln_config.max_seq_len is None:

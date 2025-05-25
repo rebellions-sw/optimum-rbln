@@ -171,6 +171,9 @@ class DecoderOnlyWrapper(nn.Module):
         self.use_position_ids = use_position_ids
         self.use_inputs_embeds = use_inputs_embeds
         self.use_learned_pos_emb = use_learned_pos_emb
+        self.sliding_window = getattr(self.config, "sliding_window", None)
+        self.sliding_window_pattern = getattr(self.config, "sliding_window_pattern", None)
+        self.cache_type = self.get_cache_type()
 
         if self.attn_impl == "flash_attn":
             self.kvcache_partition_len = kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
@@ -186,9 +189,18 @@ class DecoderOnlyWrapper(nn.Module):
             )
 
         self.causal_lm = self.convert_to_rbln_causal_lm(causal_lm, max_seq_len)
-
         self.num_hidden_layers = getattr(self.config, "num_hidden_layers", None) or getattr(self.config, "n_layer")
         self._phase = "prefill"
+    
+    def get_cache_type(self) -> str:
+        if self.sliding_window is not None and self.sliding_window_pattern is not None:
+            return "HYBRID"
+        elif self.sliding_window is not None and self.sliding_window_pattern is None:
+            return "SLIDING_WINDOW"
+        elif self.sliding_window is None and self.sliding_window_pattern is not None:
+            return "STATIC"
+        else:
+            raise ValueError(f"Unknown cache_type")
 
     def get_rotary_emb(self, max_seq_len):
         return RotaryEmbedding(config=self.config, max_seq_len_cached=max_seq_len)
@@ -243,7 +255,8 @@ class DecoderOnlyWrapper(nn.Module):
         input_ids = None if self.use_inputs_embeds else args.pop(0)
         inputs_embeds = args.pop(0) if self.use_inputs_embeds else None
         cache_position = args.pop(0)
-        block_tables = args.pop(0)
+        global_block_tables = args.pop(0) if self.cache_type in ["HYBRID", "STATIC"] else None
+        local_block_tables = args.pop(0) if self.cache_type in ["HYBRID", "SLIDING_WINDOW"] else None
         query_position = args.pop(0) if self.phase == "prefill" else None
         attention_mask = args.pop(0) if self.use_attention_mask else None
         position_ids = args.pop(0) if self.use_position_ids else None
@@ -268,7 +281,8 @@ class DecoderOnlyWrapper(nn.Module):
             input_ids,
             inputs_embeds,
             cache_position,
-            block_tables,
+            global_block_tables,
+            local_block_tables,
             query_position,
             attention_mask,
             position_ids,
@@ -281,7 +295,8 @@ class DecoderOnlyWrapper(nn.Module):
             input_ids,
             inputs_embeds,
             cache_position,
-            block_tables,
+            global_block_tables,
+            local_block_tables,
             query_position,
             attention_mask,
             position_ids,
@@ -298,7 +313,8 @@ class DecoderOnlyWrapper(nn.Module):
             query_position=query_position,
             past_key_values=past_key_values,
             rotary_emb=rotary_emb,
-            block_tables=block_tables,
+            global_block_tables=global_block_tables,
+            local_block_tables=local_block_tables,
         )
 
         return logit
@@ -1126,6 +1142,7 @@ class FlashAttentionOp(AttentionOp):
         attn_output = attn_output.reshape(batch_size, -1, self.num_heads * self.head_dim)
 
         return attn_output
+
 
 class SlidingWindowAttentionOp(AttentionOp):
     def forward(

@@ -89,6 +89,44 @@ class Gemma3ForCausalLMWrapper(DecoderOnlyWrapper):
         new_causal_lm = Gemma3ForCausalLM(causal_lm, new_model)
         return new_causal_lm
 
+    def prepare_forward_args(self, *args):
+        args = list(args)
+        input_ids = None if self.use_inputs_embeds else args.pop(0)
+        inputs_embeds = args.pop(0) if self.use_inputs_embeds else None
+        cache_position = args.pop(0)
+        block_tables = args.pop(0)
+        query_position = args.pop(0) if self.phase == "prefill" else None
+        attention_mask = args.pop(0) if self.use_attention_mask else None
+        position_ids = args.pop(0) if self.use_position_ids else None
+        past_key_values = args
+
+        if len(past_key_values) != 2 * self.num_hidden_layers:
+            raise ValueError(
+                f"Different past_key_values to model's config. {len(past_key_values)} != {2 * self.num_hidden_layers}"
+            )
+
+        # [key, value] * n_layer -> ( (key, value) ) * n_layer
+        # cache shape : batch, n_heads, 1, max_seq_len, head_dim
+        _past_key_values = []
+        for i in range(self.config.num_hidden_layers):
+            key_states = past_key_values[i * 2]
+            value_states = past_key_values[i * 2 + 1]
+            past_key_value = [key_states, value_states]
+            _past_key_values.append(past_key_value)
+        past_key_values = _past_key_values
+
+        return (
+            input_ids,
+            inputs_embeds,
+            cache_position,
+            block_tables,
+            query_position,
+            attention_mask,
+            position_ids,
+            past_key_values,
+            self.rotary_emb,
+        )
+
     def forward(self, *args):
         if self.phase == "decode":
             (
