@@ -250,7 +250,7 @@ class RBLNModel(RBLNBaseModel):
         Dynamically gets the output class from the corresponding HuggingFace model class.
 
         Returns:
-            type: The appropriate output class from transformers.modeling_outputs
+            type: The appropriate output class from transformers or diffusers
         """
         if cls._output_class is None:
             hf_class = cls.get_hf_class()
