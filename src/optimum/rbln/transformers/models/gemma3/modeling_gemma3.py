@@ -14,7 +14,7 @@
 import inspect
 from collections import deque
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple, Union, List
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
 import rebel
 import torch
@@ -320,7 +320,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
     def __init__(self, *args, image_prefill: Optional[rebel.Runtime] = None, **kwargs):
         super().__init__(*args, **kwargs)
         self.image_prefill = image_prefill  # FIXME(taehoon)
-        self.text_prefill = self.runtime if self.phase == "prefill" else None  # FIXME
+        self.prefill = self.runtime if self.phase == "prefill" else None  # FIXME
         self.decode = self.runtime if self.phase == "decode" else None
 
     def pad_for_chunked_images(
@@ -599,7 +599,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                     )
             else:
                 # Forward pass for the current chunk
-                logits = self.text_prefill(
+                logits = self.prefill(
                     input_chunk,
                     chunked_attention_mask,
                     cache_pos_chunk,
@@ -831,9 +831,11 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     def _update_submodule_config(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
         if rbln_config.prefill_chunk_size is None:
             rbln_config.prefill_chunk_size = model.config.mm_tokens_per_image
-            
+
         if rbln_config.prefill_chunk_size != model.config.mm_tokens_per_image:
-            logger.warning(f"Prefill chunk size is different from mm_tokens_per_image: {rbln_config.prefill_chunk_size} != {model.config.mm_tokens_per_image}")
+            logger.warning(
+                f"Prefill chunk size is different from mm_tokens_per_image: {rbln_config.prefill_chunk_size} != {model.config.mm_tokens_per_image}"
+            )
         return rbln_config
 
     @classmethod
@@ -844,7 +846,6 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         model_config: Optional["PretrainedConfig"] = None,
         rbln_config: Optional[RBLNGemma3ForCausalLMConfig] = None,
     ) -> RBLNGemma3ForCausalLMConfig:
-
         if rbln_config.max_seq_len is None:
             rbln_config.max_seq_len = getattr(model_config, "max_position_embeddings", None)
         if rbln_config.max_seq_len is None:
@@ -913,7 +914,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             sliding_window_pattern=sliding_window_pattern,
             dec_batch_size=max(rbln_config.decoder_batch_sizes),
         )
-        prefill_compile_config = RBLNCompileConfig(compiled_model_name="text_prefill", input_info=prefill_input_info)
+        prefill_compile_config = RBLNCompileConfig(compiled_model_name="prefill", input_info=prefill_input_info)
         image_prefill_compile_config = RBLNCompileConfig(
             compiled_model_name="image_prefill", input_info=prefill_input_info
         )
@@ -983,7 +984,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
                 if quantization:
                     quantization.maybe_reset_quantization_env()
 
-        wrapped_model.phase = "text_prefill"
+        wrapped_model.phase = "prefill"
         compiled_prefill = compile_model(
             wrapped_model,
             prefill_compile_config,
@@ -1002,7 +1003,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             rbln_config.quantization,
         )
 
-        compiled_models = {"text_prefill": compiled_prefill, "image_prefill": compiled_image_prefill}
+        compiled_models = {"prefill": compiled_prefill, "image_prefill": compiled_image_prefill}
         wrapped_model.phase = "decode"
         for batch_size, dec_compile_config in zip(rbln_config.decoder_batch_sizes, rbln_compile_configs[2:]):
             dec_example_inputs = dec_compile_config.get_dummy_inputs(fill=0, static_tensors=static_tensors)
@@ -1024,7 +1025,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         rbln_config: RBLNGemma3ForCausalLMConfig,
     ) -> List[rebel.Runtime]:
         expected_model_names = [
-            "text_prefill",
+            "prefill",
             "image_prefill",
             *[f"decoder_batch_{batch_size}" for batch_size in rbln_config.decoder_batch_sizes],
         ]
@@ -1035,7 +1036,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             rebel.Runtime(
                 compiled_models[0],
                 tensor_type="pt",
-                device=rbln_config.device_map["text_prefill"],
+                device=rbln_config.device_map["prefill"],
                 activate_profiler=rbln_config.activate_profiler,
             ),
             rebel.Runtime(
