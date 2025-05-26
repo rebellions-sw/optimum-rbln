@@ -11,8 +11,8 @@ from transformers import AutoConfig, AutoProcessor, AutoTokenizer
 from optimum.rbln import (
     RBLNAutoModel,
     RBLNAutoModelForCausalLM,
-    RBLNAutoModelForSeq2SeqLM,
     RBLNAutoModelForImageTextToText,
+    RBLNAutoModelForSeq2SeqLM,
     RBLNAutoModelForVision2Seq,
     RBLNBartForConditionalGeneration,
     RBLNExaoneForCausalLM,
@@ -394,6 +394,7 @@ class TestDisallowedLlama_4(DisallowedTestBase.DisallowedTest):
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 2048}
     RBLN_CLASS_KWARGS = {"rbln_config": {"attn_impl": "flash_attn", "kvcache_partition_len": 1024}}
 
+
 class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForImageTextToText
     RBLN_CLASS = RBLNGemma3ForConditionalGeneration
@@ -414,7 +415,7 @@ class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
         config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 2
-        text_config["sliding_window_pattern"]= 2
+        text_config["sliding_window_pattern"] = 2
         vision_config = json.loads(config.vision_config.to_json_string())
         vision_config["num_hidden_layers"] = 1
         kwargs = {"text_config": text_config, "vision_config": vision_config}
@@ -436,7 +437,13 @@ class TestGemma3ForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNGemma3ForCausalLM
     HF_MODEL_ID = "google/gemma-3-1b-it"
     EXPECTED_OUTPUT = "1st L L L L L L L L L L L L L L L L L L"
-    HF_CONFIG_KWARGS = {"num_hidden_layers": 2, "sliding_window_pattern": 2, "max_position_embeddings": 1024, "trust_remote_code": True}
+    HF_CONFIG_KWARGS = {
+        "num_hidden_layers": 2,
+        "sliding_window_pattern": 2,
+        "max_position_embeddings": 1024,
+        "trust_remote_code": True,
+    }
+
 
 if __name__ == "__main__":
     unittest.main()

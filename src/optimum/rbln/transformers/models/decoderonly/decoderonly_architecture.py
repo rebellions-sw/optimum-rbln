@@ -1127,6 +1127,7 @@ class FlashAttentionOp(AttentionOp):
 
         return attn_output
 
+
 class SlidingWindowAttentionOp(AttentionOp):
     def forward(
         self,
