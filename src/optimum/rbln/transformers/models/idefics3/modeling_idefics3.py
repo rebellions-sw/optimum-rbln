@@ -421,6 +421,7 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
         image_hidden_states: Optional[torch.FloatTensor] = None,
         cache_position: torch.Tensor = None,
         generate_idx: Optional[torch.Tensor] = None,
+        return_dict: Optional[bool] = None,
         **kwargs,
     ) -> Union[Tuple, Idefics3CausalLMOutputWithPast]:
         # Prefill
@@ -434,14 +435,14 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
 
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
-                logit = self.text_model.prefill_decoder(
+                output = self.text_model.prefill_decoder(
                     input_ids=inputs[b_idx : b_idx + 1] if inputs_embeds is None else None,
                     inputs_embeds=inputs[b_idx : b_idx + 1] if inputs_embeds is not None else None,
                     attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                     cache_position=cache_position,
                     batch_idx=b_idx,
                 )
-                logits.append(logit)
+                logits.append(output.logits)
 
             logits = torch.cat(logits, dim=0)
 
@@ -451,9 +452,12 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
-            )
+            ).logits
 
-        return RBLNDecoderOnlyOutput(
-            logits=logits,
-            generate_idx=generate_idx,
-        )
+        if not return_dict:
+            return logits, generate_idx
+        else:
+            return RBLNDecoderOnlyOutput(
+                logits=logits,
+                generate_idx=generate_idx,
+            )
