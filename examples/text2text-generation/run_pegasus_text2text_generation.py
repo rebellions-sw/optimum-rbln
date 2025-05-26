@@ -6,13 +6,17 @@ from transformers import PegasusTokenizer
 from optimum.rbln import RBLNPegasusForConditionalGeneration
 
 
-sentences = ["UN Chief Says There Is No <mask> in Syria"]
-
+sentences = [
+    "PG&E stated it scheduled the blackouts in response to forecasts for high winds "
+    "amid dry conditions. The aim is to reduce the risk of wildfires. Nearly 800 thousand customers were "
+    "scheduled to be affected by the shutoffs which were expected to last through at least midday tomorrow."
+]
 
 def main(
     model_id: str = "google/pegasus-xsum",
     batch_size: int = 1,
     from_transformers: bool = False,
+    num_beams: int = 1,
 ):
     if from_transformers:
         # Compile the RBLN-optimized Bart model (if export=True)
@@ -20,7 +24,7 @@ def main(
             model_id=model_id,
             export=True,
             # The following arguments are specific to RBLN compilation
-            rbln_batch_size=batch_size,
+            rbln_batch_size=batch_size*num_beams,
         )
         model.save_pretrained(os.path.basename(model_id))
     else:
@@ -31,22 +35,36 @@ def main(
         )
 
     # Prepare inputs
-    target_sentences = sentences * batch_size
+    # target_sentences = sentences * batch_size
+    target_sentences = sentences
     tokenizer = PegasusTokenizer.from_pretrained(model_id)
-    inputs = tokenizer(target_sentences, return_tensors="pt", padding=True)
-
+    # inputs = tokenizer(target_sentences, return_tensors="pt", padding=True)
+    inputs = tokenizer(target_sentences, max_length=1024, return_tensors="pt")
+    # inputs = tokenizer(target_sentences, return_tensors="pt", truncation=True, padding="longest", max_length=1024)
+    
     # Generate
     output_sequence = model.generate(
         input_ids=inputs["input_ids"],
         attention_mask=inputs["attention_mask"],
-        max_new_tokens=50,
-        num_beams=1,
+        max_new_tokens=64,
+        num_beams=num_beams,
     )
 
     # Decode and print the model's responses
     for i, sentence in enumerate(target_sentences):
-        print("\033[94m" + sentence + " : \033[0m\n" + tokenizer.decode(output_sequence.numpy().tolist()[i]))
+        print("\033[94m" + sentence + " : \033[0m\n" + tokenizer.decode(output_sequence.numpy().tolist()[i], 
+                                                                        skip_special_tokens=True, 
+                                                                        clean_up_tokenization_spaces=False))
+        # "California's largest electricity provider has turned off power to hundreds of thousands of customers."
 
+    print("=="*100)
+    
+    from transformers import PegasusForConditionalGeneration
+    model = PegasusForConditionalGeneration.from_pretrained("google/pegasus-xsum")
 
+    summary_ids = model.generate(inputs["input_ids"], attention_mask=inputs["attention_mask"])
+    print(tokenizer.batch_decode(summary_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0])
+    print("=="*100)
+    
 if __name__ == "__main__":
     fire.Fire(main)

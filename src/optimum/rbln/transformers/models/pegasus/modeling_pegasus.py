@@ -20,7 +20,7 @@ from transformers import PegasusForConditionalGeneration, PreTrainedModel
 from ....utils.logging import get_logger
 from ...modeling_generic import RBLNTransformerEncoderForFeatureExtraction
 from ...models.seq2seq import RBLNModelForSeq2SeqLM
-from .pegasus_architecture import BartWrapper
+from .pegasus_architecture import PegasusWrapper
 from .configuration_pegasus import RBLNPegasusForConditionalGenerationConfig
 
 
@@ -40,7 +40,7 @@ class RBLNPegasusForConditionalGeneration(RBLNModelForSeq2SeqLM):
 
     @classmethod
     def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: RBLNPegasusForConditionalGenerationConfig):
-        return BartWrapper(
+        return PegasusWrapper(
             model, enc_max_seq_len=rbln_config.enc_max_seq_len, use_attention_mask=rbln_config.use_attention_mask
         )
 
