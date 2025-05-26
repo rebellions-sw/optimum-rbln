@@ -269,6 +269,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         attention_mask: Optional[torch.Tensor] = None,
         position_embed: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
+        token_type_ids: Optional[torch.Tensor] = None,
     ):
         """
         Prepare inputs for prefill phase.
@@ -352,6 +353,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         block_tables: torch.Tensor = None,
         is_external_block_tables: bool = None,
         position_embed: Optional[torch.Tensor] = None,
+        local_block_tables: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         """
