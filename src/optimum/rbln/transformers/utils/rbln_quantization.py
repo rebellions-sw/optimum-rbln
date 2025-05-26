@@ -32,6 +32,7 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
     SUPPORTED_FORMATS = ["rbln"]
     SUPPORTED_WEIGHTS = ["int4", "fp16"]
     SUPPORTED_ACTIVATIONS = ["fp16"]
+    SUPPORTED_KVCACHES = ["fp8", "fp16"]
 
     # The RBLN_QUANT_BITS environment variable defines the precision of each layer during the graph compilation process.
     # It specifies the quantization bit depth. For instance, setting RBLN_QUANT_BITS=4 will apply 4-bit precision for quantization.
@@ -40,9 +41,11 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
     def __init__(
         self,
         format: Optional[str] = None,
-        precision: Optional[str] = None,
         weights: Optional[str] = None,
         activations: Optional[str] = None,
+        kv_caches: Optional[str] = None,
+        *,
+        precision: Optional[str] = None,
     ):
         self.format = format
         if precision is not None:
@@ -58,6 +61,7 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
 
         self.weights = weights or "fp16"
         self.activations = activations or "fp16"
+        self.kv_caches = kv_caches or "fp16"
         self._validate()
 
     def _validate(self):
@@ -69,6 +73,10 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
             raise ValueError(
                 f"Invalid activations: {self.activations}, supported activations are: {self.SUPPORTED_ACTIVATIONS}"
             )
+        if self.kv_caches not in self.SUPPORTED_KVCACHES:
+            raise ValueError(
+                f"Invalid kv_caches: {self.kv_caches}, supported kv_caches are: {self.SUPPORTED_KVCACHES}"
+            )
         if self.weights == "fp16" and self.activations == "fp16":
             raise ValueError("weights and activations cannot be both fp16. It is meaningless.")
 
@@ -77,6 +85,7 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
             "format": self.format,
             "weights": self.weights,
             "activations": self.activations,
+            "kv_caches": self.kv_caches,
         }
 
     def maybe_set_quantization_env(self):

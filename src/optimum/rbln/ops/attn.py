@@ -53,6 +53,45 @@ def paged_attn_decode_fake(
 
 
 @torch.library.custom_op(
+    "rbln_custom_ops::paged_attn_decode_kv_fp8",
+    mutates_args=(["kcache", "vcache"]),
+)
+def paged_attn_decode_kv_fp8(
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    mask: Tensor,
+    kcache: Tensor,
+    vcache: Tensor,
+    seq: Tensor,
+    scale: Tensor,
+    block_table: Tensor,
+    block_size: int,
+    k_scale: Tensor,
+    v_scale: Tensor,
+) -> Tensor:
+    return torch.empty_like(q)
+
+
+@paged_attn_decode_kv_fp8.register_fake
+def paged_attn_decode_kv_fp8_fake(
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    mask: Tensor,
+    kcache: Tensor,
+    vcache: Tensor,
+    seq: Tensor,
+    scale: Tensor,
+    block_table: Tensor,
+    block_size: int,
+    k_scale: Tensor,
+    v_scale: Tensor,
+) -> Tensor:
+    return torch.empty_like(q)
+
+
+@torch.library.custom_op(
     "rbln_custom_ops::paged_attn_prefill",
     mutates_args=(["kcache", "vcache"]),
 )
@@ -107,6 +146,45 @@ def paged_attn_prefill_fake(
     scale: Tensor,
     block_table: Tensor,
     block_size: int,
+) -> Tensor:
+    return torch.empty_like(q)
+
+
+@torch.library.custom_op(
+    "rbln_custom_ops::paged_attn_prefill_kv_fp8",
+    mutates_args=(["kcache", "vcache"]),
+)
+def paged_attn_prefill_kv_fp8(
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    mask: Tensor,
+    kcache: Tensor,
+    vcache: Tensor,
+    seq: Tensor,
+    scale: Tensor,
+    block_table: Tensor,
+    block_size: int,
+    k_scale: Tensor,
+    v_scale: Tensor,
+) -> Tensor:
+    return torch.empty_like(q)
+
+
+@paged_attn_prefill_kv_fp8.register_fake
+def paged_attn_prefill_kv_fp8_fake(
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    mask: Tensor,
+    kcache: Tensor,
+    vcache: Tensor,
+    seq: Tensor,
+    scale: Tensor,
+    block_table: Tensor,
+    block_size: int,
+    k_scale: Tensor,
+    v_scale: Tensor,
 ) -> Tensor:
     return torch.empty_like(q)
 
