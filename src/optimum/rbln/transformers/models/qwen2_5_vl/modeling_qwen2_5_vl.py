@@ -371,6 +371,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         query_length: int,
         use_inputs_embeds: bool,
         use_attention_mask: bool,
+        use_position_ids: bool,
         max_seq_len: int,
         kvcache_block_size: int,
         kvcache_num_blocks: int,
@@ -384,6 +385,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             query_length,
             use_inputs_embeds,
             use_attention_mask,
+            use_position_ids,
             max_seq_len,
             kvcache_block_size,
             kvcache_num_blocks,
@@ -392,8 +394,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             hidden_size,
             head_dim,
         )
-        pos_idx = 5 if query_length > 1 else 4
-        pos_idx = pos_idx if use_attention_mask else pos_idx - 1
+        pos_idx = 4 if query_length > 1 else 5
         input_info.insert(pos_idx, ("position_emb", [2, batch_size, 1, query_length, head_dim], "float32"))
 
         return input_info
@@ -562,7 +563,8 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         video_grid_thw: Optional[torch.LongTensor] = None,
         cache_position: Optional[torch.LongTensor] = None,
         second_per_grid_ts: Optional[torch.Tensor] = None,
-        generate_idx: torch.Tensor = None,
+        generate_idx: Optional[torch.Tensor] = None,
+        return_dict: Optional[bool] = None,
         **kwargs,
     ) -> RBLNDecoderOnlyOutput:
         # Prefill
@@ -584,25 +586,29 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
 
-                logit = self.prefill_decoder(
+                output = self.prefill_decoder(
                     inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
                     attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                     cache_position=cache_position,
                     batch_idx=b_idx,
                     position_embed=position_embed[:, b_idx : b_idx + 1],
                 )
-                logits.append(logit)
+                logits.append(output.logits)
             logits = torch.cat(logits, dim=0)
         # Decoder
         else:
             inputs_embeds, position_embed = self._preprocess_decoder(input_ids, cache_position)
-            logits = self.decoder(
+            output = self.decoder(
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
                 position_embed=position_embed,
             )
+            logits = output.logits
 
-        return RBLNDecoderOnlyOutput(
-            logits=logits,
-            generate_idx=generate_idx,
-        )
+        if not return_dict:
+            return logits, generate_idx
+        else:
+            return RBLNDecoderOnlyOutput(
+                logits=logits,
+                generate_idx=generate_idx,
+            )

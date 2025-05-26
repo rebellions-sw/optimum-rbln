@@ -65,7 +65,7 @@ class LLMTest:
 class TestQwen2Model(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen2ForCausalLM
     HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
-    EXPECTED_OUTPUT = " I am a 30-year-old woman who has been living with lupus for over 1"
+    EXPECTED_OUTPUT = " I am a 30-year-old woman who has been living with a chronic illness for the past"
     HF_CONFIG_KWARGS = {"max_position_embeddings": 1024}
 
 
@@ -94,6 +94,31 @@ class TestLlamaForCausalLM_Flash(LLMTest.TestLLM):
         self.get_tokenizer().pad_token = self.get_tokenizer().eos_token
         inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt")
         return inputs
+
+
+class TestLlamaForCausalLM_Multibatch(TestLlamaForCausalLM):
+    PROMPT = ["Who are you?", "What is the capital of France?", "What is the capital of Germany?"]
+    EXPECTED_OUTPUT = [
+        "reress makefable R���� noethetsshss rechoolso�",
+        "resget makeget makeichget makeichualichual#choolchool accngngngng",
+        "resget makeget makeichget makeichualichual#choolchool accngngngng",
+    ]
+    RBLN_CLASS_KWARGS = {"rbln_config": {"batch_size": 3, "decoder_batch_sizes": [3, 2, 1]}}
+
+    def get_inputs(self):
+        self.get_tokenizer().pad_token = self.get_tokenizer().eos_token
+        inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt", padding=True)
+        return inputs
+
+    def postprocess(self, inputs, output):
+        generated_texts = []
+        for i in range(inputs["input_ids"].shape[0]):
+            input_len = inputs["input_ids"].shape[-1]
+            generated_text = self.get_tokenizer().decode(
+                output[i][input_len:], skip_special_tokens=True, clean_up_tokenization_spaces=True
+            )
+            generated_texts.append(generated_text)
+        return generated_texts
 
 
 class TestGPT2LMHeadModel(LLMTest.TestLLM):
