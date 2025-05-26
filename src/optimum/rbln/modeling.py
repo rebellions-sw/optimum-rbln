@@ -14,7 +14,7 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Union, get_type_hints
 
 import rebel
 import torch
@@ -49,8 +49,7 @@ class RBLNModel(RBLNBaseModel):
         ```
     """
 
-    output_class = None
-    output_key = "last_hidden_state"
+    _output_class = None
 
     @classmethod
     def update_kwargs(cls, kwargs):
@@ -245,16 +244,66 @@ class RBLNModel(RBLNBaseModel):
         # Format output according to task requirements
         return self._prepare_output(output, return_dict)
 
+    @classmethod
+    def get_hf_output_class(cls):
+        """
+        Dynamically gets the output class from the corresponding HuggingFace model class.
+
+        Returns:
+            type: The appropriate output class from transformers.modeling_outputs
+        """
+        if cls._output_class is None:
+            hf_class = cls.get_hf_class()
+            if hf_class is None:
+                raise ValueError(f"No HuggingFace model class found for {cls.__name__}")
+
+            # Try to get return type from forward method annotation
+            forward_method = getattr(hf_class, "forward", None)
+            if forward_method:
+                type_hints = get_type_hints(forward_method)
+                return_type = type_hints.get("return", None)
+                if return_type:
+                    if hasattr(return_type, "__origin__") and return_type.__origin__ is Union:
+                        for arg in return_type.__args__:
+                            if arg is not type(None) and hasattr(arg, "__module__"):
+                                if "transformers" in arg.__module__ or "diffusers" in arg.__module__:
+                                    cls._output_class = arg
+                                    return cls._output_class
+                    else:
+                        if hasattr(return_type, "__module__") and (
+                            "transformers" in return_type.__module__ or "diffusers" in return_type.__module__
+                        ):
+                            cls._output_class = return_type
+                            return cls._output_class
+            else:
+                # Fallback to BaseModelOutput
+                cls._output_class = BaseModelOutput
+                return cls._output_class
+
+        return cls._output_class
+
     def _prepare_output(self, output, return_dict):
         """
         Prepare model output based on return_dict flag.
         This method can be overridden by subclasses to provide task-specific output handling.
         """
+        tuple_output = (output,) if not isinstance(output, (tuple, list)) else output
         if not return_dict:
-            return (output,) if not isinstance(output, (tuple, list)) else output
+            return tuple_output
         else:
-            if self.output_class is None:
-                return BaseModelOutput(last_hidden_state=output)
+            output_class = self.get_hf_output_class()
+            if hasattr(output_class, "loss"):
+                tuple_output = (None,) + tuple_output
 
-            # Create output with the appropriate class and key
-            return self.output_class(**{self.output_key: output})
+            # Truncate if we have too many outputs, otherwise use as is
+            if hasattr(output_class, "__annotations__"):
+                num_fields = len(output_class.__annotations__)
+                if len(tuple_output) > num_fields:
+                    tuple_output = tuple_output[:num_fields]
+                    logger.warning(
+                        f"Truncating output to {num_fields} fields for {output_class.__name__}. "
+                        f"Expected {num_fields} fields, but got {len(tuple_output)} fields."
+                        "This is unexpected. Please report this issue to the developers."
+                    )
+
+            return output_class(*tuple_output)
