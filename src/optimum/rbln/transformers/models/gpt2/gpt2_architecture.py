@@ -38,7 +38,10 @@ class GPT2Wrapper(DecoderOnlyWrapper):
         new_layers = []
         for layer in causal_lm.transformer.h:
             new_self_attn = GPT2Attention(
-                layer.attn, self.use_attention_mask, kvcache_block_size=self.kvcache_block_size
+                layer.attn,
+                self.use_attention_mask,
+                kvcache_block_size=self.kvcache_block_size,
+                use_position_ids=self.use_position_ids,
             )
             new_layer = GPT2Layer(layer, new_self_attn)
             new_layers.append(new_layer)
