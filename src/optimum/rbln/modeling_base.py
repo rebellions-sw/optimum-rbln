@@ -193,6 +193,11 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
         rbln_compiled_models = {}
         for compiled_model in expected_compiled_models:
+            if not compiled_model.exists():
+                raise FileNotFoundError(
+                    f"Expected RBLN compiled model '{compiled_model.name}' not found at '{model_path}'. "
+                    "Please ensure all models specified in `rbln_config` are present."
+                )
             rbln_compiled_models[compiled_model.stem] = rebel.RBLNCompiledModel(compiled_model)
         return rbln_compiled_models
 
