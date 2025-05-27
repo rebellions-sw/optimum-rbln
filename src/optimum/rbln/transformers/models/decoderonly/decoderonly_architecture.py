@@ -157,7 +157,11 @@ class DecoderOnlyWrapper(nn.Module):
         self.config = causal_lm.config
 
         if use_rotary_emb:
-            self.rotary_emb = self.get_rotary_emb(max_seq_len=max_seq_len)
+            rotary_embs = self.get_rotary_emb(max_seq_len=max_seq_len)
+            if isinstance(rotary_embs, tuple):
+                self.rotary_emb_global, self.rotary_emb_local = rotary_embs
+            else:
+                self.rotary_emb = rotary_embs
         else:
             self.rotary_emb = None
 
@@ -195,7 +199,10 @@ class DecoderOnlyWrapper(nn.Module):
         for layer in causal_lm.model.layers:
             if self.attn_impl == "eager":
                 new_self_attn = DecoderOnlyAttention(
-                    layer.self_attn, self.use_attention_mask, kvcache_block_size=self.kvcache_block_size
+                    layer.self_attn,
+                    self.use_attention_mask,
+                    self.use_position_ids,
+                    kvcache_block_size=self.kvcache_block_size,
                 )
             elif self.attn_impl == "flash_attn":
                 new_self_attn = DecoderOnlyFlashAttention(
@@ -203,6 +210,7 @@ class DecoderOnlyWrapper(nn.Module):
                     kvcache_partition_len=self.kvcache_partition_len,
                     kvcache_block_size=self.kvcache_block_size,
                     use_attention_mask=self.use_attention_mask,
+                    use_position_ids=self.use_position_ids,
                 )
             else:
                 raise NotImplementedError(f"Unknwon attn : {self.attn_impl}")
@@ -363,6 +371,13 @@ class DecoderOnlyForCausalLM(nn.Module):
             hidden_states = hidden_states[:, query_position.to(torch.int).unsqueeze(0)]
 
         logits = self.lm_head(hidden_states)
+
+        # Apply final logit softmaxing if configured, e.g. for Gemma2
+        if getattr(self.config, "final_logit_softcapping", None) is not None:
+            logits = logits / self.config.final_logit_softcapping
+            logits = torch.tanh(logits)
+            logits = logits * self.config.final_logit_softcapping
+
         return logits
 
 
@@ -610,7 +625,7 @@ class DecoderOnlyAttention(nn.Module):
         self_attn: Original attention module from the base model
     """
 
-    def __init__(self, self_attn, use_attention_mask, kvcache_block_size):
+    def __init__(self, self_attn, use_attention_mask, use_position_ids, kvcache_block_size):
         super().__init__()
         self._original_mod = self_attn
         self.layer_idx = self_attn.layer_idx
@@ -629,6 +644,7 @@ class DecoderOnlyAttention(nn.Module):
             self.num_key_value_heads = self.num_heads
 
         self.use_attention_mask = use_attention_mask
+        self.use_position_ids = use_position_ids
         self.attention = self.get_attention()
         self.kvcache_block_size = kvcache_block_size
         self.__post_init__()
@@ -643,7 +659,9 @@ class DecoderOnlyAttention(nn.Module):
         self.attention.phase = phase
 
     def get_attention(self):
-        return AttentionOp(self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask)
+        return AttentionOp(
+            self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask, self.use_position_ids
+        )
 
     def __post_init__(self):
         self.q_proj = self._original_mod.q_proj
@@ -716,13 +734,16 @@ class DecoderOnlyAttention(nn.Module):
 
 
 class AttentionOp(nn.Module):
-    def __init__(self, num_heads: int, head_dim: int, num_key_value_heads: int, use_attention_mask: bool):
+    def __init__(
+        self, num_heads: int, head_dim: int, num_key_value_heads: int, use_attention_mask: bool, use_position_ids: bool
+    ):
         super().__init__()
         self.num_heads = num_heads
         self.head_dim = head_dim
         self.num_key_value_heads = num_key_value_heads
         self.phase = "prefill"
         self.use_attention_mask = use_attention_mask
+        self.use_position_ids = use_position_ids
 
     def forward(
         self,
@@ -755,7 +776,8 @@ class AttentionOp(nn.Module):
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
         key_state = key_state.unsqueeze(2)  # 1, 32, 1, 128, 128
         value_state = value_state.unsqueeze(2)
-        if self.use_attention_mask:
+
+        if self.use_attention_mask and not self.use_position_ids:
             attn_mask = attn_mask.unsqueeze(2)
 
         if self.phase == "decode":
@@ -772,7 +794,7 @@ class AttentionOp(nn.Module):
         )
 
         if self.phase == "decode":
-            if self.use_attention_mask:
+            if self.use_attention_mask and not self.use_position_ids:
                 attn_output = torch.ops.rbln_custom_ops.paged_attn_decode(
                     q=query_state,
                     k=key_state,
@@ -796,11 +818,11 @@ class AttentionOp(nn.Module):
                     scale=scale,
                     block_table=block_tables,
                     block_size=block_size,
-                    mask=None,
+                    mask=attn_mask if self.use_position_ids else None,
                 )
 
         else:
-            if self.use_attention_mask:
+            if self.use_attention_mask and not self.use_position_ids:
                 attn_output = torch.ops.rbln_custom_ops.paged_attn_prefill(
                     q=query_state,
                     k=key_state,
@@ -824,8 +846,8 @@ class AttentionOp(nn.Module):
                     scale=scale,
                     block_table=block_tables,
                     block_size=block_size,
-                    is_bidirectional=False,
-                    mask=None,
+                    is_bidirectional=True if self.phase == "image_prefill" else False,  # FIXME, Hard-coded for Gemma3.
+                    mask=attn_mask if self.use_position_ids else None,
                 )
 
         attn_output = attn_output.view(batch_size, self.num_heads, -1, self.head_dim)
@@ -927,10 +949,13 @@ class RotaryEmbedding(nn.Module):
 
 
 class DecoderOnlyFlashAttention(DecoderOnlyAttention):
-    def __init__(self, self_attn, kvcache_partition_len, kvcache_block_size, use_attention_mask):
+    def __init__(self, self_attn, kvcache_partition_len, kvcache_block_size, use_attention_mask, use_position_ids):
         self.kvcache_partition_size = kvcache_partition_len
         super().__init__(
-            self_attn=self_attn, use_attention_mask=use_attention_mask, kvcache_block_size=kvcache_block_size
+            self_attn=self_attn,
+            use_attention_mask=use_attention_mask,
+            use_position_ids=use_position_ids,
+            kvcache_block_size=kvcache_block_size,
         )
 
     def get_attention(self):
@@ -940,6 +965,7 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
             self.num_key_value_heads,
             self.kvcache_partition_size,
             self.use_attention_mask,
+            self.use_position_ids,
         )
 
     def forward(
@@ -991,12 +1017,14 @@ class FlashAttentionOp(AttentionOp):
         num_key_value_heads: int,
         kvcache_partition_len: int,
         use_attention_mask: bool,
+        use_position_ids: bool,
     ):
         super().__init__(
             num_heads=num_heads,
             head_dim=head_dim,
             num_key_value_heads=num_key_value_heads,
             use_attention_mask=use_attention_mask,
+            use_position_ids=use_position_ids,
         )
         self.kvcache_partition_size = kvcache_partition_len
 
@@ -1016,7 +1044,7 @@ class FlashAttentionOp(AttentionOp):
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
         key_state = key_state.unsqueeze(2)
         value_state = value_state.unsqueeze(2)
-        if self.use_attention_mask:
+        if self.use_attention_mask and not self.use_position_ids:
             attn_mask = attn_mask.unsqueeze(2)
 
         if self.phase == "decode":
@@ -1033,7 +1061,7 @@ class FlashAttentionOp(AttentionOp):
         )
 
         if self.phase == "decode":
-            if self.use_attention_mask:
+            if self.use_attention_mask and not self.use_position_ids:
                 attn_output = torch.ops.rbln_custom_ops.paged_flash_attn_decode(
                     q=query_state,
                     k=key_state,
@@ -1059,10 +1087,10 @@ class FlashAttentionOp(AttentionOp):
                     block_table=block_tables,
                     block_size=kvcache_block_size,
                     partition=self.kvcache_partition_size,
-                    mask=None,
+                    mask=attn_mask if self.use_position_ids else None,
                 )
         else:
-            if self.use_attention_mask:
+            if self.use_attention_mask and not self.use_position_ids:
                 attn_output = torch.ops.rbln_custom_ops.paged_flash_attn_prefill(
                     q=query_state,
                     k=key_state,
@@ -1088,9 +1116,76 @@ class FlashAttentionOp(AttentionOp):
                     block_table=block_tables,
                     block_size=kvcache_block_size,
                     partition=self.kvcache_partition_size,
-                    is_bidirectional=False,
-                    mask=None,
+                    is_bidirectional=True if self.phase == "image_prefill" else False,
+                    mask=attn_mask if self.use_position_ids else None,
                 )
+
+        # reshape for removing repeat_kv
+        attn_output = attn_output.view(batch_size, self.num_heads, -1, self.head_dim)
+        attn_output = attn_output.transpose(1, 2).contiguous()
+        attn_output = attn_output.reshape(batch_size, -1, self.num_heads * self.head_dim)
+
+        return attn_output
+
+
+class SlidingWindowAttentionOp(AttentionOp):
+    def forward(
+        self,
+        query_state: torch.Tensor,
+        key_state: torch.Tensor,
+        value_state: torch.Tensor,
+        attn_mask: torch.Tensor,
+        past_key_state: torch.Tensor,
+        past_value_state: torch.Tensor,
+        seq_position: Tuple[torch.Tensor],
+        scale: torch.Tensor,
+        block_tables: torch.Tensor,
+        block_size: int,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
+        key_state = key_state.unsqueeze(2)
+        value_state = value_state.unsqueeze(2)
+
+        if self.phase == "decode":
+            batch_size = key_state.shape[0]
+        else:
+            batch_size = 1
+
+        query_state = query_state.view(
+            batch_size,
+            self.num_key_value_heads,
+            self.num_heads // self.num_key_value_heads,
+            -1,  # seq len
+            self.head_dim,
+        )
+
+        if self.phase == "decode":
+            attn_output = torch.ops.rbln_custom_ops.paged_sliding_window_attn_decode(
+                q=query_state,
+                k=key_state,
+                v=value_state,
+                kcache=past_key_state.unsqueeze(2),
+                vcache=past_value_state.unsqueeze(2),
+                cache_seq_len=seq_position[0],
+                cache_offset=seq_position[1],
+                scale=scale,
+                block_table=block_tables,
+                block_size=block_size,
+            )
+        else:
+            attn_output = torch.ops.rbln_custom_ops.paged_sliding_window_attn_prefill(
+                q=query_state,
+                k=key_state,
+                v=value_state,
+                kcache=past_key_state.unsqueeze(2),
+                vcache=past_value_state.unsqueeze(2),
+                cache_seq_len=seq_position[0],
+                cache_offset=seq_position[1],
+                scale=scale,
+                block_table=block_tables,
+                block_size=block_size,
+                is_bidirectional=True if self.phase == "image_prefill" else False,
+            )
 
         # reshape for removing repeat_kv
         attn_output = attn_output.view(batch_size, self.num_heads, -1, self.head_dim)
