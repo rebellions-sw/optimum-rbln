@@ -167,6 +167,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         block_tables: Optional[torch.Tensor] = None,
         position_embed: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
+        token_type_ids: Optional[torch.Tensor] = None,
+        local_block_tables: Optional[torch.Tensor] = None,
     ):
         if input_ids is None and inputs_embeds is None:
             raise ValueError("Either `input_ids` or `inputs_embeds` must be provided.")
@@ -193,6 +195,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 attention_mask=attention_mask,
                 position_embed=position_embed,
                 position_ids=position_ids,
+                local_block_tables=local_block_tables,
             )
         else:
             return self.prefill_forward(
@@ -202,6 +205,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 batch_idx,
                 block_tables,
                 position_embed=position_embed,
+                token_type_ids=token_type_ids,
+                local_block_tables=local_block_tables,
             )
 
     def decode_forward(
@@ -213,6 +218,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         attention_mask: Optional[torch.Tensor] = None,
         position_embed: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
+        local_block_tables: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         batch_size = inputs.shape[0]
         if batch_size != self.batch_size:
@@ -262,6 +268,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         cache_position: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         position_embed: Optional[torch.Tensor] = None,
+        local_block_tables: Optional[torch.Tensor] = None,
+        token_type_ids: Optional[torch.Tensor] = None,
     ):
         """
         Prepare inputs for prefill phase.
@@ -345,6 +353,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         block_tables: torch.Tensor = None,
         is_external_block_tables: bool = None,
         position_embed: Optional[torch.Tensor] = None,
+        local_block_tables: Optional[torch.Tensor] = None,
+        token_type_ids: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         """
         Performs chunked prefill for efficient KV-cache updates and memory optimization.
@@ -360,7 +370,9 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_embed,
             padded_cache_lengths,
             query_length,
-        ) = self._prepare_prefill_inputs(inputs, cache_position, attention_mask, position_embed)
+        ) = self._prepare_prefill_inputs(
+            inputs, cache_position, attention_mask, position_embed, token_type_ids=token_type_ids
+        )
 
         # Process input in chunks of size `prefill_chunk_size`
         for step in range(0, query_length, self.prefill_chunk_size):
@@ -373,7 +385,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             if position_embed is not None:
                 position_embed_chunk = position_embed[:, :, :, step : step + self.prefill_chunk_size, :]
 
-            if self.use_attention_mask:
+            if self.use_attention_mask and not self.use_position_ids:
                 # Update attention mask to ensure proper causal behavior
                 if step >= self.prefill_chunk_size:
                     chunked_attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
@@ -387,10 +399,10 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 input_chunk,
                 cache_pos_chunk,
                 block_tables,
+                position_embed_chunk if position_embed is not None else None,
                 query_position,
                 chunked_attention_mask if self.use_attention_mask else None,
-                position_ids_chunk if position_ids is not None else None,
-                position_embed_chunk if position_embed is not None else None,
+                position_ids_chunk if self.use_position_ids else None,
                 out=out_buffers,
             )
 
@@ -440,12 +452,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         if self.rbln_config.use_inputs_embeds:
             main_input_name = "inputs_embeds"
             artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
-            with no_init_weights():
-                self.embed_tokens = torch.nn.Embedding(
-                    self.config.vocab_size,
-                    self.config.hidden_size,
-                    self.config.pad_token_id,
-                )
+            self.embed_tokens = self._create_embedding_layer()
             self.embed_tokens.load_state_dict(artifacts["embed_tokens"])
         else:
             self.embed_tokens = None
@@ -478,6 +485,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             attn_impl=self.rbln_config.attn_impl,
             use_position_ids=self.rbln_config.use_position_ids,
         )
+
         self.decoders = {}
         for i, batch_size in enumerate(self.rbln_config.decoder_batch_sizes):
             self.decoders[batch_size] = RBLNRuntimeModel(
@@ -514,6 +522,15 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             save_dict = {}
             save_dict["embed_tokens"] = model.get_input_embeddings().state_dict()
             torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
+
+    def _create_embedding_layer(self):
+        with no_init_weights():
+            embed_tokens = torch.nn.Embedding(
+                self.config.vocab_size,
+                self.config.hidden_size,
+                self.config.pad_token_id,
+            )
+        return embed_tokens
 
     def get_input_embeddings(self):
         return self.embed_tokens
@@ -1101,6 +1118,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         generate_idx: Optional[torch.Tensor] = None,
         padded_cache_lengths: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
+        token_type_ids: Optional[torch.Tensor] = None,
         return_dict: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
@@ -1123,6 +1141,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                     cache_position=cache_position,
                     batch_idx=b_idx,
+                    token_type_ids=token_type_ids[b_idx : b_idx + 1] if token_type_ids is not None else None,
                 )
                 padded_cache_lengths[b_idx] += output.padded_cache_lengths
                 logits.append(output.logits)
