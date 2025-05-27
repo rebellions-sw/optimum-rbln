@@ -14,7 +14,7 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, Dict, List, Optional, Union, get_type_hints
+from typing import TYPE_CHECKING, Dict, List, Optional, Union, get_args, get_origin, get_type_hints
 
 import rebel
 import torch
@@ -252,35 +252,30 @@ class RBLNModel(RBLNBaseModel):
         Returns:
             type: The appropriate output class from transformers or diffusers
         """
-        if cls._output_class is None:
-            hf_class = cls.get_hf_class()
-            if hf_class is None:
-                raise ValueError(f"No HuggingFace model class found for {cls.__name__}")
+        if cls._output_class:
+            return cls._output_class
 
-            # Try to get return type from forward method annotation
-            forward_method = getattr(hf_class, "forward", None)
-            if forward_method:
-                type_hints = get_type_hints(forward_method)
-                return_type = type_hints.get("return", None)
-                if return_type:
-                    if hasattr(return_type, "__origin__") and return_type.__origin__ is Union:
-                        for arg in return_type.__args__:
-                            if arg is not type(None) and hasattr(arg, "__module__"):
-                                if "transformers" in arg.__module__ or "diffusers" in arg.__module__:
-                                    cls._output_class = arg
-                                    return cls._output_class
-                    else:
-                        if hasattr(return_type, "__module__") and (
-                            "transformers" in return_type.__module__ or "diffusers" in return_type.__module__
-                        ):
-                            cls._output_class = return_type
-                            return cls._output_class
-            else:
-                # Fallback to BaseModelOutput
-                cls._output_class = BaseModelOutput
-                return cls._output_class
+        hf_class = cls.get_hf_class()
+        if hf_class is None:
+            raise ValueError(f"No HuggingFace model class found for {cls.__name__}")
 
-        return cls._output_class
+        hints = get_type_hints(hf_class.forward) if hasattr(hf_class, "forward") else {}
+        ret = hints.get("return")
+
+        if ret is not None:
+            candidates = get_args(ret) if get_origin(ret) is Union else (ret,)
+
+            for t in candidates:
+                if t is type(None):  # Skip NoneType in Union
+                    continue
+                mod = getattr(t, "__module__", "")
+                if "transformers" in mod or "diffusers" in mod:
+                    cls._output_class = t
+                    return t
+
+        # Fallback to BaseModelOutput
+        cls._output_class = BaseModelOutput
+        return BaseModelOutput
 
     def _prepare_output(self, output, return_dict):
         """
