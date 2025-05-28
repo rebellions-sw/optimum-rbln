@@ -120,14 +120,17 @@ class RBLNBlip2VisionModel(RBLNModel):
         for i in range(batch_size):
             outputs.append(self.model[0](pixel_values[i : i + 1]))
 
-        last_hidden_states = [output[0] for output in outputs]
+        last_hidden_state = [output[0] for output in outputs]
         pooler_output = [output[1] for output in outputs]
 
-        last_hidden_states = torch.cat(last_hidden_states, dim=0)
+        last_hidden_state = torch.cat(last_hidden_state, dim=0)
         pooler_output = torch.cat(pooler_output, dim=0)
 
+        if not return_dict:
+            return (last_hidden_state, pooler_output)
+
         return BaseModelOutputWithPooling(
-            last_hidden_state=last_hidden_states,
+            last_hidden_state=last_hidden_state,
             pooler_output=pooler_output,
         )
 
@@ -232,15 +235,18 @@ class RBLNBlip2QFormerModel(RBLNModel):
                 )
             )
 
-        last_hidden_states = [output[0] for output in outputs]
-        pooler_output = [output[1] for output in outputs]
+        sequence_output = [output[0] for output in outputs]
+        pooled_output = [output[1] for output in outputs]
 
-        last_hidden_states = torch.cat(last_hidden_states, dim=0)
-        pooler_output = torch.cat(pooler_output, dim=0)
+        sequence_output = torch.cat(sequence_output, dim=0)
+        pooled_output = torch.cat(pooled_output, dim=0)
+
+        if not return_dict:
+            return (sequence_output, pooled_output)
 
         return BaseModelOutputWithPoolingAndCrossAttentions(
-            last_hidden_state=last_hidden_states,
-            pooler_output=pooler_output,
+            last_hidden_state=sequence_output,
+            pooler_output=pooled_output,
         )
 
 
