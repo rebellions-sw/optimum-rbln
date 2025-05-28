@@ -282,7 +282,7 @@ class RBLNModel(RBLNBaseModel):
         Prepare model output based on return_dict flag.
         This method can be overridden by subclasses to provide task-specific output handling.
         """
-        tuple_output = (output,) if not isinstance(output, (tuple, list)) else output
+        tuple_output = (output,) if not isinstance(output, (tuple, list)) else tuple(output)
         if not return_dict:
             return tuple_output
         else:
