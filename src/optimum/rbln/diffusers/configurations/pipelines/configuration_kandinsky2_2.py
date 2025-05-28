@@ -208,6 +208,8 @@ class _RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
         batch_size: Optional[int] = None,
         img_height: Optional[int] = None,
         img_width: Optional[int] = None,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
         guidance_scale: Optional[float] = None,
         prior_prior: Optional[RBLNPriorTransformerConfig] = None,
         prior_image_encoder: Optional[RBLNCLIPVisionModelWithProjectionConfig] = None,
@@ -234,6 +236,8 @@ class _RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
             batch_size (Optional[int]): Batch size for inference, applied to all submodules.
             img_height (Optional[int]): Height of the generated images.
             img_width (Optional[int]): Width of the generated images.
+            height (Optional[int]): Height of the generated images.
+            width (Optional[int]): Width of the generated images.
             guidance_scale (Optional[float]): Scale for classifier-free guidance.
             prior_prior (Optional[RBLNPriorTransformerConfig]): Direct configuration for the prior transformer.
                 Used if prior_pipe is not provided.
@@ -248,6 +252,30 @@ class _RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
         """
         super().__init__(**kwargs)
+
+        # Initial check for image_size conflict remains as is
+        if image_size is not None and (
+            img_height is not None or img_width is not None or height is not None or width is not None
+        ):
+            raise ValueError("image_size cannot be provided alongside img_height/img_width or height/width")
+
+        # Prioritize height/width (HF-aligned)
+        if height is not None and width is not None:
+            if img_height is not None or img_width is not None:
+                # Raise error if both sets of arguments are provided
+                raise ValueError(
+                    "Cannot provide both 'height'/'width' and 'img_height'/'img_width' simultaneously. "
+                    "Please use one set of arguments for image dimensions, preferring 'height'/'width'."
+                )
+            image_size = (height, width)
+        elif (height is not None and width is None) or (height is None and width is not None):
+            raise ValueError("Both height and width must be provided together if used")
+        # Fallback to img_height/img_width for backward compatibility
+        elif img_height is not None and img_width is not None:
+            image_size = (img_height, img_width)
+        elif (img_height is not None and img_width is None) or (img_height is None and img_width is not None):
+            raise ValueError("Both img_height and img_width must be provided together if used")
+
         self.prior_pipe = self.init_submodule_config(
             RBLNKandinskyV22PriorPipelineConfig,
             prior_pipe,
@@ -265,8 +293,6 @@ class _RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
             batch_size=batch_size,
             sample_size=sample_size,
             image_size=image_size,
-            img_height=img_height,
-            img_width=img_width,
             guidance_scale=guidance_scale,
         )
 
