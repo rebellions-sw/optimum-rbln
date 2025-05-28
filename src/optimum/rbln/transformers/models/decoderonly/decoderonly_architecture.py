@@ -21,6 +21,7 @@ from transformers import PretrainedConfig, PreTrainedModel
 
 from ....utils import logging
 from ...modeling_rope_utils import ROPE_INIT_FUNCTIONS
+from ...utils.rbln_quantization import RBLNQuantizationConfig
 
 
 logger = logging.get_logger(__name__)
@@ -152,9 +153,11 @@ class DecoderOnlyWrapper(nn.Module):
         use_learned_pos_emb: Optional[bool] = None,
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
+        quantization: Optional[RBLNQuantizationConfig] = None,
     ):
         super().__init__()
         self.config = causal_lm.config
+        self.quantization = quantization
 
         if use_rotary_emb:
             rotary_embs = self.get_rotary_emb(max_seq_len=max_seq_len)
@@ -203,6 +206,7 @@ class DecoderOnlyWrapper(nn.Module):
                     self.use_attention_mask,
                     self.use_position_ids,
                     kvcache_block_size=self.kvcache_block_size,
+                    quantization=self.quantization,
                 )
             elif self.attn_impl == "flash_attn":
                 new_self_attn = DecoderOnlyFlashAttention(
@@ -211,6 +215,7 @@ class DecoderOnlyWrapper(nn.Module):
                     kvcache_block_size=self.kvcache_block_size,
                     use_attention_mask=self.use_attention_mask,
                     use_position_ids=self.use_position_ids,
+                    quantization=self.quantization,
                 )
             else:
                 raise NotImplementedError(f"Unknwon attn : {self.attn_impl}")
@@ -625,7 +630,14 @@ class DecoderOnlyAttention(nn.Module):
         self_attn: Original attention module from the base model
     """
 
-    def __init__(self, self_attn, use_attention_mask, use_position_ids, kvcache_block_size):
+    def __init__(
+        self,
+        self_attn,
+        use_attention_mask,
+        use_position_ids,
+        kvcache_block_size,
+        quantization: Optional[RBLNQuantizationConfig] = None,
+    ):
         super().__init__()
         self._original_mod = self_attn
         self.layer_idx = self_attn.layer_idx
@@ -635,6 +647,7 @@ class DecoderOnlyAttention(nn.Module):
         self.head_dim = self._original_mod.head_dim
         self._phase = "prefill"
         self.scale = torch.tensor(self.get_attn_scale())
+        self.quantization = quantization
 
         if hasattr(self._original_mod, "num_key_value_heads"):
             self.num_key_value_heads = self._original_mod.num_key_value_heads
@@ -647,6 +660,7 @@ class DecoderOnlyAttention(nn.Module):
         self.use_position_ids = use_position_ids
         self.attention = self.get_attention()
         self.kvcache_block_size = kvcache_block_size
+
         self.__post_init__()
 
     @property
@@ -660,7 +674,12 @@ class DecoderOnlyAttention(nn.Module):
 
     def get_attention(self):
         return AttentionOp(
-            self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask, self.use_position_ids
+            self.num_heads,
+            self.head_dim,
+            self.num_key_value_heads,
+            self.use_attention_mask,
+            self.use_position_ids,
+            self.quantization,
         )
 
     def __post_init__(self):
@@ -689,6 +708,11 @@ class DecoderOnlyAttention(nn.Module):
     def get_attn_scale(self):
         return 1 / math.sqrt(self.head_dim)
 
+    def maybe_get_kvcache_scale(self) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
+        k_scale = getattr(self._original_mod, "k_scale", None)
+        v_scale = getattr(self._original_mod, "v_scale", None)
+        return k_scale, v_scale
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -716,6 +740,8 @@ class DecoderOnlyAttention(nn.Module):
         if batch_size > 1 and self.phase == "prefill":
             raise NotImplementedError(f"batch size should be 1 if prefill phase, but got {batch_size}.")
 
+        k_scale, v_scale = self.maybe_get_kvcache_scale()
+
         attn_output = self.attention(
             query_states,
             key_states,
@@ -727,6 +753,8 @@ class DecoderOnlyAttention(nn.Module):
             scale=self.scale,
             block_tables=block_tables,
             block_size=self.kvcache_block_size,
+            k_scale=k_scale,
+            v_scale=v_scale,
         )
 
         attn_outputs = self.o_proj(attn_output)
@@ -735,7 +763,13 @@ class DecoderOnlyAttention(nn.Module):
 
 class AttentionOp(nn.Module):
     def __init__(
-        self, num_heads: int, head_dim: int, num_key_value_heads: int, use_attention_mask: bool, use_position_ids: bool
+        self,
+        num_heads: int,
+        head_dim: int,
+        num_key_value_heads: int,
+        use_attention_mask: bool,
+        use_position_ids: bool,
+        quantization: Optional[RBLNQuantizationConfig] = None,
     ):
         super().__init__()
         self.num_heads = num_heads
@@ -744,6 +778,21 @@ class AttentionOp(nn.Module):
         self.phase = "prefill"
         self.use_attention_mask = use_attention_mask
         self.use_position_ids = use_position_ids
+        self.quantization = quantization
+
+    def get_attn_op_name(self):
+        phase = "decode" if self.phase == "decode" else "prefill"
+        if self.use_attention_mask:
+            attn_op_name = "paged_attn_"
+        else:
+            attn_op_name = "paged_causal_attn_"
+
+        attn_op_name += phase
+
+        if self.quantization and self.quantization.kv_caches == "fp8":
+            attn_op_name += "_kv_fp8"
+
+        return attn_op_name
 
     def forward(
         self,
@@ -757,6 +806,8 @@ class AttentionOp(nn.Module):
         scale: torch.Tensor,
         block_tables: torch.Tensor,
         block_size: int,
+        k_scale: Optional[torch.Tensor] = None,
+        v_scale: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Compute attention with static shapes and explicit cache management.
 
@@ -769,6 +820,10 @@ class AttentionOp(nn.Module):
             past_value_state: Previous value cache states
             seq_position: Current position in sequence
             scale: Scale applied to attn weights
+            block_tables: Block tables for paged attention
+            block_size: Block size for paged attention
+            k_scale: Scale applied to key
+            v_scale: Scale applied to value
 
         Returns:
             Tensor: attention_output: [batch, num_heads, seq_len, head_dim]
@@ -793,63 +848,37 @@ class AttentionOp(nn.Module):
             self.head_dim,
         )
 
-        if self.phase == "decode":
-            if self.use_attention_mask and not self.use_position_ids:
-                attn_output = torch.ops.rbln_custom_ops.paged_attn_decode(
-                    q=query_state,
-                    k=key_state,
-                    v=value_state,
-                    mask=attn_mask,
-                    kcache=past_key_state.unsqueeze(2),
-                    vcache=past_value_state.unsqueeze(2),
-                    seq=seq_position,
-                    scale=scale,
-                    block_table=block_tables,
-                    block_size=block_size,
-                )
-            else:
-                attn_output = torch.ops.rbln_custom_ops.paged_causal_attn_decode(
-                    q=query_state,
-                    k=key_state,
-                    v=value_state,
-                    kcache=past_key_state.unsqueeze(2),
-                    vcache=past_value_state.unsqueeze(2),
-                    seq=seq_position,
-                    scale=scale,
-                    block_table=block_tables,
-                    block_size=block_size,
-                    mask=attn_mask if self.use_position_ids else None,
-                )
+        op_args = {
+            "q": query_state,
+            "k": key_state,
+            "v": value_state,
+            "kcache": past_key_state.unsqueeze(2),
+            "vcache": past_value_state.unsqueeze(2),
+            "seq": seq_position,
+            "scale": scale,
+            "block_table": block_tables,
+            "block_size": block_size,
+        }
 
-        else:
-            if self.use_attention_mask and not self.use_position_ids:
-                attn_output = torch.ops.rbln_custom_ops.paged_attn_prefill(
-                    q=query_state,
-                    k=key_state,
-                    v=value_state,
-                    mask=attn_mask,
-                    kcache=past_key_state.unsqueeze(2),
-                    vcache=past_value_state.unsqueeze(2),
-                    seq=seq_position,
-                    scale=scale,
-                    block_table=block_tables,
-                    block_size=block_size,
-                )
-            else:
-                attn_output = torch.ops.rbln_custom_ops.paged_causal_attn_prefill(
-                    q=query_state,
-                    k=key_state,
-                    v=value_state,
-                    kcache=past_key_state.unsqueeze(2),
-                    vcache=past_value_state.unsqueeze(2),
-                    seq=seq_position,
-                    scale=scale,
-                    block_table=block_tables,
-                    block_size=block_size,
-                    is_bidirectional=True if self.phase == "image_prefill" else False,  # FIXME, Hard-coded for Gemma3.
-                    mask=attn_mask if self.use_position_ids else None,
-                )
+        if self.use_attention_mask:
+            op_args["mask"] = attn_mask
 
+        if self.phase == "prefill" or self.phase == "image_prefill":
+            if not self.use_attention_mask or self.use_position_ids:
+                op_args["is_bidirectional"] = self.phase == "image_prefill"  # FIXME, Hard-coded for Gemma3.
+
+        if self.quantization and self.quantization.kv_caches == "fp8":
+            if past_key_state.dtype != torch.float8_e4m3fn:
+                raise ValueError(f"Unsupported KVCaches type: {past_key_state.dtype}")
+            op_args["k_scale"] = k_scale
+            op_args["v_scale"] = v_scale
+
+        attn_op_name = self.get_attn_op_name()
+        attn_op = getattr(torch.ops.rbln_custom_ops, attn_op_name, None)
+        if attn_op is None:
+            raise ValueError(f"Attention operator {attn_op_name} not found.")
+
+        attn_output = attn_op(**op_args)
         attn_output = attn_output.view(batch_size, self.num_heads, -1, self.head_dim)
         attn_output = attn_output.transpose(1, 2).contiguous()
         attn_output = attn_output.reshape(batch_size, -1, self.num_heads * self.head_dim)
@@ -949,13 +978,22 @@ class RotaryEmbedding(nn.Module):
 
 
 class DecoderOnlyFlashAttention(DecoderOnlyAttention):
-    def __init__(self, self_attn, kvcache_partition_len, kvcache_block_size, use_attention_mask, use_position_ids):
+    def __init__(
+        self,
+        self_attn,
+        kvcache_partition_len,
+        kvcache_block_size,
+        use_attention_mask,
+        use_position_ids,
+        quantization: Optional[RBLNQuantizationConfig] = None,
+    ):
         self.kvcache_partition_size = kvcache_partition_len
         super().__init__(
             self_attn=self_attn,
             use_attention_mask=use_attention_mask,
             use_position_ids=use_position_ids,
             kvcache_block_size=kvcache_block_size,
+            quantization=quantization,
         )
 
     def get_attention(self):
@@ -992,6 +1030,8 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
         if cos is not None and sin is not None:
             query_states, key_states = self.apply_rotary_pos_embed(query_states, key_states, cos, sin)
 
+        k_scale, v_scale = self.maybe_get_kvcache_scale()
+
         attn_output = self.attention(
             query_states,
             key_states,
@@ -1003,6 +1043,8 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
             scale=self.scale,
             block_tables=block_tables,
             kvcache_block_size=self.kvcache_block_size,
+            k_scale=k_scale,
+            v_scale=v_scale,
         )
 
         attn_outputs = self.o_proj(attn_output)
@@ -1018,13 +1060,18 @@ class FlashAttentionOp(AttentionOp):
         kvcache_partition_len: int,
         use_attention_mask: bool,
         use_position_ids: bool,
+        quantization: Optional[RBLNQuantizationConfig] = None,
     ):
+        if quantization:
+            raise NotImplementedError("Quantization is not supported for FlashAttentionOp")
+
         super().__init__(
             num_heads=num_heads,
             head_dim=head_dim,
             num_key_value_heads=num_key_value_heads,
             use_attention_mask=use_attention_mask,
             use_position_ids=use_position_ids,
+            quantization=quantization,
         )
         self.kvcache_partition_size = kvcache_partition_len
 
@@ -1040,6 +1087,8 @@ class FlashAttentionOp(AttentionOp):
         scale,
         block_tables,
         kvcache_block_size,
+        k_scale=None,
+        v_scale=None,
     ):
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
         key_state = key_state.unsqueeze(2)
@@ -1141,6 +1190,8 @@ class SlidingWindowAttentionOp(AttentionOp):
         scale: torch.Tensor,
         block_tables: torch.Tensor,
         block_size: int,
+        k_scale: Optional[torch.Tensor] = None,
+        v_scale: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
         key_state = key_state.unsqueeze(2)

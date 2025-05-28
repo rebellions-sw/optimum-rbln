@@ -30,7 +30,7 @@ from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
-from ...utils.rbln_quantization import prepare_model_for_quantization
+from ...utils.rbln_quantization import RBLNQuantizationConfig, prepare_model_for_quantization
 from .configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
 from .decoderonly_architecture import (
     DecoderOnlyWrapper,
@@ -553,10 +553,10 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         subfolder: str = "",
         local_files_only: bool = False,
         trust_remote_code: bool = False,
+        rbln_config: Optional[RBLNDecoderOnlyModelForCausalLMConfig] = None,
         **kwargs,
     ):
         kwargs = cls.update_kwargs(kwargs)
-
         if config is None:
             config = AutoConfig.from_pretrained(
                 model_id,
@@ -567,6 +567,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 trust_remote_code=trust_remote_code,
                 **kwargs,
             )
+            if config.torch_dtype == torch.bfloat16:
+                # FIXME: bfloat16 is not supported by rebel-compiler
+                config.torch_dtype = torch.float32
 
         with no_init_weights():
             model = AutoModelForCausalLM.from_config(config)
@@ -580,6 +583,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             cache_dir=cache_dir,
             force_download=force_download,
             local_files_only=local_files_only,
+            rbln_quantization=rbln_config.quantization,
         )
         return model
 
@@ -608,7 +612,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         cls, *args, rbln_config: Optional[RBLNDecoderOnlyModelForCausalLMConfig] = None, **kwargs
     ) -> "PreTrainedModel":
         if rbln_config and rbln_config.quantization:
-            model = cls.get_quantized_model(*args, **kwargs)
+            model = cls.get_quantized_model(*args, rbln_config=rbln_config, **kwargs)
         else:
             model = super().get_pytorch_model(*args, **kwargs)
 
@@ -625,6 +629,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             "use_attention_mask": rbln_config.use_attention_mask,
             "use_position_ids": rbln_config.use_position_ids,
             "use_inputs_embeds": rbln_config.use_inputs_embeds,
+            "quantization": rbln_config.quantization,
         }
         return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
 
@@ -843,6 +848,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         num_hidden_layers: int,
         hidden_size: int,
         head_dim: int,
+        quantization: RBLNQuantizationConfig,
     ):
         if use_inputs_embeds:
             main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
@@ -880,6 +886,10 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         if use_position_ids:
             input_info.append(("position_ids", [batch_size, query_length], "int32"))
 
+        kvcache_dtype = "float32"
+        if quantization and quantization.kv_caches == "fp8":
+            kvcache_dtype = "float8_e4m3fn"
+
         input_info.extend(
             [
                 (
@@ -890,7 +900,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                         kvcache_block_size,
                         head_dim,
                     ],
-                    "float32",
+                    kvcache_dtype,
                 )
                 for i in range(num_hidden_layers * 2)
             ]
@@ -980,6 +990,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             num_hidden_layers=num_hidden_layers,
             hidden_size=hidden_size,
             head_dim=head_dim,
+            quantization=rbln_config.quantization,
         )
 
         prefill_compile_config = RBLNCompileConfig(compiled_model_name="prefill", input_info=prefill_input_info)
@@ -999,6 +1010,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 num_hidden_layers=num_hidden_layers,
                 hidden_size=hidden_size,
                 head_dim=head_dim,
+                quantization=rbln_config.quantization,
             )
             dec_compile_configs.append(
                 RBLNCompileConfig(compiled_model_name=f"decoder_batch_{batch_size}", input_info=dec_input_info)
