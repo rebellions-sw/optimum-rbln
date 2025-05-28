@@ -860,7 +860,7 @@ class AttentionOp(nn.Module):
             "block_size": block_size,
         }
 
-        if self.use_attention_mask:
+        if self.use_attention_mask != self.use_position_ids:
             op_args["mask"] = attn_mask
 
         if self.phase == "prefill" or self.phase == "image_prefill":
@@ -1004,6 +1004,7 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
             self.kvcache_partition_size,
             self.use_attention_mask,
             self.use_position_ids,
+            self.quantization,
         )
 
     def forward(
@@ -1062,9 +1063,6 @@ class FlashAttentionOp(AttentionOp):
         use_position_ids: bool,
         quantization: Optional[RBLNQuantizationConfig] = None,
     ):
-        if quantization:
-            raise NotImplementedError("Quantization is not supported for FlashAttentionOp")
-
         super().__init__(
             num_heads=num_heads,
             head_dim=head_dim,
@@ -1074,6 +1072,20 @@ class FlashAttentionOp(AttentionOp):
             quantization=quantization,
         )
         self.kvcache_partition_size = kvcache_partition_len
+
+    def get_attn_op_name(self):
+        phase = "decode" if self.phase == "decode" else "prefill"
+        if self.use_attention_mask:
+            attn_op_name = "paged_flash_attn_"
+        else:
+            attn_op_name = "paged_flash_causal_attn_"
+
+        attn_op_name += phase
+
+        if self.quantization and self.quantization.kv_caches == "fp8":
+            attn_op_name += "_kv_fp8"
+
+        return attn_op_name
 
     def forward(
         self,
@@ -1109,67 +1121,38 @@ class FlashAttentionOp(AttentionOp):
             self.head_dim,
         )
 
-        if self.phase == "decode":
-            if self.use_attention_mask and not self.use_position_ids:
-                attn_output = torch.ops.rbln_custom_ops.paged_flash_attn_decode(
-                    q=query_state,
-                    k=key_state,
-                    v=value_state,
-                    mask=attn_mask,
-                    kcache=past_key_state.unsqueeze(2),
-                    vcache=past_value_state.unsqueeze(2),
-                    seq=seq_position,
-                    scale=scale,
-                    block_table=block_tables,
-                    block_size=kvcache_block_size,
-                    partition=self.kvcache_partition_size,
-                )
-            else:
-                attn_output = torch.ops.rbln_custom_ops.paged_flash_causal_attn_decode(
-                    q=query_state,
-                    k=key_state,
-                    v=value_state,
-                    kcache=past_key_state.unsqueeze(2),
-                    vcache=past_value_state.unsqueeze(2),
-                    seq=seq_position,
-                    scale=scale,
-                    block_table=block_tables,
-                    block_size=kvcache_block_size,
-                    partition=self.kvcache_partition_size,
-                    mask=attn_mask if self.use_position_ids else None,
-                )
-        else:
-            if self.use_attention_mask and not self.use_position_ids:
-                attn_output = torch.ops.rbln_custom_ops.paged_flash_attn_prefill(
-                    q=query_state,
-                    k=key_state,
-                    v=value_state,
-                    mask=attn_mask,
-                    kcache=past_key_state.unsqueeze(2),
-                    vcache=past_value_state.unsqueeze(2),
-                    seq=seq_position,
-                    scale=scale,
-                    block_table=block_tables,
-                    block_size=kvcache_block_size,
-                    partition=self.kvcache_partition_size,
-                )
-            else:
-                attn_output = torch.ops.rbln_custom_ops.paged_flash_causal_attn_prefill(
-                    q=query_state,
-                    k=key_state,
-                    v=value_state,
-                    kcache=past_key_state.unsqueeze(2),
-                    vcache=past_value_state.unsqueeze(2),
-                    seq=seq_position,
-                    scale=scale,
-                    block_table=block_tables,
-                    block_size=kvcache_block_size,
-                    partition=self.kvcache_partition_size,
-                    is_bidirectional=True if self.phase == "image_prefill" else False,
-                    mask=attn_mask if self.use_position_ids else None,
-                )
+        op_args = {
+            "q": query_state,
+            "k": key_state,
+            "v": value_state,
+            "kcache": past_key_state.unsqueeze(2),
+            "vcache": past_value_state.unsqueeze(2),
+            "seq": seq_position,
+            "scale": scale,
+            "block_table": block_tables,
+            "block_size": kvcache_block_size,
+            "partition": self.kvcache_partition_size,
+        }
 
-        # reshape for removing repeat_kv
+        if self.use_attention_mask != self.use_position_ids:
+            op_args["mask"] = attn_mask
+
+        if self.phase == "prefill" or self.phase == "image_prefill":
+            if not self.use_attention_mask or self.use_position_ids:
+                op_args["is_bidirectional"] = self.phase == "image_prefill"  # FIXME, Hard-coded for Gemma3.
+
+        if self.quantization and self.quantization.kv_caches == "fp8":
+            if past_key_state.dtype != torch.float8_e4m3fn:
+                raise ValueError(f"Unsupported KVCaches type: {past_key_state.dtype}")
+            op_args["k_scale"] = k_scale
+            op_args["v_scale"] = v_scale
+
+        attn_op_name = self.get_attn_op_name()
+        attn_op = getattr(torch.ops.rbln_custom_ops, attn_op_name, None)
+        if attn_op is None:
+            raise ValueError(f"Attention operator {attn_op_name} not found.")
+
+        attn_output = attn_op(**op_args)
         attn_output = attn_output.view(batch_size, self.num_heads, -1, self.head_dim)
         attn_output = attn_output.transpose(1, 2).contiguous()
         attn_output = attn_output.reshape(batch_size, -1, self.num_heads * self.head_dim)
