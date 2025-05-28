@@ -222,9 +222,10 @@ def load_weights(
     loaded_scale = False
     for safetensor_file in safetensor_files:
         file_data = load_file(safetensor_file)
-        loaded_scale = loaded_scale or "scale" in file_data
 
         for key, value in file_data.items():
+            loaded_scale = loaded_scale or "scale" in key
+
             if target_layers is not None:
                 parts = key.split(".")
 
