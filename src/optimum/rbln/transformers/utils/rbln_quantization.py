@@ -326,12 +326,9 @@ def create_fp8linear(layer: Linear, rbln_quantization: RBLNQuantizationConfig) -
     Converts a standard linear layer to a fp8 linear layer with a custom forward pass.
     """
 
-    def static_per_tensor_quantize(tensor: torch.Tensor, inv_scale: Optional[float]) -> torch.Tensor:
+    def static_per_tensor_quantize(tensor: torch.Tensor, inv_scale: float) -> torch.Tensor:
         finfo = torch.finfo(torch.float8_e4m3fn)
-        if inv_scale is None:
-            qweight = tensor.clamp(min=finfo.min, max=finfo.max)
-        else:
-            qweight = (tensor / inv_scale).clamp(min=finfo.min, max=finfo.max)
+        qweight = (tensor / inv_scale).clamp(min=finfo.min, max=finfo.max)
         return qweight
 
     def fp8_gemm(A: torch.Tensor, A_scale, B: torch.Tensor, B_scale, bias, out_dtype: torch.dtype):
@@ -347,9 +344,12 @@ def create_fp8linear(layer: Linear, rbln_quantization: RBLNQuantizationConfig) -
         return output
 
     def fp8linear_forward(self, x: torch.Tensor) -> torch.Tensor:
-        qinput = static_per_tensor_quantize(x, self.input_scale)
+        if self.input_scale:
+            input = static_per_tensor_quantize(x, self.input_scale)
+        else:
+            input = x
         output = fp8_gemm(
-            A=qinput,
+            A=input,
             A_scale=self.input_scale,
             B=self.weight,
             B_scale=self.weight_scale,
