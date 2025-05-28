@@ -311,7 +311,7 @@ class RBLNBlip2ForConditionalGeneration(RBLNModel):
             (
                 "query_output",
                 [
-                    rbln_config.batch_size,
+                    1,
                     model_config.num_query_tokens,
                     model_config.qformer_config.hidden_size,
                 ],
