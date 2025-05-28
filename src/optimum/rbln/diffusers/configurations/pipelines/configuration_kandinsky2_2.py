@@ -293,8 +293,6 @@ class _RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
             batch_size=batch_size,
             sample_size=sample_size,
             image_size=image_size,
-            img_height=img_height,
-            img_width=img_width,
             guidance_scale=guidance_scale,
         )
 
