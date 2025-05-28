@@ -219,12 +219,17 @@ def load_weights(
     target_layers = list(range(n_layer)) if n_layer is not None else None
 
     unloaded_keys = []
-    loaded_scale = False
+    loaded_input_scale = False
+    loaded_kv_scale = False
+    loaded_weight_scale = False
+
     for safetensor_file in safetensor_files:
         file_data = load_file(safetensor_file)
 
         for key, value in file_data.items():
-            loaded_scale = loaded_scale or "scale" in key
+            loaded_input_scale = loaded_input_scale or "input_scale" in key
+            loaded_weight_scale = loaded_weight_scale or "weight_scale" in key
+            loaded_kv_scale = loaded_kv_scale or "kv_scale" in key
 
             if target_layers is not None:
                 parts = key.split(".")
@@ -249,13 +254,19 @@ def load_weights(
     if len(unloaded_keys) > 0:
         logger.warning(f"There are unexpected parameters/buffers on the checkpoint: {unloaded_keys}")
 
-    if not loaded_scale and (
-        rbln_quantization.kv_caches == "fp8"
-        or rbln_quantization.activations == "fp8"
-        or rbln_quantization.weights == "fp8"
-    ):
+    if not loaded_input_scale and rbln_quantization.activations == "fp8":
         raise ValueError(
-            "No scale found in the checkpoint. Did you use the correct quantization config? "
+            "No input_scale found in the checkpoint. Did you use the correct quantization config? "
+            "If you are using fp8 quantization, you need to use the correct quantization config."
+        )
+    if not loaded_weight_scale and rbln_quantization.weights == "fp8":
+        raise ValueError(
+            "No weight_scale found in the checkpoint. Did you use the correct quantization config? "
+            "If you are using fp8 quantization, you need to use the correct quantization config."
+        )
+    if not loaded_kv_scale and rbln_quantization.kv_caches == "fp8":
+        raise ValueError(
+            "No kv_scale found in the checkpoint. Did you use the correct quantization config? "
             "If you are using fp8 quantization, you need to use the correct quantization config."
         )
 
