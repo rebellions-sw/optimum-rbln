@@ -858,6 +858,11 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             max_seq_len=rbln_config.max_seq_len,
         )
 
+        if rbln_config.attn_impl == "eager":
+            raise ValueError(
+                "Eager attention is not supported for Gemma3. Please use flash attention by setting `rbln_attn_impl='flash_attn'`. Stay tuned for future updates!"
+            )
+
         validate_attention_method(
             attn_impl=rbln_config.attn_impl,
             kvcache_partition_len=rbln_config.kvcache_partition_len,
