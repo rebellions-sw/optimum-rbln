@@ -33,6 +33,8 @@ class _RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
         batch_size: Optional[int] = None,
         img_height: Optional[int] = None,
         img_width: Optional[int] = None,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
         sample_size: Optional[Tuple[int, int]] = None,
         image_size: Optional[Tuple[int, int]] = None,
         guidance_scale: Optional[float] = None,
@@ -51,6 +53,8 @@ class _RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
             batch_size (Optional[int]): Batch size for inference, applied to all submodules.
             img_height (Optional[int]): Height of the generated images.
             img_width (Optional[int]): Width of the generated images.
+            height (Optional[int]): Height of the generated images.
+            width (Optional[int]): Width of the generated images.
             sample_size (Optional[Tuple[int, int]]): Spatial dimensions for the UNet model.
             image_size (Optional[Tuple[int, int]]): Alternative way to specify image dimensions.
                 Cannot be used together with img_height/img_width.
@@ -65,11 +69,19 @@ class _RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
             accommodate classifier-free guidance.
         """
         super().__init__(**kwargs)
-        if image_size is not None and (img_height is not None or img_width is not None):
-            raise ValueError("image_size and img_height/img_width cannot both be provided")
+        if image_size is not None and (
+            img_height is not None or img_width is not None or height is not None or width is not None
+        ):
+            raise ValueError("image_size cannot be provided alongside img_height/img_width or height/width")
 
         if img_height is not None and img_width is not None:
             image_size = (img_height, img_width)
+        elif (img_height is not None and img_width is None) or (img_height is None and img_width is not None):
+            raise ValueError("Both img_height and img_width must be provided together if used")
+        elif height is not None and width is not None:
+            image_size = (height, width)
+        elif (height is not None and width is None) or (height is None and width is not None):
+            raise ValueError("Both height and width must be provided together if used")
 
         self.text_encoder = self.init_submodule_config(RBLNCLIPTextModelConfig, text_encoder, batch_size=batch_size)
         self.text_encoder_2 = self.init_submodule_config(
