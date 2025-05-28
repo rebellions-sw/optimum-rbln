@@ -75,7 +75,7 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
                 f"Invalid kv_caches: {self.kv_caches}, supported kv_caches are: {self.SUPPORTED_KVCACHES}"
             )
         if self.weights == "fp16" and self.activations == "fp16":
-            raise ValueError("weights and activations cannot be both fp16. It is meaningless.")
+            raise ValueError("weights and activations of QuantizationConfig cannot be both fp16. It is meaningless.")
 
     def _prepare_for_serialization(self) -> Dict[str, Any]:
         return {
