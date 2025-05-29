@@ -15,9 +15,11 @@
 import copy
 import importlib
 from os import PathLike
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
 
 import torch
+from transformers import PretrainedConfig
 
 from ..configuration_utils import ContextRblnConfig, RBLNModelConfig
 from ..modeling import RBLNModel
@@ -212,8 +214,12 @@ class RBLNDiffusionMixin:
 
                 submodule_cls: Type[RBLNModel] = getattr(importlib.import_module("optimum.rbln"), class_name)
                 submodule_config = getattr(rbln_config, submodule_name)
+
+                json_file_path = Path(model_id) / submodule_name / "config.json"
+                config = PretrainedConfig.from_json_file(json_file_path)
+
                 submodule = submodule_cls.from_pretrained(
-                    model_id, export=False, subfolder=submodule_name, rbln_config=submodule_config
+                    model_id, export=False, subfolder=submodule_name, rbln_config=submodule_config, config=config
                 )
                 kwargs[submodule_name] = submodule
 

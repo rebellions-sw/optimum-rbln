@@ -50,8 +50,11 @@ _import_structure = {
         "RBLNSD3Transformer2DModelConfig",
         "RBLNUNet2DConditionModelConfig",
         "RBLNVQModelConfig",
+        "RBLNFluxTransformer2DModelConfig",
+        "RBLNFluxPipelineConfig",
     ],
     "pipelines": [
+        "RBLNFluxPipeline",
         "RBLNKandinskyV22CombinedPipeline",
         "RBLNKandinskyV22Img2ImgCombinedPipeline",
         "RBLNKandinskyV22InpaintCombinedPipeline",
@@ -76,6 +79,7 @@ _import_structure = {
     ],
     "models": [
         "RBLNAutoencoderKL",
+        "RBLNFluxTransformer2DModel",
         "RBLNUNet2DConditionModel",
         "RBLNControlNetModel",
         "RBLNSD3Transformer2DModel",
@@ -91,6 +95,8 @@ if TYPE_CHECKING:
     from .configurations import (
         RBLNAutoencoderKLConfig,
         RBLNControlNetModelConfig,
+        RBLNFluxPipelineConfig,
+        RBLNFluxTransformer2DModelConfig,
         RBLNKandinskyV22CombinedPipelineConfig,
         RBLNKandinskyV22Img2ImgCombinedPipelineConfig,
         RBLNKandinskyV22Img2ImgPipelineConfig,
@@ -120,12 +126,14 @@ if TYPE_CHECKING:
     from .models import (
         RBLNAutoencoderKL,
         RBLNControlNetModel,
+        RBLNFluxTransformer2DModel,
         RBLNPriorTransformer,
         RBLNSD3Transformer2DModel,
         RBLNUNet2DConditionModel,
         RBLNVQModel,
     )
     from .pipelines import (
+        RBLNFluxPipeline,
         RBLNKandinskyV22CombinedPipeline,
         RBLNKandinskyV22Img2ImgCombinedPipeline,
         RBLNKandinskyV22Img2ImgPipeline,
