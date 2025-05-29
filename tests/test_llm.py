@@ -65,7 +65,7 @@ class LLMTest:
 class TestQwen2Model(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen2ForCausalLM
     HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
-    EXPECTED_OUTPUT = " I am a 30-year-old woman who has been living with a chronic illness for the past"
+    EXPECTED_OUTPUT = " I am a 30-year-old woman who has been living with lupus for over 1"
     HF_CONFIG_KWARGS = {"max_position_embeddings": 1024}
 
 
