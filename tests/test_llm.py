@@ -11,13 +11,10 @@ from transformers import AutoConfig, AutoProcessor, AutoTokenizer
 from optimum.rbln import (
     RBLNAutoModel,
     RBLNAutoModelForCausalLM,
-    RBLNAutoModelForImageTextToText,
     RBLNAutoModelForSeq2SeqLM,
     RBLNAutoModelForVision2Seq,
     RBLNBartForConditionalGeneration,
     RBLNExaoneForCausalLM,
-    RBLNGemma3ForCausalLM,
-    RBLNGemma3ForConditionalGeneration,
     RBLNGPT2LMHeadModel,
     RBLNIdefics3ForConditionalGeneration,
     RBLNLlamaForCausalLM,
