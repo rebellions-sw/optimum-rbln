@@ -565,16 +565,9 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
             )
 
             # Not used in Gemma3 yet.
-            if self.use_attention_mask:
-                if self.use_position_ids:
-                    chunked_attention_mask[0, step : step + self.prefill_chunk_size] = padded_attention_mask[
-                        batch_idx, step : step + self.prefill_chunk_size
-                    ]
-                else:
-                    # Update attention mask to ensure proper causal behavior
-                    if step >= self.prefill_chunk_size:
-                        chunked_attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
-                    chunked_attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
+            chunked_attention_mask[0, step : step + self.prefill_chunk_size] = padded_attention_mask[
+                0, step : step + self.prefill_chunk_size
+            ]
 
             # Define query position
             query_position = (
