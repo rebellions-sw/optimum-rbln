@@ -395,55 +395,5 @@ class TestDisallowedLlama_4(DisallowedTestBase.DisallowedTest):
     RBLN_CLASS_KWARGS = {"rbln_config": {"attn_impl": "flash_attn", "kvcache_partition_len": 1024}}
 
 
-class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
-    RBLN_AUTO_CLASS = RBLNAutoModelForImageTextToText
-    RBLN_CLASS = RBLNGemma3ForConditionalGeneration
-    HF_MODEL_ID = "google/gemma-3-4b-it"  # No tiny model yet.
-    PROMPT = "<bos><start_of_turn>user\n<start_of_image>Describe the image.<end_of_turn>\n<start_of_turn>model\n'"
-    RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True, "kvcache_partition_len": 4096}}}
-    EXPECTED_OUTPUT = "ִיсмотрятОднакоettingiPadaenуdenlyticsinท์नियमितinท์नियमित"
-
-    @classmethod
-    def get_tokenizer(cls):
-        if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
-        return cls._tokenizer
-
-    # override
-    @classmethod
-    def setUpClass(cls):
-        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
-        text_config = json.loads(config.text_config.to_json_string())
-        text_config["num_hidden_layers"] = 2
-        text_config["sliding_window_pattern"] = 2
-        vision_config = json.loads(config.vision_config.to_json_string())
-        vision_config["num_hidden_layers"] = 1
-        kwargs = {"text_config": text_config, "vision_config": vision_config}
-        cls.HF_CONFIG_KWARGS.update(kwargs)
-        return super().setUpClass()
-
-    def get_inputs(self):
-        tokenizer = self.get_tokenizer()
-        img_path = f"{os.path.dirname(__file__)}/../assets/rbln_logo.png"
-        image = Image.open(img_path)
-        image = image.convert("RGB")
-        inputs = tokenizer(images=[image], text=[self.PROMPT], return_tensors="pt", padding=True)
-        inputs["max_new_tokens"] = 20
-        inputs["do_sample"] = False
-        return inputs
-
-
-class TestGemma3ForCausalLM(LLMTest.TestLLM):
-    RBLN_CLASS = RBLNGemma3ForCausalLM
-    HF_MODEL_ID = "google/gemma-3-1b-it"
-    EXPECTED_OUTPUT = "1st L L L L L L L L L L L L L L L L L L"
-    HF_CONFIG_KWARGS = {
-        "num_hidden_layers": 2,
-        "sliding_window_pattern": 2,
-        "max_position_embeddings": 1024,
-        "trust_remote_code": True,
-    }
-
-
 if __name__ == "__main__":
     unittest.main()

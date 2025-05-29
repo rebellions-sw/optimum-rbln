@@ -11,8 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 from typing import Optional
+
+import rebel
 
 from ....configuration_utils import RBLNModelConfig
 from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
@@ -38,6 +39,10 @@ class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
             use_position_ids=use_position_ids,
             **kwargs,
         )
+
+        npu = self.npu or rebel.get_npu_name()
+        if npu == "RBLN-CA02":
+            raise NotImplementedError("Gemma3 is currently not supported on RBLN-CA02")
 
 
 class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):
