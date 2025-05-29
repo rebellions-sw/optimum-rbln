@@ -18,29 +18,12 @@ from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNBlip2VisionModelConfig(RBLNModelConfig):
-    def __init__(
-        self,
-        batch_size: Optional[int] = None,
-        **kwargs,
-    ):
-        """
-        Args:
-            batch_size (Optional[int]): The batch size for inference. Defaults to 1.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
-
-        Raises:
-            ValueError: If batch_size is not a positive integer.
-        """
-        super().__init__(**kwargs)
-        self.batch_size = batch_size or 1
-        if not isinstance(self.batch_size, int) or self.batch_size < 0:
-            raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
+    pass
 
 
 class RBLNBlip2QFormerModelConfig(RBLNModelConfig):
     def __init__(
         self,
-        batch_size: Optional[int] = None,
         num_query_tokens: Optional[int] = None,
         image_text_hidden_size: Optional[int] = None,
         **kwargs,
@@ -54,10 +37,6 @@ class RBLNBlip2QFormerModelConfig(RBLNModelConfig):
             ValueError: If batch_size is not a positive integer.
         """
         super().__init__(**kwargs)
-        self.batch_size = batch_size or 1
-        if not isinstance(self.batch_size, int) or self.batch_size < 0:
-            raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
-
         self.num_query_tokens = num_query_tokens
         self.image_text_hidden_size = image_text_hidden_size
 
@@ -88,6 +67,6 @@ class RBLNBlip2ForConditionalGenerationConfig(RBLNModelConfig):
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
-        self.vision_model = self.init_submodule_config(RBLNBlip2VisionModelConfig, vision_model, batch_size=batch_size)
+        self.vision_model = self.init_submodule_config(RBLNBlip2VisionModelConfig, vision_model)
         self.language_model = language_model
-        self.qformer = self.init_submodule_config(RBLNBlip2QFormerModelConfig, qformer, batch_size=batch_size)
+        self.qformer = self.init_submodule_config(RBLNBlip2QFormerModelConfig, qformer)
