@@ -538,7 +538,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         (
             inputs,
             cache_position,
-            chunked_attention_mask,
+            padded_attention_mask,
             out_buffers,
             position_ids,
             position_embed,
@@ -548,8 +548,8 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         ) = self._prepare_prefill_inputs(
             inputs, cache_position, attention_mask, position_embed, token_type_ids=token_type_ids
         )
-        self.dec_attn_mask[batch_idx : batch_idx + 1] = chunked_attention_mask[:1]
         if not is_external_block_tables:
+            self.dec_attn_mask[batch_idx : batch_idx + 1] = padded_attention_mask[:1]
             local_block_tables = torch.tensor([batch_idx], dtype=torch.int16)
 
         if self.use_attention_mask and self.use_position_ids:
@@ -567,7 +567,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
             # Not used in Gemma3 yet.
             if self.use_attention_mask:
                 if self.use_position_ids:
-                    chunked_attention_mask[0, step : step + self.prefill_chunk_size] = self.dec_attn_mask[
+                    chunked_attention_mask[0, step : step + self.prefill_chunk_size] = padded_attention_mask[
                         batch_idx, step : step + self.prefill_chunk_size
                     ]
                 else:
