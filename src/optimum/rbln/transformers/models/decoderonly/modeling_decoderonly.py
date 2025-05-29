@@ -465,6 +465,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 trust_remote_code=trust_remote_code,
                 **kwargs,
             )
+            if config.torch_dtype == torch.bfloat16:
+                # FIXME: bfloat16 is not supported by rebel-compiler
+                config.torch_dtype = torch.float32
 
         with no_init_weights():
             model = AutoModelForCausalLM.from_config(config)
