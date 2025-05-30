@@ -14,13 +14,13 @@ from optimum.rbln import (
     RBLNAutoModelForSeq2SeqLM,
     RBLNAutoModelForVision2Seq,
     RBLNBartForConditionalGeneration,
+    RBLNBlip2ForConditionalGeneration,
     RBLNExaoneForCausalLM,
     RBLNGPT2LMHeadModel,
     RBLNIdefics3ForConditionalGeneration,
     RBLNLlamaForCausalLM,
     RBLNLlavaNextForConditionalGeneration,
     RBLNOPTForCausalLM,
-    RBLNBlip2ForConditionalGeneration,
     RBLNPhiForCausalLM,
     RBLNQwen2_5_VLForConditionalGeneration,
     RBLNQwen2ForCausalLM,
@@ -69,7 +69,7 @@ class TestQwen2Model(LLMTest.TestLLM):
     HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
     EXPECTED_OUTPUT = " I am a 30-year-old woman who has been living with lupus for over 1"
     HF_CONFIG_KWARGS = {"max_position_embeddings": 1024}
-    
+
 
 class TestOptModel(LLMTest.TestLLM):
     RBLN_CLASS = RBLNOPTForCausalLM
@@ -298,8 +298,8 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
             rbln_config={"language_model": {"create_runtimes": False}},
             **self.HF_CONFIG_KWARGS,
         )
-        
-        
+
+
 class TestBlip2ForConditionalGeneration(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
     RBLN_CLASS = RBLNBlip2ForConditionalGeneration
