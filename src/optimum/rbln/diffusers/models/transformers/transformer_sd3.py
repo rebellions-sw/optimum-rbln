@@ -61,8 +61,7 @@ class SD3Transformer2DModelWrapper(torch.nn.Module):
 class RBLNSD3Transformer2DModel(RBLNModel):
     hf_library_name = "diffusers"
     auto_model_class = SD3Transformer2DModel
-    output_class = Transformer2DModelOutput
-    output_key = "sample"
+    _output_class = Transformer2DModelOutput
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
@@ -161,7 +160,7 @@ class RBLNSD3Transformer2DModel(RBLNModel):
                 f"Mismatch between transformer's runtime batch size ({sample_batch_size}) and compiled batch size ({compiled_batch_size}). "
                 "This may be caused by the 'guidance scale' parameter, which doubles the runtime batch size in Stable Diffusion. "
                 "Adjust the batch size of transformer during compilation.\n\n"
-                "For details, see: https://docs.rbln.ai/software/optimum/model_api.html#stable-diffusion"
+                "For details, see: https://docs.rbln.ai/software/optimum/model_api/diffusers/pipelines/stable_diffusion_3.html#important-batch-size-configuration-for-guidance-scale"
             )
 
         return super().forward(

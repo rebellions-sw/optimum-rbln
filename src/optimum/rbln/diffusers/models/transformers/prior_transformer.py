@@ -58,8 +58,7 @@ class _PriorTransformer(torch.nn.Module):
 class RBLNPriorTransformer(RBLNModel):
     hf_library_name = "diffusers"
     auto_model_class = PriorTransformer
-    output_class = PriorTransformerOutput
-    output_key = "predicted_image_embedding"
+    _output_class = PriorTransformerOutput
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)

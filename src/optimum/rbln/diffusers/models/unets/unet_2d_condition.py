@@ -143,8 +143,7 @@ class RBLNUNet2DConditionModel(RBLNModel):
     hf_library_name = "diffusers"
     auto_model_class = UNet2DConditionModel
     _rbln_config_class = RBLNUNet2DConditionModelConfig
-    output_class = UNet2DConditionOutput
-    output_key = "sample"
+    _output_class = UNet2DConditionOutput
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
@@ -346,7 +345,7 @@ class RBLNUNet2DConditionModel(RBLNModel):
                 f"Mismatch between UNet's runtime batch size ({sample_batch_size}) and compiled batch size ({compiled_batch_size}). "
                 "This may be caused by the 'guidance scale' parameter, which doubles the runtime batch size of UNet in Stable Diffusion. "
                 "Adjust the batch size of UNet during compilation to match the runtime batch size.\n\n"
-                "For details, see: https://docs.rbln.ai/software/optimum/model_api.html#stable-diffusion"
+                "For details, see: https://docs.rbln.ai/software/optimum/model_api/diffusers/pipelines/stable_diffusion.html#important-batch-size-configuration-for-guidance-scale"
             )
 
         added_cond_kwargs = {} if added_cond_kwargs is None else added_cond_kwargs

@@ -14,7 +14,7 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Union, get_args, get_origin, get_type_hints
 
 import rebel
 import torch
@@ -49,18 +49,13 @@ class RBLNModel(RBLNBaseModel):
         ```
     """
 
-    output_class = None
-    output_key = "last_hidden_state"
+    _output_class = None
 
     @classmethod
     def update_kwargs(cls, kwargs):
         """
         Update user-given kwargs to get proper pytorch model.
-
-        For example, `torchscript`=True should be set because torch.jit
-        does not support `transformers` output instances as module output;
         """
-        kwargs.update({"torchscript": True})
         return kwargs
 
     @classmethod
@@ -133,7 +128,6 @@ class RBLNModel(RBLNBaseModel):
 
         if not isinstance(config, PretrainedConfig):  # diffusers config
             config = PretrainedConfig(**config)
-        config.save_pretrained(save_dir_path / subfolder)
 
         # Save preprocessor
         for preprocessor in preprocessors:
@@ -155,6 +149,10 @@ class RBLNModel(RBLNBaseModel):
             preprocessors=preprocessors, model=model, model_config=config, rbln_config=rbln_config
         )
 
+        # torchscript should be True for jit to work
+        torchscript_backup = config.torchscript
+        config.torchscript = True
+
         compiled_model: Union[rebel.RBLNCompiledModel, Dict[str, rebel.RBLNCompiledModel]] = cls.get_compiled_model(
             model, rbln_config=rbln_config
         )
@@ -168,6 +166,9 @@ class RBLNModel(RBLNBaseModel):
         for compiled_model_name, cm in compiled_models.items():
             cm.save(save_dir_path / subfolder / f"{compiled_model_name}.rbln")
         rbln_config.save(save_dir_path / subfolder)
+
+        config.torchscript = torchscript_backup
+        config.save_pretrained(save_dir_path / subfolder)
 
         # Save torch artifacts (e.g. embedding matrix if needed.)
         cls.save_torch_artifacts(model, save_dir_path=save_dir_path, subfolder=subfolder, rbln_config=rbln_config)
@@ -243,16 +244,61 @@ class RBLNModel(RBLNBaseModel):
         # Format output according to task requirements
         return self._prepare_output(output, return_dict)
 
+    @classmethod
+    def get_hf_output_class(cls):
+        """
+        Dynamically gets the output class from the corresponding HuggingFace model class.
+
+        Returns:
+            type: The appropriate output class from transformers or diffusers
+        """
+        if cls._output_class:
+            return cls._output_class
+
+        hf_class = cls.get_hf_class()
+        if hf_class is None:
+            raise ValueError(f"No HuggingFace model class found for {cls.__name__}")
+
+        hints = get_type_hints(hf_class.forward) if hasattr(hf_class, "forward") else {}
+        ret = hints.get("return")
+
+        if ret is not None:
+            candidates = get_args(ret) if get_origin(ret) is Union else (ret,)
+
+            for t in candidates:
+                if t is type(None):  # Skip NoneType in Union
+                    continue
+                mod = getattr(t, "__module__", "")
+                if "transformers" in mod or "diffusers" in mod:
+                    cls._output_class = t
+                    return t
+
+        # Fallback to BaseModelOutput
+        cls._output_class = BaseModelOutput
+        return BaseModelOutput
+
     def _prepare_output(self, output, return_dict):
         """
         Prepare model output based on return_dict flag.
         This method can be overridden by subclasses to provide task-specific output handling.
         """
+        tuple_output = (output,) if not isinstance(output, (tuple, list)) else tuple(output)
         if not return_dict:
-            return (output,) if not isinstance(output, (tuple, list)) else output
+            return tuple_output
         else:
-            if self.output_class is None:
-                return BaseModelOutput(last_hidden_state=output)
+            output_class = self.get_hf_output_class()
+            if hasattr(output_class, "loss"):
+                tuple_output = (None,) + tuple_output
 
-            # Create output with the appropriate class and key
-            return self.output_class(**{self.output_key: output})
+            # Truncate if we have too many outputs, otherwise use as is
+            if hasattr(output_class, "__annotations__"):
+                num_fields = len(output_class.__annotations__)
+                if len(tuple_output) > num_fields:
+                    tuple_output = tuple_output[:num_fields]
+                    logger.warning(
+                        f"Truncating output to {num_fields} fields for {output_class.__name__}. "
+                        f"Expected {num_fields} fields, but got {len(tuple_output)} fields."
+                        "This is unexpected. Please report this issue to the developers."
+                    )
+
+            return output_class(*tuple_output)
