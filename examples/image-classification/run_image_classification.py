@@ -35,7 +35,7 @@ def main(
     image_processor = AutoFeatureExtractor.from_pretrained(model_id)
     inputs = image_processor([image] * batch_size, return_tensors="pt")
 
-    logits = model(**inputs)
+    logits = model(**inputs).logits
     labels = logits.argmax(-1)
 
     print("predicted label:", [model.config.id2label[label.item()] for label in labels])

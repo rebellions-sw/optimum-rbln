@@ -12,18 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .modeling_auto import (
-    RBLNAutoModel,
-    RBLNAutoModelForAudioClassification,
-    RBLNAutoModelForCausalLM,
-    RBLNAutoModelForCTC,
-    RBLNAutoModelForDepthEstimation,
-    RBLNAutoModelForImageClassification,
-    RBLNAutoModelForImageTextToText,
-    RBLNAutoModelForMaskedLM,
-    RBLNAutoModelForQuestionAnswering,
-    RBLNAutoModelForSeq2SeqLM,
-    RBLNAutoModelForSequenceClassification,
-    RBLNAutoModelForSpeechSeq2Seq,
-    RBLNAutoModelForVision2Seq,
+from .configuration_siglip import (
+    RBLNSiglipVisionModelConfig,
+)
+from .modeling_siglip import (
+    RBLNSiglipVisionModel,
 )

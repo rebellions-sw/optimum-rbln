@@ -61,8 +61,7 @@ class SD3Transformer2DModelWrapper(torch.nn.Module):
 class RBLNSD3Transformer2DModel(RBLNModel):
     hf_library_name = "diffusers"
     auto_model_class = SD3Transformer2DModel
-    output_class = Transformer2DModelOutput
-    output_key = "sample"
+    _output_class = Transformer2DModelOutput
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)

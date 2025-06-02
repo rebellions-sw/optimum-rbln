@@ -13,7 +13,10 @@
 # limitations under the License.
 
 import importlib
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Type
+
+from transformers import PretrainedConfig
 
 from ..configuration_utils import RBLNModelConfig
 
@@ -39,6 +42,10 @@ class SubModulesMixin:
             setattr(self, submodule_meta["name"], submodule)
 
     @classmethod
+    def _update_submodule_config(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
+        return rbln_config
+
+    @classmethod
     def _export_submodules_from_model(
         cls, model: "PreTrainedModel", model_save_dir: str, rbln_config: RBLNModelConfig, **kwargs
     ) -> List["RBLNBaseModel"]:
@@ -61,6 +68,8 @@ class SubModulesMixin:
                 submodule_rbln_config_class = submodule_cls.get_rbln_config_class()
                 submodule_rbln_config = submodule_rbln_config_class(**submodule_rbln_config)
                 setattr(rbln_config, submodule_name, submodule_rbln_config)
+
+            submodule_rbln_config = submodule_cls._update_submodule_config(model, submodule_rbln_config)
 
             rbln_submodule = submodule_cls.from_model(
                 model=torch_submodule,
@@ -90,9 +99,12 @@ class SubModulesMixin:
                 importlib.import_module("optimum.rbln"), submodule_rbln_config.rbln_model_cls_name
             )
 
+            json_file_path = Path(model_save_dir) / submodule_name / "config.json"
+            config = PretrainedConfig.from_json_file(json_file_path)
+
             rbln_submodule = submodule_cls._from_pretrained(
                 model_id=model_save_dir,
-                config=None,
+                config=config,
                 subfolder=submodule_name,
                 rbln_config=submodule_rbln_config,
                 **kwargs,
