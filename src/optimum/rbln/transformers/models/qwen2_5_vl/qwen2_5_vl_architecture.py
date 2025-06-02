@@ -56,6 +56,7 @@ class Qwen2_5_VLVisionBlock(torch.nn.Module):
         if is_full_attn:
             self.attn = Qwen2_5_VLVisionFullAttention(model.attn)
         else:
+            # NOTE(si) : 여기서 SdpaAttention, EagerAttention 분기를 칠 필요?
             self.attn = Qwen2_5_VLVisionWindowAttention(model.attn, window_seq_len)
         self.mlp = model.mlp
 
@@ -79,7 +80,7 @@ class Qwen2_5_VLVisionFullAttention(nn.Module):
         super().__init__()
         self._origin_model = model
         self.num_heads = model.num_heads
-        self.head_dim = model.head_dim
+        self.head_dim = model.proj.in_features // model.num_heads
         self.qkv = model.qkv
         self.proj = model.proj
 
@@ -114,7 +115,7 @@ class Qwen2_5_VLVisionWindowAttention(nn.Module):
         super().__init__()
         self._origin_model = model
         self.num_heads = model.num_heads
-        self.head_dim = model.head_dim
+        self.head_dim = model.proj.in_features // model.num_heads
         self.qkv = model.qkv
         self.proj = model.proj
         self.window_seq_len = window_seq_len

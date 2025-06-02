@@ -22,7 +22,7 @@ class Qwen2_5_VisionTransformerWrapper(nn.Module):
     def wrap_vision_blocks(self, blocks: torch.nn.ModuleList, window_seq_len: int):
         wrapped_blocks = []
         for i, block in enumerate(blocks):
-            is_full_attn = True if i in self.fullatt_block_indexes else False
+            is_full_attn = True
             wrapped_blocks.append(ColQwen2_5VisionBlock(block, is_full_attn, window_seq_len))
         return nn.ModuleList(wrapped_blocks)
 
