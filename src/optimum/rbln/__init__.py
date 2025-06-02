@@ -135,7 +135,11 @@ _import_structure = {
     "diffusers": [
         "RBLNAutoencoderKL",
         "RBLNAutoencoderKLConfig",
+        "RBLNAutoencoderKLTemporalDecoder",
+        "RBLNAutoencoderKLTemporalDecoderConfig",
         "RBLNControlNetModel",
+        "RBLNUNetSpatioTemporalConditionModel",
+        "RBLNStableVideoDiffusionPipeline",
         "RBLNControlNetModelConfig",
         "RBLNDiffusionMixin",
         "RBLNKandinskyV22CombinedPipeline",
@@ -187,6 +191,8 @@ _import_structure = {
         "RBLNUNet2DConditionModelConfig",
         "RBLNVQModel",
         "RBLNVQModelConfig",
+        "RBLNUNetSpatioTemporalConditionModelConfig",
+        "RBLNStableVideoDiffusionPipelineConfig",
     ],
 }
 
@@ -198,6 +204,8 @@ if TYPE_CHECKING:
     from .diffusers import (
         RBLNAutoencoderKL,
         RBLNAutoencoderKLConfig,
+        RBLNAutoencoderKLTemporalDecoder,
+        RBLNAutoencoderKLTemporalDecoderConfig,
         RBLNControlNetModel,
         RBLNControlNetModelConfig,
         RBLNDiffusionMixin,
@@ -246,8 +254,12 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLInpaintPipelineConfig,
         RBLNStableDiffusionXLPipeline,
         RBLNStableDiffusionXLPipelineConfig,
+        RBLNStableVideoDiffusionPipeline,
+        RBLNStableVideoDiffusionPipelineConfig,
         RBLNUNet2DConditionModel,
         RBLNUNet2DConditionModelConfig,
+        RBLNUNetSpatioTemporalConditionModel,
+        RBLNUNetSpatioTemporalConditionModelConfig,
         RBLNVQModel,
         RBLNVQModelConfig,
     )

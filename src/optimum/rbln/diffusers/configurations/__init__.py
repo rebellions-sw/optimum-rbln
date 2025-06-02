@@ -1,9 +1,11 @@
 from .models import (
     RBLNAutoencoderKLConfig,
+    RBLNAutoencoderKLTemporalDecoderConfig,
     RBLNControlNetModelConfig,
     RBLNPriorTransformerConfig,
     RBLNSD3Transformer2DModelConfig,
     RBLNUNet2DConditionModelConfig,
+    RBLNUNetSpatioTemporalConditionModelConfig,
     RBLNVQModelConfig,
 )
 from .pipelines import (
@@ -27,4 +29,5 @@ from .pipelines import (
     RBLNStableDiffusionXLImg2ImgPipelineConfig,
     RBLNStableDiffusionXLInpaintPipelineConfig,
     RBLNStableDiffusionXLPipelineConfig,
+    RBLNStableVideoDiffusionPipelineConfig,
 )
