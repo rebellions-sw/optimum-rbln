@@ -12,4 +12,4 @@ def aligned_tensor(size, dtype=np.float16, alignment=4096):
     aligned_buf = buf[offset:offset + size]
 
     assert aligned_buf.ctypes.data % alignment == 0, "Alignment failed"
-    return torch.from_numpy(aligned_buf)
+    return torch.from_numpy(aligned_buf).contiguous()
