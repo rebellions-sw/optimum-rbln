@@ -35,20 +35,6 @@ logger = get_logger(__name__)
 
 
 class RBLNModel(RBLNBaseModel):
-    """
-    A class that inherits from RBLNBaseModel for models consisting of a single `torch.nn.Module`.
-
-    This class supports all the functionality of RBLNBaseModel, including loading and saving models using
-    the `from_pretrained` and `save_pretrained` methods, compiling PyTorch models for execution on RBLN NPU
-    devices.
-
-    Example:
-        ```python
-        model = RBLNModel.from_pretrained("model_id", export=True, rbln_npu="npu_name")
-        outputs = model(**inputs)
-        ```
-    """
-
     _output_class = None
 
     @classmethod
@@ -93,6 +79,27 @@ class RBLNModel(RBLNBaseModel):
         subfolder: str = "",
         **kwargs,
     ):
+        """
+        Converts and compiles a pre-trained HuggingFace library model into a RBLN model.
+        This method performs the actual model conversion and compilation process.
+
+        Args:
+            model: The PyTorch model to be compiled. The object must be an instance of the HuggingFace transformers PreTrainedModel class.
+            rbln_config: Configuration for RBLN model compilation and runtime. This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNLlamaForCausalLMConfig` for Llama models).
+                For detailed configuration options, see the specific model's configuration class documentation.
+
+            kwargs: Additional keyword arguments. Arguments with the prefix 'rbln_' are passed to rbln_config, while the remaining arguments are passed to the HuggingFace library.
+
+        The method performs the following steps:
+
+        1. Compiles the PyTorch model into an optimized RBLN graph
+        2. Configures the model for the specified NPU device
+        3. Creates the necessary runtime objects if requested
+        4. Saves the compiled model and configurations
+
+        Returns:
+            A RBLN model instance ready for inference on RBLN NPU devices.
+        """
         preprocessors = kwargs.pop("preprocessors", [])
         rbln_config, kwargs = cls.prepare_rbln_config(rbln_config=rbln_config, **kwargs)
 

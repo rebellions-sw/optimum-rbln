@@ -15,7 +15,7 @@
 import importlib
 import os
 import shutil
-from abc import ABC, abstractmethod
+from abc import ABC
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
@@ -47,40 +47,6 @@ class RBLNBaseModelConfig(RBLNModelConfig):
 
 
 class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
-    """
-    An abstract base class for compiling, loading, and saving neural network models from the huggingface
-    transformers and diffusers libraries to run on RBLN NPU devices.
-
-    This class supports loading and saving models using the `from_pretrained` and `save_pretrained` methods,
-    similar to the huggingface libraries.
-
-    The `from_pretrained` method loads a model corresponding to the given `model_id` from a local repository
-    or the huggingface hub onto the NPU. If the model is a PyTorch model and `export=True` is passed as a
-    kwarg, it compiles the PyTorch model corresponding to the given `model_id` before loading. If `model_id`
-    is an already rbln-compiled model, it can be directly loaded onto the NPU with `export=False`.
-
-    `rbln_npu` is a kwarg required for compilation, specifying the name of the NPU to be used. If this
-    keyword is not specified, the NPU installed on the host machine is used. If no NPU is installed on the
-    host machine, an error occurs.
-
-    `rbln_device` specifies the device to be used at runtime. If not specified, device 0 is used.
-
-    `rbln_create_runtimes` indicates whether to create runtime objects. If False, the runtime does not load
-    the model onto the NPU. This option is particularly useful when you want to perform compilation only on a
-    host machine without an NPU.
-
-    `RBLNModel`, `RBLNModelFor*`, etc. are all child classes of RBLNBaseModel.
-
-    Models compiled in this way can be saved to a local repository using `save_pretrained` or uploaded to
-    the huggingface hub.
-
-    It also supports generation through `generate` (for transformers models that support generation).
-
-    RBLNBaseModel is a class for models consisting of an arbitrary number of `torch.nn.Module`s, and
-    therefore is an abstract class without explicit implementations of `forward` or `export` functions.
-    To inherit from this class, `forward`, `export`, etc. must be implemented.
-    """
-
     model_type = "rbln_model"
     auto_model_class = AutoModel
     config_class = AutoConfig
@@ -380,7 +346,29 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         return rbln_config, kwargs
 
     @classmethod
-    def from_pretrained(cls, model_id: Union[str, Path], export: bool = False, **kwargs) -> "RBLNBaseModel":
+    def from_pretrained(
+        cls: Type["RBLNBaseModel"],
+        model_id: Union[str, Path],
+        export: bool = False,
+        rbln_config: Optional[Union[Dict, RBLNModelConfig]] = None,
+        **kwargs: Dict[str, Any],
+    ) -> "RBLNBaseModel":
+        """
+        The `from_pretrained()` function is utilized in its standard form as in the HuggingFace transformers library.
+        User can use this function to load a pre-trained model from the HuggingFace library and convert it to a RBLN model to be run on RBLN NPUs.
+
+        Args:
+            model_id: The model id of the pre-trained model to be loaded. It can be downloaded from the HuggingFace model hub or a local path, or a model id of a compiled model using the RBLN Compiler.
+            export: A boolean flag to indicate whether the model should be compiled.
+            rbln_config: Configuration for RBLN model compilation and runtime. This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNLlamaForCausalLMConfig` for Llama models).
+                For detailed configuration options, see the specific model's configuration class documentation.
+
+            kwargs: Additional keyword arguments. Arguments with the prefix 'rbln_' are passed to rbln_config, while the remaining arguments are passed to the HuggingFace library.
+
+        Returns:
+            A RBLN model instance ready for inference on RBLN NPU devices.
+        """
+
         if isinstance(model_id, Path):
             model_id = model_id.as_posix()
         from_pretrained_method = cls._export if export else cls._from_pretrained
@@ -563,40 +551,3 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             "and ensure the compilation completes successfully."
         )
         raise KeyError(message)
-
-    @classmethod
-    @abstractmethod
-    def _update_rbln_config(cls, **rbln_config_kwargs) -> RBLNModelConfig:
-        pass
-
-    @classmethod
-    @abstractmethod
-    def _create_runtimes(
-        cls,
-        compiled_models: List[rebel.RBLNCompiledModel],
-        rbln_config: RBLNModelConfig,
-    ) -> List[rebel.Runtime]:
-        # compiled_models -> runtimes
-        pass
-
-    @classmethod
-    @abstractmethod
-    def get_pytorch_model(cls, *args, **kwargs):
-        pass
-
-    @classmethod
-    @abstractmethod
-    def from_model(
-        cls,
-        model: "PreTrainedModel",
-        config: Optional[PretrainedConfig] = None,
-        rbln_config: Optional[RBLNModelConfig] = None,
-        model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
-        subfolder: str = "",
-        **kwargs,
-    ):
-        pass
-
-    @abstractmethod
-    def forward(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
-        pass
