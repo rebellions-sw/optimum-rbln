@@ -407,15 +407,21 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 position_ids_chunk if self.use_position_ids else None,
                 out=out_buffers,
             )
-            # n_layers = 3
-            # import rebel.kv_cache
-            # cpu_kv_cache = aligned_tensor(n_layers * 2 * 1 * 8 * 1 * 2 * 8192 * 64)
+
+            n_layers = 28 # full layer
+            import rebel.kv_cache
+            # cpu_kv_cache = aligned_tensor(n_layers * 2 * 1 * 8 * 1 * 2 * 8192 * 64) # no kv, max_seq=8192
+            cpu_kv_cache = aligned_tensor(n_layers * 2 * 3 * 8 * 4096 * 128) # max_seq=8192
+            current_block_idx = block_tables[step // self.kvcache_block_size].item()
+            current_block_offset = step % self.kvcache_block_size
+            print(f"currrent block idx : {current_block_idx}")
+            print(f"currrent block offset : {current_block_offset}")
+
+            rebel.kv_cache.get_kv_cache(
+                self.runtime, cpu_kv_cache, current_block_idx, current_block_offset, size=self.prefill_chunk_size)            
             
-            # rebel.kv_cache.get_kv_cache(
-            #     self.runtime, cpu_kv_cache, 0, step, size=self.prefill_chunk_size)            
-            
-            # rebel.kv_cache.set_kv_cache(
-            #     self.runtime, cpu_kv_cache, 0, step, size=self.prefill_chunk_size)
+            rebel.kv_cache.set_kv_cache(
+                self.runtime, cpu_kv_cache, current_block_idx, current_block_offset, size=self.prefill_chunk_size)
 
 
         # Update decoder attention mask with processed KV-cache length from prefill phase
