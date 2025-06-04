@@ -18,6 +18,8 @@ from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNControlNetModelConfig(RBLNModelConfig):
+    """Configuration class for RBLN ControlNet models."""
+
     subclass_non_save_attributes = ["_batch_size_is_specified"]
 
     def __init__(

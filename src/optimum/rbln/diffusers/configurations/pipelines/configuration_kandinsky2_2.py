@@ -21,6 +21,8 @@ from ..models.configuration_prior_transformer import RBLNPriorTransformerConfig
 
 
 class _RBLNKandinskyV22PipelineBaseConfig(RBLNModelConfig):
+    """Base configuration class for Kandinsky V2.2 decoder pipelines."""
+
     submodules = ["unet", "movq"]
     _movq_uses_encoder = False
 
@@ -118,18 +120,26 @@ class _RBLNKandinskyV22PipelineBaseConfig(RBLNModelConfig):
 
 
 class RBLNKandinskyV22PipelineConfig(_RBLNKandinskyV22PipelineBaseConfig):
+    """Configuration class for the Kandinsky V2.2 text-to-image decoder pipeline."""
+
     _movq_uses_encoder = False
 
 
 class RBLNKandinskyV22Img2ImgPipelineConfig(_RBLNKandinskyV22PipelineBaseConfig):
+    """Configuration class for the Kandinsky V2.2 image-to-image decoder pipeline."""
+
     _movq_uses_encoder = True
 
 
 class RBLNKandinskyV22InpaintPipelineConfig(_RBLNKandinskyV22PipelineBaseConfig):
+    """Configuration class for the Kandinsky V2.2 inpainting decoder pipeline."""
+
     _movq_uses_encoder = True
 
 
 class RBLNKandinskyV22PriorPipelineConfig(RBLNModelConfig):
+    """Configuration class for the Kandinsky V2.2 Prior pipeline."""
+
     submodules = ["text_encoder", "image_encoder", "prior"]
 
     def __init__(
@@ -195,6 +205,8 @@ class RBLNKandinskyV22PriorPipelineConfig(RBLNModelConfig):
 
 
 class _RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
+    """Base configuration class for Kandinsky V2.2 combined pipelines."""
+
     submodules = ["prior_pipe", "decoder_pipe"]
     _decoder_pipe_cls = RBLNKandinskyV22PipelineConfig
 
@@ -326,12 +338,18 @@ class _RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
 
 
 class RBLNKandinskyV22CombinedPipelineConfig(_RBLNKandinskyV22CombinedPipelineBaseConfig):
+    """Configuration class for the Kandinsky V2.2 combined text-to-image pipeline."""
+
     _decoder_pipe_cls = RBLNKandinskyV22PipelineConfig
 
 
 class RBLNKandinskyV22InpaintCombinedPipelineConfig(_RBLNKandinskyV22CombinedPipelineBaseConfig):
+    """Configuration class for the Kandinsky V2.2 combined inpainting pipeline."""
+
     _decoder_pipe_cls = RBLNKandinskyV22InpaintPipelineConfig
 
 
 class RBLNKandinskyV22Img2ImgCombinedPipelineConfig(_RBLNKandinskyV22CombinedPipelineBaseConfig):
+    """Configuration class for the Kandinsky V2.2 combined image-to-image pipeline."""
+
     _decoder_pipe_cls = RBLNKandinskyV22Img2ImgPipelineConfig

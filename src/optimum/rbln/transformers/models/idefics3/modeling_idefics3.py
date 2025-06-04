@@ -190,6 +190,44 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
 
 
 class RBLNIdefics3ForConditionalGeneration(RBLNModel):
+    """
+    RBLNIdefics3ForConditionalGeneration is a multi-modal model that integrates vision and language processing capabilities,
+    optimized for RBLN NPUs. It is designed for conditional generation tasks that involve both image and text inputs.
+
+    This model inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    Important Note:
+        This model includes a Large Language Model (LLM) as a submodule. For optimal performance, it is highly recommended to use
+        tensor parallelism for the language model.  This can be achieved by using the `rbln_config` parameter in the
+        `from_pretrained` method. Refer to the `from_pretrained` documentation and the RBLNIdefics3ForConditionalGenerationConfig class for details.
+
+    Examples:
+        ```python
+        from optimum.rbln import RBLNIdefics3ForConditionalGeneration
+
+        model = RBLNIdefics3ForConditionalGeneration.from_pretrained(
+            "HuggingFaceM4/idefics3-8b",
+            export=True,
+            rbln_config={
+                "vision_model": {
+                    "device": 0,
+                },
+                "text_model": {
+                    "batch_size": 1,
+                    "max_seq_len": 131_072,
+                    "tensor_parallel_size": 8,
+                    "use_inputs_embeds": True,
+                    "attn_impl": "flash_attn",
+                    "kvcache_partition_len": 16_384,
+                    "device": [0, 1, 2, 3, 4, 5, 6, 7],
+                },
+            },
+        )
+
+        model.save_pretrained("compiled-idefics3-8b")
+        ```
+    """
+
     auto_model_class = AutoModelForVision2Seq
     _rbln_submodules = [{"name": "vision_model"}, {"name": "text_model"}]
     _rbln_submodule_prefix = "model"

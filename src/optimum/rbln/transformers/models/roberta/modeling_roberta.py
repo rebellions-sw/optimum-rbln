@@ -12,19 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .configuration_xlm_roberta import (
-    RBLNXLMRobertaForSequenceClassificationConfig,
-    RBLNXLMRobertaModelConfig,
-)
-from .modeling_xlm_roberta import (
-    RBLNXLMRobertaForSequenceClassification,
-    RBLNXLMRobertaModel,
-)
+from ...modeling_generic import RBLNModelForMaskedLM, RBLNModelForSequenceClassification
 
 
-__all__ = [
-    "RBLNXLMRobertaModelConfig",
-    "RBLNXLMRobertaForSequenceClassificationConfig",
-    "RBLNXLMRobertaModel",
-    "RBLNXLMRobertaForSequenceClassification",
-]
+class RBLNRobertaForMaskedLM(RBLNModelForMaskedLM):
+    rbln_model_input_names = ["input_ids", "attention_mask"]
+
+
+class RBLNRobertaForSequenceClassification(RBLNModelForSequenceClassification):
+    rbln_model_input_names = ["input_ids", "attention_mask"]

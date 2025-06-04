@@ -12,19 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .configuration_xlm_roberta import (
-    RBLNXLMRobertaForSequenceClassificationConfig,
-    RBLNXLMRobertaModelConfig,
-)
-from .modeling_xlm_roberta import (
-    RBLNXLMRobertaForSequenceClassification,
-    RBLNXLMRobertaModel,
-)
+from ...modeling_generic import RBLNModelForImageClassification
 
 
-__all__ = [
-    "RBLNXLMRobertaModelConfig",
-    "RBLNXLMRobertaForSequenceClassificationConfig",
-    "RBLNXLMRobertaModel",
-    "RBLNXLMRobertaForSequenceClassification",
-]
+class RBLNViTForImageClassification(RBLNModelForImageClassification):
+    ""

@@ -135,12 +135,18 @@ class _RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
 
 
 class RBLNStableDiffusionXLPipelineConfig(_RBLNStableDiffusionXLPipelineBaseConfig):
+    """Config for SDXL Text2Img Pipeline"""
+
     _vae_uses_encoder = False
 
 
 class RBLNStableDiffusionXLImg2ImgPipelineConfig(_RBLNStableDiffusionXLPipelineBaseConfig):
+    """Config for SDXL Img2Img Pipeline"""
+
     _vae_uses_encoder = True
 
 
 class RBLNStableDiffusionXLInpaintPipelineConfig(_RBLNStableDiffusionXLPipelineBaseConfig):
+    """Config for SDXL Inpainting Pipeline"""
+
     _vae_uses_encoder = True

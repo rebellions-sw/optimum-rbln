@@ -120,6 +120,17 @@ class RBLNSeq2SeqTSDecoderOutput(ModelOutput):
 
 
 class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
+    """
+    The Time Series Transformer Model with a distribution head on top for time-series forecasting. e.g., for datasets like M4, NN5, or other time series forecasting benchmarks.
+    This model inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    A class to convert and run pre-trained transformer-based `TimeSeriesTransformerForPrediction` models on RBLN devices.
+    It implements the methods to convert a pre-trained transformers `TimeSeriesTransformerForPrediction` model into a RBLN transformer model by:
+
+    - transferring the checkpoint weights of the original into an optimized RBLN graph,
+    - compiling the resulting graph using the RBLN Compiler.
+    """
+
     auto_model_class = None
     main_input_name = "inputs_embeds"
 

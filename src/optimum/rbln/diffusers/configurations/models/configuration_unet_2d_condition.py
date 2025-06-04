@@ -18,6 +18,13 @@ from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNUNet2DConditionModelConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLN UNet2DCondition models.
+
+    This class inherits from RBLNModelConfig and provides specific configuration options
+    for UNet2DCondition models used in diffusion-based image generation.
+    """
+
     subclass_non_save_attributes = ["_batch_size_is_specified"]
 
     def __init__(

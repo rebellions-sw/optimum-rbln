@@ -18,6 +18,13 @@ from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNAutoencoderKLConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLN Variational Autoencoder (VAE) models.
+
+    This class inherits from RBLNModelConfig and provides specific configuration options
+    for VAE models used in diffusion-based image generation.
+    """
+
     def __init__(
         self,
         batch_size: Optional[int] = None,

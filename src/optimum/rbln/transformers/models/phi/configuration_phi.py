@@ -16,4 +16,27 @@ from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausa
 
 
 class RBLNPhiForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
-    pass
+    """
+    Configuration class for RBLN Phi models.
+
+    This class is an alias of RBLNDecoderOnlyModelForCausalLMConfig.
+
+    Example usage:
+    ```python
+    from optimum.rbln import RBLNPhiForCausalLM, RBLNPhiForCausalLMConfig
+
+    # Create a configuration object
+    config = RBLNPhiForCausalLMConfig(
+        batch_size=1,
+        max_seq_len=4096,
+        tensor_parallel_size=4
+    )
+
+    # Use the configuration with from_pretrained
+    model = RBLNPhiForCausalLM.from_pretrained(
+        "microsoft/phi-2",
+        export=True,
+        rbln_config=config
+    )
+    ```
+    """

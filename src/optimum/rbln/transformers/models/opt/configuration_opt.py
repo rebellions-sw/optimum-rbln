@@ -16,4 +16,7 @@ from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausa
 
 
 class RBLNOPTForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
-    pass
+    """
+    Configuration class for OPT causal language model.
+    Inherits from RBLNDecoderOnlyModelForCausalLMConfig with no additional parameters.
+    """

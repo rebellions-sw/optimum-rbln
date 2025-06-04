@@ -251,6 +251,38 @@ class RBLNBlip2QFormerModel(RBLNModel):
 
 
 class RBLNBlip2ForConditionalGeneration(RBLNModel):
+    """
+    RBLNBlip2ForConditionalGeneration is a multi-modal model that integrates vision and language processing capabilities,
+    optimized for RBLN NPUs. It is designed for conditional generation tasks that involve both image and text inputs.
+
+    This model inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    Important Note:
+        This model includes a Large Language Model (LLM) as a submodule. For optimal performance, it is highly recommended to use
+        tensor parallelism for the language model.  This can be achieved by using the `rbln_config` parameter in the
+        `from_pretrained` method. Refer to the `from_pretrained` documentation and the RBLNBlip2ForConditionalGeneration class for details.
+
+    Examples:
+        ```python
+        from optimum.rbln import RBLNBlip2ForConditionalGeneration
+
+        model = RBLNBlip2ForConditionalGeneration.from_pretrained(
+            "Salesforce/blip2-opt-2.7b",
+            export=True,
+            rbln_config={
+                "language_model": {
+                    "batch_size": 1,
+                    "max_seq_len": 2048,
+                    "tensor_parallel_size": 1,
+                    "use_inputs_embeds": True,
+                },
+            },
+        )
+
+        model.save_pretrained("compiled-blip2-opt-2.7b")
+        ```
+    """
+
     auto_model_class = AutoModelForVisualQuestionAnswering
     _rbln_submodules = [{"name": "vision_model"}, {"name": "qformer"}, {"name": "language_model"}]
 
