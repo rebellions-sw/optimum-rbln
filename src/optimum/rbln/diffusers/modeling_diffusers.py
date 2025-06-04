@@ -110,9 +110,7 @@ class RBLNDiffusionMixin:
 
     @classmethod
     def get_rbln_config_class(cls) -> Type[RBLNModelConfig]:
-        """
-        Lazily loads and caches the corresponding RBLN model config class.
-        """
+        # Lazily loads and caches the corresponding RBLN model config class.
         if cls._rbln_config_class is None:
             rbln_config_class_name = cls.__name__ + "Config"
             library = importlib.import_module("optimum.rbln")

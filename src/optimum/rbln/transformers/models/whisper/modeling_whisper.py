@@ -184,11 +184,6 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
         return self.decoder
 
     def __getattr__(self, __name: str) -> Any:
-        """This is the key method to implement RBLN-Whisper.
-        Returns:
-            Any: Whisper's corresponding method
-        """
-
         def redirect(func):
             return lambda *pargs, **kwargs: func(self, *pargs, **kwargs)
 
@@ -362,12 +357,6 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
         attention_mask: Optional[torch.Tensor] = None,  # need for support transformers>=4.45.0
         **kwargs,
     ):
-        """
-        whisper don't use attention_mask,
-            attention_mask (`torch.Tensor`)`, *optional*):
-                Whisper does not support masking of the `input_features`, this argument is preserved for compatibility,
-                but it is not used. By default the silence in the input log mel spectrogram are ignored.
-        """
         return {
             "input_ids": input_ids,
             "cache_position": cache_position,

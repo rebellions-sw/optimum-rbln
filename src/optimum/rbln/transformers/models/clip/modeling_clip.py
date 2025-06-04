@@ -81,10 +81,9 @@ class RBLNCLIPTextModel(RBLNModel):
         return output
 
     def _prepare_output(self, output, return_dict):
-        """
-        Prepare model output based on return_dict flag.
-        This method can be overridden by subclasses to provide task-specific output handling.
-        """
+        # Prepare model output based on return_dict flag.
+        # This method can be overridden by subclasses to provide task-specific output handling.
+
         if not return_dict:
             return (output,) if not isinstance(output, (tuple, list)) else output
         else:
@@ -168,10 +167,9 @@ class RBLNCLIPVisionModel(RBLNModel):
         return output
 
     def _prepare_output(self, output, return_dict):
-        """
-        Prepare model output based on return_dict flag.
-        This method can be overridden by subclasses to provide task-specific output handling.
-        """
+        # Prepare model output based on return_dict flag.
+        # This method can be overridden by subclasses to provide task-specific output handling.
+
         if not return_dict:
             return (output,) if not isinstance(output, (tuple, list)) else output
         else:

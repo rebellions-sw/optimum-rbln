@@ -155,11 +155,6 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         )
 
     def __getattr__(self, __name: str) -> Any:
-        """This is the key method to implement RBLN-TimeSeriesTransformersForPrediction.
-        Returns:
-            Any: TimeSeriesTransformersForPrediction's corresponding method
-        """
-
         def redirect(func):
             return lambda *pargs, **kwargs: func(self, *pargs, **kwargs)
 
@@ -222,10 +217,9 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         subfolder: str,
         rbln_config: RBLNTimeSeriesTransformerForPredictionConfig,
     ):
-        """
-        If you are unavoidably running on a CPU rather than an RBLN device,
-        store the torch tensor, weight, etc. in this function.
-        """
+        # If you are unavoidably running on a CPU rather than an RBLN device,
+        # store the torch tensor, weight, etc. in this function.
+
         save_dict = {}
         save_dict["embedder"] = model.model.embedder.state_dict()
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")

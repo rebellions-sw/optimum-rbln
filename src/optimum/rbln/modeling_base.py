@@ -122,7 +122,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         subfolder: str = "",
         local_files_only: bool = False,
     ) -> str:
-        """Load the directory containing the compiled model files."""
+        # Load the directory containing the compiled model files.
         model_path = Path(model_id)
 
         if model_path.is_dir():
@@ -338,9 +338,8 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     def prepare_rbln_config(
         cls, rbln_config: Optional[Union[Dict[str, Any], RBLNModelConfig]] = None, **kwargs
     ) -> Tuple[RBLNModelConfig, Dict[str, Any]]:
-        """
-        Extract rbln-config from kwargs and convert it to RBLNModelConfig.
-        """
+        # Extract rbln-config from kwargs and convert it to RBLNModelConfig.
+
         config_cls = cls.get_rbln_config_class()
         rbln_config, kwargs = config_cls.initialize_from_kwargs(rbln_config, **kwargs)
         return rbln_config, kwargs
@@ -399,15 +398,13 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
     @classmethod
     def get_hf_class(cls):
-        """
-        Lazily loads and caches the corresponding HuggingFace model class.
-        Removes 'RBLN' prefix from the class name to get the original class name
-        (e.g., RBLNLlamaForCausalLM -> LlamaForCausalLM) and imports it from
-        the transformers/diffusers module.
+        # Lazily loads and caches the corresponding HuggingFace model class.
+        # Removes 'RBLN' prefix from the class name to get the original class name
+        # (e.g., RBLNLlamaForCausalLM -> LlamaForCausalLM) and imports it from
+        # the transformers/diffusers module.
 
-        Returns:
-            type: The original HuggingFace model class
-        """
+        # Returns:
+        #     type: The original HuggingFace model class
         if cls._hf_class is None:
             hf_cls_name = cls.__name__[4:]
             library = importlib.import_module(cls.hf_library_name)
@@ -416,9 +413,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
     @classmethod
     def get_rbln_config_class(cls) -> Type[RBLNModelConfig]:
-        """
-        Lazily loads and caches the corresponding RBLN model config class.
-        """
+        # Lazily loads and caches the corresponding RBLN model config class.
         if cls._rbln_config_class is None:
             rbln_config_class_name = cls.__name__ + "Config"
             library = importlib.import_module("optimum.rbln")
@@ -437,17 +432,15 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         return self
 
     def parameters(self):
-        """
-        Provides a dummy parameter generator for compatibility.
+        # A dummy parameter generator for compatibility.
 
-        This method mimics the interface of torch.nn.Module.parameters()
-        specifically for code that uses `next(model.parameters())` to infer
-        the device or dtype. It yields a single dummy tensor on CPU with float32 dtype.
+        # This method mimics the interface of torch.nn.Module.parameters()
+        # specifically for code that uses `next(model.parameters())` to infer
+        # the device or dtype. It yields a single dummy tensor on CPU with float32 dtype.
 
-        Warning:
-            This does NOT yield the actual model parameters used by the RBLN runtime.
-            Code relying on iterating through all model parameters will not work as expected.
-        """
+        # Warning:
+        #     This does NOT yield the actual model parameters used by the RBLN runtime.
+        #     Code relying on iterating through all model parameters will not work as expected.
         yield torch.tensor([1.0], dtype=torch.float32, device=torch.device("cpu"))
 
     def __call__(self, *args, **kwargs):
@@ -535,7 +528,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
     @staticmethod
     def _raise_missing_compiled_file_error(missing_files: List[str]):
-        """Raises a KeyError with a message indicating missing compiled model files."""
+        # Raises a KeyError with a message indicating missing compiled model files.
 
         if len(missing_files) == 1:
             message = f"The rbln model folder is missing the required '{missing_files[0]}.rbln' file. "

@@ -14,7 +14,7 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, Dict, List, Optional, Union, get_args, get_origin, get_type_hints
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, get_args, get_origin, get_type_hints
 
 import rebel
 import torch
@@ -39,9 +39,8 @@ class RBLNModel(RBLNBaseModel):
 
     @classmethod
     def update_kwargs(cls, kwargs):
-        """
-        Update user-given kwargs to get proper pytorch model.
-        """
+        # Update user-given kwargs to get proper pytorch model.
+
         return kwargs
 
     @classmethod
@@ -52,10 +51,9 @@ class RBLNModel(RBLNBaseModel):
         subfolder: str,
         rbln_config: RBLNModelConfig,
     ):
-        """
-        If you are unavoidably running on a CPU rather than an RBLN device,
-        store the torch tensor, weight, etc. in this function.
-        """
+        # If you are unavoidably running on a CPU rather than an RBLN device,
+        # store the torch tensor, weight, etc. in this function.
+        pass
 
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
@@ -77,8 +75,8 @@ class RBLNModel(RBLNBaseModel):
         rbln_config: Optional[RBLNModelConfig] = None,
         model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
         subfolder: str = "",
-        **kwargs,
-    ):
+        **kwargs: Dict[str, Any],
+    ) -> "RBLNModel":
         """
         Converts and compiles a pre-trained HuggingFace library model into a RBLN model.
         This method performs the actual model conversion and compilation process.
@@ -253,12 +251,7 @@ class RBLNModel(RBLNBaseModel):
 
     @classmethod
     def get_hf_output_class(cls):
-        """
-        Dynamically gets the output class from the corresponding HuggingFace model class.
-
-        Returns:
-            type: The appropriate output class from transformers or diffusers
-        """
+        # Dynamically gets the output class from the corresponding HuggingFace model class.
         if cls._output_class:
             return cls._output_class
 
@@ -285,10 +278,8 @@ class RBLNModel(RBLNBaseModel):
         return BaseModelOutput
 
     def _prepare_output(self, output, return_dict):
-        """
-        Prepare model output based on return_dict flag.
-        This method can be overridden by subclasses to provide task-specific output handling.
-        """
+        # Prepare model output based on return_dict flag.
+        # This method can be overridden by subclasses to provide task-specific output handling.
         tuple_output = (output,) if not isinstance(output, (tuple, list)) else tuple(output)
         if not return_dict:
             return tuple_output

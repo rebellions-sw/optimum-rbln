@@ -307,10 +307,9 @@ class RBLNBlip2ForConditionalGeneration(RBLNModel):
         subfolder: str,
         rbln_config: RBLNModelConfig,
     ):
-        """
-        If you are unavoidably running on a CPU rather than an RBLN device,
-        store the torch tensor, weight, etc. in this function.
-        """
+        # If you are unavoidably running on a CPU rather than an RBLN device,
+        # store the torch tensor, weight, etc. in this function.
+
         save_dict = {}
         save_dict["query_tokens"] = model.query_tokens
         torch.save(save_dict, save_dir_path / subfolder / "query_tokens.pth")

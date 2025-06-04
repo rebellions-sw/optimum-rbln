@@ -47,7 +47,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         prefill_chunk_size: Optional[int] = None,
         kvcache_num_blocks: Optional[int] = None,
         decoder_batch_sizes: Optional[List[int]] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:

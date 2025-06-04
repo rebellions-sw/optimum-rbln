@@ -202,9 +202,8 @@ class RBLNModelForQuestionAnswering(_RBLNTransformerEncoder):
     output_class = QuestionAnsweringModelOutput
 
     def _prepare_output(self, output, return_dict):
-        """
-        Prepare QuestionAnswering specific output format.
-        """
+        # Prepare QuestionAnswering specific output format.
+
         start_logits, end_logits = output
 
         if not return_dict:
