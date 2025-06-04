@@ -23,7 +23,7 @@ from ..models import RBLNAutoencoderKLCosmosConfig, RBLNCosmosTransformer3DModel
 logger = get_logger(__name__)
 
 
-class RBLNCosmosPipelineConfig(RBLNModelConfig):
+class RBLNCosmosTextToWorldPipelineConfig(RBLNModelConfig):
     submodules = ["text_encoder", "transformer", "vae"]
     _optional_components = ["safety_checker"]
     _vae_uses_encoder = False

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-from diffusers import CosmosPipeline
+from diffusers import CosmosTextToWorldPipeline
 
 from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
@@ -22,8 +22,8 @@ from ...modeling_diffusers import RBLNDiffusionMixin
 logger = get_logger(__name__)
 
 
-class RBLNCosmosPipeline(RBLNDiffusionMixin, CosmosPipeline):
-    original_class = CosmosPipeline
+class RBLNCosmosTextToWorldPipeline(RBLNDiffusionMixin, CosmosTextToWorldPipeline):
+    original_class = CosmosTextToWorldPipeline
     _submodules = ["text_encoder", "transformer", "vae"]
     _optional_components = ["safety_checker"]
 
