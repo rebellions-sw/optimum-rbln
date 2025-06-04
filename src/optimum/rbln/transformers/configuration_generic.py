@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from ..configuration_utils import RBLNModelConfig
 
 
-class _RBLNTransformerEncoderConfig(RBLNModelConfig):
+class RBLNTransformerEncoderConfig(RBLNModelConfig):
     rbln_model_input_names: Optional[List[str]] = None
 
     def __init__(
@@ -47,7 +47,7 @@ class _RBLNTransformerEncoderConfig(RBLNModelConfig):
         self.model_input_names = model_input_names or self.rbln_model_input_names
 
 
-class _RBLNImageModelConfig(RBLNModelConfig):
+class RBLNImageModelConfig(RBLNModelConfig):
     def __init__(
         self,
         image_size: Optional[Union[int, Tuple[int, int]]] = None,
@@ -89,32 +89,32 @@ class _RBLNImageModelConfig(RBLNModelConfig):
             return self.image_size["height"]
 
 
-class RBLNModelForQuestionAnsweringConfig(_RBLNTransformerEncoderConfig):
+class RBLNModelForQuestionAnsweringConfig(RBLNTransformerEncoderConfig):
     pass
 
 
-class RBLNModelForSequenceClassificationConfig(_RBLNTransformerEncoderConfig):
+class RBLNModelForSequenceClassificationConfig(RBLNTransformerEncoderConfig):
     pass
 
 
-class RBLNModelForMaskedLMConfig(_RBLNTransformerEncoderConfig):
+class RBLNModelForMaskedLMConfig(RBLNTransformerEncoderConfig):
     pass
 
 
-class RBLNModelForTextEncodingConfig(_RBLNTransformerEncoderConfig):
+class RBLNModelForTextEncodingConfig(RBLNTransformerEncoderConfig):
     pass
 
 
 # FIXME : Appropriate name ?
-class RBLNTransformerEncoderForFeatureExtractionConfig(_RBLNTransformerEncoderConfig):
+class RBLNTransformerEncoderForFeatureExtractionConfig(RBLNTransformerEncoderConfig):
     pass
 
 
-class RBLNModelForImageClassificationConfig(_RBLNImageModelConfig):
+class RBLNModelForImageClassificationConfig(RBLNImageModelConfig):
     pass
 
 
-class RBLNModelForDepthEstimationConfig(_RBLNImageModelConfig):
+class RBLNModelForDepthEstimationConfig(RBLNImageModelConfig):
     pass
 
 
