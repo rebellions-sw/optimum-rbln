@@ -41,7 +41,10 @@ class ExaoneForCausalLMWrapper(DecoderOnlyWrapper):
         for layer in causal_lm.transformer.h:
             if self.attn_impl == "eager":
                 new_self_attn = ExaoneAttention(
-                    layer.attn.attention, self.use_attention_mask, kvcache_block_size=self.kvcache_block_size
+                    layer.attn.attention,
+                    self.use_attention_mask,
+                    kvcache_block_size=self.kvcache_block_size,
+                    use_position_ids=self.use_position_ids,
                 )
             elif self.attn_impl == "flash_attn":
                 new_self_attn = ExaoneFlashAttention(
@@ -49,6 +52,7 @@ class ExaoneForCausalLMWrapper(DecoderOnlyWrapper):
                     kvcache_partition_len=self.kvcache_partition_len,
                     use_attention_mask=self.use_attention_mask,
                     kvcache_block_size=self.kvcache_block_size,
+                    use_position_ids=self.use_position_ids,
                 )
             else:
                 raise NotImplementedError(f"Unknwon attn : {self.attn_impl}")

@@ -36,11 +36,7 @@ from transformers import (
 )
 from transformers.modeling_outputs import (
     BaseModelOutput,
-    DepthEstimatorOutput,
-    ImageClassifierOutput,
-    MaskedLMOutput,
     QuestionAnsweringModelOutput,
-    SequenceClassifierOutput,
 )
 
 from ..configuration_utils import RBLNCompileConfig
@@ -63,8 +59,6 @@ class _RBLNTransformerEncoder(RBLNModel):
     auto_model_class = AutoModel
     rbln_model_input_names = ["input_ids", "attention_mask", "token_type_ids"]
     rbln_dtype = "int64"
-    output_class = BaseModelOutput
-    output_key = "last_hidden_state"
 
     @classmethod
     def _update_rbln_config(
@@ -149,7 +143,6 @@ class _RBLNImageModel(RBLNModel):
     auto_model_class = AutoModel
     main_input_name = "pixel_values"
     output_class = BaseModelOutput
-    output_key = "last_hidden_state"
 
     @classmethod
     def _update_rbln_config(
@@ -223,15 +216,11 @@ class RBLNModelForQuestionAnswering(_RBLNTransformerEncoder):
 class RBLNModelForSequenceClassification(_RBLNTransformerEncoder):
     auto_model_class = AutoModelForSequenceClassification
     rbln_model_input_names = ["input_ids", "attention_mask"]
-    output_class = SequenceClassifierOutput
-    output_key = "logits"
 
 
 class RBLNModelForMaskedLM(_RBLNTransformerEncoder):
     auto_model_class = AutoModelForMaskedLM
     rbln_model_input_names = ["input_ids", "attention_mask"]
-    output_class = MaskedLMOutput
-    output_key = "logits"
 
 
 class RBLNModelForTextEncoding(_RBLNTransformerEncoder):
@@ -243,20 +232,14 @@ class RBLNTransformerEncoderForFeatureExtraction(_RBLNTransformerEncoder):
     # TODO: RBLNModel is also for feature extraction.
     auto_model_class = AutoModel
     rbln_model_input_names = ["input_ids", "attention_mask"]
-    output_class = BaseModelOutput
-    output_key = "last_hidden_state"
 
 
 class RBLNModelForImageClassification(_RBLNImageModel):
     auto_model_class = AutoModelForImageClassification
-    output_class = ImageClassifierOutput
-    output_key = "logits"
 
 
 class RBLNModelForDepthEstimation(_RBLNImageModel):
     auto_model_class = AutoModelForDepthEstimation
-    output_class = DepthEstimatorOutput
-    output_key = "predicted_depth"
 
 
 class RBLNModelForAudioClassification(RBLNModel):
@@ -273,8 +256,6 @@ class RBLNModelForAudioClassification(RBLNModel):
     """
 
     auto_model_class = AutoModelForAudioClassification
-    output_class = SequenceClassifierOutput
-    output_key = "logits"
 
     @classmethod
     def _update_rbln_config(
