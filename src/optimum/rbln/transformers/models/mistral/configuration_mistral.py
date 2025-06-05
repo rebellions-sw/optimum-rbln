@@ -16,4 +16,27 @@ from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausa
 
 
 class RBLNMistralForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
-    pass
+    """
+    Configuration class for RBLN Mistral models.
+
+    This class is an alias of RBLNDecoderOnlyModelForCausalLMConfig.
+
+    Example usage:
+    ```python
+    from optimum.rbln import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig
+
+    # Create a configuration object
+    config = RBLNMistralForCausalLMConfig(
+        batch_size=1,
+        max_seq_len=4096,
+        tensor_parallel_size=4
+    )
+
+    # Use the configuration with from_pretrained
+    model = RBLNMistralForCausalLM.from_pretrained(
+        "mistralai/Mistral-7B-v0.1",
+        export=True,
+        rbln_config=config
+    )
+    ```
+    """

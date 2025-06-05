@@ -12,9 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-from ...modeling_generic import RBLNTransformerEncoderForFeatureExtraction
+from ...modeling_generic import RBLNModelForSequenceClassification, RBLNTransformerEncoderForFeatureExtraction
 
 
 class RBLNXLMRobertaModel(RBLNTransformerEncoderForFeatureExtraction):
-    pass
+    """
+    XLM-RoBERTa base model optimized for RBLN NPU.
+    """
+
+
+class RBLNXLMRobertaForSequenceClassification(RBLNModelForSequenceClassification):
+    """
+    XLM-RoBERTa model for sequence classification tasks optimized for RBLN NPU.
+    """
+
+    rbln_model_input_names = ["input_ids", "attention_mask"]

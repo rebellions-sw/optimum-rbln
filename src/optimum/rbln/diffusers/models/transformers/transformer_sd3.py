@@ -59,6 +59,8 @@ class SD3Transformer2DModelWrapper(torch.nn.Module):
 
 
 class RBLNSD3Transformer2DModel(RBLNModel):
+    """RBLN wrapper for the Stable Diffusion 3 MMDiT Transformer model."""
+
     hf_library_name = "diffusers"
     auto_model_class = SD3Transformer2DModel
     _output_class = Transformer2DModelOutput

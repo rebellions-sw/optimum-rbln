@@ -16,4 +16,27 @@ from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausa
 
 
 class RBLNQwen2ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
-    pass
+    """
+    Configuration class for RBLN Qwen2 models.
+
+    This class is an alias of RBLNDecoderOnlyModelForCausalLMConfig.
+
+    Example usage:
+    ```python
+    from optimum.rbln import RBLNQwen2ForCausalLM, RBLNQwen2ForCausalLMConfig
+
+    # Create a configuration object
+    config = RBLNQwen2ForCausalLMConfig(
+        batch_size=1,
+        max_seq_len=4096,
+        tensor_parallel_size=4
+    )
+
+    # Use the configuration with from_pretrained
+    model = RBLNQwen2ForCausalLM.from_pretrained(
+        "Qwen/Qwen2-7B",
+        export=True,
+        rbln_config=config
+    )
+    ```
+    """

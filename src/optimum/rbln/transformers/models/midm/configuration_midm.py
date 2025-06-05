@@ -16,4 +16,27 @@ from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausa
 
 
 class RBLNMidmLMHeadModelConfig(RBLNDecoderOnlyModelForCausalLMConfig):
-    pass
+    """
+    Configuration class for MIDM models.
+
+    This class is an alias of RBLNDecoderOnlyModelForCausalLMConfig.
+
+    Example usage:
+    ```python
+    from optimum.rbln import RBLNMidmLMHeadModel, RBLNMidmLMHeadModelConfig
+
+    # Create a configuration object
+    config = RBLNMidmLMHeadModelConfig(
+        batch_size=1,
+        max_seq_len=4096,
+        tensor_parallel_size=4
+    )
+
+    # Use the configuration with from_pretrained
+    model = RBLNMidmLMHeadModel.from_pretrained(
+        "KT-AI/midm-bitext-S-7B-inst-v1",
+        export=True,
+        rbln_config=config
+    )
+    ```
+    """

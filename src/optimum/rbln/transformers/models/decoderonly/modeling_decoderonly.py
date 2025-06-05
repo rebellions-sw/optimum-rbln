@@ -514,10 +514,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         subfolder: str,
         rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
     ):
-        """
-        If you are unavoidably running on a CPU rather than an RBLN device,
-        store the torch tensor, weight, etc. in this function.
-        """
+        # If you are unavoidably running on a CPU rather than an RBLN device,
+        # store the torch tensor, weight, etc. in this function.
         if rbln_config.use_inputs_embeds:
             save_dict = {}
             save_dict["embed_tokens"] = model.get_input_embeddings().state_dict()
@@ -748,35 +746,33 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         buffer: Optional[int] = None,
         num_runtimes: int = 2,
     ) -> int:
-        """
-        We are finding max_n_blocks(x) that satisfies the following equation:
+        # We are finding max_n_blocks(x) that satisfies the following equation:
 
-        available_dram - kernel_size - buffer
-            - num_layers * 2 * tensor_parallel_size
-            * align_2MB(
-                x
-                * block_size
-                * align_64(head_dim)
-                * math.ceil(num_key_value_heads / tensor_parallel_size)
-                * 2
-            ) > 0
+        # available_dram - kernel_size - buffer
+        #     - num_layers * 2 * tensor_parallel_size
+        #     * align_2MB(
+        #         x
+        #         * block_size
+        #         * align_64(head_dim)
+        #         * math.ceil(num_key_value_heads / tensor_parallel_size)
+        #         * 2
+        #     ) > 0
 
-        This inequality can be rewritten as follows:
+        # This inequality can be rewritten as follows:
 
-        a - c * align_2MB(b * x) > 0
-        where
-           a = available_dram - kernel_size - buffer
-           b = block_size * align_64(head_dim) * math.ceil(num_key_value_heads / tensor_parallel_size) * 2
-           c = num_layers * 2 * tensor_parallel_size
+        # a - c * align_2MB(b * x) > 0
+        # where
+        #    a = available_dram - kernel_size - buffer
+        #    b = block_size * align_64(head_dim) * math.ceil(num_key_value_heads / tensor_parallel_size) * 2
+        #    c = num_layers * 2 * tensor_parallel_size
 
-        We can rewrite the inequality as follows:
-        k > align_2MB(b*x)
-        where
-           k = a / c
+        # We can rewrite the inequality as follows:
+        # k > align_2MB(b*x)
+        # where
+        #    k = a / c
 
-        After that, we can derive the following equation:
-        x = floor(2**21 / b * floor((k - 1) / 2**21))
-        """
+        # After that, we can derive the following equation:
+        # x = floor(2**21 / b * floor((k - 1) / 2**21))
 
         def align(x: int, nbytes: int) -> int:
             return int(math.ceil(x / nbytes) * nbytes)
@@ -1124,12 +1120,11 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         return_dict: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
-        """
-        Forward method for the RBLN-optimized model, designed for integration with the HuggingFace generate API.
-        For continuous batching, the prefill stage processes one batch at a time and updates the KV cache using batch_idx.
-        A for-loop ensures synchronization with the HuggingFace generate API.
-        The decoder stage operates as usual, processing inputs in batch mode.
-        """
+        # Forward method for the RBLN-optimized model, designed for integration with the HuggingFace generate API.
+        # For continuous batching, the prefill stage processes one batch at a time and updates the KV cache using batch_idx.
+        # A for-loop ensures synchronization with the HuggingFace generate API.
+        # The decoder stage operates as usual, processing inputs in batch mode.
+
         # Prefll
         if cache_position is None:
             logits = []

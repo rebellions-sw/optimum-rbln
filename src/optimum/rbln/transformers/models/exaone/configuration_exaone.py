@@ -16,4 +16,27 @@ from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausa
 
 
 class RBLNExaoneForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
-    pass
+    """
+    Configuration class for RBLN Exaone models.
+
+    This class is an alias of RBLNDecoderOnlyModelForCausalLMConfig.
+
+    Example usage:
+    ```python
+    from optimum.rbln import RBLNExaoneForCausalLM, RBLNExaoneForCausalLMConfig
+
+    # Create a configuration object
+    config = RBLNExaoneForCausalLMConfig(
+        batch_size=1,
+        max_seq_len=4096,
+        tensor_parallel_size=4
+    )
+
+    # Use the configuration with from_pretrained
+    model = RBLNExaoneForCausalLM.from_pretrained(
+        "LGAI-EXAONE/EXAONE-3.0-7.8B-Instruct",
+        export=True,
+        rbln_config=config
+    )
+    ```
+    """

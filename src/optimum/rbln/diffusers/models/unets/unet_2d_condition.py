@@ -140,6 +140,13 @@ class _UNet_Kandinsky(torch.nn.Module):
 
 
 class RBLNUNet2DConditionModel(RBLNModel):
+    """
+    Configuration class for RBLN UNet2DCondition models.
+
+    This class inherits from RBLNModelConfig and provides specific configuration options
+    for UNet2DCondition models used in diffusion-based image generation.
+    """
+
     hf_library_name = "diffusers"
     auto_model_class = UNet2DConditionModel
     _rbln_config_class = RBLNUNet2DConditionModelConfig

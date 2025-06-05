@@ -16,4 +16,27 @@ from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausa
 
 
 class RBLNLlamaForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
-    pass
+    """
+    Configuration class for RBLN Llama models.
+
+    This class is an alias of RBLNDecoderOnlyModelForCausalLMConfig.
+
+    Example usage:
+    ```python
+    from optimum.rbln import RBLNLlamaForCausalLM, RBLNLlamaForCausalLMConfig
+
+    # Create a configuration object
+    config = RBLNLlamaForCausalLMConfig(
+        batch_size=1,
+        max_seq_len=4096,
+        tensor_parallel_size=4
+    )
+
+    # Use the configuration with from_pretrained
+    model = RBLNLlamaForCausalLM.from_pretrained(
+        "meta-llama/Llama-2-7b-hf",
+        export=True,
+        rbln_config=config
+    )
+    ```
+    """

@@ -18,6 +18,8 @@ from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNSD3Transformer2DModelConfig(RBLNModelConfig):
+    """Configuration class for RBLN Stable Diffusion 3 Transformer models."""
+
     subclass_non_save_attributes = ["_batch_size_is_specified"]
 
     def __init__(

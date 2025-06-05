@@ -462,13 +462,11 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         self,
         submodule_config_cls: Type["RBLNModelConfig"],
         submodule_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ) -> "RBLNModelConfig":
-        """
-        Initialize a submodule config from a dict or a RBLNModelConfig.
+        # Initialize a submodule config from a dict or a RBLNModelConfig.
+        # kwargs is specified from the predecessor config.
 
-        kwargs is specified from the predecessor config.
-        """
         if submodule_config is None:
             submodule_config = {}
 
@@ -530,7 +528,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         tensor_parallel_size: Optional[int] = None,
         optimum_rbln_version: Optional[str] = None,
         _compile_cfgs: List[RBLNCompileConfig] = [],
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Initialize a RBLN model configuration with runtime options and compile configurations.
@@ -600,10 +598,8 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         return rbln_model_cls
 
     def _prepare_for_serialization(self) -> Dict[str, Any]:
-        """
-        Prepare the attributes map for serialization by converting nested RBLNModelConfig
-        objects to their serializable form.
-        """
+        # Prepare the attributes map for serialization by converting nested RBLNModelConfig
+        # objects to their serializable form.
         serializable_map = {}
         for key, value in self._attributes_map.items():
             if isinstance(value, RBLNSerializableConfigProtocol):
@@ -678,7 +674,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
             json.dump(serializable_data, jsonf, indent=2)
 
     @classmethod
-    def load(cls, path: str, **kwargs) -> "RBLNModelConfig":
+    def load(cls, path: str, **kwargs: Dict[str, Any]) -> "RBLNModelConfig":
         """
         Load a RBLNModelConfig from a path.
 
@@ -711,11 +707,9 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
     def initialize_from_kwargs(
         cls: Type["RBLNModelConfig"],
         rbln_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ) -> Tuple["RBLNModelConfig", Dict[str, Any]]:
-        """
-        Initialize RBLNModelConfig from kwargs.
-        """
+        # Initialize RBLNModelConfig from kwargs.
         kwargs_keys = list(kwargs.keys())
         rbln_kwargs = {key[5:]: kwargs.pop(key) for key in kwargs_keys if key.startswith("rbln_")}
 
@@ -733,16 +727,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         return rbln_config, kwargs
 
     def get_default_values_for_original_cls(self, func_name: str, keys: List[str]) -> Dict[str, Any]:
-        """
-        Get default values for original class attributes from RBLNModelConfig.
-
-        Args:
-            func_name (str): The name of the function to get the default values for.
-            keys (List[str]): The keys of the attributes to get.
-
-        Returns:
-            Dict[str, Any]: The default values for the attributes.
-        """
+        # Get default values for original class attributes from RBLNModelConfig.
         model_cls = self.rbln_model_cls.get_hf_class()
         func = getattr(model_cls, func_name)
         func_signature = inspect.signature(func)

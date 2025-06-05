@@ -26,7 +26,7 @@ from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
-from .configuration_seq2seq2 import RBLNModelForSeq2SeqLMConfig
+from .configuration_seq2seq import RBLNModelForSeq2SeqLMConfig
 
 
 logger = get_logger(__name__)

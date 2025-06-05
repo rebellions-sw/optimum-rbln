@@ -154,12 +154,18 @@ class _RBLNStableDiffusion3PipelineBaseConfig(RBLNModelConfig):
 
 
 class RBLNStableDiffusion3PipelineConfig(_RBLNStableDiffusion3PipelineBaseConfig):
+    """Config for SD3 Text2Img Pipeline"""
+
     _vae_uses_encoder = False
 
 
 class RBLNStableDiffusion3Img2ImgPipelineConfig(_RBLNStableDiffusion3PipelineBaseConfig):
+    """Config for SD3 Img2Img Pipeline"""
+
     _vae_uses_encoder = True
 
 
 class RBLNStableDiffusion3InpaintPipelineConfig(_RBLNStableDiffusion3PipelineBaseConfig):
+    """Config for SD3 Inpainting Pipeline"""
+
     _vae_uses_encoder = True

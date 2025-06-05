@@ -22,6 +22,16 @@ class RBLNIdefics3VisionTransformerConfig(RBLNModelConfig):
 
 
 class RBLNIdefics3ForConditionalGenerationConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLNIdefics3ForConditionalGeneration models.
+
+    This class extends `RBLNModelConfig` to include settings specific to the Idefics3 vision-language model optimized for RBLN devices.
+    It allows configuration of the batch size and separate configurations for the vision and text submodules.
+
+    Attributes:
+        submodules (List[str]): List of submodules included in the model. Defaults to `["vision_model", "text_model"]`.
+    """
+
     submodules = ["vision_model", "text_model"]
 
     def __init__(

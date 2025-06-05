@@ -12,8 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ...configuration_generic import RBLNTransformerEncoderForFeatureExtractionConfig
+from ...configuration_generic import (
+    RBLNModelForSequenceClassificationConfig,
+    RBLNTransformerEncoderForFeatureExtractionConfig,
+)
 
 
 class RBLNXLMRobertaModelConfig(RBLNTransformerEncoderForFeatureExtractionConfig):
-    pass
+    """
+    Configuration class for XLM-RoBERTa model.
+    Inherits from RBLNTransformerEncoderForFeatureExtractionConfig with no additional parameters.
+    """
+
+
+class RBLNXLMRobertaForSequenceClassificationConfig(RBLNModelForSequenceClassificationConfig):
+    """
+    Configuration class for XLM-RoBERTa sequence classification model.
+    Inherits from RBLNModelForSequenceClassificationConfig with no additional parameters.
+    """

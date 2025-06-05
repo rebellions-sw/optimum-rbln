@@ -16,4 +16,27 @@ from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausa
 
 
 class RBLNGemmaForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
-    pass
+    """
+    Configuration class for RBLN Gemma models.
+
+    This class is an alias of RBLNDecoderOnlyModelForCausalLMConfig.
+
+    Example usage:
+    ```python
+    from optimum.rbln import RBLNGemmaForCausalLM, RBLNGemmaForCausalLMConfig
+
+    # Create a configuration object
+    config = RBLNGemmaForCausalLMConfig(
+        batch_size=1,
+        max_seq_len=4096,
+        tensor_parallel_size=4
+    )
+
+    # Use the configuration with from_pretrained
+    model = RBLNGemmaForCausalLM.from_pretrained(
+        "google/gemma-7b",
+        export=True,
+        rbln_config=config
+    )
+    ```
+    """

@@ -104,13 +104,44 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
 
 class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin):
     """
-    The Whisper Model with a language modeling head. Can be used for automatic speech recognition.
-    This model inherits from [`RBLNDecoderOnlyModelForCausalLM`]. Check the superclass documentation for the generic methods the library implements for all its models.
+    Whisper model for speech recognition and transcription optimized for RBLN NPU.
 
-    A class to convert and run pre-trained transformers based LlamaForCausalLM model on RBLN devices.
-    It implements the methods to convert a pre-trained transformers LlamaForCausalLM model into a RBLN transformer model by:
+    This model inherits from [`RBLNModel`]. It implements the methods to convert and run
+    pre-trained transformers based Whisper model on RBLN devices by:
     - transferring the checkpoint weights of the original into an optimized RBLN graph,
     - compiling the resulting graph using the RBLN compiler.
+
+    Example (Short form):
+    ```python
+    import torch
+    from transformers import AutoProcessor
+    from datasets import load_dataset
+    from optimum.rbln import RBLNWhisperForConditionalGeneration
+
+    # Load processor and dataset
+    model_id = "openai/whisper-tiny"
+    processor = AutoProcessor.from_pretrained(model_id)
+    ds = load_dataset("hf-internal-testing/librispeech_asr_dummy", "clean", split="validation")
+
+    # Prepare input features
+    input_features = processor(
+        ds[0]["audio"]["array"],
+        sampling_rate=ds[0]["audio"]["sampling_rate"],
+        return_tensors="pt"
+    ).input_features
+
+    # Load and compile model (or load pre-compiled model)
+    model = RBLNWhisperForConditionalGeneration.from_pretrained(
+        model_id=model_id,
+        export=True,
+        rbln_batch_size=1
+    )
+
+    # Generate transcription
+    outputs = model.generate(input_features=input_features, return_timestamps=True)
+    transcription = processor.batch_decode(outputs, skip_special_tokens=True)[0]
+    print(f"Transcription: {transcription}")
+    ```
     """
 
     auto_model_class = AutoModelForSpeechSeq2Seq
@@ -153,11 +184,6 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
         return self.decoder
 
     def __getattr__(self, __name: str) -> Any:
-        """This is the key method to implement RBLN-Whisper.
-        Returns:
-            Any: Whisper's corresponding method
-        """
-
         def redirect(func):
             return lambda *pargs, **kwargs: func(self, *pargs, **kwargs)
 
@@ -331,12 +357,6 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
         attention_mask: Optional[torch.Tensor] = None,  # need for support transformers>=4.45.0
         **kwargs,
     ):
-        """
-        whisper don't use attention_mask,
-            attention_mask (`torch.Tensor`)`, *optional*):
-                Whisper does not support masking of the `input_features`, this argument is preserved for compatibility,
-                but it is not used. By default the silence in the input log mel spectrogram are ignored.
-        """
         return {
             "input_ids": input_ids,
             "cache_position": cache_position,

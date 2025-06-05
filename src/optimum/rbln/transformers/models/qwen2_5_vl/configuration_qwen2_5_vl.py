@@ -54,6 +54,18 @@ class RBLNQwen2_5_VisionTransformerPretrainedModelConfig(RBLNModelConfig):
 
         Raises:
             ValueError: If batch_size is not a positive integer.
+
+        Max Seq Lens:
+            Since `Qwen2_5_VLForConditionalGeneration` performs inference on a per-image or per-frame basis,
+            `max_seq_lens` should be set based on the maximum expected resolution of the input images or video frames,
+            according to the following guidelines:
+
+            1. **Minimum Value**: `max_seq_lens` must be greater than or equal to the number of patches generated from the input image.
+                For example, a 224x224 image with a patch size of 14 results in (224 / 14) * (224 / 14) = 256 patches.
+                Therefore, `max_seq_lens` must be at least 256.
+            2. **Alignment Requirement**: `max_seq_lens` must be a multiple of `(window_size / patch_size)^2` due to the requirements
+                of the window-based attention mechanism. For instance, if `window_size` is 112 and `patch_size` is 14, then
+                `(112 / 14)^2 = 64`, meaning valid values for `max_seq_lens` include 64, 128, 192, 256, etc.
         """
         super().__init__(**kwargs)
 

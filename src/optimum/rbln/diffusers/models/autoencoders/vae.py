@@ -12,20 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, List
+from typing import List
 
 import torch
 from diffusers import AutoencoderKL, VQModel
 from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
 
-from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
-
-
-if TYPE_CHECKING:
-    import torch
-
-logger = get_logger(__name__)
 
 
 class RBLNRuntimeVAEEncoder(RBLNPytorchRuntime):
