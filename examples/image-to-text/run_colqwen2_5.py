@@ -14,7 +14,7 @@ processor = ColQwen2_5_Processor.from_pretrained("Metric-AI/colqwen2.5-3b-multil
 from peft.tuners.lora.layer import Linear as LoraLinear
 for m in model.modules():
     if isinstance(m, LoraLinear):
-        m.merge(safe_merge=True)
+        m.merge(safe_merge=False)
 
 model = RBLNColQwen2_5ForConditionalGeneration.from_model(
     model,
@@ -43,7 +43,7 @@ model = RBLNColQwen2_5ForConditionalGeneration.from_model(
         "device": [0, 1, 2, 3, 4, 5, 6, 7],
     },
 )
-
+model.save_pretrained("colqwen2.5-3b-multilingual")
 
 # Your inputs
 images = [
@@ -59,14 +59,9 @@ queries = [
 batch_images = processor.process_images(images).to(model.device)
 batch_queries = processor.process_queries(queries).to(model.device)
 
-# Forward pass
-with torch.no_grad():
-    image_embeddings = model(**batch_images)
-    query_embeddings = model(**batch_queries)
+import pdb; pdb.set_trace()
 
-scores = processor.score_multi_vector(query_embeddings, image_embeddings)
-print(scores)
-    
+# Forward pass
 with torch.no_grad():
     image_embeddings = model(**batch_images)
     query_embeddings = model(**batch_queries)

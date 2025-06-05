@@ -3,160 +3,54 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
+from transformers import PretrainedConfig, PreTrainedModel
 
 from ..decoderonly.decoderonly_architecture import (
     DecoderOnlyWrapper,
+    DecoderOnlyModel,
+    DecoderOnlyAttention,
+    DecoderOnlyFlashAttention,
+    DecoderOnlyLayer,
     apply_rotary_pos_emb,
 )
 
-
-class Qwen2_5_VisionTransformerWrapper(nn.Module):
-    def __init__(self, model: torch.nn.Module):
-        super().__init__()
-        self._original_mod = model
-        self.fullatt_block_indexes = model.fullatt_block_indexes
-        self.merger = model.merger
-        window_seq_len = (model.window_size // model.patch_size) ** 2
-        self.blocks = self.wrap_vision_blocks(model.blocks, window_seq_len)
-
-    def wrap_vision_blocks(self, blocks: torch.nn.ModuleList, window_seq_len: int):
-        wrapped_blocks = []
-        for i, block in enumerate(blocks):
-            is_full_attn = True
-            wrapped_blocks.append(ColQwen2_5VisionBlock(block, is_full_attn, window_seq_len))
-        return nn.ModuleList(wrapped_blocks)
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        full_attn_masks: torch.Tensor,
-        window_attn_masks: torch.Tensor,
-        cos: torch.Tensor,
-        sin: torch.Tensor,
-    ):
-        full_attn_masks = (1 - full_attn_masks) * torch.finfo(torch.float32).min
-        window_attn_masks = (1 - window_attn_masks) * torch.finfo(torch.float32).min
-
-        for i, block in enumerate(self.blocks):
-            attn_masks = full_attn_masks if i in self.fullatt_block_indexes else window_attn_masks
-            hidden_states = block(hidden_states, attn_masks, [cos, sin])
-
-        hidden_states = self.merger(hidden_states)
-
-        return hidden_states
-
-
-class ColQwen2_5VisionBlock(torch.nn.Module):
-    def __init__(self, model: torch.nn.Module, is_full_attn: bool, window_seq_len: int):
-        super().__init__()
-        self._origin_model = model
-        self.norm1 = model.norm1
-        self.norm2 = model.norm2
-
-        if is_full_attn:
-            self.attn = ColQwen2_5VisionFullAttention(model.attn)
-        else:
-            self.attn = ColQwen2_5VisionWindowAttention(model.attn, window_seq_len)
-        self.mlp = model.mlp
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        attn_masks: torch.Tensor,
-        position_embeddings: Tuple[torch.Tensor, torch.Tensor],
-    ) -> torch.Tensor:
-        hidden_states = hidden_states + self.attn(
-            self.norm1(hidden_states),
-            attn_masks,
-            position_embeddings,
-        )
-        hidden_states = hidden_states + self.mlp(self.norm2(hidden_states))
-        return hidden_states
-
-
-class ColQwen2_5VisionFullAttention(nn.Module):
-    def __init__(self, model: nn.Module) -> None:
-        super().__init__()
-        self._origin_model = model
-        self.num_heads = model.num_heads
-        self.head_dim = model.head_dim
-        self.qkv = model.qkv
-        self.proj = model.proj
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        attn_masks: torch.Tensor,
-        position_embeddings: Tuple[torch.Tensor, torch.Tensor],
-    ) -> torch.Tensor:
-        seq_length = hidden_states.shape[0]
-        hidden_states = hidden_states.unsqueeze(0)
-        q, k, v = (
-            self.qkv(hidden_states).reshape(1, seq_length, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4).unbind(0)
-        )
-
-        cos, sin = position_embeddings
-        q, k = apply_rotary_pos_emb(q, k, cos, sin)
-
-        attn_weights = torch.matmul(q, k.transpose(2, 3)) / math.sqrt(self.head_dim)
-        attn_weights = attn_weights + attn_masks
-        attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32)
-        attn_output = torch.matmul(attn_weights, v)
-        attn_output = attn_output.transpose(1, 2)
-        attn_output = attn_output.reshape(1, seq_length, -1)
-        attn_output = self.proj(attn_output).squeeze(0)
-
-        return attn_output
-
-
-class ColQwen2_5VisionWindowAttention(nn.Module):
-    def __init__(self, model: nn.Module, window_seq_len: int) -> None:
-        super().__init__()
-        self._origin_model = model
-        self.num_heads = model.num_heads
-        self.head_dim = model.head_dim
-        self.qkv = model.qkv
-        self.proj = model.proj
-        self.window_seq_len = window_seq_len
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        attn_masks: torch.Tensor,
-        position_embeddings: Tuple[torch.Tensor, torch.Tensor],
-    ) -> torch.Tensor:
-        seq_length = hidden_states.shape[0]
-        num_windows = seq_length // self.window_seq_len
-
-        window_hidden_states = []
-        for i in range(0, seq_length, self.window_seq_len):
-            window_hidden_states.append(hidden_states[i : i + self.window_seq_len])
-        hidden_states = torch.stack(window_hidden_states)
-
-        q, k, v = (
-            self.qkv(hidden_states)
-            .reshape(num_windows, self.window_seq_len, 3, self.num_heads, -1)
-            .permute(2, 0, 3, 1, 4)
-            .unbind(0)
-        )
-        cos, sin = position_embeddings
-        cos = cos.reshape(num_windows, 1, seq_length // num_windows, -1)
-        sin = sin.reshape(num_windows, 1, seq_length // num_windows, -1)
-        q, k = apply_rotary_pos_emb(q, k, cos, sin)
-
-        attn_weights = torch.matmul(q, k.transpose(2, 3)) / math.sqrt(self.head_dim)
-
-        attn_weights = attn_weights + attn_masks
-        attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32)
-        attn_output = torch.matmul(attn_weights, v)
-        attn_output = attn_output.transpose(1, 2)
-        attn_output = attn_output.reshape(1, seq_length, -1)
-        attn_output = self.proj(attn_output).squeeze(0)
-
-        return attn_output
-
-
 class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
+    def convert_to_rbln_causal_lm(self, causal_lm: PreTrainedModel, max_seq_len: int):
+        new_layers = []
+
+        for layer in causal_lm.model.layers:
+            if self.attn_impl == "eager":
+                new_self_attn = DecoderOnlyAttention(
+                    layer.self_attn,
+                    self.use_attention_mask,
+                    self.use_position_ids,
+                    kvcache_block_size=self.kvcache_block_size,
+                )
+            elif self.attn_impl == "flash_attn":
+                new_self_attn = DecoderOnlyFlashAttention(
+                    layer.self_attn,
+                    kvcache_partition_len=self.kvcache_partition_len,
+                    kvcache_block_size=self.kvcache_block_size,
+                    use_attention_mask=self.use_attention_mask,
+                    use_position_ids=self.use_position_ids,
+                )
+            else:
+                raise NotImplementedError(f"Unknwon attn : {self.attn_impl}")
+
+            new_layer = DecoderOnlyLayer(layer, new_self_attn)
+            new_layers.append(new_layer)
+
+        new_model = DecoderOnlyModel(
+            causal_lm.model,
+            new_layers,
+            partition_len=self.kvcache_partition_len,
+            max_seq_len=max_seq_len,
+            kvcache_block_size=self.kvcache_block_size,
+            use_learned_pos_emb=self.use_learned_pos_emb,
+        )
+        # new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
+        return new_model
+        
     def prepare_forward_args(self, *args):
         args = list(args)
         input_ids = None if self.use_inputs_embeds else args.pop(0)
@@ -164,7 +58,7 @@ class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
         cache_position = args.pop(0)
         block_tables = args.pop(0)
         position_embeds = args.pop(0)
-        query_position = args.pop(0) if self.phase == "prefill" else None
+        # query_position = args.pop(0) if self.phase == "prefill" else None
         position_ids = None
         attention_mask = args.pop(0) if self.use_attention_mask else None
         past_key_values = args
@@ -189,9 +83,37 @@ class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
             inputs_embeds,
             cache_position,
             block_tables,
-            query_position,
+            # query_position,
             attention_mask,
             position_ids,
             past_key_values,
             position_embeds,
         )
+
+    def forward(self, *args):
+        (
+            input_ids,
+            inputs_embeds,
+            cache_position,
+            block_tables,
+            # query_position,
+            attention_mask,
+            position_ids,
+            past_key_values,
+            rotary_emb,
+        ) = self.prepare_forward_args(*args)
+        
+        last_hidden_states = self.causal_lm(
+            input_ids=input_ids,
+            inputs_embeds=inputs_embeds,
+            attention_mask=attention_mask,
+            cache_position=cache_position,
+            position_ids=position_ids,
+            # query_position=query_position,
+            past_key_values=past_key_values,
+            rotary_emb=rotary_emb,
+            block_tables=block_tables,
+            # use_cache=False,
+            # output_hidden_states=True
+        )
+        return last_hidden_states
