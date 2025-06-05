@@ -371,7 +371,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         if isinstance(model_id, Path):
             model_id = model_id.as_posix()
         from_pretrained_method = cls._export if export else cls._from_pretrained
-        return from_pretrained_method(model_id=model_id, **kwargs)
+        return from_pretrained_method(model_id=model_id, **kwargs, rbln_config=rbln_config)
 
     @classmethod
     def compile(cls, model, rbln_compile_config: Optional[RBLNCompileConfig] = None, **kwargs):
