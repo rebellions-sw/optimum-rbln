@@ -29,7 +29,7 @@ logger = get_logger()
 
 
 class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
-    SUPPORTED_FORMATS = ["rbln", "redhat", "neuralmagic"]
+    SUPPORTED_FORMATS = ["rbln"]
     SUPPORTED_WEIGHTS = ["int4", "fp8", "fp16"]
     SUPPORTED_ACTIVATIONS = ["fp8", "fp16"]
     SUPPORTED_KVCACHES = ["fp8", "fp16"]
@@ -41,9 +41,6 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
         weights: Optional[str] = None,
         activations: Optional[str] = None,
         kv_caches: Optional[str] = None,
-        weight_scale_ndim: Optional[int] = None,
-        kv_scale_ndim: Optional[int] = None,
-        activation_scale_ndim: Optional[int] = None,
         *,
         precision: Optional[str] = None,
     ):
@@ -66,10 +63,6 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
         self.activations = activations or "fp16"
         self.kv_caches = kv_caches or "fp16"
 
-        self.weight_scale_ndim = weight_scale_ndim or 0
-        self.kv_scale_ndim = kv_scale_ndim or 0
-        self.activation_scale_ndim = activation_scale_ndim or 0
-
         self._validate()
 
     def _validate(self):
@@ -88,32 +81,12 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
         if self.weights == "fp16" and self.activations == "fp16":
             raise ValueError("weights and activations of QuantizationConfig cannot be both fp16. It is meaningless.")
 
-        if any(
-            scale_ndim > 0 for scale_ndim in (self.weight_scale_ndim, self.kv_scale_ndim, self.activation_scale_ndim)
-        ):
-            if self.weights != "fp8":
-                raise ValueError(
-                    "weight_scale_ndim, kv_scale_ndim, and activation_scale_ndim can only be set when weights is fp8."
-                )
-            if any(
-                scale_ndim not in [0, 2]
-                for scale_ndim in (self.weight_scale_ndim, self.kv_scale_ndim, self.activation_scale_ndim)
-            ):
-                raise ValueError(
-                    "weight_scale_ndim, kv_scale_ndim, and activation_scale_ndim can only be 0 or 2. "
-                    "If you want to use a static scale, set the scale_ndim to 0. "
-                    "If you want to use a dynamic scale, set the scale_ndim to 2."
-                )
-
     def _prepare_for_serialization(self) -> Dict[str, Any]:
         return {
             "format": self.format,
             "weights": self.weights,
             "activations": self.activations,
             "kv_caches": self.kv_caches,
-            "weight_scale_ndim": self.weight_scale_ndim,
-            "kv_scale_ndim": self.kv_scale_ndim,
-            "activation_scale_ndim": self.activation_scale_ndim,
         }
 
     def maybe_set_quantization_env(self):
@@ -286,12 +259,11 @@ def load_weights(
             elif key in model_buffers:
                 model_buffers[key].data.copy_(value)
             elif "kv_scale" in key:
-                if rbln_quantization.kv_caches != "fp8":
-                    raise ValueError(
-                        "Unexpected kv_scale in the checkpoint. Did you use the correct quantization config?"
-                    )
-                model_params[key.replace("kv_scale", "k_scale")].data.copy_(value)
-                model_params[key.replace("kv_scale", "v_scale")].data.copy_(value)
+                if rbln_quantization.kv_caches == "fp8":
+                    model_params[key.replace("kv_scale", "k_scale")].data.copy_(value)
+                    model_params[key.replace("kv_scale", "v_scale")].data.copy_(value)
+                else:
+                    unloaded_keys.append(key)
             else:
                 unloaded_keys.append(key)
 
@@ -312,6 +284,10 @@ def load_weights(
         raise ValueError(
             "No kv_scale found in the checkpoint. Did you use the correct quantization config? "
             "If you are using fp8 quantization, you need to use the correct quantization config."
+        )
+    if loaded_kv_scale and rbln_quantization.kv_caches != "fp8":
+        logger.warning(
+            "kv_scale found in the checkpoint, but kv_caches of quantization config is not fp8. Ignoring kv_scale."
         )
 
 
@@ -404,17 +380,10 @@ def create_fp8linear(layer: Linear, rbln_quantization: RBLNQuantizationConfig) -
         return output
 
     layer.weight = Parameter(layer.weight.to(torch.float8_e4m3fn), requires_grad=False)
-    if rbln_quantization.weight_scale_ndim == 0:
-        layer.weight_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
-    else:
-        layer.weight_scale = Parameter(torch.ones(layer.out_features, 1, dtype=torch.float32), requires_grad=False)
+    layer.weight_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
 
     if rbln_quantization.activations == "fp8":
-        if rbln_quantization.activation_scale_ndim == 0:
-            input_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
-        else:
-            input_scale = Parameter(torch.ones(layer.in_features, 1, dtype=torch.float32), requires_grad=False)
-        layer.input_scale = input_scale
+        layer.input_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
     else:
         layer.input_scale = None
 
