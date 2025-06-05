@@ -29,7 +29,7 @@ logger = get_logger()
 
 
 class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
-    SUPPORTED_FORMATS = ["rbln"]
+    SUPPORTED_FORMATS = ["rbln", "redhat", "neuralmagic"]
     SUPPORTED_WEIGHTS = ["int4", "fp8", "fp16"]
     SUPPORTED_ACTIVATIONS = ["fp8", "fp16"]
     SUPPORTED_KVCACHES = ["fp8", "fp16"]
@@ -41,10 +41,16 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
         weights: Optional[str] = None,
         activations: Optional[str] = None,
         kv_caches: Optional[str] = None,
+        weight_scale_ndim: Optional[int] = None,
+        kv_scale_ndim: Optional[int] = None,
+        activation_scale_ndim: Optional[int] = None,
         *,
         precision: Optional[str] = None,
     ):
-        self.format = format
+        self.format = format or "rbln"
+        if self.format not in self.SUPPORTED_FORMATS:
+            raise ValueError(f"Invalid format: {self.format}, supported formats are: {self.SUPPORTED_FORMATS}")
+
         if precision is not None:
             logger.warning("The `precision` argument is deprecated. Use `weights` and `activations` instead.")
             if any(precision_arg is not None for precision_arg in (weights, activations)):
@@ -59,6 +65,11 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
         self.weights = weights or "fp16"
         self.activations = activations or "fp16"
         self.kv_caches = kv_caches or "fp16"
+
+        self.weight_scale_ndim = weight_scale_ndim or 0
+        self.kv_scale_ndim = kv_scale_ndim or 0
+        self.activation_scale_ndim = activation_scale_ndim or 0
+
         self._validate()
 
     def _validate(self):
@@ -77,12 +88,32 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
         if self.weights == "fp16" and self.activations == "fp16":
             raise ValueError("weights and activations of QuantizationConfig cannot be both fp16. It is meaningless.")
 
+        if any(
+            scale_ndim > 0 for scale_ndim in (self.weight_scale_ndim, self.kv_scale_ndim, self.activation_scale_ndim)
+        ):
+            if self.weights != "fp8":
+                raise ValueError(
+                    "weight_scale_ndim, kv_scale_ndim, and activation_scale_ndim can only be set when weights is fp8."
+                )
+            if any(
+                scale_ndim not in [0, 2]
+                for scale_ndim in (self.weight_scale_ndim, self.kv_scale_ndim, self.activation_scale_ndim)
+            ):
+                raise ValueError(
+                    "weight_scale_ndim, kv_scale_ndim, and activation_scale_ndim can only be 0 or 2. "
+                    "If you want to use a static scale, set the scale_ndim to 0. "
+                    "If you want to use a dynamic scale, set the scale_ndim to 2."
+                )
+
     def _prepare_for_serialization(self) -> Dict[str, Any]:
         return {
             "format": self.format,
             "weights": self.weights,
             "activations": self.activations,
             "kv_caches": self.kv_caches,
+            "weight_scale_ndim": self.weight_scale_ndim,
+            "kv_scale_ndim": self.kv_scale_ndim,
+            "activation_scale_ndim": self.activation_scale_ndim,
         }
 
     def maybe_set_quantization_env(self):
@@ -94,6 +125,25 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
     def maybe_reset_quantization_env(self):
         if self.RBLN_QUANT_BITS_ENV in os.environ:
             os.environ.pop(self.RBLN_QUANT_BITS_ENV)
+
+
+class QuantizedLayerFactory:
+    def __init__(self, quantization_config: RBLNQuantizationConfig):
+        self.quantization_config = quantization_config
+
+    def create_linear(self, layer: Linear) -> Linear:
+        if self.quantization_config.weights == "int4":
+            return self.create_qlinear(layer)
+        elif self.quantization_config.weights == "fp8":
+            return self.create_fp8linear(layer)
+        else:
+            raise ValueError(f"Invalid quantization weights: {self.quantization_config.weights}")
+
+    def create_qlinear(self, layer: Linear) -> Linear:
+        return create_qlinear(layer, self.quantization_config)
+
+    def create_fp8linear(self, layer: Linear) -> Linear:
+        return create_fp8linear(layer, self.quantization_config)
 
 
 # Constants
@@ -146,18 +196,12 @@ def update_layers_to_quantize(
     """
 
     processed_layers = []
-
-    if rbln_quantization.weights == "int4":
-        replace_method = create_qlinear
-    elif rbln_quantization.weights == "fp8":
-        replace_method = create_fp8linear
-    else:
-        raise ValueError(f"Invalid quantization weights: {rbln_quantization.weights}")
+    quantized_layer_factory = QuantizedLayerFactory(rbln_quantization)
 
     for name, layer in module.named_modules():
         if is_target_for_qlinear_replacement(name, layer):
             parent_module, layer_name = get_parent_and_child(module, name)
-            setattr(parent_module, layer_name, replace_method(layer, rbln_quantization))
+            setattr(parent_module, layer_name, quantized_layer_factory.create_linear(layer))
             processed_layers.append(name)
         elif rbln_quantization.kv_caches == "fp8" and is_target_for_adding_kv_scales(name):
             layer.k_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
@@ -360,10 +404,17 @@ def create_fp8linear(layer: Linear, rbln_quantization: RBLNQuantizationConfig) -
         return output
 
     layer.weight = Parameter(layer.weight.to(torch.float8_e4m3fn), requires_grad=False)
-    layer.weight_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
+    if rbln_quantization.weight_scale_ndim == 0:
+        layer.weight_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
+    else:
+        layer.weight_scale = Parameter(torch.ones(layer.out_features, 1, dtype=torch.float32), requires_grad=False)
 
     if rbln_quantization.activations == "fp8":
-        layer.input_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
+        if rbln_quantization.activation_scale_ndim == 0:
+            input_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
+        else:
+            input_scale = Parameter(torch.ones(layer.in_features, 1, dtype=torch.float32), requires_grad=False)
+        layer.input_scale = input_scale
     else:
         layer.input_scale = None
 
