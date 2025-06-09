@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 from ....configuration_utils import RBLNModelConfig
 
@@ -27,7 +27,7 @@ class RBLNSD3Transformer2DModelConfig(RBLNModelConfig):
         batch_size: Optional[int] = None,
         sample_size: Optional[Union[int, Tuple[int, int]]] = None,
         prompt_embed_length: Optional[int] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:

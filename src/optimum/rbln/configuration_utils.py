@@ -19,6 +19,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Tuple, Type, Union, runtime_checkable
 
+import numpy as np
 import torch
 
 from .__version__ import __version__
@@ -61,7 +62,7 @@ class RBLNCompileConfig:
     tensor_parallel_size: Optional[int] = None
 
     @staticmethod
-    def normalize_dtype(dtype):
+    def normalize_dtype(dtype: Union[str, torch.dtype, np.dtype]) -> str:
         """
         Convert framework-specific dtype to string representation.
         i.e. torch.float32 -> "float32"
@@ -70,7 +71,7 @@ class RBLNCompileConfig:
             dtype: The input dtype (can be string, torch dtype, or numpy dtype).
 
         Returns:
-            str: The normalized string representation of the dtype.
+            The normalized string representation of the dtype.
         """
         if isinstance(dtype, str):
             return dtype
