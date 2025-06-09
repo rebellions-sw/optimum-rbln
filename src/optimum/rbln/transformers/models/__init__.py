@@ -120,7 +120,7 @@ _import_structure = {
         "RBLNSiglipVisionModel",
         "RBLNSiglipVisionModelConfig",
     ],
-    "time_series_transformers": [
+    "time_series_transformer": [
         "RBLNTimeSeriesTransformerForPrediction",
         "RBLNTimeSeriesTransformerForPredictionConfig",
     ],
@@ -247,7 +247,7 @@ if TYPE_CHECKING:
         RBLNT5ForConditionalGeneration,
         RBLNT5ForConditionalGenerationConfig,
     )
-    from .time_series_transformers import (
+    from .time_series_transformer import (
         RBLNTimeSeriesTransformerForPrediction,
         RBLNTimeSeriesTransformerForPredictionConfig,
     )
