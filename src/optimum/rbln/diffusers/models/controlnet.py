@@ -98,6 +98,15 @@ class _ControlNetModel_Cross_Attention(torch.nn.Module):
 
 
 class RBLNControlNetModel(RBLNModel):
+    """
+    RBLN implementation of ControlNetModel for diffusion models.
+
+    This model is used to accelerate ControlNetModel models from diffusers library on RBLN NPUs.
+
+    This class inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods
+    the library implements for all its models.
+    """
+
     hf_library_name = "diffusers"
     auto_model_class = ControlNetModel
     output_class = ControlNetOutput

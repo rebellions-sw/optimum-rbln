@@ -19,7 +19,11 @@ from ....transformers import RBLNCLIPTextModelConfig
 from ..models import RBLNAutoencoderKLConfig, RBLNUNet2DConditionModelConfig
 
 
-class _RBLNStableDiffusionPipelineBaseConfig(RBLNModelConfig):
+class RBLNStableDiffusionPipelineBaseConfig(RBLNModelConfig):
+    """
+    Base configuration for Stable Diffusion pipelines.
+    """
+
     submodules = ["text_encoder", "unet", "vae"]
     _vae_uses_encoder = False
 
@@ -128,13 +132,25 @@ class _RBLNStableDiffusionPipelineBaseConfig(RBLNModelConfig):
         return self.vae.sample_size
 
 
-class RBLNStableDiffusionPipelineConfig(_RBLNStableDiffusionPipelineBaseConfig):
+class RBLNStableDiffusionPipelineConfig(RBLNStableDiffusionPipelineBaseConfig):
+    """
+    Configuration for Stable Diffusion pipeline.
+    """
+
     _vae_uses_encoder = False
 
 
-class RBLNStableDiffusionImg2ImgPipelineConfig(_RBLNStableDiffusionPipelineBaseConfig):
+class RBLNStableDiffusionImg2ImgPipelineConfig(RBLNStableDiffusionPipelineBaseConfig):
+    """
+    Configuration for Stable Diffusion image-to-image pipeline.
+    """
+
     _vae_uses_encoder = True
 
 
-class RBLNStableDiffusionInpaintPipelineConfig(_RBLNStableDiffusionPipelineBaseConfig):
+class RBLNStableDiffusionInpaintPipelineConfig(RBLNStableDiffusionPipelineBaseConfig):
+    """
+    Configuration for Stable Diffusion inpainting pipeline.
+    """
+
     _vae_uses_encoder = True

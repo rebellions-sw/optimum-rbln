@@ -19,7 +19,11 @@ from ....transformers import RBLNCLIPTextModelConfig, RBLNCLIPTextModelWithProje
 from ..models import RBLNAutoencoderKLConfig, RBLNUNet2DConditionModelConfig
 
 
-class _RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
+class RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
+    """
+    Base configuration for Stable Diffusion XL pipelines.
+    """
+
     submodules = ["text_encoder", "text_encoder_2", "unet", "vae"]
     _vae_uses_encoder = False
 
@@ -134,19 +138,19 @@ class _RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
         return self.vae.sample_size
 
 
-class RBLNStableDiffusionXLPipelineConfig(_RBLNStableDiffusionXLPipelineBaseConfig):
+class RBLNStableDiffusionXLPipelineConfig(RBLNStableDiffusionXLPipelineBaseConfig):
     """Config for SDXL Text2Img Pipeline"""
 
     _vae_uses_encoder = False
 
 
-class RBLNStableDiffusionXLImg2ImgPipelineConfig(_RBLNStableDiffusionXLPipelineBaseConfig):
+class RBLNStableDiffusionXLImg2ImgPipelineConfig(RBLNStableDiffusionXLPipelineBaseConfig):
     """Config for SDXL Img2Img Pipeline"""
 
     _vae_uses_encoder = True
 
 
-class RBLNStableDiffusionXLInpaintPipelineConfig(_RBLNStableDiffusionXLPipelineBaseConfig):
+class RBLNStableDiffusionXLInpaintPipelineConfig(RBLNStableDiffusionXLPipelineBaseConfig):
     """Config for SDXL Inpainting Pipeline"""
 
     _vae_uses_encoder = True

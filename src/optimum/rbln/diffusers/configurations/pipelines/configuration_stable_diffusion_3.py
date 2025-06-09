@@ -19,7 +19,11 @@ from ....transformers import RBLNCLIPTextModelWithProjectionConfig, RBLNT5Encode
 from ..models import RBLNAutoencoderKLConfig, RBLNSD3Transformer2DModelConfig
 
 
-class _RBLNStableDiffusion3PipelineBaseConfig(RBLNModelConfig):
+class RBLNStableDiffusion3PipelineBaseConfig(RBLNModelConfig):
+    """
+    Base configuration for Stable Diffusion 3 pipelines.
+    """
+
     submodules = ["transformer", "text_encoder", "text_encoder_2", "text_encoder_3", "vae"]
     _vae_uses_encoder = False
 
@@ -153,19 +157,19 @@ class _RBLNStableDiffusion3PipelineBaseConfig(RBLNModelConfig):
         return self.vae.sample_size
 
 
-class RBLNStableDiffusion3PipelineConfig(_RBLNStableDiffusion3PipelineBaseConfig):
+class RBLNStableDiffusion3PipelineConfig(RBLNStableDiffusion3PipelineBaseConfig):
     """Config for SD3 Text2Img Pipeline"""
 
     _vae_uses_encoder = False
 
 
-class RBLNStableDiffusion3Img2ImgPipelineConfig(_RBLNStableDiffusion3PipelineBaseConfig):
+class RBLNStableDiffusion3Img2ImgPipelineConfig(RBLNStableDiffusion3PipelineBaseConfig):
     """Config for SD3 Img2Img Pipeline"""
 
     _vae_uses_encoder = True
 
 
-class RBLNStableDiffusion3InpaintPipelineConfig(_RBLNStableDiffusion3PipelineBaseConfig):
+class RBLNStableDiffusion3InpaintPipelineConfig(RBLNStableDiffusion3PipelineBaseConfig):
     """Config for SD3 Inpainting Pipeline"""
 
     _vae_uses_encoder = True

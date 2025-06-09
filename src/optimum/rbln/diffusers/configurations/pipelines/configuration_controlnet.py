@@ -19,7 +19,11 @@ from ....transformers import RBLNCLIPTextModelConfig, RBLNCLIPTextModelWithProje
 from ..models import RBLNAutoencoderKLConfig, RBLNControlNetModelConfig, RBLNUNet2DConditionModelConfig
 
 
-class _RBLNStableDiffusionControlNetPipelineBaseConfig(RBLNModelConfig):
+class RBLNStableDiffusionControlNetPipelineBaseConfig(RBLNModelConfig):
+    """
+    Base configuration for Stable Diffusion ControlNet pipelines.
+    """
+
     submodules = ["text_encoder", "unet", "vae", "controlnet"]
     _vae_uses_encoder = False
 
@@ -138,15 +142,27 @@ class _RBLNStableDiffusionControlNetPipelineBaseConfig(RBLNModelConfig):
         return self.vae.sample_size
 
 
-class RBLNStableDiffusionControlNetPipelineConfig(_RBLNStableDiffusionControlNetPipelineBaseConfig):
+class RBLNStableDiffusionControlNetPipelineConfig(RBLNStableDiffusionControlNetPipelineBaseConfig):
+    """
+    Configuration for Stable Diffusion ControlNet pipeline.
+    """
+
     _vae_uses_encoder = False
 
 
-class RBLNStableDiffusionControlNetImg2ImgPipelineConfig(_RBLNStableDiffusionControlNetPipelineBaseConfig):
+class RBLNStableDiffusionControlNetImg2ImgPipelineConfig(RBLNStableDiffusionControlNetPipelineBaseConfig):
+    """
+    Configuration for Stable Diffusion ControlNet image-to-image pipeline.
+    """
+
     _vae_uses_encoder = True
 
 
-class _RBLNStableDiffusionXLControlNetPipelineBaseConfig(RBLNModelConfig):
+class RBLNStableDiffusionXLControlNetPipelineBaseConfig(RBLNModelConfig):
+    """
+    Base configuration for Stable Diffusion XL ControlNet pipelines.
+    """
+
     submodules = ["text_encoder", "text_encoder_2", "unet", "vae", "controlnet"]
     _vae_uses_encoder = False
 
@@ -272,9 +288,17 @@ class _RBLNStableDiffusionXLControlNetPipelineBaseConfig(RBLNModelConfig):
         return self.vae.sample_size
 
 
-class RBLNStableDiffusionXLControlNetPipelineConfig(_RBLNStableDiffusionXLControlNetPipelineBaseConfig):
+class RBLNStableDiffusionXLControlNetPipelineConfig(RBLNStableDiffusionXLControlNetPipelineBaseConfig):
+    """
+    Configuration for Stable Diffusion XL ControlNet pipeline.
+    """
+
     _vae_uses_encoder = False
 
 
-class RBLNStableDiffusionXLControlNetImg2ImgPipelineConfig(_RBLNStableDiffusionXLControlNetPipelineBaseConfig):
+class RBLNStableDiffusionXLControlNetImg2ImgPipelineConfig(RBLNStableDiffusionXLControlNetPipelineBaseConfig):
+    """
+    Configuration for Stable Diffusion XL ControlNet image-to-image pipeline.
+    """
+
     _vae_uses_encoder = True
