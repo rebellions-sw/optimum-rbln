@@ -707,7 +707,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 compiled_models[f"decoder_batch_{batch_size}"].get_alloc_per_node_by_key().items()
             ):
                 alloc_memory_by_key[key] += sum(memory_per_node)
-        alloc_memory_by_key.pop("PortRecur")  # kv-cache
+
+        alloc_memory_by_key.pop("PortRecur", None)  # Old compiler's kv-cache Key
+        alloc_memory_by_key.pop("DramTensor", None)  # kv-cache
         kernel_size = alloc_memory_by_key.pop("Kernel")  # model weight
 
         # Get the maximum number of blocks that can be allocated
