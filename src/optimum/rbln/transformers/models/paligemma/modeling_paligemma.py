@@ -96,8 +96,8 @@ class LoopProjector:
 class RBLNPaliGemmaForConditionalGeneration(RBLNModel):
     auto_model_class = AutoModelForVision2Seq
     _rbln_submodules = [
-        {"name": "language_model"},
         {"name": "vision_tower"},
+        {"name": "language_model"},
     ]
 
     def __getattr__(self, __name: str) -> Any:
@@ -114,8 +114,8 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel):
         return True
 
     def __post_init__(self, **kwargs):
-        self.vision_tower = LoopVisionTower(self.rbln_submodules[1])
-        self.language_model = self.rbln_submodules[0]
+        self.vision_tower = LoopVisionTower(self.rbln_submodules[0])
+        self.language_model = self.rbln_submodules[1]
         self.multi_modal_projector = LoopProjector(self.model[0])
         self.vocab_size = self.config.text_config.vocab_size
 
@@ -246,8 +246,7 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel):
             inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, image_features)
 
         return inputs_embeds
-    
-    
+
     def _update_causal_mask(
         self,
         attention_mask,
@@ -258,12 +257,10 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel):
             sequence_length = torch.sum(attention_mask, dim=-1)
             target_length = self.rbln_config.language_model.max_seq_len
             prefill_chunk_size = self.rbln_config.language_model.prefill_chunk_size
-            causal_mask = torch.full(
-                (prefill_chunk_size, target_length), fill_value=0, dtype=torch.float32
-            )
+            causal_mask = torch.full((prefill_chunk_size, target_length), fill_value=0, dtype=torch.float32)
             causal_mask[:, :sequence_length] = 1
             causal_mask = causal_mask[None, None, :, :]
-            
+
             return causal_mask
 
     def forward(
@@ -287,7 +284,7 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
                 output = self.language_model.prefill_decoder(
                     inputs_embeds=inputs_embeds[b_idx : b_idx + 1, attention_mask[b_idx].bool()],
-                    attention_mask=self._update_causal_mask(attention_mask[b_idx:b_idx+1]),
+                    attention_mask=self._update_causal_mask(attention_mask[b_idx : b_idx + 1]),
                     cache_position=cache_position,
                     batch_idx=b_idx,
                 )
