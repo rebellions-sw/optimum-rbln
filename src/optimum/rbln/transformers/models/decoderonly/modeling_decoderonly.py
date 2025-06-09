@@ -835,18 +835,16 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         cls,
         batch_size: int,
         query_length: int,
-        use_inputs_embeds: bool,
-        use_attention_mask: bool,
-        use_position_ids: bool,
-        max_seq_len: int,
-        kvcache_block_size: int,
-        kvcache_num_blocks: int,
-        num_key_value_heads: int,
-        num_hidden_layers: int,
-        hidden_size: int,
-        head_dim: int,
+        rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
+        model_config: PretrainedConfig,
     ):
-        if use_inputs_embeds:
+        num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
+        num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
+        num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
+        hidden_size = getattr(model_config, "n_embd", None) or getattr(model_config, "hidden_size")
+        head_dim = getattr(model_config, "head_dim", None) or hidden_size // num_attention_heads
+
+        if rbln_config.use_inputs_embeds:
             main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
         else:
             main_input = ("input_ids", [batch_size, query_length], "int64")
@@ -860,7 +858,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             ),
         ]
 
-        max_block_cnt = max_seq_len // kvcache_block_size
+        max_block_cnt = rbln_config.max_seq_len // rbln_config.kvcache_block_size
 
         if query_length > 1:
             input_info.extend([("block_tables", [max_block_cnt], "int16")])
@@ -873,13 +871,13 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     ("query_position", [], "int16"),
                 ]
             )
-        if use_attention_mask:
+        if rbln_config.use_attention_mask:
             input_info.extend(
                 [
-                    ("attention_mask", [batch_size, 1, query_length, max_seq_len], "float32"),
+                    ("attention_mask", [batch_size, 1, query_length, rbln_config.max_seq_len], "float32"),
                 ]
             )
-        if use_position_ids:
+        if rbln_config.use_position_ids:
             input_info.append(("position_ids", [batch_size, query_length], "int32"))
 
         input_info.extend(
@@ -887,9 +885,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 (
                     f"past_key_values_{i}",
                     [
-                        kvcache_num_blocks,
+                        rbln_config.kvcache_num_blocks,
                         num_key_value_heads,
-                        kvcache_block_size,
+                        rbln_config.kvcache_block_size,
                         head_dim,
                     ],
                     "float32",
@@ -963,25 +961,12 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 "This can cause a failure during model compilation."
             )
         logger.info(f"[KVCache] Compiling with num_blocks: {rbln_config.kvcache_num_blocks}")
-        num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
-        num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
-        num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
-        hidden_size = getattr(model_config, "n_embd", None) or getattr(model_config, "hidden_size")
-        head_dim = getattr(model_config, "head_dim", None) or hidden_size // num_attention_heads
 
         prefill_input_info = cls.get_input_info(
             batch_size=1,
             query_length=rbln_config.prefill_chunk_size,
-            use_inputs_embeds=rbln_config.use_inputs_embeds,
-            use_attention_mask=rbln_config.use_attention_mask,
-            use_position_ids=rbln_config.use_position_ids,
-            max_seq_len=rbln_config.max_seq_len,
-            kvcache_block_size=rbln_config.kvcache_block_size,
-            kvcache_num_blocks=rbln_config.kvcache_num_blocks,
-            num_key_value_heads=num_key_value_heads,
-            num_hidden_layers=num_hidden_layers,
-            hidden_size=hidden_size,
-            head_dim=head_dim,
+            rbln_config=rbln_config,
+            model_config=model_config,
         )
 
         prefill_compile_config = RBLNCompileConfig(compiled_model_name="prefill", input_info=prefill_input_info)
@@ -991,16 +976,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             dec_input_info = cls.get_input_info(
                 batch_size=batch_size,
                 query_length=1,
-                use_inputs_embeds=rbln_config.use_inputs_embeds,
-                use_attention_mask=rbln_config.use_attention_mask,
-                use_position_ids=rbln_config.use_position_ids,
-                max_seq_len=rbln_config.max_seq_len,
-                kvcache_block_size=rbln_config.kvcache_block_size,
-                kvcache_num_blocks=rbln_config.kvcache_num_blocks,
-                num_key_value_heads=num_key_value_heads,
-                num_hidden_layers=num_hidden_layers,
-                hidden_size=hidden_size,
-                head_dim=head_dim,
+                rbln_config=rbln_config,
+                model_config=model_config,
             )
             dec_compile_configs.append(
                 RBLNCompileConfig(compiled_model_name=f"decoder_batch_{batch_size}", input_info=dec_input_info)

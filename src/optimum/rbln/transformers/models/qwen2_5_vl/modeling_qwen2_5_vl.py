@@ -51,6 +51,8 @@ if TYPE_CHECKING:
         PretrainedConfig,
     )
 
+    from .configuration_qwen2_5_vl import RBLNQwen2_5_VLForConditionalGenerationConfig
+
 
 class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
     auto_model_class = None
@@ -369,33 +371,66 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         cls,
         batch_size: int,
         query_length: int,
-        use_inputs_embeds: bool,
-        use_attention_mask: bool,
-        use_position_ids: bool,
-        max_seq_len: int,
-        kvcache_block_size: int,
-        kvcache_num_blocks: int,
-        num_key_value_heads: int,
-        num_hidden_layers: int,
-        hidden_size: int,
-        head_dim: int,
+        rbln_config: "RBLNQwen2_5_VLForConditionalGenerationConfig",
+        model_config: PretrainedConfig,
     ):
-        input_info = super().get_input_info(
-            batch_size,
-            query_length,
-            use_inputs_embeds,
-            use_attention_mask,
-            use_position_ids,
-            max_seq_len,
-            kvcache_block_size,
-            kvcache_num_blocks,
-            num_key_value_heads,
-            num_hidden_layers,
-            hidden_size,
-            head_dim,
+        num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
+        num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
+        num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
+        hidden_size = getattr(model_config, "n_embd", None) or getattr(model_config, "hidden_size")
+        head_dim = getattr(model_config, "head_dim", None) or hidden_size // num_attention_heads
+
+        if rbln_config.use_inputs_embeds:
+            main_input = ("inputs_embeds", [batch_size, query_length, model_config.hidden_size], "float32")
+        else:
+            main_input = ("input_ids", [batch_size, query_length], "int64")
+
+        input_info = [
+            main_input,
+            (
+                "cache_position",
+                [batch_size, query_length],
+                "int32",
+            ),
+        ]
+
+        max_block_cnt = rbln_config.max_seq_len // rbln_config.kvcache_block_size
+
+        if query_length > 1:
+            input_info.extend([("block_tables", [max_block_cnt], "int16")])
+        else:
+            input_info.extend([("block_tables", [batch_size, max_block_cnt], "int16")])
+
+        if query_length > 1:
+            input_info.extend(
+                [
+                    ("query_position", [], "int16"),
+                ]
+            )
+        if rbln_config.use_attention_mask:
+            input_info.extend(
+                [
+                    ("attention_mask", [batch_size, 1, query_length, rbln_config.max_seq_len], "float32"),
+                ]
+            )
+        if rbln_config.use_position_ids:
+            input_info.append(("position_ids", [batch_size, query_length], "int32"))
+
+        input_info.extend(
+            [
+                (
+                    f"past_key_values_{i}",
+                    [
+                        rbln_config.kvcache_num_blocks,
+                        num_key_value_heads,
+                        rbln_config.kvcache_block_size,
+                        head_dim,
+                    ],
+                    "float32",
+                )
+                for i in range(num_hidden_layers * 2)
+            ]
         )
-        pos_idx = 3
-        input_info.insert(pos_idx, ("position_emb", [2, batch_size, 1, query_length, head_dim], "float32"))
 
         return input_info
 
