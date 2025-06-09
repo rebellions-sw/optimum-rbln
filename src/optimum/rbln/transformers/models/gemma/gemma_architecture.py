@@ -34,7 +34,10 @@ class GemmaWrapper(DecoderOnlyWrapper):
         for layer in causal_lm.model.layers:
             if self.attn_impl == "eager":
                 new_self_attn = DecoderOnlyAttention(
-                    layer.self_attn, self.use_attention_mask, kvcache_block_size=self.kvcache_block_size
+                    layer.self_attn,
+                    self.use_attention_mask,
+                    kvcache_block_size=self.kvcache_block_size,
+                    use_position_ids=self.use_position_ids,
                 )
             elif self.attn_impl == "flash_attn":
                 new_self_attn = DecoderOnlyFlashAttention(
@@ -42,6 +45,7 @@ class GemmaWrapper(DecoderOnlyWrapper):
                     kvcache_partition_len=self.kvcache_partition_len,
                     use_attention_mask=self.use_attention_mask,
                     kvcache_block_size=self.kvcache_block_size,
+                    use_position_ids=self.use_position_ids,
                 )
             else:
                 raise NotImplementedError(f"Unknwon attn : {self.attn_impl}")

@@ -25,6 +25,7 @@ env:
   REBEL_PYPI_ENDPOINT: ${{ vars.REBEL_PYPI_INTERNAL_ENDPOINT }}
   REBEL_PYPI_USERNAME: ${{ secrets.REBEL_PYPI_USERNAME }}
   REBEL_PYPI_PASSWORD: ${{ secrets.REBEL_PYPI_PASSWORD }}
+  HF_HOME: ${{ secrets.HF_HOME }}
 
 jobs:
   pytest:

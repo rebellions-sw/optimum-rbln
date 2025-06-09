@@ -70,6 +70,8 @@ class RBLNOPTForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             "kvcache_block_size": rbln_config.kvcache_block_size,
             "use_rotary_emb": cls._use_rotary_emb,
             "use_attention_mask": rbln_config.use_attention_mask,
+            "use_position_ids": rbln_config.use_position_ids,
+            "use_inputs_embeds": rbln_config.use_inputs_embeds,
         }
 
         for i in range(len(model.model.decoder.layers)):
