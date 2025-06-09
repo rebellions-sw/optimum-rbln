@@ -12,94 +12,82 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import functools
 import glob
 import os
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 import torch
 from safetensors.torch import load_file
 from torch.nn import Linear, Parameter
 from torch.nn import functional as F
 
+from ...configuration_utils import RBLNSerializableConfigProtocol
 from ...utils.logging import get_logger
 
 
 logger = get_logger()
 
-SUPPORTED_QUANTIZATIONS: Dict[str, list[str]] = {
-    "rbln": ["w4a16"],
-}
 
+class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
+    SUPPORTED_FORMATS = ["rbln"]
+    SUPPORTED_WEIGHTS = ["int4", "fp16"]
+    SUPPORTED_ACTIVATIONS = ["fp16"]
 
-class QuantizationManager:
     # The RBLN_QUANT_BITS environment variable defines the precision of each layer during the graph compilation process.
     # It specifies the quantization bit depth. For instance, setting RBLN_QUANT_BITS=4 will apply 4-bit precision for quantization.
     RBLN_QUANT_BITS_ENV = "RBLN_QUANT_BITS"
 
-    @staticmethod
-    def _raise_invalid_config_error(
-        key: str, value: str, valid_values: list[str], context: Optional[str] = None
-    ) -> None:
-        context_info = f" for {context}" if context else ""
-        valid_values_str = ", ".join(valid_values)
-        raise ValueError(f"Invalid {key}: {value}{context_info}. Supported values are: {valid_values_str}")
+    def __init__(
+        self,
+        format: Optional[str] = None,
+        precision: Optional[str] = None,
+        weights: Optional[str] = None,
+        activations: Optional[str] = None,
+    ):
+        self.format = format
+        if precision is not None:
+            logger.warning("The `precision` argument is deprecated. Use `weights` and `activations` instead.")
+            if any(precision_arg is not None for precision_arg in (weights, activations)):
+                raise ValueError("`precision` and `weights` or `activations` cannot be set at the same time.")
 
-    @staticmethod
-    def validate_quantization_config(quantize_config: Optional[dict]) -> Optional[dict]:
-        if not quantize_config:
-            return None
+            if precision == "w4a16":
+                weights = "int4"
+                activations = "fp16"
+            else:
+                raise ValueError(f"Invalid precision: {precision}")
 
-        q_format = quantize_config.get("format")
-        q_precision = quantize_config.get("precision")
+        self.weights = weights or "fp16"
+        self.activations = activations or "fp16"
+        self._validate()
 
-        if q_format not in SUPPORTED_QUANTIZATIONS:
-            QuantizationManager._raise_invalid_config_error(
-                "quantization format", q_format, list(SUPPORTED_QUANTIZATIONS.keys())
+    def _validate(self):
+        if self.format not in self.SUPPORTED_FORMATS:
+            raise ValueError(f"Invalid format: {self.format}, supported formats are: {self.SUPPORTED_FORMATS}")
+        if self.weights not in self.SUPPORTED_WEIGHTS:
+            raise ValueError(f"Invalid weights: {self.weights}, supported weights are: {self.SUPPORTED_WEIGHTS}")
+        if self.activations not in self.SUPPORTED_ACTIVATIONS:
+            raise ValueError(
+                f"Invalid activations: {self.activations}, supported activations are: {self.SUPPORTED_ACTIVATIONS}"
             )
+        if self.weights == "fp16" and self.activations == "fp16":
+            raise ValueError("weights and activations cannot be both fp16. It is meaningless.")
 
-        if q_precision not in SUPPORTED_QUANTIZATIONS[q_format]:
-            QuantizationManager._raise_invalid_config_error(
-                "precision", q_precision, SUPPORTED_QUANTIZATIONS[q_format], q_format
-            )
+    def _prepare_for_serialization(self) -> Dict[str, Any]:
+        return {
+            "format": self.format,
+            "weights": self.weights,
+            "activations": self.activations,
+        }
 
-        return quantize_config
+    def maybe_set_quantization_env(self):
+        quant_bits = None
+        if self.weights == "int4":
+            quant_bits = "4"
+            os.environ[self.RBLN_QUANT_BITS_ENV] = quant_bits
 
-    @classmethod
-    def _set_env_var(cls, name: str, value: str) -> None:
-        os.environ[name] = value
-
-    @classmethod
-    def _unset_env_var(cls, name: str) -> None:
-        os.environ.pop(name, None)
-
-    @classmethod
-    def set_quantization_env(cls, quantize_config: Optional[dict]) -> Optional[str]:
-        quantize_config = cls.validate_quantization_config(quantize_config)
-        if quantize_config:
-            q_precision: str = quantize_config["precision"]
-            quant_bits = q_precision.split("w")[1].split("a")[0]
-            cls._set_env_var(cls.RBLN_QUANT_BITS_ENV, quant_bits)
-            return cls.RBLN_QUANT_BITS_ENV
-        return None
-
-    @classmethod
-    def reset_quantization_env(cls, env_var_name: Optional[str]) -> None:
-        if env_var_name:
-            cls._unset_env_var(env_var_name)
-
-    @classmethod
-    def with_quantization_env(cls, func: Callable) -> Callable:
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            quantize_config = kwargs.get("quantize_config")
-            quantize_env_var = cls.set_quantization_env(quantize_config)
-            try:
-                return func(*args, **kwargs)
-            finally:
-                cls.reset_quantization_env(quantize_env_var)
-
-        return wrapper
+    def maybe_reset_quantization_env(self):
+        if self.RBLN_QUANT_BITS_ENV in os.environ:
+            os.environ.pop(self.RBLN_QUANT_BITS_ENV)
 
 
 # Constants
@@ -114,12 +102,31 @@ QUANTIZED_WEIGHTS = {
 }
 
 
-def prepare_model_for_quantization(model: torch.nn.Module, model_id: str, n_layer: Optional[int] = None) -> None:
+def prepare_model_for_quantization(
+    model: torch.nn.Module,
+    model_id: str,
+    n_layer: Optional[int] = None,
+    use_auth_token: Optional[Union[bool, str]] = None,
+    revision: Optional[str] = None,
+    cache_dir: Optional[str] = None,
+    force_download: bool = False,
+    local_files_only: bool = False,
+) -> torch.nn.Module:
     """
     Prepare the model for quantization by updating specified linear layers to quantized (qlinear) layers.
     """
     update_layers_to_quantize(model)
-    load_weights(model, model_id, n_layer)
+    load_weights(
+        model,
+        model_id,
+        n_layer,
+        use_auth_token=use_auth_token,
+        revision=revision,
+        cache_dir=cache_dir,
+        force_download=force_download,
+        local_files_only=local_files_only,
+    )
+    return model
 
 
 def update_layers_to_quantize(module: torch.nn.Module) -> None:
@@ -140,18 +147,57 @@ def update_layers_to_quantize(module: torch.nn.Module) -> None:
         logger.debug(f"Updated the following linear layers to quantized layers:\n {{{', '.join(processed_layers)}}}")
 
 
-def load_weights(model, model_id, n_layer=None):
+def load_weights(
+    model,
+    model_id,
+    n_layer=None,
+    use_auth_token=None,
+    revision=None,
+    cache_dir=None,
+    force_download=False,
+    local_files_only=False,
+):
     """
     Load safetensor file data directly into the model, filtering by layer if n_layer is provided.
     """
-    logger.debug("Loading the quantized weights into the CPU.")  # TODO(jongho): remove.
 
     model_params = dict(model.named_parameters(recurse=True))
     model_buffers = dict(model.named_buffers(recurse=True))
-    safetensor_files = glob.glob(f"{model_id}/*.safetensors")
+
+    if os.path.isdir(model_id):
+        safetensor_files = glob.glob(f"{model_id}/*.safetensors")
+    else:
+        from huggingface_hub import hf_hub_download, list_repo_files
+
+        try:
+            # List all files in the repository
+            repo_files = list_repo_files(model_id, revision=revision, token=use_auth_token)
+            # Filter for safetensors files
+            safetensor_files = []
+
+            for file in repo_files:
+                if file.endswith(".safetensors"):
+                    # Download the safetensors file
+                    downloaded_file = hf_hub_download(
+                        repo_id=model_id,
+                        filename=file,
+                        revision=revision,
+                        token=use_auth_token,
+                        cache_dir=cache_dir,
+                        force_download=force_download,
+                        local_files_only=local_files_only,
+                    )
+                    safetensor_files.append(downloaded_file)
+        except Exception as e:
+            logger.error(f"Failed to download safetensors files from Hugging Face Hub: {e}")
+            raise e
+
+    if not safetensor_files:
+        raise FileNotFoundError(f"No safetensors files found for model_id: {model_id}")
 
     target_layers = list(range(n_layer)) if n_layer is not None else None
 
+    unloaded_keys = []
     for safetensor_file in safetensor_files:
         file_data = load_file(safetensor_file)
         for key, value in file_data.items():
@@ -165,8 +211,11 @@ def load_weights(model, model_id, n_layer=None):
                 model_params[key].data.copy_(value)
             elif key in model_buffers:
                 model_buffers[key].data.copy_(value)
+            else:
+                unloaded_keys.append(key)
 
-    logger.debug("Loaded the quantized weights into the CPU.")
+    if len(unloaded_keys) > 0:
+        logger.warning(f"There are unexpected parameters/buffers on the checkpoint: {unloaded_keys}")
 
 
 def is_target_for_qlinear_replacement(layer_name: str, layer: torch.nn.Module) -> bool:

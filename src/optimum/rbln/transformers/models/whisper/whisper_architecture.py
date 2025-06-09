@@ -313,6 +313,7 @@ class WhisperSelfAttention(WhisperAttention):
             args["mask"] = attention_mask.unsqueeze(2)
             attn_output = torch.ops.rbln_custom_ops.paged_attn_decode(**args)
         else:
+            args["mask"] = None
             attn_output = torch.ops.rbln_custom_ops.paged_causal_attn_decode(**args)
 
         attn_output = attn_output.view(bsz, self.num_heads, tgt_len, self.head_dim)

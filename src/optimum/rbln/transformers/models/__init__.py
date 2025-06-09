@@ -31,6 +31,7 @@ _import_structure = {
         "RBLNAutoModelForSequenceClassification",
         "RBLNAutoModelForSpeechSeq2Seq",
         "RBLNAutoModelForVision2Seq",
+        "RBLNAutoModelForImageTextToText",
     ],
     "bart": [
         "RBLNBartForConditionalGeneration",
@@ -45,6 +46,14 @@ _import_structure = {
         "RBLNBertForQuestionAnsweringConfig",
         "RBLNBertForMaskedLM",
         "RBLNBertForMaskedLMConfig",
+    ],
+    "blip_2": [
+        "RBLNBlip2VisionModelConfig",
+        "RBLNBlip2VisionModel",
+        "RBLNBlip2ForConditionalGeneration",
+        "RBLNBlip2ForConditionalGenerationConfig",
+        "RBLNBlip2QFormerModel",
+        "RBLNBlip2QFormerModelConfig",
     ],
     "clip": [
         "RBLNCLIPTextModel",
@@ -72,6 +81,12 @@ _import_structure = {
     ],
     "exaone": ["RBLNExaoneForCausalLM", "RBLNExaoneForCausalLMConfig"],
     "gemma": ["RBLNGemmaForCausalLM", "RBLNGemmaForCausalLMConfig"],
+    "gemma3": [
+        "RBLNGemma3ForCausalLM",
+        "RBLNGemma3ForCausalLMConfig",
+        "RBLNGemma3ForConditionalGeneration",
+        "RBLNGemma3ForConditionalGenerationConfig",
+    ],
     "gpt2": ["RBLNGPT2LMHeadModel", "RBLNGPT2LMHeadModelConfig"],
     "idefics3": [
         "RBLNIdefics3VisionTransformer",
@@ -80,11 +95,16 @@ _import_structure = {
         "RBLNIdefics3VisionTransformerConfig",
     ],
     "llama": ["RBLNLlamaForCausalLM", "RBLNLlamaForCausalLMConfig"],
+    "opt": ["RBLNOPTForCausalLM", "RBLNOPTForCausalLMConfig"],
     "llava_next": ["RBLNLlavaNextForConditionalGeneration", "RBLNLlavaNextForConditionalGenerationConfig"],
     "midm": ["RBLNMidmLMHeadModel", "RBLNMidmLMHeadModelConfig"],
     "mistral": ["RBLNMistralForCausalLM", "RBLNMistralForCausalLMConfig"],
     "phi": ["RBLNPhiForCausalLM", "RBLNPhiForCausalLMConfig"],
     "qwen2": ["RBLNQwen2ForCausalLM", "RBLNQwen2ForCausalLMConfig"],
+    "siglip": [
+        "RBLNSiglipVisionModel",
+        "RBLNSiglipVisionModelConfig",
+    ],
     "time_series_transformers": [
         "RBLNTimeSeriesTransformerForPrediction",
         "RBLNTimeSeriesTransformerForPredictionConfig",
@@ -108,6 +128,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForCTC,
         RBLNAutoModelForDepthEstimation,
         RBLNAutoModelForImageClassification,
+        RBLNAutoModelForImageTextToText,
         RBLNAutoModelForMaskedLM,
         RBLNAutoModelForQuestionAnswering,
         RBLNAutoModelForSeq2SeqLM,
@@ -129,6 +150,14 @@ if TYPE_CHECKING:
         RBLNBertModel,
         RBLNBertModelConfig,
     )
+    from .blip_2 import (
+        RBLNBlip2ForConditionalGeneration,
+        RBLNBlip2ForConditionalGenerationConfig,
+        RBLNBlip2QFormerModel,
+        RBLNBlip2QFormerModelConfig,
+        RBLNBlip2VisionModel,
+        RBLNBlip2VisionModelConfig,
+    )
     from .clip import (
         RBLNCLIPTextModel,
         RBLNCLIPTextModelConfig,
@@ -149,6 +178,12 @@ if TYPE_CHECKING:
     )
     from .exaone import RBLNExaoneForCausalLM, RBLNExaoneForCausalLMConfig
     from .gemma import RBLNGemmaForCausalLM, RBLNGemmaForCausalLMConfig
+    from .gemma3 import (
+        RBLNGemma3ForCausalLM,
+        RBLNGemma3ForCausalLMConfig,
+        RBLNGemma3ForConditionalGeneration,
+        RBLNGemma3ForConditionalGenerationConfig,
+    )
     from .gpt2 import RBLNGPT2LMHeadModel, RBLNGPT2LMHeadModelConfig
     from .idefics3 import (
         RBLNIdefics3ForConditionalGeneration,
@@ -160,6 +195,7 @@ if TYPE_CHECKING:
     from .llava_next import RBLNLlavaNextForConditionalGeneration, RBLNLlavaNextForConditionalGenerationConfig
     from .midm import RBLNMidmLMHeadModel, RBLNMidmLMHeadModelConfig
     from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig
+    from .opt import RBLNOPTForCausalLM, RBLNOPTForCausalLMConfig
     from .phi import RBLNPhiForCausalLM, RBLNPhiForCausalLMConfig
     from .qwen2 import RBLNQwen2ForCausalLM, RBLNQwen2ForCausalLMConfig
     from .qwen2_5_vl import (
@@ -168,6 +204,7 @@ if TYPE_CHECKING:
         RBLNQwen2_5_VLForConditionalGeneration,
         RBLNQwen2_5_VLForConditionalGenerationConfig,
     )
+    from .siglip import RBLNSiglipVisionModel, RBLNSiglipVisionModelConfig
     from .t5 import (
         RBLNT5EncoderModel,
         RBLNT5EncoderModelConfig,

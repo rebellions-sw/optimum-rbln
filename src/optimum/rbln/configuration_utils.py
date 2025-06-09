@@ -17,7 +17,7 @@ import inspect
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Protocol, Tuple, Type, Union, runtime_checkable
 
 import torch
 
@@ -32,6 +32,11 @@ logger = get_logger(__name__)
 DEFAULT_COMPILED_MODEL_NAME = "compiled_model"
 DEFAULT_MOD_NAME = "default"
 TypeInputInfo = List[Tuple[str, Tuple[int], str]]
+
+
+@runtime_checkable
+class RBLNSerializableConfigProtocol(Protocol):
+    def _prepare_for_serialization(self) -> Dict[str, Any]: ...
 
 
 @dataclass
@@ -263,7 +268,7 @@ class RBLNAutoConfig:
             return cls(**config_file)
 
 
-class RBLNModelConfig:
+class RBLNModelConfig(RBLNSerializableConfigProtocol):
     """Base configuration class for RBLN models that handles compilation settings, runtime options, and submodules.
 
     This class provides functionality for:
@@ -620,14 +625,14 @@ class RBLNModelConfig:
             )
         return rbln_model_cls
 
-    def _prepare_for_serialization(self):
+    def _prepare_for_serialization(self) -> Dict[str, Any]:
         """
         Prepare the attributes map for serialization by converting nested RBLNModelConfig
         objects to their serializable form.
         """
         serializable_map = {}
         for key, value in self._attributes_map.items():
-            if isinstance(value, RBLNModelConfig):
+            if isinstance(value, RBLNSerializableConfigProtocol):
                 # Convert nested RBLNModelConfig to its serializable form
                 serializable_map[key] = value._prepare_for_serialization()
             elif key == "_compile_cfgs":
