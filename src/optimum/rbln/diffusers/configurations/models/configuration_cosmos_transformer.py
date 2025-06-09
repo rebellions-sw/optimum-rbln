@@ -26,21 +26,25 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
         width: Optional[int] = None,
         fps: Optional[int] = None,
         max_seq_len: Optional[int] = None,
-        num_channel_latents: Optional[int] = None,
+        num_channels_latents: Optional[int] = None,
         num_latent_frames: Optional[int] = None,
         latent_height: Optional[int] = None,
         latent_width: Optional[int] = None,
         embedding_dim: Optional[int] = None,
-        time_proj_num_channels: Optional[int] = None,
         **kwargs,
     ):
         """
         Args:
             batch_size (Optional[int]): The batch size for inference. Defaults to 1.
-            num_frames (Optional[int]): The number of frames in the generated video.
-            height (Optional[int]): The height in pixels of the generated image.
-            width (Optional[int]): The width in pixels of the generated image.
-            fps (Optional[int]): The frames per second of the generated video.
+            num_frames (Optional[int]): The number of frames in the generated video. Defaults to 121.
+            height (Optional[int]): The height in pixels of the generated video. Defaults to 704.
+            width (Optional[int]): The width in pixels of the generated video. Defaults to 1280.
+            fps (Optional[int]): The frames per second of the generated video.  Defaults to 30.
+            max_seq_len (Optional[int]):
+            num_channels_latents (Optional[int]): The number of channels in latent space.
+            latent_height (Optional[int]): The height in pixels in latent space.
+            latent_width (Optional[int]): The width in pixels in latent space.
+            embedding_dim (Optional[int]):
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -54,12 +58,11 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
         self.fps = fps or 30
         self.max_seq_len = max_seq_len or 512
 
-        self.num_channel_latents = num_channel_latents
+        self.num_channels_latents = num_channels_latents
         self.num_latent_frames = num_latent_frames
         self.latent_height = latent_height
         self.latent_width = latent_width
         self.embedding_dim = embedding_dim
-        self.time_proj_num_channels = time_proj_num_channels
 
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")

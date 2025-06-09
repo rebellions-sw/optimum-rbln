@@ -51,8 +51,8 @@ class RBLNCosmosTextToWorldPipelineConfig(RBLNModelConfig):
             vae (Optional[RBLNAutoencoderKLCosmosConfig]): Configuration for the VAE model component.
                 Initialized as RBLNAutoencoderKLCosmosConfig if not provided.
             batch_size (Optional[int]): Batch size for inference, applied to all submodules.
-            height (Optional[int]): Height of the generated images.
-            width (Optional[int]): Width of the generated images.
+            height (Optional[int]): Height of the generated videos.
+            width (Optional[int]): Width of the generated videos.
             num_frames (Optional[int]): The number of frames in the generated video.
             fps (Optional[int]): The frames per second of the generated video.
             max_seq_len (Optional[int]): Maximum sequence length supported by the model.
@@ -77,7 +77,7 @@ class RBLNCosmosTextToWorldPipelineConfig(RBLNModelConfig):
             RBLNAutoencoderKLCosmosConfig,
             vae,
             batch_size=batch_size,
-            uses_encoder=False,
+            uses_encoder=self.__class__._vae_uses_encoder,
             height=height,
             width=width,
             num_frames=num_frames,

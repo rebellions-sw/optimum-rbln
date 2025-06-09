@@ -29,17 +29,27 @@ class RBLNAutoencoderKLCosmosConfig(RBLNModelConfig):
         num_frames: Optional[int] = None,
         height: Optional[int] = None,
         width: Optional[int] = None,
-        num_channel_latents: Optional[int] = None,
+        num_channels_latents: Optional[int] = None,
         vae_scale_factor_temporal: Optional[int] = None,
         vae_scale_factor_spatial: Optional[int] = None,
-        use_slicing: bool = False,
+        use_slicing: Optional[bool] = None,
         **kwargs,
     ):
         """
         Args:
             batch_size (Optional[int]): The batch size for inference. Defaults to 1.
             uses_encoder (Optional[bool]): Whether to include the encoder part of the VAE in the model.
-                When False, only the decoder is used (for latent-to-image conversion).
+                When False, only the decoder is used (for latent-to-video conversion).
+            num_frames (Optional[int]): The number of frames in the generated video. Defaults to 121.
+            height (Optional[int]): The height in pixels of the generated video. Defaults to 704.
+            width (Optional[int]): The width in pixels of the generated video. Defaults to 1280.
+            num_channels_latents (Optional[int]): The number of channels in latent space.
+            vae_scale_factor_temporal (Optional[int]): The scaling factor between time space and latent space.
+                Determines how much shorter the latent representations are compared to the original videos.
+            vae_scale_factor_spatial (Optional[int]): The scaling factor between pixel space and latent space.
+                Determines how much smaller the latent representations are compared to the original videos.
+            use_slicing (Optional[Bool]): Enable sliced VAE encoding and decoding.
+                If True, the VAE will split the input tensor in slices to compute encoding or decoding in several steps.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -62,10 +72,10 @@ class RBLNAutoencoderKLCosmosConfig(RBLNModelConfig):
         self.height = height or 704
         self.width = width or 1280
 
-        self.num_channel_latents = num_channel_latents
+        self.num_channels_latents = num_channels_latents
         self.vae_scale_factor_temporal = vae_scale_factor_temporal
         self.vae_scale_factor_spatial = vae_scale_factor_spatial
-        self.use_slicing = use_slicing
+        self.use_slicing = use_slicing or False
 
     @property
     def image_size(self):
