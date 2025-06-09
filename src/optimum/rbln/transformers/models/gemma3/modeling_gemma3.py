@@ -776,7 +776,9 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             main_input,
             (
                 "attention_mask",
-                [batch_size, 1, query_length, rbln_config.max_seq_len] if not rbln_config.use_position_ids else [batch_size, rbln_config.max_seq_len],
+                [batch_size, 1, query_length, rbln_config.max_seq_len]
+                if not rbln_config.use_position_ids
+                else [batch_size, rbln_config.max_seq_len],
                 "float32",
             ),
             (
@@ -818,7 +820,12 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             return bool((layer_idx + 1) % sliding_window_pattern)
 
         local_kvcache_shape = [dec_batch_size, num_key_value_heads, sliding_window, head_dim]
-        global_kvcache_shape = [rbln_config.kvcache_num_blocks, num_key_value_heads, rbln_config.kvcache_block_size, head_dim]
+        global_kvcache_shape = [
+            rbln_config.kvcache_num_blocks,
+            num_key_value_heads,
+            rbln_config.kvcache_block_size,
+            head_dim,
+        ]
         input_info.extend(
             [
                 (
