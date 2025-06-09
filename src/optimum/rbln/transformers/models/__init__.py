@@ -118,6 +118,10 @@ _import_structure = {
     "wav2vec2": ["RBLNWav2Vec2ForCTC", "RBLNWav2Vec2ForCTCConfig"],
     "whisper": ["RBLNWhisperForConditionalGeneration", "RBLNWhisperForConditionalGenerationConfig"],
     "xlm_roberta": ["RBLNXLMRobertaModel", "RBLNXLMRobertaModelConfig"],
+    "paligemma": [
+        "RBLNPaliGemmaForConditionalGeneration",
+        "RBLNPaliGemmaForConditionalGenerationConfig",
+    ],
 }
 
 if TYPE_CHECKING:
@@ -196,6 +200,10 @@ if TYPE_CHECKING:
     from .midm import RBLNMidmLMHeadModel, RBLNMidmLMHeadModelConfig
     from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig
     from .opt import RBLNOPTForCausalLM, RBLNOPTForCausalLMConfig
+    from .paligemma import (
+        RBLNPaliGemmaForConditionalGeneration,
+        RBLNPaliGemmaForConditionalGenerationConfig,
+    )
     from .phi import RBLNPhiForCausalLM, RBLNPhiForCausalLMConfig
     from .qwen2 import RBLNQwen2ForCausalLM, RBLNQwen2ForCausalLMConfig
     from .qwen2_5_vl import (

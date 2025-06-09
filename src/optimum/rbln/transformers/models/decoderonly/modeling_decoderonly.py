@@ -276,11 +276,10 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         """
         # Handle continuous batching in a compiled graph by extracting valid inputs
         # If an attention mask is provided, select only the valid (non-masked) inputs
-        inputs = inputs[:, attention_mask.bool()] if attention_mask is not None else inputs
-        if position_embed is not None:
-            position_embed = (
-                position_embed[:, :, :, attention_mask.bool(), :] if attention_mask is not None else position_embed
-            )
+        if attention_mask is not None and attention_mask.dim() == 1:
+            inputs = inputs[:, attention_mask.bool()]
+            if position_embed is not None:
+                position_embed = position_embed[:, :, :, attention_mask.bool(), :]
 
         query_length = inputs.shape[1]
         if query_length > self.max_seq_len:
@@ -289,11 +288,11 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             )
 
         # Initialize attention mask for chunked processing
-        chunked_attention_mask = (
-            torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
-            if self.use_attention_mask
-            else None
-        )
+        if self.use_attention_mask:
+            if attention_mask.dim() == 4:
+                chunked_attention_mask = attention_mask
+            else:
+                chunked_attention_mask = torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
 
         # Buffer for storing output logits
         out_buffers = [
@@ -385,7 +384,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             if position_embed is not None:
                 position_embed_chunk = position_embed[:, :, :, step : step + self.prefill_chunk_size, :]
 
-            if self.use_attention_mask and not self.use_position_ids:
+            if self.use_attention_mask and not self.use_position_ids and attention_mask.dim() != 4:
                 # Update attention mask to ensure proper causal behavior
                 if step >= self.prefill_chunk_size:
                     chunked_attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
