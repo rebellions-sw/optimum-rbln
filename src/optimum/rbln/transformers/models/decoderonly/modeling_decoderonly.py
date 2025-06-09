@@ -846,14 +846,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         local_kvcache_num_blocks: int,
     ):
         is_prefill: bool = query_length > 1
-        if sliding_window is None and sliding_window_pattern is None:
-            cache_type: str = "STATIC"
-        elif sliding_window is not None and sliding_window_pattern is None:
-            cache_type: str = "SLIDING_WINDOW"
-        elif sliding_window is not None and sliding_window_pattern is not None:
-            cache_type: str = "HYBRID"
-        else:
-            raise ValueError(f"Unexpected config. sliding_window is None and sliding_window_pattern is not None")
 
         if use_inputs_embeds:
             main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 import rebel
 
@@ -39,6 +39,9 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         prefill_chunk_size: Optional[int] = None,
         kvcache_num_blocks: Optional[int] = None,
         decoder_batch_sizes: Optional[List[int]] = None,
+        model_type: Literal["static", "sliding_window", "hybrid"] = "static",
+        sliding_window: Optional[int] = None,
+        sliding_window_layers: Optional[List[int]] = None,
         **kwargs,
     ):
         """
@@ -62,7 +65,9 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
                 1) All values must be less than or equal to the main batch size.
                 2) The list will be sorted in descending order (larger batch sizes first).
                 3) If using multiple decoders, at least one batch size should match the main batch size.
-
+            model_type (Literal["static", "sliding_window", "hybrid"]): The type of model construction. Defaults to "static" which is the all layers are global.
+            sliding_window (Optional[int]): The size of the sliding window. Defaults to None.
+            sliding_window_layers (Optional[List[int]]): The layers to use for the sliding window used in the hybrid model. Defaults to None.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -120,6 +125,10 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
 
             # Larger batch size should be at the beginning of the list.
             self.decoder_batch_sizes.sort(reverse=True)
+        
+        self.model_type = model_type
+        self.sliding_window = sliding_window
+        self.sliding_window_layers = sliding_window_layers
 
     @property
     def use_multiple_decoder(self):
