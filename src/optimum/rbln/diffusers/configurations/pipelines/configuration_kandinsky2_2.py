@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from ....configuration_utils import RBLNModelConfig
 from ....transformers import RBLNCLIPTextModelWithProjectionConfig, RBLNCLIPVisionModelWithProjectionConfig
@@ -39,7 +39,7 @@ class _RBLNKandinskyV22PipelineBaseConfig(RBLNModelConfig):
         img_width: Optional[int] = None,
         height: Optional[int] = None,
         width: Optional[int] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:
@@ -150,7 +150,7 @@ class RBLNKandinskyV22PriorPipelineConfig(RBLNModelConfig):
         *,
         batch_size: Optional[int] = None,
         guidance_scale: Optional[float] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Initialize a configuration for Kandinsky 2.2 prior pipeline optimized for RBLN NPU.
@@ -228,7 +228,7 @@ class _RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
         prior_text_encoder: Optional[RBLNCLIPTextModelWithProjectionConfig] = None,
         unet: Optional[RBLNUNet2DConditionModelConfig] = None,
         movq: Optional[RBLNVQModelConfig] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Initialize a configuration for combined Kandinsky 2.2 pipelines optimized for RBLN NPU.

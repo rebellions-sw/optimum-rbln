@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from ....configuration_utils import RBLNModelConfig
 from ....transformers import RBLNCLIPTextModelConfig, RBLNCLIPTextModelWithProjectionConfig
@@ -38,7 +38,7 @@ class _RBLNStableDiffusionControlNetPipelineBaseConfig(RBLNModelConfig):
         sample_size: Optional[Tuple[int, int]] = None,
         image_size: Optional[Tuple[int, int]] = None,
         guidance_scale: Optional[float] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:
@@ -166,7 +166,7 @@ class _RBLNStableDiffusionXLControlNetPipelineBaseConfig(RBLNModelConfig):
         sample_size: Optional[Tuple[int, int]] = None,
         image_size: Optional[Tuple[int, int]] = None,
         guidance_scale: Optional[float] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:
