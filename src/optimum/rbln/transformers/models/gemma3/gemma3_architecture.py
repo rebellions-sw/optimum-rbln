@@ -20,7 +20,6 @@ from torch import nn
 from transformers.models.gemma3.modeling_gemma3 import Gemma3RMSNorm
 
 from ..decoderonly.decoderonly_architecture import (
-    AttentionOp,
     DecoderOnlyAttention,
     DecoderOnlyFlashAttention,
     DecoderOnlyForCausalLM,
@@ -28,7 +27,6 @@ from ..decoderonly.decoderonly_architecture import (
     DecoderOnlyModel,
     DecoderOnlyWrapper,
     RotaryEmbedding,
-    SlidingWindowAttentionOp,
     slice_and_unsqueeze_cos_sin,
 )
 
@@ -57,6 +55,7 @@ class Gemma3ForCausalLMWrapper(DecoderOnlyWrapper):
                     use_attention_mask=None,  # FIXME: no use in SWA
                     use_position_ids=self.use_position_ids,
                     kvcache_block_size=self.config.sliding_window,
+                    is_sliding=True,
                 )
             else:
                 if self.attn_impl == "eager":
@@ -65,6 +64,7 @@ class Gemma3ForCausalLMWrapper(DecoderOnlyWrapper):
                         use_attention_mask=self.use_attention_mask,
                         use_position_ids=self.use_position_ids,
                         kvcache_block_size=self.kvcache_block_size,
+                        is_sliding=False,
                     )
                 elif self.attn_impl == "flash_attn":
                     new_self_attn = Gemma3FlashAttention(
@@ -294,20 +294,6 @@ class Gemma3Attention(DecoderOnlyAttention):
 
     def get_attn_scale(self):
         return self._original_mod.config.query_pre_attn_scalar**-0.5
-
-    def get_attention(self):
-        if self._original_mod.is_sliding:
-            return SlidingWindowAttentionOp(
-                self.num_heads,
-                self.head_dim,
-                self.num_key_value_heads,
-                self.use_attention_mask,
-                self.use_position_ids,
-            )
-        else:
-            return AttentionOp(
-                self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask, self.use_position_ids
-            )
 
     def forward(
         self,

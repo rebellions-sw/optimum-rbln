@@ -153,6 +153,8 @@ class DecoderOnlyWrapper(nn.Module):
         use_learned_pos_emb: Optional[bool] = None,
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
+        sliding_window: Optional[int] = None,
+        sliding_window_layers: Optional[List[int]] = None,
     ):
         super().__init__()
         self.config = causal_lm.config
@@ -172,8 +174,8 @@ class DecoderOnlyWrapper(nn.Module):
         self.use_position_ids = use_position_ids
         self.use_inputs_embeds = use_inputs_embeds
         self.use_learned_pos_emb = use_learned_pos_emb
-        self.sliding_window = getattr(self.config, "sliding_window", None)
-        self.sliding_window_pattern = getattr(self.config, "sliding_window_pattern", None)
+        self.sliding_window = sliding_window
+        self.sliding_window_layers = sliding_window_layers
         self.model_type = model_type
 
         if self.attn_impl == "flash_attn":
@@ -199,13 +201,15 @@ class DecoderOnlyWrapper(nn.Module):
     def convert_to_rbln_causal_lm(self, causal_lm: PreTrainedModel, max_seq_len: int):
         new_layers = []
 
-        for layer in causal_lm.model.layers:
+        for layer_idx, layer in enumerate(causal_lm.model.layers):
+            is_sliding = True if layer_idx in self.sliding_window_layers else False
             if self.attn_impl == "eager":
                 new_self_attn = DecoderOnlyAttention(
                     layer.self_attn,
                     self.use_attention_mask,
                     self.use_position_ids,
                     kvcache_block_size=self.kvcache_block_size,
+                    is_sliding=is_sliding,
                 )
             elif self.attn_impl == "flash_attn":
                 new_self_attn = DecoderOnlyFlashAttention(
@@ -228,6 +232,7 @@ class DecoderOnlyWrapper(nn.Module):
             max_seq_len=max_seq_len,
             kvcache_block_size=self.kvcache_block_size,
             use_learned_pos_emb=self.use_learned_pos_emb,
+            sliding_window_layers=self.sliding_window_layers,
         )
         new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm
@@ -309,7 +314,7 @@ class DecoderOnlyWrapper(nn.Module):
             query_position=query_position,
             past_key_values=past_key_values,
             rotary_emb=rotary_emb,
-            global_block_tables=global_block_tables,
+            block_tables=global_block_tables,
             local_block_tables=local_block_tables,
         )
 
@@ -366,6 +371,7 @@ class DecoderOnlyForCausalLM(nn.Module):
         past_key_values: Tuple[Tuple[torch.Tensor]] = None,
         rotary_emb: nn.Module = None,
         block_tables: Optional[torch.Tensor] = None,
+        local_block_tables: Optional[torch.Tensor] = None,
     ):
         # outputs
         hidden_states = self.model(
@@ -377,6 +383,7 @@ class DecoderOnlyForCausalLM(nn.Module):
             past_key_values=past_key_values,
             rotary_emb=rotary_emb,
             block_tables=block_tables,
+            local_block_tables=local_block_tables,
         )
 
         if self.phase == "prefill":
@@ -414,6 +421,7 @@ class DecoderOnlyModel(nn.Module):
         max_seq_len=None,
         kvcache_block_size=None,
         use_learned_pos_emb=None,
+        sliding_window_layers=None,
     ):
         super().__init__()
         self._original_mod = model
@@ -423,6 +431,7 @@ class DecoderOnlyModel(nn.Module):
         self.kvcache_block_size = kvcache_block_size
         self.max_seq_len = max_seq_len
         self.use_learned_pos_emb = use_learned_pos_emb
+        self.sliding_window_layers = sliding_window_layers
 
     @property
     def phase(self):
@@ -474,6 +483,7 @@ class DecoderOnlyModel(nn.Module):
         past_key_values: Tuple[Tuple[torch.Tensor]] = None,
         rotary_emb: Optional[Union[nn.Module, torch.Tensor]] = None,
         block_tables: Optional[torch.Tensor] = None,
+        local_block_tables: Optional[torch.Tensor] = None,
     ):
         # retrieve input_ids and inputs_embeds
         if (input_ids is None) ^ (inputs_embeds is not None):
@@ -532,7 +542,8 @@ class DecoderOnlyModel(nn.Module):
         else:
             seq_positions = cache_position[:, :1]
 
-        for layer in self.layers:
+        for layer_idx, layer in enumerate(self.layers):
+            is_sliding = True if layer_idx in self.sliding_window_layers else False
             hidden_states = layer(
                 hidden_states=hidden_states,
                 attention_mask=attention_mask,
@@ -540,7 +551,7 @@ class DecoderOnlyModel(nn.Module):
                 past_key_values=past_key_values,
                 cos=cos,
                 sin=sin,
-                block_tables=block_tables,
+                block_tables=local_block_tables if is_sliding else block_tables,
             )
 
         hidden_states = self.get_last_layernorm()(hidden_states)
@@ -637,7 +648,7 @@ class DecoderOnlyAttention(nn.Module):
         self_attn: Original attention module from the base model
     """
 
-    def __init__(self, self_attn, use_attention_mask, use_position_ids, kvcache_block_size):
+    def __init__(self, self_attn, use_attention_mask, use_position_ids, kvcache_block_size, is_sliding=False):
         super().__init__()
         self._original_mod = self_attn
         self.layer_idx = self_attn.layer_idx
@@ -657,6 +668,7 @@ class DecoderOnlyAttention(nn.Module):
 
         self.use_attention_mask = use_attention_mask
         self.use_position_ids = use_position_ids
+        self.is_sliding = is_sliding
         self.attention = self.get_attention()
         self.kvcache_block_size = kvcache_block_size
         self.__post_init__()
@@ -671,8 +683,13 @@ class DecoderOnlyAttention(nn.Module):
         self.attention.phase = phase
 
     def get_attention(self):
-        return AttentionOp(
-            self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask, self.use_position_ids
+        if self.is_sliding:
+            return SlidingWindowAttentionOp(
+                self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask, self.use_position_ids
+            )
+        else:
+            return AttentionOp(
+                self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask, self.use_position_ids
         )
 
     def __post_init__(self):

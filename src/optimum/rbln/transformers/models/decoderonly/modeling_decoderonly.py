@@ -624,6 +624,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             "use_position_ids": rbln_config.use_position_ids,
             "use_inputs_embeds": rbln_config.use_inputs_embeds,
             "model_type": rbln_config.model_type,
+            "sliding_window_layers": rbln_config.sliding_window_layers,
         }
         return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
 
@@ -708,7 +709,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 compiled_models[f"decoder_batch_{batch_size}"].get_alloc_per_node_by_key().items()
             ):
                 alloc_memory_by_key[key] += sum(memory_per_node)
-        alloc_memory_by_key.pop("PortRecur")  # kv-cache
+        alloc_memory_by_key.pop("PortRecur", None)  # Old compiler's kv-cache Key
+        alloc_memory_by_key.pop("DramTensor", None)  # kv-cache
         kernel_size = alloc_memory_by_key.pop("Kernel")  # model weight
 
         # Get the maximum number of blocks that can be allocated
