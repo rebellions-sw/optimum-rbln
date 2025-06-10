@@ -39,7 +39,8 @@ model = RBLNColQwen2_5ForConditionalGeneration.from_model(
         "tensor_parallel_size": 8,
         "kvcache_partition_len": 16_384,
         # Max position embedding for the language model, must be a multiple of kvcache_partition_len.
-        "max_seq_len": 114_688,
+        # "max_seq_len": 114_688,
+        "max_seq_len": 192, # TODO(si) check
         "device": [0, 1, 2, 3, 4, 5, 6, 7],
     },
 )
