@@ -191,7 +191,7 @@ class DecoderOnlyWrapper(nn.Module):
         self.causal_lm = self.convert_to_rbln_causal_lm(causal_lm, max_seq_len)
         self.num_hidden_layers = getattr(self.config, "num_hidden_layers", None) or getattr(self.config, "n_layer")
         self._phase = "prefill"
-    
+
     def get_cache_type(self) -> str:
         if self.sliding_window is not None and self.sliding_window_pattern is not None:
             return "HYBRID"

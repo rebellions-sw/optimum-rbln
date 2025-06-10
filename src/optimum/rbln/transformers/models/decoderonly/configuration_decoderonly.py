@@ -125,7 +125,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
 
             # Larger batch size should be at the beginning of the list.
             self.decoder_batch_sizes.sort(reverse=True)
-        
+
         self.model_type = model_type
         self.sliding_window = sliding_window
         self.sliding_window_layers = sliding_window_layers

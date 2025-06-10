@@ -831,27 +831,24 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         cls,
         batch_size: int,
         query_length: int,
-        use_inputs_embeds: bool,
-        use_attention_mask: bool,
-        use_position_ids: bool,
-        max_seq_len: int,
-        kvcache_block_size: int,
-        kvcache_num_blocks: int,
-        num_key_value_heads: int,
-        num_hidden_layers: int,
-        hidden_size: int,
-        head_dim: int,
-        sliding_window: int,
-        sliding_window_pattern: int,
-        local_kvcache_num_blocks: int,
+        rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
+        model_config: PretrainedConfig,
     ):
         is_prefill: bool = query_length > 1
+        num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
+        num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
+        num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
+        hidden_size = getattr(model_config, "n_embd", None) or getattr(model_config, "hidden_size")
+        head_dim = getattr(model_config, "head_dim", None) or hidden_size // num_attention_heads
+        local_kvcache_num_blocks = max(rbln_config.decoder_batch_sizes)
 
-        if use_inputs_embeds:
+        # 1. main input
+        if rbln_config.use_inputs_embeds:
             main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
         else:
             main_input = ("input_ids", [batch_size, query_length], "int64")
 
+        # 2. cache_position
         input_info = [
             main_input,
             (
@@ -861,45 +858,46 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             ),
         ]
 
-        max_block_cnt = rbln_config.max_seq_len // rbln_config.kvcache_block_size
-
-        if cache_type == "STATIC" or cache_type == "HYBRID":
+        # 3. block_tables
+        if rbln_config.model_type in ["static", "hybrid"]:
+            max_block_cnt = rbln_config.max_seq_len // rbln_config.kvcache_block_size
             input_info.extend(
                 [("block_tables", [max_block_cnt] if is_prefill else [batch_size, max_block_cnt], "int16")]
             )
-        if cache_type == "HYBRID" or cache_type == "SLIDING_WINDOW":
+        if rbln_config.model_type in ["hybrid", "sliding_window"]:
             input_info.extend([("local_block_tables", [1] if is_prefill else [batch_size, 1], "int16")])
 
+        # 4. query_position
         if is_prefill:
             input_info.extend([("query_position", [], "int16")])
 
-        if use_attention_mask:
+        # 5. attention_mask & position_ids
+        if rbln_config.use_attention_mask:
             input_info.extend(
                 [
-                    ("attention_mask", [batch_size, 1, query_length, max_seq_len], "float32")
-                    if not use_position_ids
-                    else [batch_size, max_seq_len],
+                    ("attention_mask", [batch_size, rbln_config.max_seq_len], "float32")
+                    if rbln_config.use_position_ids
+                    else ("attention_mask", [batch_size, 1, query_length, rbln_config.max_seq_len], "float32")
                 ]
             )
         if rbln_config.use_position_ids:
             input_info.append(("position_ids", [batch_size, query_length], "int32"))
 
-        global_kvcache_shape = [kvcache_num_blocks, num_key_value_heads, kvcache_block_size, head_dim]
-        local_kvcache_shape = [local_kvcache_num_blocks, num_key_value_heads, sliding_window, head_dim]
-
-        def is_sliding(layer_idx: int) -> bool:
-            if cache_type == "STATIC":
-                return False
-            elif cache_type == "SLIDING_WINDOW":
-                return True
-            elif cache_type == "HYBRID":
-                return bool((layer_idx + 1) % sliding_window_pattern)
-
+        # 6. past_key_values
+        global_kvcache_shape = [
+            rbln_config.kvcache_num_blocks,
+            num_key_value_heads,
+            rbln_config.kvcache_block_size,
+            head_dim,
+        ]
+        local_kvcache_shape = [local_kvcache_num_blocks, num_key_value_heads, rbln_config.sliding_window, head_dim]
         input_info.extend(
             [
                 (
                     f"past_key_values_{i}",
-                    local_kvcache_shape if is_sliding(i // 2) else global_kvcache_shape,
+                    local_kvcache_shape
+                    if rbln_config.sliding_window is not None and ((i // 2) in rbln_config.sliding_window_layers)
+                    else global_kvcache_shape,
                     "float32",
                 )
                 for i in range(num_hidden_layers * 2)
@@ -971,13 +969,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 "This can cause a failure during model compilation."
             )
         logger.info(f"[KVCache] Compiling with num_blocks: {rbln_config.kvcache_num_blocks}")
-
-        sliding_window = getattr(model_config, "sliding_window", None)
-        sliding_window_pattern = getattr(model_config, "sliding_window_pattern", None)
-        if sliding_window is not None and sliding_window >= rbln_config.max_seq_len:
-            sliding_window = None
-        if sliding_window_pattern is not None and sliding_window_pattern >= num_hidden_layers:
-            sliding_window_pattern = None
 
         prefill_input_info = cls.get_input_info(
             batch_size=1,
