@@ -33,7 +33,7 @@ dependencies = [
     "torchvision<=0.21.0",
     "accelerate>=1.0.1",
     "transformers==4.50.3",
-    "diffusers @ git+https://github.com/huggingface/diffusers.git@311503582624ce3cedb21a887b8b77ae516cb0fc",
+    "diffusers @ git+https://github.com/huggingface/diffusers.git@6674a5157f10f6f3a7ef41f2397ec90f8d20d0ef",
     "packaging>=24.1",
 ]
 
