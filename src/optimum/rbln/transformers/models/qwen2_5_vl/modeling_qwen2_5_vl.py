@@ -37,6 +37,7 @@ from ....utils.logging import get_logger
 from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyOutput
 from .configuration_qwen2_5_vl import (
     RBLNQwen2_5_VisionTransformerPretrainedModelConfig,
+    RBLNQwen2_5_VLForConditionalGenerationConfig,
 )
 from .qwen2_5_vl_architecture import Qwen2_5_VisionTransformerWrapper, Qwen2_5_VL_LanguageModelWrapper
 
@@ -369,7 +370,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         cls,
         batch_size: int,
         query_length: int,
-        rbln_config: "RBLNQwen2_5_VLForConditionalGenerationConfig",
+        rbln_config: RBLNQwen2_5_VLForConditionalGenerationConfig,
         model_config: PretrainedConfig,
     ):
         """

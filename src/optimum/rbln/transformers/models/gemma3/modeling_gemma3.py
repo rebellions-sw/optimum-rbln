@@ -767,7 +767,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             rbln_config (RBLNGemma3ForCausalLMConfig): The RBLN model configuration.
             model_config (PretrainedConfig): The HuggingFace model configuration.
         """
-        
+
         num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
         num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
         num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
