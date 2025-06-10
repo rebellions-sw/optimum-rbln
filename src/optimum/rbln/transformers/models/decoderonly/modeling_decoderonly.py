@@ -623,6 +623,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             "use_attention_mask": rbln_config.use_attention_mask,
             "use_position_ids": rbln_config.use_position_ids,
             "use_inputs_embeds": rbln_config.use_inputs_embeds,
+            "model_type": rbln_config.model_type,
         }
         return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
 

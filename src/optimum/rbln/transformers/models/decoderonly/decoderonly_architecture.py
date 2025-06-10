@@ -146,6 +146,7 @@ class DecoderOnlyWrapper(nn.Module):
         max_seq_len: int,
         use_rotary_emb: bool,
         attn_impl: str,
+        model_type: str,
         use_inputs_embeds: bool,
         use_attention_mask: bool,
         use_position_ids: bool,
@@ -173,7 +174,7 @@ class DecoderOnlyWrapper(nn.Module):
         self.use_learned_pos_emb = use_learned_pos_emb
         self.sliding_window = getattr(self.config, "sliding_window", None)
         self.sliding_window_pattern = getattr(self.config, "sliding_window_pattern", None)
-        self.cache_type = self.get_cache_type()
+        self.model_type = model_type
 
         if self.attn_impl == "flash_attn":
             self.kvcache_partition_len = kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
@@ -191,16 +192,6 @@ class DecoderOnlyWrapper(nn.Module):
         self.causal_lm = self.convert_to_rbln_causal_lm(causal_lm, max_seq_len)
         self.num_hidden_layers = getattr(self.config, "num_hidden_layers", None) or getattr(self.config, "n_layer")
         self._phase = "prefill"
-
-    def get_cache_type(self) -> str:
-        if self.sliding_window is not None and self.sliding_window_pattern is not None:
-            return "HYBRID"
-        elif self.sliding_window is not None and self.sliding_window_pattern is None:
-            return "SLIDING_WINDOW"
-        elif self.sliding_window is None and self.sliding_window_pattern is not None:
-            return "STATIC"
-        else:
-            raise ValueError("Unknown cache_type")
 
     def get_rotary_emb(self, max_seq_len):
         return RotaryEmbedding(config=self.config, max_seq_len_cached=max_seq_len)
@@ -255,8 +246,8 @@ class DecoderOnlyWrapper(nn.Module):
         input_ids = None if self.use_inputs_embeds else args.pop(0)
         inputs_embeds = args.pop(0) if self.use_inputs_embeds else None
         cache_position = args.pop(0)
-        global_block_tables = args.pop(0) if self.cache_type in ["HYBRID", "STATIC"] else None
-        local_block_tables = args.pop(0) if self.cache_type in ["HYBRID", "SLIDING_WINDOW"] else None
+        global_block_tables = args.pop(0) if self.model_type in ["hybrid", "static"] else None
+        local_block_tables = args.pop(0) if self.model_type in ["hybrid", "sliding_window"] else None
         query_position = args.pop(0) if self.phase == "prefill" else None
         attention_mask = args.pop(0) if self.use_attention_mask else None
         position_ids = args.pop(0) if self.use_position_ids else None
@@ -277,6 +268,11 @@ class DecoderOnlyWrapper(nn.Module):
             _past_key_values.append(past_key_value)
         past_key_values = _past_key_values
 
+        if self.model_type == "hybrid":
+            rotary_emb = (self.rotary_emb_global, self.rotary_emb_local)
+        else:
+            rotary_emb = self.rotary_emb
+
         return (
             input_ids,
             inputs_embeds,
@@ -287,7 +283,7 @@ class DecoderOnlyWrapper(nn.Module):
             attention_mask,
             position_ids,
             past_key_values,
-            self.rotary_emb,
+            rotary_emb,
         )
 
     def forward(self, *args):
