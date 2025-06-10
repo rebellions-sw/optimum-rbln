@@ -19,11 +19,9 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import rebel
 import torch
-from diffusers.pipelines.cosmos.cosmos_guardrail import (
-    CosmosSafetyChecker,
-)
+from cosmos_guardrail import CosmosSafetyChecker
 
-from optimum.rbln import RBLNLlamaForCausalLM
+from optimum.rbln import RBLNLlamaForCausalLM, RBLNSiglipVisionModel
 from optimum.rbln.diffusers.configurations.models.configuration_cosmos_guardrail import (
     RBLNRetinaFaceConfig,
     RBLNSiglipVisionModelConfig,
@@ -365,8 +363,7 @@ class RBLNSiglipVisionModel(RBLNSimpleModel):
     def wrap_runtime_if_needed(cls, model):
         return RBLNRuntimeSiglipVisionModel(model)
 
-
-class RBLNLlamaGuard:
+class RBLNAegis:
     _origin_class = RBLNLlamaForCausalLM
 
     @classmethod
@@ -452,7 +449,7 @@ class RBLNCosmosSafetyChecker:
     _additional_modules = [None, "encoder.model", None, None]
     _target_model_names = ["net", "vision_model", "model", "model"]
     _subfolders = ["", "encoder", "model", ""]
-    _rbln_modules = [RBLNRetinaFace, RBLNSiglipVisionModel, RBLNVideoSafetyModel, RBLNLlamaGuard]
+    _rbln_modules = [RBLNRetinaFace, RBLNSiglipVisionModel, RBLNVideoSafetyModel, RBLNAegis]
 
     @classmethod
     @update_submodule_config
