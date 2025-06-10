@@ -751,6 +751,17 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         return embed_tokens
 
     @classmethod
+    def _update_sliding_window_config(cls, model_config: PretrainedConfig, rbln_config: RBLNGemma3ForCausalLMConfig):
+        sliding_window = getattr(model_config, "sliding_window", None)
+        sliding_window_pattern = getattr(model_config, "sliding_window_pattern", None)
+        if sliding_window_pattern <= model_config.num_hidden_layers:
+            rbln_config.model_type = "hybrid"
+            rbln_config.sliding_window = sliding_window
+            rbln_config.sliding_window_layers = list(range(sliding_window_pattern - 1, model_config.num_hidden_layers, sliding_window_pattern))
+
+        return rbln_config
+
+    @classmethod
     def get_input_info(
         cls,
         batch_size: int,

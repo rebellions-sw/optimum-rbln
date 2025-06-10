@@ -907,6 +907,45 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         return input_info
 
     @classmethod
+    def _update_sliding_window_config(
+        cls, model_config: PretrainedConfig, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig
+    ):
+        """
+        Update the sliding window configuration for the RBLN model.
+
+        This method must be implemented by subclasses to handle their specific sliding window configurations,
+        as Hugging Face models use different configuration keys to represent sliding window layers.
+
+        Args:
+            model_config (PretrainedConfig): The model configuration from Hugging Face.
+            rbln_config (RBLNDecoderOnlyModelForCausalLMConfig): The RBLN model configuration.
+
+        Notes:
+            Required configuration settings:
+            - `model_type`: Must be one of:
+                - "static": All layers use global attention (no sliding window)
+                - "sliding_window": All layers use sliding window attention
+                - "hybrid": A mix of global and sliding window attention layers
+            - `sliding_window`: Width of the sliding window (required if model_type is "sliding_window" or "hybrid")
+            - `sliding_window_layers`: List of layer indices using sliding window attention (required if model_type is "hybrid")
+
+            Example implementation for a 'sliding_window' model:
+            ```python
+            rbln_config.model_type = "sliding_window"
+            rbln_config.sliding_window = model_config.sliding_window
+            rbln_config.sliding_window_layers = [i for i in range(model_config.num_hidden_layers)]
+            return rbln_config
+            ```
+
+        Returns:
+            RBLNDecoderOnlyModelForCausalLMConfig: The updated RBLN model configuration.
+        """
+        raise NotImplementedError(
+            "Subclasses must implement _update_sliding_window_config to configure sliding window attention settings. "
+            "See method docstring for required configuration details."
+        )
+
+    @classmethod
     def _update_rbln_config(
         cls,
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
@@ -920,6 +959,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             )
         if rbln_config.max_seq_len is None:
             raise ValueError("`max_seq_len` should be specified.")
+
+        if getattr(model_config, "sliding_window", None) is not None:
+            rbln_config = cls._update_sliding_window_config(model_config, rbln_config)
 
         rbln_config.attn_impl, rbln_config.kvcache_partition_len, rbln_config.kvcache_block_size = set_default_values(
             attn_impl=rbln_config.attn_impl,

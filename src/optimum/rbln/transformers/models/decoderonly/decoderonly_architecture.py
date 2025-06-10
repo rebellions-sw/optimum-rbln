@@ -200,7 +200,7 @@ class DecoderOnlyWrapper(nn.Module):
         elif self.sliding_window is None and self.sliding_window_pattern is not None:
             return "STATIC"
         else:
-            raise ValueError(f"Unknown cache_type")
+            raise ValueError("Unknown cache_type")
 
     def get_rotary_emb(self, max_seq_len):
         return RotaryEmbedding(config=self.config, max_seq_len_cached=max_seq_len)

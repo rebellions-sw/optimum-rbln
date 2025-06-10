@@ -592,7 +592,6 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 logits.append(output.logits)
             logits = torch.cat(logits, dim=0)
             # Decoder
-            from transformers import GenerationMixin
         else:
             print(input_ids[0], cache_position[0])
             inputs_embeds, position_embed = self._preprocess_decoder(input_ids, cache_position)
