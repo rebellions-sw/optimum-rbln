@@ -51,8 +51,6 @@ if TYPE_CHECKING:
         PretrainedConfig,
     )
 
-    from .configuration_qwen2_5_vl import RBLNQwen2_5_VLForConditionalGenerationConfig
-
 
 class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
     auto_model_class = None
