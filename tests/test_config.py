@@ -14,12 +14,40 @@ from optimum.rbln import (
     RBLNModelConfig,
     RBLNResNetForImageClassification,
     RBLNResNetForImageClassificationConfig,
+    RBLNStableDiffusionPipeline,
 )
 
 
 @pytest.fixture
 def model_id():
     return "hf-internal-testing/tiny-random-ResNetForImageClassification"
+
+
+@pytest.fixture
+def stable_diffusion_model():
+    model = RBLNStableDiffusionPipeline.from_pretrained(
+        "hf-internal-testing/tiny-sd-pipe",
+        export=True,
+        rbln_config={
+            "unet": {
+                "batch_size": 1,
+                "npu": "RBLN-CA22",
+                "create_runtimes": False,
+                "optimize_host_memory": False,
+            }
+        },
+    )
+    return model
+
+
+def test_stable_diffusion_config(stable_diffusion_model):
+    model = stable_diffusion_model
+    assert model is not None
+    assert model.unet.rbln_config.batch_size == 1
+    assert model.unet.rbln_config.npu == "RBLN-CA22"
+    assert model.unet.rbln_config.create_runtimes is False
+    assert model.unet.rbln_config.optimize_host_memory is False
+    assert model.unet.compiled_models[0]._meta["npu"] == "RBLN-CA22"
 
 
 def test_explicit_config_parameters(model_id):
