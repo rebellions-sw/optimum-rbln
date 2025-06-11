@@ -964,7 +964,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         if rbln_config.max_seq_len is None:
             raise ValueError("`max_seq_len` should be specified.")
 
-        if getattr(model_config, "sliding_window", None) is not None and getattr(model_config, "use_sliding_window", True):
+        if getattr(model_config, "sliding_window", None) is not None and getattr(
+            model_config, "use_sliding_window", True
+        ):
             rbln_config = cls._update_sliding_window_config(model_config, rbln_config)
 
         rbln_config.attn_impl, rbln_config.kvcache_partition_len, rbln_config.kvcache_block_size = set_default_values(

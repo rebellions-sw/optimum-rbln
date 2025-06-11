@@ -48,8 +48,8 @@ class Gemma3ForCausalLMWrapper(DecoderOnlyWrapper):
 
     def convert_to_rbln_causal_lm(self, causal_lm: "Gemma3ForCausalLM", max_seq_len: int):
         new_layers = []
-        for layer in causal_lm.model.layers:
-            if layer.is_sliding:
+        for layer_idx, layer in enumerate(causal_lm.model.layers):
+            if layer_idx in self.sliding_window_layers:
                 new_self_attn = Gemma3Attention(
                     layer.self_attn,
                     use_attention_mask=None,  # FIXME: no use in SWA
@@ -85,93 +85,13 @@ class Gemma3ForCausalLMWrapper(DecoderOnlyWrapper):
             new_layers,
             partition_len=self.kvcache_partition_len,
             max_seq_len=max_seq_len,
+            sliding_window_layers=self.sliding_window_layers,
         )
-        new_causal_lm = Gemma3ForCausalLM(causal_lm, new_model)
+        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm
 
-    def forward(self, *args):
-        (
-            input_ids,
-            inputs_embeds,
-            cache_position,
-            global_block_tables,
-            local_block_tables,
-            query_position,
-            attention_mask,
-            position_ids,
-            past_key_values,
-            rotary_emb,
-        ) = self.prepare_forward_args(*args)
-
-        logit = self.causal_lm(
-            input_ids=input_ids,
-            inputs_embeds=inputs_embeds,
-            attention_mask=attention_mask,
-            cache_position=cache_position,
-            position_ids=position_ids,
-            query_position=query_position,
-            past_key_values=past_key_values,
-            rotary_emb=rotary_emb,
-            global_block_tables=global_block_tables,
-            local_block_tables=local_block_tables,
-        )
-
-        return logit
-
-
-class Gemma3ForCausalLM(DecoderOnlyForCausalLM):
-    def forward(
-        self,
-        input_ids: torch.Tensor = None,
-        inputs_embeds: torch.Tensor = None,
-        attention_mask: torch.Tensor = None,
-        cache_position: torch.Tensor = None,
-        position_ids: torch.Tensor = None,
-        query_position: torch.Tensor = None,
-        past_key_values: Tuple[Tuple[torch.Tensor]] = None,
-        rotary_emb: nn.Module = None,
-        global_block_tables: Optional[torch.Tensor] = None,
-        local_block_tables: Optional[torch.Tensor] = None,
-    ):
-        # outputs
-        hidden_states = self.model(
-            input_ids=input_ids,
-            inputs_embeds=inputs_embeds,
-            attention_mask=attention_mask,
-            cache_position=cache_position,
-            position_ids=position_ids,
-            query_position=query_position,
-            past_key_values=past_key_values,
-            rotary_emb=rotary_emb,
-            global_block_tables=global_block_tables,
-            local_block_tables=local_block_tables,
-        )
-
-        if "prefill" in self.phase:
-            hidden_states = hidden_states[:, query_position.to(torch.int).unsqueeze(0)]
-
-        logits = self.lm_head(hidden_states)
-
-        # Apply final logit softmaxing if configured, e.g. for Gemma2
-        if getattr(self.config, "final_logit_softcapping", None) is not None:
-            logits = logits / self.config.final_logit_softcapping
-            logits = torch.tanh(logits)
-            logits = logits * self.config.final_logit_softcapping
-
-        return logits
-
-
 class Gemma3TextModel(DecoderOnlyModel):
-    def get_local_cache_positions(self, position_ids, query_position):
-        max_cache_len = self._original_mod.config.sliding_window
-        valid_input_len = 1 if query_position is None else query_position + 1
-        cache_seq_len = torch.clamp(position_ids, max=max_cache_len)[:, :1]  # past seen tokens
-        cache_offset = (
-            torch.clamp(position_ids, max=max_cache_len)[:, :1] + valid_input_len
-        )  # cache offset for next steps
-
-        return cache_seq_len, cache_offset
-
+    # Different from DecoderOnlyModel, this model has global and local rotary embeddings.
     def forward(
         self,
         input_ids: torch.Tensor = None,
@@ -185,6 +105,7 @@ class Gemma3TextModel(DecoderOnlyModel):
         global_block_tables: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
     ):
+        
         # retrieve input_ids and inputs_embeds
         if (input_ids is None) ^ (inputs_embeds is not None):
             raise ValueError(
@@ -216,37 +137,23 @@ class Gemma3TextModel(DecoderOnlyModel):
 
         sliding_cache_pos = self.get_local_cache_positions(position_ids, query_position)
 
-        for layer in self.layers:
-            if layer.is_sliding:
-                hidden_states = layer(
-                    hidden_states=hidden_states,
-                    attention_mask=attention_mask,
-                    seq_positions=sliding_cache_pos,
-                    past_key_values=past_key_values,
-                    cos=cos_local,
-                    sin=sin_local,
-                    block_tables=local_block_tables,
-                )
-            else:
-                hidden_states = layer(
-                    hidden_states=hidden_states,
-                    attention_mask=attention_mask,
-                    seq_positions=seq_positions,
-                    past_key_values=past_key_values,
-                    cos=cos_global,
-                    sin=sin_global,
-                    block_tables=global_block_tables,
-                )
+        for layer_idx, layer in enumerate(self.layers):
+            is_sliding = True if layer_idx in self.sliding_window_layers else False
+            hidden_states = layer(
+                hidden_states=hidden_states,
+                attention_mask=attention_mask,
+                seq_positions=sliding_cache_pos if is_sliding else seq_positions,
+                past_key_values=past_key_values,
+                cos=cos_local if is_sliding else cos_global,
+                sin=sin_local if is_sliding else sin_global,
+                block_tables=local_block_tables if is_sliding else global_block_tables,
+            )
 
         hidden_states = self.get_last_layernorm()(hidden_states)
         return hidden_states
 
 
 class Gemma3DecoderLayer(DecoderOnlyLayer):
-    def __init__(self, layer, self_attn: "DecoderOnlyAttention"):
-        super().__init__(layer, self_attn)
-        self.is_sliding = self._original_mod.is_sliding
-
     def get_pre_feedforward_layernorm(self) -> Gemma3RMSNorm:
         return self._original_mod.pre_feedforward_layernorm
 
@@ -290,55 +197,9 @@ class Gemma3Attention(DecoderOnlyAttention):
         self.o_proj = self._original_mod.o_proj
         self.q_norm = self._original_mod.q_norm
         self.k_norm = self._original_mod.k_norm
-        self.is_sliding = self._original_mod.is_sliding
 
     def get_attn_scale(self):
         return self._original_mod.config.query_pre_attn_scalar**-0.5
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        attention_mask: torch.Tensor,
-        seq_positions: torch.LongTensor,
-        past_key_values: Tuple[Tuple[torch.Tensor]],
-        cos: Optional[torch.Tensor] = None,
-        sin: Optional[torch.Tensor] = None,
-        block_tables: Optional[torch.Tensor] = None,
-    ):
-        batch_size, query_length, _ = hidden_states.size()
-
-        query_states, key_states, value_states = self.projection(hidden_states=hidden_states)
-
-        query_states = query_states.view(batch_size, query_length, self.num_heads, self.head_dim).transpose(1, 2)
-        key_states = key_states.view(batch_size, query_length, self.num_key_value_heads, self.head_dim).transpose(1, 2)
-        value_states = value_states.view(batch_size, query_length, self.num_key_value_heads, self.head_dim).transpose(
-            1, 2
-        )
-
-        query_states = self.q_norm(query_states)
-        key_states = self.k_norm(key_states)
-        query_states, key_states = self.apply_rotary_pos_embed(query_states, key_states, cos, sin)
-
-        batch_size = query_states.shape[0]
-        if batch_size > 1 and "prefill" in self.phase:
-            raise NotImplementedError(f"batch size should be 1 if prefill phase, but got {batch_size}.")
-
-        attn_output = self.attention(
-            query_states,
-            key_states,
-            value_states,
-            attention_mask,
-            past_key_state=past_key_values[self.layer_idx][0],
-            past_value_state=past_key_values[self.layer_idx][1],
-            seq_position=seq_positions,
-            scale=self.scale,
-            block_tables=block_tables,
-            block_size=self.kvcache_block_size,
-        )
-
-        attn_outputs = self.o_proj(attn_output)
-        return attn_outputs
-
 
 class Gemma3FlashAttention(DecoderOnlyFlashAttention):
     def __post_init__(self):
@@ -348,47 +209,6 @@ class Gemma3FlashAttention(DecoderOnlyFlashAttention):
         self.o_proj = self._original_mod.o_proj
         self.q_norm = self._original_mod.q_norm
         self.k_norm = self._original_mod.k_norm
-        self.is_sliding = self._original_mod.is_sliding
 
     def get_attn_scale(self):
         return self._original_mod.config.query_pre_attn_scalar**-0.5
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        attention_mask: torch.Tensor,
-        seq_positions: torch.LongTensor,
-        past_key_values: Tuple[Tuple[torch.Tensor]],
-        cos: Optional[torch.Tensor] = None,
-        sin: Optional[torch.Tensor] = None,
-        block_tables: Optional[torch.Tensor] = None,
-    ):
-        batch_size, query_length, _ = hidden_states.size()
-
-        query_states, key_states, value_states = self.projection(hidden_states=hidden_states)
-
-        query_states = query_states.view(batch_size, query_length, self.num_heads, self.head_dim).transpose(1, 2)
-        key_states = key_states.view(batch_size, query_length, self.num_key_value_heads, self.head_dim).transpose(1, 2)
-        value_states = value_states.view(batch_size, query_length, self.num_key_value_heads, self.head_dim).transpose(
-            1, 2
-        )
-
-        query_states = self.q_norm(query_states)
-        key_states = self.k_norm(key_states)
-        query_states, key_states = self.apply_rotary_pos_embed(query_states, key_states, cos, sin)
-
-        attn_output = self.attention(
-            query_states,
-            key_states,
-            value_states,
-            attention_mask,
-            past_key_state=past_key_values[self.layer_idx][0],
-            past_value_state=past_key_values[self.layer_idx][1],
-            seq_position=seq_positions,
-            scale=self.scale,
-            block_tables=block_tables,
-            kvcache_block_size=self.kvcache_block_size,
-        )
-
-        attn_outputs = self.o_proj(attn_output)
-        return attn_outputs
