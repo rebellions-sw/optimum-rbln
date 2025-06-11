@@ -105,7 +105,7 @@ class RBLNSiglipVisionModel(RBLNModel):
         self,
         pixel_values: Optional[torch.FloatTensor] = None,
         return_dict: bool = None,
-        output_hidden_states: bool = False,
+        output_hidden_states: bool = None,
         interpolate_pos_encoding: bool = False,
         **kwargs,
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
