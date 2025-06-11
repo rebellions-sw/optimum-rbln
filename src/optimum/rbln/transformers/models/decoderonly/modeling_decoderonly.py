@@ -36,6 +36,7 @@ from .decoderonly_architecture import (
     DecoderOnlyWrapper,
     set_default_values,
     validate_attention_method,
+    validate_sliding_window_size,
 )
 
 
@@ -968,6 +969,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             model_config, "use_sliding_window", True
         ):
             rbln_config = cls._update_sliding_window_config(model_config, rbln_config)
+            validate_sliding_window_size(rbln_config.sliding_window, rbln_config.prefill_chunk_size)
 
         rbln_config.attn_impl, rbln_config.kvcache_partition_len, rbln_config.kvcache_block_size = set_default_values(
             attn_impl=rbln_config.attn_impl,

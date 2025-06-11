@@ -30,6 +30,7 @@ DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH = 32_768
 MIN_FLASH_ATTN_MAX_SEQ_LEN = 8_192
 MIN_FLASH_ATTN_PARTITION_LENGTH = 4_096
 MAX_FLASH_ATTN_PARTITION_LENGTH = 32_768
+MAX_SLIDING_WINDOW_SIZE = 32_768
 
 
 def set_default_values(
@@ -112,6 +113,13 @@ def validate_attention_method(attn_impl: str, kvcache_partition_len: int, kvcach
                 f" When using 'eager attention', the `kvcache_block_size` ({kvcache_block_size})  "
                 f"must always be set equal to the `max_seq_len` {max_seq_len}."
             )
+
+
+def validate_sliding_window_size(sliding_window: int, prefill_chunk_size: int):
+    if sliding_window > MAX_SLIDING_WINDOW_SIZE - prefill_chunk_size:
+        raise ValueError(
+            f"Sliding window size ({sliding_window}) must be less than 32768 - prefill_chunk_size ({32768 - prefill_chunk_size})"
+        )
 
 
 class DecoderOnlyWrapper(nn.Module):

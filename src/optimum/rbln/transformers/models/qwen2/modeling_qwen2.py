@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from transformers import PretrainedConfig
+
 from ....utils import logging
-from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM
+from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyModelForCausalLMConfig
 from .qwen2_architecture import QWEN2Wrapper
 
 
@@ -32,3 +34,12 @@ class RBLNQwen2ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     """
 
     _decoder_wrapper_cls = QWEN2Wrapper
+
+    @classmethod
+    def _update_sliding_window_config(
+        cls, model_config: PretrainedConfig, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig
+    ):
+        rbln_config.model_type = "hybrid"
+        rbln_config.sliding_window = model_config.sliding_window
+        rbln_config.sliding_window_layers = list(range(model_config.max_window_layers, model_config.num_hidden_layers))
+        return rbln_config

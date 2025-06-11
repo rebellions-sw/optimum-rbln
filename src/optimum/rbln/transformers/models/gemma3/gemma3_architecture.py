@@ -16,7 +16,6 @@ import copy
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import torch
-from torch import nn
 from transformers.models.gemma3.modeling_gemma3 import Gemma3RMSNorm
 
 from ..decoderonly.decoderonly_architecture import (
@@ -90,6 +89,7 @@ class Gemma3ForCausalLMWrapper(DecoderOnlyWrapper):
         new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm
 
+
 class Gemma3TextModel(DecoderOnlyModel):
     # Different from DecoderOnlyModel, this model has global and local rotary embeddings.
     def forward(
@@ -105,7 +105,6 @@ class Gemma3TextModel(DecoderOnlyModel):
         global_block_tables: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
     ):
-        
         # retrieve input_ids and inputs_embeds
         if (input_ids is None) ^ (inputs_embeds is not None):
             raise ValueError(
@@ -200,6 +199,7 @@ class Gemma3Attention(DecoderOnlyAttention):
 
     def get_attn_scale(self):
         return self._original_mod.config.query_pre_attn_scalar**-0.5
+
 
 class Gemma3FlashAttention(DecoderOnlyFlashAttention):
     def __post_init__(self):
