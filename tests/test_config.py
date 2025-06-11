@@ -4,6 +4,7 @@ import tempfile
 from typing import Optional, Tuple
 
 import pytest
+import rebel
 import torch
 
 from optimum.rbln import (
@@ -34,7 +35,10 @@ def stable_diffusion_model():
                 "npu": "RBLN-CA22",
                 "create_runtimes": False,
                 "optimize_host_memory": False,
-            }
+            },
+            "text_encoder": {
+                "optimize_host_memory": False,
+            },
         },
     )
     return model
@@ -48,6 +52,9 @@ def test_stable_diffusion_config(stable_diffusion_model):
     assert model.unet.rbln_config.create_runtimes is False
     assert model.unet.rbln_config.optimize_host_memory is False
     assert model.unet.compiled_models[0]._meta["npu"] == "RBLN-CA22"
+
+    npu = rebel.get_npu_name()
+    assert model.text_encoder.compiled_models[0]._meta["npu"] == npu
 
 
 def test_explicit_config_parameters(model_id):
