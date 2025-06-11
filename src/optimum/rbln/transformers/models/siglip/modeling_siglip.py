@@ -108,7 +108,7 @@ class RBLNSiglipVisionModel(RBLNModel):
         return_dict: bool = None,
         interpolate_pos_encoding: bool = False,
         **kwargs,
-    ) -> Union[Tuple, SiglipVisionModelOutput]:
+    ) -> Union[Tuple, BaseModelOutputWithPooling]:
         if len(kwargs) > 0 and any(kwargs.values()):
             logger.warning(f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__}.")
 
@@ -130,12 +130,12 @@ class RBLNSiglipVisionModel(RBLNModel):
         else:
             last_hidden_state = (
                 output[0]
-                if self.rbln_config.interpolate_pos_encoding or self.rbln_config.output_hidden_states
+                if getattr(self.config, "vision_use_head", True) or self.rbln_config.output_hidden_states
                 else output
             )
-            pooler_output = output[1] if self.rbln_config.interpolate_pos_encoding else None
+            pooler_output = output[1] if getattr(self.config, "vision_use_head", True) else None
             if self.rbln_config.output_hidden_states:
-                hidden_states = (output[2:] if self.rbln_config.interpolate_pos_encoding else output[1:],)
+                hidden_states = (output[2:] if getattr(self.config, "vision_use_head", True) else output[1:],)
             else:
                 hidden_states = None
 
