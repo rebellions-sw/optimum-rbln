@@ -109,8 +109,10 @@ class RBLNSiglipVisionModel(RBLNModel):
         interpolate_pos_encoding: bool = False,
         **kwargs,
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
-        if len(kwargs) > 0 and any(kwargs.values()):
-            logger.warning(f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__}.")
+        if len(kwargs) > 0 and any(value is not None for value in kwargs.values()):
+            logger.warning(
+                f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__.__name__}."
+            )
 
         if interpolate_pos_encoding != self.rbln_config.interpolate_pos_encoding:
             raise ValueError(
