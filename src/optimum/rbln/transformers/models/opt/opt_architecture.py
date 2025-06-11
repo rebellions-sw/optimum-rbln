@@ -38,7 +38,10 @@ class OPTWrapper(DecoderOnlyWrapper):
 
         for layer in causal_lm.model.decoder.layers:
             new_self_attn = OPTAttention(
-                layer.self_attn, self.use_attention_mask, kvcache_block_size=self.kvcache_block_size
+                layer.self_attn,
+                self.use_attention_mask,
+                kvcache_block_size=self.kvcache_block_size,
+                use_position_ids=self.use_position_ids,
             )
             new_layer = OPTDecoderLayer(layer, new_self_attn)
             new_layers.append(new_layer)

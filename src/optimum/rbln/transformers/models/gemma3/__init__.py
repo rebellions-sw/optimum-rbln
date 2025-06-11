@@ -12,18 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .modeling_auto import (
-    RBLNAutoModel,
-    RBLNAutoModelForAudioClassification,
-    RBLNAutoModelForCausalLM,
-    RBLNAutoModelForCTC,
-    RBLNAutoModelForDepthEstimation,
-    RBLNAutoModelForImageClassification,
-    RBLNAutoModelForImageTextToText,
-    RBLNAutoModelForMaskedLM,
-    RBLNAutoModelForQuestionAnswering,
-    RBLNAutoModelForSeq2SeqLM,
-    RBLNAutoModelForSequenceClassification,
-    RBLNAutoModelForSpeechSeq2Seq,
-    RBLNAutoModelForVision2Seq,
-)
+from .configuration_gemma3 import RBLNGemma3ForCausalLMConfig, RBLNGemma3ForConditionalGenerationConfig
+from .modeling_gemma3 import RBLNGemma3ForCausalLM, RBLNGemma3ForConditionalGeneration

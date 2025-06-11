@@ -19,10 +19,11 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
 
 import torch
 
-from ..configuration_utils import ContextRblnConfig, RBLNModelConfig
+from ..configuration_utils import ContextRblnConfig, RBLNModelConfig, get_rbln_config_class
 from ..modeling import RBLNModel
 from ..utils.decorator_utils import remove_compile_time_kwargs
 from ..utils.logging import get_logger
+from ..utils.model_utils import get_rbln_model_cls
 
 
 logger = get_logger(__name__)
@@ -115,13 +116,7 @@ class RBLNDiffusionMixin:
         """
         if cls._rbln_config_class is None:
             rbln_config_class_name = cls.__name__ + "Config"
-            library = importlib.import_module("optimum.rbln")
-            cls._rbln_config_class = getattr(library, rbln_config_class_name, None)
-            if cls._rbln_config_class is None:
-                raise ValueError(
-                    f"RBLN config class {rbln_config_class_name} not found. This is an internal error. "
-                    "Please report it to the developers."
-                )
+            cls._rbln_config_class = get_rbln_config_class(rbln_config_class_name)
         return cls._rbln_config_class
 
     @classmethod
@@ -210,7 +205,7 @@ class RBLNDiffusionMixin:
                         "Expected 'optimum.rbln'. Please check the model_index.json configuration."
                     )
 
-                submodule_cls: Type[RBLNModel] = getattr(importlib.import_module("optimum.rbln"), class_name)
+                submodule_cls = get_rbln_model_cls(class_name)
                 submodule_config = getattr(rbln_config, submodule_name)
                 submodule = submodule_cls.from_pretrained(
                     model_id, export=False, subfolder=submodule_name, rbln_config=submodule_config
@@ -293,7 +288,6 @@ class RBLNDiffusionMixin:
             elif isinstance(submodule, RBLNModel):
                 pass
             elif submodule_name == "controlnet" and hasattr(submodule, "nets"):
-                # In case of multicontrolnet
                 submodule = cls._compile_multicontrolnet(
                     controlnets=submodule,
                     model_save_dir=model_save_dir,
@@ -301,11 +295,8 @@ class RBLNDiffusionMixin:
                     prefix=prefix,
                 )
             elif isinstance(submodule, torch.nn.Module):
-                submodule_cls: RBLNModel = getattr(
-                    importlib.import_module("optimum.rbln"), f"RBLN{submodule.__class__.__name__}"
-                )
                 subfolder = prefix + submodule_name
-                submodule = submodule_cls.from_model(
+                submodule = submodule_rbln_cls.from_model(
                     model=submodule,
                     subfolder=subfolder,
                     model_save_dir=model_save_dir,

@@ -61,7 +61,10 @@ class MidmLMHeadModelWrapper(DecoderOnlyWrapper):
         new_layers = []
         for layer in causal_lm.transformer.h:
             new_self_attn = MidmAttention(
-                layer.attn, self.use_attention_mask, kvcache_block_size=self.kvcache_block_size
+                layer.attn,
+                self.use_attention_mask,
+                kvcache_block_size=self.kvcache_block_size,
+                use_position_ids=self.use_position_ids,
             )
             new_layer = MidmLayer(layer, new_self_attn)
             new_layers.append(new_layer)

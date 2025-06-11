@@ -49,7 +49,7 @@ class RBLNCLIPTextModel(RBLNModel):
 
     @classmethod
     def update_rbln_config_using_pipe(
-        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_config: str
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
     ) -> "RBLNDiffusionMixinConfig":
         return rbln_config
 
@@ -161,9 +161,10 @@ class RBLNCLIPVisionModel(RBLNModel):
         return_dict: bool = None,
         **kwargs,
     ) -> Union[Tuple, CLIPVisionModelOutput]:
-        if len(kwargs) > 0 and any(kwargs.values()):
-            logger.warning(f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__}.")
-
+        if len(kwargs) > 0 and any(value is not None for value in kwargs.values()):
+            logger.warning(
+                f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__.__name__}."
+            )
         output = super().forward(pixel_values, return_dict=return_dict)
         return output
 
