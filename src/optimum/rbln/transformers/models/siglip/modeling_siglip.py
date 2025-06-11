@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Optional, Tuple, Union
 import torch
 from transformers import SiglipVisionConfig, SiglipVisionModel
 from transformers.modeling_outputs import BaseModelOutputWithPooling
-from transformers.models.siglip.modeling_siglip import SiglipVisionModelOutput
 
 from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
