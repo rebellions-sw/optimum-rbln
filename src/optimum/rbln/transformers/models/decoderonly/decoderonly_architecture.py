@@ -253,7 +253,7 @@ class DecoderOnlyWrapper(nn.Module):
         cache_position = args.pop(0)
         global_block_tables = args.pop(0) if self.model_type in ["hybrid", "static"] else None
         local_block_tables = args.pop(0) if self.model_type in ["hybrid", "sliding_window"] else None
-        query_position = args.pop(0) if self.phase == "prefill" else None
+        query_position = args.pop(0) if "prefill" in self.phase else None
         attention_mask = args.pop(0) if self.use_attention_mask else None
         position_ids = args.pop(0) if self.use_position_ids else None
         past_key_values = args
@@ -690,7 +690,7 @@ class DecoderOnlyAttention(nn.Module):
         else:
             return AttentionOp(
                 self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask, self.use_position_ids
-        )
+            )
 
     def __post_init__(self):
         self.q_proj = self._original_mod.q_proj
