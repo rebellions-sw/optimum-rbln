@@ -105,6 +105,7 @@ class RBLNSiglipVisionModel(RBLNModel):
         self,
         pixel_values: Optional[torch.FloatTensor] = None,
         return_dict: bool = None,
+        output_hidden_states: bool = False,
         interpolate_pos_encoding: bool = False,
         **kwargs,
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
@@ -113,11 +114,18 @@ class RBLNSiglipVisionModel(RBLNModel):
                 f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__.__name__}."
             )
 
+        if output_hidden_states != self.rbln_config.output_hidden_states:
+            raise ValueError(
+                f"Variable interpolate_pos_encoding {output_hidden_states} is not equal to rbln_config.interpolate_pos_encoding {self.rbln_config.output_hidden_states}"
+                f"Please compile again with the correct argument."
+            )
+            
         if interpolate_pos_encoding != self.rbln_config.interpolate_pos_encoding:
             raise ValueError(
                 f"Variable interpolate_pos_encoding {interpolate_pos_encoding} is not equal to rbln_config.interpolate_pos_encoding {self.rbln_config.interpolate_pos_encoding}"
                 f"Please compile again with the correct argument."
             )
+
         output = super().forward(pixel_values, return_dict=return_dict)
         return output
 
