@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import fire
 import torch
-from diffusers.pipelines.cosmos.cosmos_guardrail import CosmosSafetyChecker
+from cosmos_guardrail import CosmosSafetyChecker
 from diffusers.utils import export_to_video
 
 from optimum.rbln import RBLNCosmosPipeline, RBLNCosmosSafetyChecker

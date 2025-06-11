@@ -54,7 +54,6 @@ _import_structure = {
         "RBLNUNet2DConditionModelConfig",
         "RBLNVQModelConfig",
         "RBLNRetinaFaceConfig",
-        "RBLNSiglipVisionModelConfig",
         "RBLNVideoSafetyModelConfig",
     ],
     "pipelines": [
@@ -114,7 +113,6 @@ if TYPE_CHECKING:
         RBLNPriorTransformerConfig,
         RBLNRetinaFaceConfig,
         RBLNSD3Transformer2DModelConfig,
-        RBLNSiglipVisionModelConfig,
         RBLNStableDiffusion3Img2ImgPipelineConfig,
         RBLNStableDiffusion3InpaintPipelineConfig,
         RBLNStableDiffusion3PipelineConfig,

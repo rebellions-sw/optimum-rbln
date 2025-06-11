@@ -190,7 +190,6 @@ _import_structure = {
         "RBLNVQModel",
         "RBLNVQModelConfig",
         "RBLNRetinaFaceConfig",
-        "RBLNSiglipVisionModelConfig",
         "RBLNVideoSafetyModelConfig",
     ],
 }
@@ -233,7 +232,6 @@ if TYPE_CHECKING:
         RBLNRetinaFaceConfig,
         RBLNSD3Transformer2DModel,
         RBLNSD3Transformer2DModelConfig,
-        RBLNSiglipVisionModelConfig,
         RBLNStableDiffusion3Img2ImgPipeline,
         RBLNStableDiffusion3Img2ImgPipelineConfig,
         RBLNStableDiffusion3InpaintPipeline,
