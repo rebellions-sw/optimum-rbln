@@ -709,8 +709,8 @@ class DecoderOnlyAttention(nn.Module):
         return 1 / math.sqrt(self.head_dim)
 
     def maybe_get_kvcache_scale(self) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
-        k_scale = getattr(self._original_mod, "k_scale", None)
-        v_scale = getattr(self._original_mod, "v_scale", None)
+        k_scale = getattr(self.k_proj, "k_scale", None)
+        v_scale = getattr(self.v_proj, "v_scale", None)
         return k_scale, v_scale
 
     def forward(
