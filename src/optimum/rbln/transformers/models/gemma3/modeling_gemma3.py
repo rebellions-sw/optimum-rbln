@@ -479,8 +479,9 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
             )
 
         # Pad input and cache_position if the last chunk is smaller than `prefill_chunk_size`
+        padding_size = 0
         if query_length % self.prefill_chunk_size != 0:
-            padding_size = self.prefill_chunk_size - query_length % self.prefill_chunk_size
+            padding_size = (self.prefill_chunk_size - query_length) % self.prefill_chunk_size
             # inputs_embeds
             if inputs.dim() == 3:
                 inputs = torch.nn.functional.pad(inputs, (0, 0, 0, padding_size))

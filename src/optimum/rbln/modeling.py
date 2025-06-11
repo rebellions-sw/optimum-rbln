@@ -88,7 +88,7 @@ class RBLNModel(RBLNBaseModel):
         cls,
         model: "PreTrainedModel",
         config: Optional[PretrainedConfig] = None,
-        rbln_config: Optional[RBLNModelConfig] = None,
+        rbln_config: Optional[Union[RBLNModelConfig, Dict]] = None,
         model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
         subfolder: str = "",
         **kwargs,
