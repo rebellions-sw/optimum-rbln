@@ -115,6 +115,8 @@ _import_structure = {
         "RBLNWhisperForConditionalGenerationConfig",
         "RBLNXLMRobertaModel",
         "RBLNXLMRobertaModelConfig",
+        "RBLNPaliGemmaForConditionalGeneration",
+        "RBLNPaliGemmaForConditionalGenerationConfig",
     ],
     "modeling_alias": [
         "RBLNASTForAudioClassification",
@@ -212,6 +214,8 @@ if TYPE_CHECKING:
         RBLNMistralForCausalLMConfig,
         RBLNOPTForCausalLM,
         RBLNOPTForCausalLMConfig,
+        RBLNPaliGemmaForConditionalGeneration,
+        RBLNPaliGemmaForConditionalGenerationConfig,
         RBLNPhiForCausalLM,
         RBLNPhiForCausalLMConfig,
         RBLNQwen2_5_VisionTransformerPretrainedModel,

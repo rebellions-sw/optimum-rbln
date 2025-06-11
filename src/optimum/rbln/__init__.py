@@ -132,6 +132,8 @@ _import_structure = {
         "RBLNXLMRobertaForSequenceClassificationConfig",
         "RBLNXLMRobertaModel",
         "RBLNXLMRobertaModelConfig",
+        "RBLNPaliGemmaForConditionalGeneration",
+        "RBLNPaliGemmaForConditionalGenerationConfig",
     ],
     "diffusers": [
         "RBLNAutoencoderKL",
@@ -327,6 +329,8 @@ if TYPE_CHECKING:
         RBLNMistralForCausalLMConfig,
         RBLNOPTForCausalLM,
         RBLNOPTForCausalLMConfig,
+        RBLNPaliGemmaForConditionalGeneration,
+        RBLNPaliGemmaForConditionalGenerationConfig,
         RBLNPhiForCausalLM,
         RBLNPhiForCausalLMConfig,
         RBLNQwen2_5_VisionTransformerPretrainedModel,
