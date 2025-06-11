@@ -24,7 +24,7 @@ import rebel
 import torch
 from transformers import AutoConfig, AutoModel, GenerationConfig, PretrainedConfig
 
-from .configuration_utils import RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig
+from .configuration_utils import RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig, get_rbln_config_class
 from .utils.hub import PushToHubMixin, pull_compiled_model_from_hub, validate_files
 from .utils.logging import get_logger
 from .utils.runtime_utils import UnavailableRuntime
@@ -416,13 +416,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         # Lazily loads and caches the corresponding RBLN model config class.
         if cls._rbln_config_class is None:
             rbln_config_class_name = cls.__name__ + "Config"
-            library = importlib.import_module("optimum.rbln")
-            cls._rbln_config_class = getattr(library, rbln_config_class_name, None)
-            if cls._rbln_config_class is None:
-                raise ValueError(
-                    f"RBLN config class {rbln_config_class_name} not found. This is an internal error. "
-                    "Please report it to the developers."
-                )
+            cls._rbln_config_class = get_rbln_config_class(rbln_config_class_name)
         return cls._rbln_config_class
 
     def can_generate(self):

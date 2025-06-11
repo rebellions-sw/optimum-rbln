@@ -53,15 +53,15 @@ class RBLNKandinskyV22CombinedPipeline(RBLNDiffusionMixin, KandinskyV22CombinedP
 
     def __init__(
         self,
-        unet: "UNet2DConditionModel",
-        scheduler: "DDPMScheduler",
-        movq: "VQModel",
-        prior_prior: "PriorTransformer",
-        prior_image_encoder: "CLIPVisionModelWithProjection",
-        prior_text_encoder: "CLIPTextModelWithProjection",
-        prior_tokenizer: "CLIPTokenizer",
-        prior_scheduler: "UnCLIPScheduler",
-        prior_image_processor: "CLIPImageProcessor",
+        unet: UNet2DConditionModel,
+        scheduler: DDPMScheduler,
+        movq: VQModel,
+        prior_prior: PriorTransformer,
+        prior_image_encoder: CLIPVisionModelWithProjection,
+        prior_text_encoder: CLIPTextModelWithProjection,
+        prior_tokenizer: CLIPTokenizer,
+        prior_scheduler: UnCLIPScheduler,
+        prior_image_processor: CLIPImageProcessor,
     ):
         RBLNDiffusionMixin.__init__(self)
         super(KandinskyV22CombinedPipeline, self).__init__()
@@ -111,15 +111,15 @@ class RBLNKandinskyV22Img2ImgCombinedPipeline(RBLNDiffusionMixin, KandinskyV22Im
 
     def __init__(
         self,
-        unet: "UNet2DConditionModel",
-        scheduler: "DDPMScheduler",
-        movq: "VQModel",
-        prior_prior: "PriorTransformer",
-        prior_image_encoder: "CLIPVisionModelWithProjection",
-        prior_text_encoder: "CLIPTextModelWithProjection",
-        prior_tokenizer: "CLIPTokenizer",
-        prior_scheduler: "UnCLIPScheduler",
-        prior_image_processor: "CLIPImageProcessor",
+        unet: UNet2DConditionModel,
+        scheduler: DDPMScheduler,
+        movq: VQModel,
+        prior_prior: PriorTransformer,
+        prior_image_encoder: CLIPVisionModelWithProjection,
+        prior_text_encoder: CLIPTextModelWithProjection,
+        prior_tokenizer: CLIPTokenizer,
+        prior_scheduler: UnCLIPScheduler,
+        prior_image_processor: CLIPImageProcessor,
     ):
         RBLNDiffusionMixin.__init__(self)
         super(KandinskyV22Img2ImgCombinedPipeline, self).__init__()
@@ -169,15 +169,15 @@ class RBLNKandinskyV22InpaintCombinedPipeline(RBLNDiffusionMixin, KandinskyV22In
 
     def __init__(
         self,
-        unet: "UNet2DConditionModel",
-        scheduler: "DDPMScheduler",
-        movq: "VQModel",
-        prior_prior: "PriorTransformer",
-        prior_image_encoder: "CLIPVisionModelWithProjection",
-        prior_text_encoder: "CLIPTextModelWithProjection",
-        prior_tokenizer: "CLIPTokenizer",
-        prior_scheduler: "UnCLIPScheduler",
-        prior_image_processor: "CLIPImageProcessor",
+        unet: UNet2DConditionModel,
+        scheduler: DDPMScheduler,
+        movq: VQModel,
+        prior_prior: PriorTransformer,
+        prior_image_encoder: CLIPVisionModelWithProjection,
+        prior_text_encoder: CLIPTextModelWithProjection,
+        prior_tokenizer: CLIPTokenizer,
+        prior_scheduler: UnCLIPScheduler,
+        prior_image_processor: CLIPImageProcessor,
     ):
         RBLNDiffusionMixin.__init__(self)
         super(KandinskyV22InpaintCombinedPipeline, self).__init__()

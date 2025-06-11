@@ -72,10 +72,7 @@ class RBLNT5EncoderModel(RBLNTransformerEncoderForFeatureExtraction):
 
     @classmethod
     def update_rbln_config_using_pipe(
-        cls,
-        pipe: "RBLNDiffusionMixin",
-        rbln_config: "RBLNDiffusionMixinConfig",
-        submodule_name: str,
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
     ) -> "RBLNDiffusionMixinConfig":
         submodule_config = getattr(rbln_config, submodule_name)
         submodule_config.max_seq_len = rbln_config.max_seq_len or 256
