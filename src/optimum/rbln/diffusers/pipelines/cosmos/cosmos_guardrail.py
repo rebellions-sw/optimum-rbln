@@ -30,7 +30,7 @@ from optimum.rbln.diffusers.configurations.models.configuration_cosmos_guardrail
 from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig
 from ....utils.hub import validate_files
 from ....utils.logging import get_logger
-from ....utils.runtime_utils import RBLNPytorchRuntime, UnavailableRuntime
+from ....utils.runtime_utils import UnavailableRuntime
 
 
 logger = get_logger(__name__)
@@ -327,11 +327,12 @@ class RBLNCosmosSiglipVisionModel:
             export=True,
             rbln_batch_size=batch_size,
             rbln_device=rbln_device,
-            rbln_image_size=[384, 384], # hard coded
+            rbln_image_size=[384, 384],  # hard coded
             model_save_dir=model_save_dir,
             subfolder=subfolder,
         )
         return compiled_model
+
 
 class RBLNAegis:
     _origin_class = RBLNLlamaForCausalLM
@@ -339,9 +340,7 @@ class RBLNAegis:
     @classmethod
     def load_compiled_model(cls, model_id, rbln_config, subfolder=""):
         rbln_config_as_kwargs = {f"rbln_{key}": value for key, value in rbln_config.items()}
-        rbln_config = RBLNAutoConfig.load(
-            model_id, passed_rbln_config=None, kwargs=rbln_config_as_kwargs
-        )
+        rbln_config = RBLNAutoConfig.load(model_id, passed_rbln_config=None, kwargs=rbln_config_as_kwargs)
         model = cls._origin_class.from_pretrained(
             model_id=model_id,
             export=False,
@@ -411,13 +410,13 @@ def update_submodule_config(fn):
 
 class RBLNCosmosSafetyChecker:
     original_class = CosmosSafetyChecker
+    _rbln_modules = [RBLNRetinaFace, RBLNCosmosSiglipVisionModel, RBLNVideoSafetyModel, RBLNAegis]
     _guardrails = ["video_guardrail", "video_guardrail", "video_guardrail", "text_guardrail"]
     _submodules = ["postprocessors", "safety_models", "safety_models", "safety_models"]
     _module_ids = [0, 0, 0, 1]
     _additional_modules = [None, "encoder.model", None, None]
     _target_model_names = ["net", "vision_model", "model", "model"]
     _subfolders = ["", "encoder", "model", ""]
-    _rbln_modules = [RBLNRetinaFace, RBLNCosmosSiglipVisionModel, RBLNVideoSafetyModel, RBLNAegis]
 
     @classmethod
     @update_submodule_config
@@ -429,7 +428,7 @@ class RBLNCosmosSafetyChecker:
     ):
         save_dir_path = Path(model_save_dir)
         save_dir_path.mkdir(exist_ok=True)
-        for i, target_model_name in enumerate(cls._target_model_names): 
+        for i, target_model_name in enumerate(cls._target_model_names):
             guardrail = cls._guardrails[i]
             submodule = cls._submodules[i]
             additional_module = cls._additional_modules[i]

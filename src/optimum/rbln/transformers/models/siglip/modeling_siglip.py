@@ -119,7 +119,7 @@ class RBLNSiglipVisionModel(RBLNModel):
                 f"Variable interpolate_pos_encoding {output_hidden_states} is not equal to rbln_config.interpolate_pos_encoding {self.rbln_config.output_hidden_states}"
                 f"Please compile again with the correct argument."
             )
-            
+
         if interpolate_pos_encoding != self.rbln_config.interpolate_pos_encoding:
             raise ValueError(
                 f"Variable interpolate_pos_encoding {interpolate_pos_encoding} is not equal to rbln_config.interpolate_pos_encoding {self.rbln_config.interpolate_pos_encoding}"

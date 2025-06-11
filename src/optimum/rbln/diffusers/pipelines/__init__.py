@@ -63,8 +63,8 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLControlNetPipeline,
     )
     from .cosmos import (
-        RBLNCosmosTextToWorldPipeline,
         RBLNCosmosSafetyChecker,
+        RBLNCosmosTextToWorldPipeline,
     )
     from .kandinsky2_2 import (
         RBLNKandinskyV22CombinedPipeline,

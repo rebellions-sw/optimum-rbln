@@ -26,7 +26,7 @@ from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...configurations import RBLNAutoencoderKLCosmosConfig
-from .vae import RBLNRuntimeCosmosVAEEncoder, RBLNRuntimeCosmosVAEDecoder, _VAECosmosDecoder, _VAECosmosEncoder
+from .vae import RBLNRuntimeCosmosVAEDecoder, RBLNRuntimeCosmosVAEEncoder, _VAECosmosDecoder, _VAECosmosEncoder
 
 
 if TYPE_CHECKING:
@@ -47,9 +47,13 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
         super().__post_init__(**kwargs)
 
         if self.rbln_config.uses_encoder:
-            self.encoder = RBLNRuntimeCosmosVAEEncoder(runtime=self.model[0], main_input_name="x", use_slicing=self.rbln_config.use_slicing)
+            self.encoder = RBLNRuntimeCosmosVAEEncoder(
+                runtime=self.model[0], main_input_name="x", use_slicing=self.rbln_config.use_slicing
+            )
 
-        self.decoder = RBLNRuntimeCosmosVAEDecoder(runtime=self.model[-1], main_input_name="z", use_slicing=self.rbln_config.use_slicing)
+        self.decoder = RBLNRuntimeCosmosVAEDecoder(
+            runtime=self.model[-1], main_input_name="z", use_slicing=self.rbln_config.use_slicing
+        )
         self.image_size = self.rbln_config.image_size
 
     @classmethod
@@ -70,7 +74,6 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
     def get_compiled_model(
         cls, model, rbln_config: RBLNAutoencoderKLCosmosConfig
     ) -> Dict[str, rebel.RBLNCompiledModel]:
-
         def replaced_forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
             if self.temporal_pad != 0:
                 hidden_states_prev = hidden_states[:, :, :1, ...].repeat(1, 1, self.temporal_pad, 1, 1)

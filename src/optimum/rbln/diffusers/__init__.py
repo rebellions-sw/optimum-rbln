@@ -141,8 +141,8 @@ if TYPE_CHECKING:
         RBLNVQModel,
     )
     from .pipelines import (
-        RBLNCosmosTextToWorldPipeline,
         RBLNCosmosSafetyChecker,
+        RBLNCosmosTextToWorldPipeline,
         RBLNKandinskyV22CombinedPipeline,
         RBLNKandinskyV22Img2ImgCombinedPipeline,
         RBLNKandinskyV22Img2ImgPipeline,
