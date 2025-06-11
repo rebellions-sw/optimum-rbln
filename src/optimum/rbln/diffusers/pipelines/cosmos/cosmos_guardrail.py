@@ -124,8 +124,6 @@ class RBLNSimpleModel:
             )
             raise rebel.core.exception.RBLNRuntimeError(error_msg) from e
 
-        models = [cls.wrap_runtime_if_needed(model) for model in models]
-
         return cls(
             models,
             rbln_config=rbln_config,
@@ -133,10 +131,6 @@ class RBLNSimpleModel:
             rbln_compiled_models=rbln_compiled_models,
             subfolder=subfolder,
         )
-
-    @classmethod
-    def wrap_runtime_if_needed(cls, model):
-        return model
 
     @classmethod
     def wrap_model_if_needed(cls, model):
@@ -307,75 +301,20 @@ class RBLNVideoSafetyModel(RBLNSimpleModel):
         return self(x)
 
 
-class RBLNRuntimeSiglipVisionModel(RBLNPytorchRuntime):
-    def __init__(self, runtime, **kwargs):
-        super().__init__(runtime=runtime, **kwargs)
-        self.model = runtime
-
-    def get_image_features(
-        self,
-        pixel_values: Optional[torch.FloatTensor] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
-        interpolate_pos_encoding: bool = False,
-    ) -> torch.FloatTensor:
-        # Use SiglipModel's config for some fields (if specified) instead of those of vision & text components.
-        vision_outputs = self.model(
-            pixel_values=pixel_values,
-        )
-        pooled_output = vision_outputs[1]
-        return pooled_output
-
-
-# class _SiglipVisionModel(torch.nn.Module):
-#     def __init__(self, model):
-#         super().__init__()
-#         self.model = model
-
-#     def forward(self, pixel_values):
-#         return self.model(
-#             pixel_values=pixel_values,
-#             return_dict=False,
-#         )
-
-
-# class RBLNSiglipVisionModel(RBLNSimpleModel):
-#     _rbln_config_class = RBLNSiglipVisionModelConfig
-
-#     @classmethod
-#     def _update_rbln_config(cls, rbln_config: RBLNSiglipVisionModelConfig):
-#         batch_size = rbln_config.batch_size
-#         height = rbln_config.height
-#         width = rbln_config.width
-
-#         input_info_enc = [("pixel_values", [batch_size, 3, height, width], "float32")]  # hard coded
-#         enc_config = RBLNCompileConfig(input_info=input_info_enc)
-#         rbln_config.set_compile_cfgs([enc_config])
-#         return rbln_config
-
-#     @classmethod
-#     def wrap_model_if_needed(cls, model):
-#         return _SiglipVisionModel(model)
-
-#     @classmethod
-#     def wrap_runtime_if_needed(cls, model):
-#         return RBLNRuntimeSiglipVisionModel(model)
-
 class RBLNCosmosSiglipVisionModel:
     _origin_class = RBLNSiglipVisionModel
 
     @classmethod
     def load_compiled_model(cls, model_id, rbln_config, subfolder=""):
-        # FIXME: this is temp patch until fix main branch
         rbln_config_as_kwargs = {f"rbln_{key}": value for key, value in rbln_config.items()}
-        rbln_config, kwargs = RBLNAutoConfig.load(
-            model_id, passed_rbln_config=None, kwargs=rbln_config_as_kwargs, return_unused_kwargs=True
+        rbln_config = RBLNAutoConfig.load(
+            os.path.join(model_id, subfolder), passed_rbln_config=None, kwargs=rbln_config_as_kwargs
         )
         model = cls._origin_class.from_pretrained(
             model_id=model_id,
             export=False,
             rbln_config=rbln_config,
+            subfolder=subfolder,
         )
         return model
 
@@ -383,7 +322,6 @@ class RBLNCosmosSiglipVisionModel:
     def compile_model(cls, model, rbln_config, model_save_dir, subfolder=""):
         batch_size = rbln_config.get("batch_size", 1)
         rbln_device = rbln_config.get("device", 0)
-        import pdb; pdb.set_trace()
         compiled_model = cls._origin_class.from_model(
             model,
             export=True,
@@ -400,10 +338,9 @@ class RBLNAegis:
 
     @classmethod
     def load_compiled_model(cls, model_id, rbln_config, subfolder=""):
-        # FIXME: this is temp patch until fix main branch
         rbln_config_as_kwargs = {f"rbln_{key}": value for key, value in rbln_config.items()}
-        rbln_config, kwargs = RBLNAutoConfig.load(
-            model_id, passed_rbln_config=None, kwargs=rbln_config_as_kwargs, return_unused_kwargs=True
+        rbln_config = RBLNAutoConfig.load(
+            model_id, passed_rbln_config=None, kwargs=rbln_config_as_kwargs
         )
         model = cls._origin_class.from_pretrained(
             model_id=model_id,
@@ -453,7 +390,6 @@ def update_submodule_config(fn):
 
         if rbln_config is None:
             rbln_config_dict = {}
-
         else:
             rbln_config_dict = rbln_config
 
@@ -480,8 +416,6 @@ class RBLNCosmosSafetyChecker:
     _module_ids = [0, 0, 0, 1]
     _additional_modules = [None, "encoder.model", None, None]
     _target_model_names = ["net", "vision_model", "model", "model"]
-    # _additional_modules = [None, "encoder", None, None]
-    # _target_model_names = ["net", "model", "model", "model"]
     _subfolders = ["", "encoder", "model", ""]
     _rbln_modules = [RBLNRetinaFace, RBLNCosmosSiglipVisionModel, RBLNVideoSafetyModel, RBLNAegis]
 
@@ -495,8 +429,7 @@ class RBLNCosmosSafetyChecker:
     ):
         save_dir_path = Path(model_save_dir)
         save_dir_path.mkdir(exist_ok=True)
-        for i, target_model_name in enumerate(cls._target_model_names):
-            if i != 1 : continue
+        for i, target_model_name in enumerate(cls._target_model_names): 
             guardrail = cls._guardrails[i]
             submodule = cls._submodules[i]
             additional_module = cls._additional_modules[i]
