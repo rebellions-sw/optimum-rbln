@@ -373,15 +373,6 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         rbln_config: RBLNQwen2_5_VLForConditionalGenerationConfig,
         model_config: PretrainedConfig,
     ):
-        """
-        Returns the input information for the RBLNQwen2_5_VLForConditionalGeneration.
-
-        Args:
-            batch_size (int): The batch size.
-            query_length (int): The length of the query.
-            rbln_config (RBLNQwen2_5_VLForConditionalGenerationConfig): The RBLN model configuration.
-            model_config (PretrainedConfig): The HuggingFace model configuration.
-        """
         input_info = super().get_input_info(batch_size, query_length, rbln_config, model_config)
         pos_idx = 3
         input_info.insert(
