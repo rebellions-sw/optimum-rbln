@@ -496,6 +496,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             block_tables=block_tables,
             free_block_pool=free_block_pool,
             rbln_config=self.rbln_config,
+            vocab_size=self.config.vocab_size,
         )
 
         self.decoders = {}
