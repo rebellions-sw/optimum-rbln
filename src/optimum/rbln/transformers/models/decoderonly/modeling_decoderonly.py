@@ -57,36 +57,27 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         dec_attn_mask: torch.Tensor,
         block_tables: torch.Tensor,
         free_block_pool: Deque,
-        kvcache_block_size: int,
-        use_attention_mask: bool,
-        attn_impl: str,
-        use_position_ids: bool,
+        rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
+        embed_tokens: torch.Tensor,
         **kwargs: Any,
     ) -> None:
         super().__init__(runtime, **kwargs)
         self.phase = phase
         self.batch_size = batch_size
-
-        # shared data structures between prefill and decode phase
-        self.use_attention_mask = use_attention_mask
+        self.rbln_config = rbln_config
+        self.embed_tokens = embed_tokens
 
         # shared tensor between prefill and decode phase
         self.dec_attn_mask = dec_attn_mask
         self.block_tables = block_tables
         self.free_block_pool = free_block_pool
-        self.use_position_ids = use_position_ids
 
-        self.kvcache_block_size = kvcache_block_size
         self.empty_block = -1
-        self.attn_impl = attn_impl
-
         if self.phase == "prefill":
             vocab_size = kwargs.pop("vocab_size")
-            self.max_seq_len = kwargs.pop("max_seq_len")
-            self.prefill_chunk_size = kwargs.pop("prefill_chunk_size")
             self.output_size = [1, 1, vocab_size]
             self.causal_mask = 1 - torch.triu(
-                torch.ones(1, 1, self.prefill_chunk_size, self.prefill_chunk_size), diagonal=1
+                torch.ones(1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.prefill_chunk_size), diagonal=1
             )
 
     def get_block_tables(self, cache_position: torch.Tensor, batch_idx: int = None):
@@ -132,6 +123,16 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             else:
                 raise RuntimeError(NO_BLOCKS_ERROR)
 
+        def get_local_block_tables(batch_idx: int):
+            if self.rbln_config.model_type == "static":
+                return None
+            else:
+                return (
+                    torch.tensor([batch_idx], dtype=torch.int16)
+                    if self.phase == "prefill"
+                    else torch.arange(self.batch_size, dtype=torch.int16).view(self.batch_size, -1)
+                )
+
         if self.phase == "prefill":
             # Track previously used blocks and return them to the free_block_pool and
             # reset the current batch's block table to empty blocks
@@ -142,21 +143,36 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             # Get the start (s) and end (e) positions from cache_position and
             # iterate over the cache positions to allocate necessary blocks
             s, e = cache_position[0][0].item(), cache_position[0][-1].item()
-            for position in range(s, e + 1, self.kvcache_block_size):
-                block_idx = position // self.kvcache_block_size
+            for position in range(s, e + 1, self.rbln_config.kvcache_block_size):
+                block_idx = position // self.rbln_config.kvcache_block_size
                 if batch_idx >= len(self.block_tables) or block_idx >= len(self.block_tables[batch_idx]):
                     raise IndexError(f"Invalid index: batch_idx={batch_idx}, block_idx={block_idx}")
                 update_block(batch_idx, block_idx)
 
-            return replace_empty_block(self.block_tables[batch_idx])
+            return replace_empty_block(self.block_tables[batch_idx]), get_local_block_tables(batch_idx)
         # Case for 'decoder' phase, iterate over the cache positions to allocate necessary blocks
         else:
             for b_idx in range(self.batch_size):
                 position = cache_position[b_idx][0].item()
-                block_idx = position // self.kvcache_block_size
+                block_idx = position // self.rbln_config.kvcache_block_size
                 update_block(b_idx, block_idx)
 
-            return replace_empty_block(self.block_tables)
+            return replace_empty_block(self.block_tables), get_local_block_tables(batch_idx)
+
+    def is_external_block_tables(self, block_tables: Optional[torch.Tensor], local_block_tables: Optional[torch.Tensor]):
+        if self.rbln_config.model_type == "static" and block_tables is None:
+            return False
+        elif self.rbln_config.model_type == "sliding_window" and local_block_tables is None:
+            return False    
+        elif self.rbln_config.model_type == "hybrid":
+            if (block_tables is not None) != (local_block_tables is not None):
+                raise ValueError(
+                    "Both block_tables and local_block_tables must be provided or neither of them must be provided."
+                )
+            elif block_tables is None and local_block_tables is None:
+                return False
+        else:   
+            return True
 
     def forward(
         self,
@@ -181,11 +197,9 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         else:
             inputs = inputs_embeds
 
-        if block_tables is None:
-            block_tables = self.get_block_tables(cache_position, batch_idx=batch_idx)
-            is_external_block_tables = False
-        else:
-            is_external_block_tables = True
+        is_external_block_tables = self.is_external_block_tables(block_tables, local_block_tables)
+        if not is_external_block_tables:
+            block_tables, local_block_tables = self.get_block_tables(cache_position, batch_idx=batch_idx)
 
         if self.phase == "decode":
             return self.decode_forward(
@@ -230,7 +244,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         if batch_size != cache_position.shape[0]:
             raise RuntimeError(f"Cache position size mismatch: got {cache_position.shape[0]}, expected {batch_size}.")
 
-        if self.use_attention_mask and attention_mask is None:
+        if self.rbln_config.use_attention_mask and attention_mask is None:
             for b_idx in range(batch_size):
                 decoding_step = cache_position[b_idx].item()
                 if not (0 <= decoding_step < self.dec_attn_mask.shape[-1]):
@@ -256,9 +270,10 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             inputs,
             cache_position,
             block_tables,
+            local_block_tables,
             position_embed,
-            attention_mask if self.use_attention_mask else None,
-            position_ids if self.use_position_ids else None,
+            attention_mask if self.rbln_config.use_attention_mask else None,
+            position_ids if self.rbln_config.use_position_ids else None,
         )
 
         return RBLNDecoderOnlyOutput(logits=logits)
@@ -270,7 +285,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         attention_mask: Optional[torch.Tensor] = None,
         position_embed: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
-        local_block_tables: Optional[torch.Tensor] = None,
     ):
         """
         Prepare inputs for prefill phase.
@@ -284,15 +298,15 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             )
 
         query_length = inputs.shape[1]
-        if query_length > self.max_seq_len:
+        if query_length > self.rbln_config.max_seq_len:
             raise ValueError(
-                f"Input length ({query_length}) exceeds the maximum allowed sequence length ({self.max_seq_len})."
+                f"Input length ({query_length}) exceeds the maximum allowed sequence length ({self.rbln_config.max_seq_len})."
             )
 
         # Initialize attention mask for chunked processing
         chunked_attention_mask = (
-            torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
-            if self.use_attention_mask
+            torch.zeros(1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.max_seq_len, dtype=torch.float32)
+            if self.rbln_config.use_attention_mask
             else None
         )
 
@@ -306,8 +320,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         ]
 
         # Pad input and cache_position if the last chunk is smaller than `prefill_chunk_size`
-        if query_length % self.prefill_chunk_size != 0:
-            padding_size = self.prefill_chunk_size - query_length % self.prefill_chunk_size
+        if query_length % self.rbln_config.prefill_chunk_size != 0:
+            padding_size = self.rbln_config.prefill_chunk_size - query_length % self.rbln_config.prefill_chunk_size
             # inputs_embeds
             if inputs.dim() == 3:
                 inputs = torch.nn.functional.pad(inputs, (0, 0, 0, padding_size))
@@ -376,39 +390,42 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         )
 
         # Process input in chunks of size `prefill_chunk_size`
-        for step in range(0, query_length, self.prefill_chunk_size):
+        for step in range(0, query_length, self.rbln_config.prefill_chunk_size):
             # Extract the current chunk of inputs and cache positions
-            input_chunk = inputs[:, step : step + self.prefill_chunk_size]
-            cache_pos_chunk = cache_position[:, step : step + self.prefill_chunk_size]
+            input_chunk = inputs[:, step : step + self.rbln_config.prefill_chunk_size]
+            cache_pos_chunk = cache_position[:, step : step + self.rbln_config.prefill_chunk_size]
             position_ids_chunk = (
-                position_ids[:, step : step + self.prefill_chunk_size] if position_ids is not None else None
+                position_ids[:, step : step + self.rbln_config.prefill_chunk_size]
+                if position_ids is not None
+                else None
             )
             if position_embed is not None:
-                position_embed_chunk = position_embed[:, :, :, step : step + self.prefill_chunk_size, :]
+                position_embed_chunk = position_embed[:, :, :, step : step + self.rbln_config.prefill_chunk_size, :]
 
-            if self.use_attention_mask and not self.use_position_ids:
+            if self.rbln_config.use_attention_mask and not self.rbln_config.use_position_ids:
                 # Update attention mask to ensure proper causal behavior
-                if step >= self.prefill_chunk_size:
-                    chunked_attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
-                chunked_attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
+                if step >= self.rbln_config.prefill_chunk_size:
+                    chunked_attention_mask[:, :, :, step - self.rbln_config.prefill_chunk_size : step] = 1
+                chunked_attention_mask[:, :, :, step : step + self.rbln_config.prefill_chunk_size] = self.causal_mask
 
             # Define query position
-            query_position = torch.tensor((query_length - 1) % self.prefill_chunk_size, dtype=torch.int16)
+            query_position = torch.tensor((query_length - 1) % self.rbln_config.prefill_chunk_size, dtype=torch.int16)
 
             # Forward pass for the current chunk
             logits = super().forward(
                 input_chunk,
                 cache_pos_chunk,
                 block_tables,
+                local_block_tables,
                 position_embed_chunk if position_embed is not None else None,
                 query_position,
-                chunked_attention_mask if self.use_attention_mask else None,
-                position_ids_chunk if self.use_position_ids else None,
+                chunked_attention_mask if self.rbln_config.use_attention_mask else None,
+                position_ids_chunk if self.rbln_config.use_position_ids else None,
                 out=out_buffers,
             )
 
         # Update decoder attention mask with processed KV-cache length from prefill phase
-        if not is_external_block_tables and self.use_attention_mask:
+        if not is_external_block_tables and self.rbln_config.use_attention_mask:
             self.dec_attn_mask[batch_idx].fill_(0)
             self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
 
@@ -478,13 +495,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             dec_attn_mask=dec_attn_mask,
             block_tables=block_tables,
             free_block_pool=free_block_pool,
-            kvcache_block_size=self.rbln_config.kvcache_block_size,
-            vocab_size=self.config.vocab_size,
-            prefill_chunk_size=self.rbln_config.prefill_chunk_size,
-            max_seq_len=self.rbln_config.max_seq_len,
-            use_attention_mask=self.rbln_config.use_attention_mask,
-            attn_impl=self.rbln_config.attn_impl,
-            use_position_ids=self.rbln_config.use_position_ids,
+            rbln_config=self.rbln_config,
         )
 
         self.decoders = {}
@@ -498,10 +509,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 dec_attn_mask=dec_attn_mask,
                 block_tables=block_tables,
                 free_block_pool=free_block_pool,
-                kvcache_block_size=self.rbln_config.kvcache_block_size,
-                use_attention_mask=self.rbln_config.use_attention_mask,
-                attn_impl=self.rbln_config.attn_impl,
-                use_position_ids=self.rbln_config.use_position_ids,
+                rbln_config=self.rbln_config,
             )
 
         # NOTE(eunji): Use a decoder whose batch size matches the model's main batch size for compatibility.

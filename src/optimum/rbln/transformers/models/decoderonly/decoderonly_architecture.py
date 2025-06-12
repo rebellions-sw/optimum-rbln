@@ -289,7 +289,7 @@ class DecoderOnlyWrapper(nn.Module):
             _past_key_values.append(past_key_value)
         past_key_values = _past_key_values
 
-        if self.model_type == "hybrid":
+        if hasattr(self, "rotary_emb_global") and hasattr(self, "rotary_emb_local"):
             rotary_emb = (self.rotary_emb_global, self.rotary_emb_local)
         else:
             rotary_emb = self.rotary_emb
