@@ -58,14 +58,12 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         block_tables: torch.Tensor,
         free_block_pool: Deque,
         rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
-        embed_tokens: torch.Tensor,
         **kwargs: Any,
     ) -> None:
         super().__init__(runtime, **kwargs)
         self.phase = phase
         self.batch_size = batch_size
         self.rbln_config = rbln_config
-        self.embed_tokens = embed_tokens
 
         # shared tensor between prefill and decode phase
         self.dec_attn_mask = dec_attn_mask
@@ -159,11 +157,13 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
             return replace_empty_block(self.block_tables), get_local_block_tables(batch_idx)
 
-    def is_external_block_tables(self, block_tables: Optional[torch.Tensor], local_block_tables: Optional[torch.Tensor]):
+    def is_external_block_tables(
+        self, block_tables: Optional[torch.Tensor], local_block_tables: Optional[torch.Tensor]
+    ):
         if self.rbln_config.model_type == "static" and block_tables is None:
             return False
         elif self.rbln_config.model_type == "sliding_window" and local_block_tables is None:
-            return False    
+            return False
         elif self.rbln_config.model_type == "hybrid":
             if (block_tables is not None) != (local_block_tables is not None):
                 raise ValueError(
@@ -171,7 +171,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 )
             elif block_tables is None and local_block_tables is None:
                 return False
-        else:   
+        else:
             return True
 
     def forward(
