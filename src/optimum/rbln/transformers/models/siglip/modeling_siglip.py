@@ -155,25 +155,22 @@ class RBLNSiglipVisionModel(RBLNModel):
         if not return_dict:
             return (output,) if not isinstance(output, (tuple, list)) else output
         else:
-            last_hidden_state = (
-                output[0]
-                if getattr(self.config, "vision_use_head", True) or self.rbln_config.output_hidden_states
-                else output
-            )
-            pooler_output = output[1] if getattr(self.config, "vision_use_head", True) else None
+            if self.rbln_config.output_attentions:
+                attentions = ()
+                for i in range(self.config.vision_config.num_hidden_layers):
+                    attentions += (output.pop(),)
+            else:
+                attentions = None
+
             if self.rbln_config.output_hidden_states:
-                idx = self.config.vision_config.num_hidden_layers + 1
-                hidden_states = (
-                    output[2 : 2 + idx] if getattr(self.config, "vision_use_head", True) else output[1 : 1 + idx]
-                )
+                hidden_states = ()
+                for i in range(self.config.vision_config.num_hidden_layers + 1):
+                    hidden_states += (output.pop(),)
             else:
                 hidden_states = None
 
-            if self.rbln_config.output_attentions:
-                idx = self.config.vision_config.num_hidden_layers
-                attentions = output[-idx:]
-            else:
-                attentions = None
+            pooler_output = output.pop() if getattr(self.config.vision_config, "vision_use_head", True) else None
+            last_hidden_state = output.pop()
 
             return BaseModelOutputWithPooling(
                 last_hidden_state=last_hidden_state,
