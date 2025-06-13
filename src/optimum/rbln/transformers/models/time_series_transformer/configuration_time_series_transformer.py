@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from ....configuration_utils import RBLNModelConfig
 
@@ -10,7 +10,7 @@ class RBLNTimeSeriesTransformerForPredictionConfig(RBLNModelConfig):
         enc_max_seq_len: Optional[int] = None,
         dec_max_seq_len: Optional[int] = None,
         num_parallel_samples: Optional[int] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:

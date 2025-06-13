@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from ....configuration_utils import RBLNModelConfig
 from ....transformers import RBLNCLIPTextModelWithProjectionConfig, RBLNCLIPVisionModelWithProjectionConfig
@@ -20,7 +20,9 @@ from ..models import RBLNUNet2DConditionModelConfig, RBLNVQModelConfig
 from ..models.configuration_prior_transformer import RBLNPriorTransformerConfig
 
 
-class _RBLNKandinskyV22PipelineBaseConfig(RBLNModelConfig):
+class RBLNKandinskyV22PipelineBaseConfig(RBLNModelConfig):
+    """Base configuration class for Kandinsky V2.2 decoder pipelines."""
+
     submodules = ["unet", "movq"]
     _movq_uses_encoder = False
 
@@ -37,7 +39,7 @@ class _RBLNKandinskyV22PipelineBaseConfig(RBLNModelConfig):
         img_width: Optional[int] = None,
         height: Optional[int] = None,
         width: Optional[int] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:
@@ -117,19 +119,27 @@ class _RBLNKandinskyV22PipelineBaseConfig(RBLNModelConfig):
         return self.movq.sample_size
 
 
-class RBLNKandinskyV22PipelineConfig(_RBLNKandinskyV22PipelineBaseConfig):
+class RBLNKandinskyV22PipelineConfig(RBLNKandinskyV22PipelineBaseConfig):
+    """Configuration class for the Kandinsky V2.2 text-to-image decoder pipeline."""
+
     _movq_uses_encoder = False
 
 
-class RBLNKandinskyV22Img2ImgPipelineConfig(_RBLNKandinskyV22PipelineBaseConfig):
+class RBLNKandinskyV22Img2ImgPipelineConfig(RBLNKandinskyV22PipelineBaseConfig):
+    """Configuration class for the Kandinsky V2.2 image-to-image decoder pipeline."""
+
     _movq_uses_encoder = True
 
 
-class RBLNKandinskyV22InpaintPipelineConfig(_RBLNKandinskyV22PipelineBaseConfig):
+class RBLNKandinskyV22InpaintPipelineConfig(RBLNKandinskyV22PipelineBaseConfig):
+    """Configuration class for the Kandinsky V2.2 inpainting decoder pipeline."""
+
     _movq_uses_encoder = True
 
 
 class RBLNKandinskyV22PriorPipelineConfig(RBLNModelConfig):
+    """Configuration class for the Kandinsky V2.2 Prior pipeline."""
+
     submodules = ["text_encoder", "image_encoder", "prior"]
 
     def __init__(
@@ -140,7 +150,7 @@ class RBLNKandinskyV22PriorPipelineConfig(RBLNModelConfig):
         *,
         batch_size: Optional[int] = None,
         guidance_scale: Optional[float] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Initialize a configuration for Kandinsky 2.2 prior pipeline optimized for RBLN NPU.
@@ -194,7 +204,9 @@ class RBLNKandinskyV22PriorPipelineConfig(RBLNModelConfig):
         return self.image_encoder.image_size
 
 
-class _RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
+class RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
+    """Base configuration class for Kandinsky V2.2 combined pipelines."""
+
     submodules = ["prior_pipe", "decoder_pipe"]
     _decoder_pipe_cls = RBLNKandinskyV22PipelineConfig
 
@@ -216,7 +228,7 @@ class _RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
         prior_text_encoder: Optional[RBLNCLIPTextModelWithProjectionConfig] = None,
         unet: Optional[RBLNUNet2DConditionModelConfig] = None,
         movq: Optional[RBLNVQModelConfig] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Initialize a configuration for combined Kandinsky 2.2 pipelines optimized for RBLN NPU.
@@ -325,13 +337,19 @@ class _RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
         return self.decoder_pipe.movq
 
 
-class RBLNKandinskyV22CombinedPipelineConfig(_RBLNKandinskyV22CombinedPipelineBaseConfig):
+class RBLNKandinskyV22CombinedPipelineConfig(RBLNKandinskyV22CombinedPipelineBaseConfig):
+    """Configuration class for the Kandinsky V2.2 combined text-to-image pipeline."""
+
     _decoder_pipe_cls = RBLNKandinskyV22PipelineConfig
 
 
-class RBLNKandinskyV22InpaintCombinedPipelineConfig(_RBLNKandinskyV22CombinedPipelineBaseConfig):
+class RBLNKandinskyV22InpaintCombinedPipelineConfig(RBLNKandinskyV22CombinedPipelineBaseConfig):
+    """Configuration class for the Kandinsky V2.2 combined inpainting pipeline."""
+
     _decoder_pipe_cls = RBLNKandinskyV22InpaintPipelineConfig
 
 
-class RBLNKandinskyV22Img2ImgCombinedPipelineConfig(_RBLNKandinskyV22CombinedPipelineBaseConfig):
+class RBLNKandinskyV22Img2ImgCombinedPipelineConfig(RBLNKandinskyV22CombinedPipelineBaseConfig):
+    """Configuration class for the Kandinsky V2.2 combined image-to-image pipeline."""
+
     _decoder_pipe_cls = RBLNKandinskyV22Img2ImgPipelineConfig
