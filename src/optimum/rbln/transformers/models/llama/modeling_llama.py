@@ -27,8 +27,57 @@ class RBLNLlamaForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
     A class to convert and run pre-trained transformers based LlamaForCausalLM model on RBLN devices.
     It implements the methods to convert a pre-trained transformers LlamaForCausalLM model into a RBLN transformer model by:
+
     - transferring the checkpoint weights of the original into an optimized RBLN graph,
     - compiling the resulting graph using the RBLN compiler.
+
+    **Configuration:**
+    This model uses [`RBLNLlamaForCausalLMConfig`] for configuration. When calling methods like `from_pretrained` or `from_model`,
+    the `rbln_config` parameter should be an instance of [`RBLNLlamaForCausalLMConfig`] or a dictionary conforming to its structure.
+
+    See the [`RBLNLlamaForCausalLMConfig`] class for all available configuration options.
+
+    Examples:
+        ```python
+        from optimum.rbln import RBLNLlamaForCausalLM
+
+        # Simple usage using rbln_* arguments
+        # `max_seq_len` is automatically inferred from the model config
+        model = RBLNLlamaForCausalLM.from_pretrained(
+            "meta-llama/Llama-2-7b-hf",
+            export=True,
+            rbln_batch_size=1,
+            rbln_tensor_parallel_size=4,
+        )
+
+
+        # Using a config dictionary
+        rbln_config = {
+            "batch_size": 1,
+            "max_seq_len": 4096,
+            "tensor_parallel_size": 4,
+        }
+        model = RBLNLlamaForCausalLM.from_pretrained(
+            "meta-llama/Llama-2-7b-hf",
+            export=True,
+            rbln_config=rbln_config
+        )
+
+
+        # Using a RBLNLlamaForCausalLMConfig instance (recommended for type checking)
+        from optimum.rbln import RBLNLlamaForCausalLMConfig
+
+        config = RBLNLlamaForCausalLMConfig(
+            batch_size=1,
+            max_seq_len=4096,
+            tensor_parallel_size=4
+        )
+        model = RBLNLlamaForCausalLM.from_pretrained(
+            "meta-llama/Llama-2-7b-hf",
+            export=True,
+            rbln_config=config
+        )
+        ```
     """
 
     _decoder_wrapper_cls = LlamaWrapper

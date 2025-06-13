@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import rebel
 
@@ -31,7 +31,7 @@ class RBLNModelForSeq2SeqLMConfig(RBLNModelConfig):
         dec_max_seq_len: Optional[int] = None,
         use_attention_mask: Optional[bool] = None,
         pad_token_id: Optional[int] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:
