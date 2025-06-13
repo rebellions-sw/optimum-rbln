@@ -12,12 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNUNet2DConditionModelConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLN UNet2DCondition models.
+
+    This class inherits from RBLNModelConfig and provides specific configuration options
+    for UNet2DCondition models used in diffusion-based image generation.
+    """
+
     subclass_non_save_attributes = ["_batch_size_is_specified"]
 
     def __init__(
@@ -31,7 +38,7 @@ class RBLNUNet2DConditionModelConfig(RBLNModelConfig):
         in_features: Optional[int] = None,
         text_model_hidden_size: Optional[int] = None,
         image_model_hidden_size: Optional[int] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:

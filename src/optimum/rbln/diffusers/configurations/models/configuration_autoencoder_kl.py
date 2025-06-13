@@ -12,12 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNAutoencoderKLConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLN Variational Autoencoder (VAE) models.
+
+    This class inherits from RBLNModelConfig and provides specific configuration options
+    for VAE models used in diffusion-based image generation.
+    """
+
     def __init__(
         self,
         batch_size: Optional[int] = None,
@@ -26,7 +33,7 @@ class RBLNAutoencoderKLConfig(RBLNModelConfig):
         vae_scale_factor: Optional[float] = None,  # TODO: rename to scaling_factor
         in_channels: Optional[int] = None,
         latent_channels: Optional[int] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:

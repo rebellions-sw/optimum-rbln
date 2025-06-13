@@ -24,13 +24,61 @@ logger = logging.get_logger(__name__)
 
 class RBLNQwen2ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     """
-    The Llama Model transformer with a language modeling head (linear layer) on top.
+    The Qwen2 Model transformer with a language modeling head (linear layer) on top.
     This model inherits from [`RBLNDecoderOnlyModelForCausalLM`]. Check the superclass documentation for the generic methods the library implements for all its models.
 
-    A class to convert and run pre-trained transformers based LlamaForCausalLM model on RBLN devices.
-    It implements the methods to convert a pre-trained transformers LlamaForCausalLM model into a RBLN transformer model by:
+    A class to convert and run pre-trained transformers based Qwen2ForCausalLM model on RBLN devices.
+    It implements the methods to convert a pre-trained transformers Qwen2ForCausalLM model into a RBLN transformer model by:
     - transferring the checkpoint weights of the original into an optimized RBLN graph,
     - compiling the resulting graph using the RBLN compiler.
+
+    **Configuration:**
+    This model uses [`RBLNQwen2ForCausalLMConfig`] for configuration. When calling methods like `from_pretrained` or `from_model`,
+    the `rbln_config` parameter should be an instance of [`RBLNQwen2ForCausalLMConfig`] or a dictionary conforming to its structure.
+
+    See the [`RBLNQwen2ForCausalLMConfig`] class for all available configuration options.
+
+    Examples:
+        ```python
+        from optimum.rbln import RBLNQwen2ForCausalLM
+
+        # Simple usage using rbln_* arguments
+        # `max_seq_len` is automatically inferred from the model config
+        model = RBLNQwen2ForCausalLM.from_pretrained(
+            "Qwen/Qwen2-7B-Instruct",
+            export=True,
+            rbln_batch_size=1,
+            rbln_tensor_parallel_size=4,
+        )
+
+
+        # Using a config dictionary
+        rbln_config = {
+            "batch_size": 1,
+            "max_seq_len": 4096,
+            "tensor_parallel_size": 4,
+        }
+        model = RBLNQwen2ForCausalLM.from_pretrained(
+            "Qwen/Qwen2-7B-Instruct",
+            export=True,
+            rbln_config=rbln_config
+        )
+
+
+        # Using a RBLNQwen2ForCausalLMConfig instance (recommended for type checking)
+        from optimum.rbln import RBLNQwen2ForCausalLMConfig
+
+        config = RBLNQwen2ForCausalLMConfig(
+            batch_size=1,
+            max_seq_len=4096,
+            tensor_parallel_size=4
+        )
+        model = RBLNQwen2ForCausalLM.from_pretrained(
+            "Qwen/Qwen2-7B-Instruct",
+            export=True,
+            rbln_config=config
+        )
+        ```
     """
 
     _decoder_wrapper_cls = QWEN2Wrapper

@@ -49,6 +49,13 @@ logger = get_logger(__name__)
 
 
 class RBLNStableDiffusionControlNetPipeline(RBLNDiffusionMixin, StableDiffusionControlNetPipeline):
+    """
+    RBLN-accelerated implementation of Stable Diffusion pipeline with ControlNet for guided text-to-image generation.
+
+    This pipeline compiles Stable Diffusion and ControlNet models to run efficiently on RBLN NPUs, enabling high-performance
+    inference for generating images with precise structural control using conditioning inputs like edges, depth, or poses.
+    """
+
     original_class = StableDiffusionControlNetPipeline
     _rbln_config_class = RBLNStableDiffusionControlNetPipelineConfig
     _submodules = ["text_encoder", "unet", "vae", "controlnet"]

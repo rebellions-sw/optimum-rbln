@@ -19,6 +19,13 @@ from ...modeling_diffusers import RBLNDiffusionMixin
 
 
 class RBLNKandinskyV22PriorPipeline(RBLNDiffusionMixin, KandinskyV22PriorPipeline):
+    """
+    RBLN-accelerated implementation of Kandinsky 2.2 prior pipeline for text and image embedding generation.
+
+    This pipeline compiles Kandinsky 2.2 prior models to run efficiently on RBLN NPUs, enabling high-performance
+    inference for generating image embeddings from text prompts and image inputs for downstream generation tasks.
+    """
+
     original_class = KandinskyV22PriorPipeline
     _rbln_config_class = RBLNKandinskyV22PriorPipelineConfig
     _submodules = ["text_encoder", "image_encoder", "prior"]

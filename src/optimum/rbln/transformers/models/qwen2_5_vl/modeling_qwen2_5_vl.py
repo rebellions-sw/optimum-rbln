@@ -339,6 +339,40 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
 
 
 class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
+    """
+    RBLNQwen2_5_VLForConditionalGeneration is a multi-modal model that integrates vision and language processing capabilities,
+    optimized for RBLN NPUs. It is designed for conditional generation tasks that involve both image and text inputs.
+
+    This model inherits from [`RBLNDecoderOnlyModelForCausalLM`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    Important Note:
+        This model includes a Large Language Model (LLM). For optimal performance, it is highly recommended to use
+        tensor parallelism for the language model. This can be achieved by using the `rbln_config` parameter in the
+        `from_pretrained` method. Refer to the `from_pretrained` documentation and the RBLNQwen2_5_VLForConditionalGenerationConfig class for details.
+
+    Examples:
+        ```python
+        from optimum.rbln import RBLNQwen2_5_VLForConditionalGeneration
+
+        model = RBLNQwen2_5_VLForConditionalGeneration.from_pretrained(
+            "Qwen/Qwen2.5-VL-7B-Instruct",
+            export=True,
+            rbln_config={
+                "visual": {
+                    "max_seq_lens": 6400,
+                    "device": 0,
+                },
+                "tensor_parallel_size": 8,
+                "kvcache_partition_len": 16_384,
+                "max_seq_len": 114_688,
+                "device": [0, 1, 2, 3, 4, 5, 6, 7],
+            },
+        )
+
+        model.save_pretrained("compiled-qwen2.5-vl-7b-instruct")
+        ```
+    """
+
     auto_model_class = AutoModelForVision2Seq
     _rbln_submodules = [
         {"name": "visual"},
@@ -373,15 +407,6 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         rbln_config: RBLNQwen2_5_VLForConditionalGenerationConfig,
         model_config: PretrainedConfig,
     ):
-        """
-        Returns the input information for the RBLNQwen2_5_VLForConditionalGeneration.
-
-        Args:
-            batch_size (int): The batch size.
-            query_length (int): The length of the query.
-            rbln_config (RBLNQwen2_5_VLForConditionalGenerationConfig): The RBLN model configuration.
-            model_config (PretrainedConfig): The HuggingFace model configuration.
-        """
         input_info = super().get_input_info(batch_size, query_length, rbln_config, model_config)
         pos_idx = 3
         input_info.insert(
