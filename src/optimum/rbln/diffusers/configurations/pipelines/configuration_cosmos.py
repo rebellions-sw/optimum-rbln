@@ -23,7 +23,7 @@ from ..models import RBLNAutoencoderKLCosmosConfig, RBLNCosmosTransformer3DModel
 logger = get_logger(__name__)
 
 
-class RBLNCosmosTextToWorldPipelineConfig(RBLNModelConfig):
+class _RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
     submodules = ["text_encoder", "transformer", "vae"]
     _optional_components = ["safety_checker"]
     _vae_uses_encoder = False
@@ -90,3 +90,11 @@ class RBLNCosmosTextToWorldPipelineConfig(RBLNModelConfig):
     @property
     def max_seq_len(self):
         return self.text_encoder.max_seq_len
+
+
+class RBLNCosmosTextToWorldPipelineConfig(_RBLNCosmosPipelineBaseConfig):
+    _vae_uses_encoder = False
+
+
+class RBLNCosmosVideoToWorldPipelineConfig(_RBLNCosmosPipelineBaseConfig):
+    _vae_uses_encoder = True
