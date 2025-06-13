@@ -109,11 +109,11 @@ class RBLNSiglipVisionModel(RBLNModel):
 
     def forward(
         self,
-        pixel_values: Optional[torch.FloatTensor] = None,
-        return_dict: bool = None,
+        pixel_values,
+        return_dict: Optional[bool] = None,
         output_attentions: Optional[bool] = None,
-        output_hidden_states: bool = None,
-        interpolate_pos_encoding: bool = False,
+        output_hidden_states: Optional[bool] = None,
+        interpolate_pos_encoding: Optional[bool] = None,
         **kwargs,
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
         if len(kwargs) > 0 and any(value is not None for value in kwargs.values()):
