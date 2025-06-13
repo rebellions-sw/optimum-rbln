@@ -12,6 +12,7 @@ from .models import (
 )
 from .pipelines import (
     RBLNCosmosTextToWorldPipelineConfig,
+    RBLNCosmosVideoToWorldPipelineConfig,
     RBLNKandinskyV22CombinedPipelineConfig,
     RBLNKandinskyV22Img2ImgCombinedPipelineConfig,
     RBLNKandinskyV22Img2ImgPipelineConfig,
