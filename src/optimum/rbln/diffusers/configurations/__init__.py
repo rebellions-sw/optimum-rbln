@@ -6,7 +6,6 @@ from .models import (
     RBLNPriorTransformerConfig,
     RBLNRetinaFaceConfig,
     RBLNSD3Transformer2DModelConfig,
-    RBLNSiglipVisionModelConfig,
     RBLNUNet2DConditionModelConfig,
     RBLNVideoSafetyModelConfig,
     RBLNVQModelConfig,

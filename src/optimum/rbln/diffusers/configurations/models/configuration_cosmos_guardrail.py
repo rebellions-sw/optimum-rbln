@@ -62,25 +62,3 @@ class RBLNVideoSafetyModelConfig(RBLNModelConfig):
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
         self.input_size = 1152  # hard coded
-
-
-class RBLNSiglipVisionModelConfig(RBLNModelConfig):
-    def __init__(
-        self,
-        batch_size: Optional[int] = None,
-        height: Optional[int] = None,
-        width: Optional[int] = None,
-        **kwargs,
-    ):
-        """
-        Args:
-            batch_size (Optional[int]): The batch size for inference. Defaults to 1.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
-
-        Raises:
-            ValueError: If batch_size is not a positive integer.
-        """
-        super().__init__(**kwargs)
-        self.batch_size = batch_size or 1
-        self.height = 384  # hard coded
-        self.width = 384  # hard coded
