@@ -147,6 +147,17 @@ class RBLNCompileConfig:
 
 
 RUNTIME_KEYWORDS = ["create_runtimes", "optimize_host_memory", "device", "device_map", "activate_profiler"]
+CONFIG_MAPPING: Dict[str, Type["RBLNModelConfig"]] = {}
+
+
+def get_rbln_config_class(rbln_config_class_name: str) -> Type["RBLNModelConfig"]:
+    cls = getattr(importlib.import_module("optimum.rbln"), rbln_config_class_name, None)
+    if cls is None:
+        if rbln_config_class_name in CONFIG_MAPPING:
+            cls = CONFIG_MAPPING[rbln_config_class_name]
+        else:
+            raise ValueError(f"Configuration for {rbln_config_class_name} not found.")
+    return cls
 
 
 def load_config(path: str) -> Tuple[Type["RBLNModelConfig"], Dict[str, Any]]:
@@ -166,7 +177,7 @@ def load_config(path: str) -> Tuple[Type["RBLNModelConfig"], Dict[str, Any]]:
             )
 
     cls_name = config_file["cls_name"]
-    cls = getattr(importlib.import_module("optimum.rbln"), cls_name)
+    cls = get_rbln_config_class(cls_name)
     return cls, config_file
 
 
@@ -175,7 +186,7 @@ class RBLNAutoConfig:
         cls_name = kwargs.get("cls_name")
         if cls_name is None:
             raise ValueError("`cls_name` is required.")
-        cls = getattr(importlib.import_module("optimum.rbln"), cls_name)
+        cls = get_rbln_config_class(cls_name)
         return cls(**kwargs)
 
     @staticmethod
@@ -183,8 +194,26 @@ class RBLNAutoConfig:
         cls_name = config_dict.get("cls_name")
         if cls_name is None:
             raise ValueError("`cls_name` is required.")
-        cls = getattr(importlib.import_module("optimum.rbln"), cls_name)
+        cls = get_rbln_config_class(cls_name)
         return cls(**config_dict)
+
+    @staticmethod
+    def register(config: Type["RBLNModelConfig"], exist_ok=False):
+        """
+        Register a new configuration for this class.
+
+        Args:
+            config ([`RBLNModelConfig`]): The config to register.
+        """
+        if not issubclass(config, RBLNModelConfig):
+            raise ValueError("`config` must be a subclass of RBLNModelConfig.")
+
+        native_cls = getattr(importlib.import_module("optimum.rbln"), config.__name__, None)
+        if config.__name__ in CONFIG_MAPPING or native_cls is not None:
+            if not exist_ok:
+                raise ValueError(f"Configuration for {config.__name__} already registered.")
+
+        CONFIG_MAPPING[config.__name__] = config
 
     @staticmethod
     def load(
@@ -306,9 +335,6 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         ```python
         # Save to disk
         config.save("/path/to/model")
-
-        # Load configuration from disk
-        loaded_config = RBLNModelConfig.load("/path/to/model")
 
         # Using AutoConfig
         loaded_config = RBLNAutoConfig.load("/path/to/model")
@@ -474,7 +500,15 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
 
         if isinstance(submodule_config, dict):
             from_predecessor = self._runtime_options.copy()
+            from_predecessor.update(
+                {
+                    "npu": self.npu,
+                    "tensor_parallel_size": self.tensor_parallel_size,
+                    "optimum_rbln_version": self.optimum_rbln_version,
+                }
+            )
             from_predecessor.update(kwargs)
+
             init_kwargs = from_predecessor
             init_kwargs.update(submodule_config)
             submodule_config = submodule_config_cls(**init_kwargs)

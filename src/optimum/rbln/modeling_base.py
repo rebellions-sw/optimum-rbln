@@ -24,7 +24,7 @@ import rebel
 import torch
 from transformers import AutoConfig, AutoModel, GenerationConfig, PretrainedConfig
 
-from .configuration_utils import RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig
+from .configuration_utils import RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig, get_rbln_config_class
 from .utils.hub import PushToHubMixin, pull_compiled_model_from_hub, validate_files
 from .utils.logging import get_logger
 from .utils.runtime_utils import UnavailableRuntime
@@ -178,9 +178,27 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         return str(model_path)
 
     @classmethod
-    def _load_compiled_models(cls, model_path: str):
+    def _load_compiled_models(cls, model_path: str, expected_compiled_model_names: List[str]):
         compiled_models = Path(model_path).glob("*.rbln")
-        rbln_compiled_models = {cm.stem: rebel.RBLNCompiledModel(cm) for cm in compiled_models}
+        expected_compiled_models = [
+            Path(model_path) / f"{compiled_model_name}.rbln" for compiled_model_name in expected_compiled_model_names
+        ]
+        unexpected_compiled_models = [cm for cm in compiled_models if cm not in expected_compiled_models]
+        if unexpected_compiled_models:
+            # TODO(jongho): fix after May release. raise error if unexpected compiled models are found
+            logger.warning(
+                f"Unexpected compiled models found: {[cm.name for cm in unexpected_compiled_models]}. "
+                f"Please check the model path: {model_path}"
+            )
+
+        rbln_compiled_models = {}
+        for compiled_model in expected_compiled_models:
+            if not compiled_model.exists():
+                raise FileNotFoundError(
+                    f"Expected RBLN compiled model '{compiled_model.name}' not found at '{model_path}'. "
+                    "Please ensure all models specified in `rbln_config` are present."
+                )
+            rbln_compiled_models[compiled_model.stem] = rebel.RBLNCompiledModel(compiled_model)
         return rbln_compiled_models
 
     @classmethod
@@ -271,7 +289,8 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
                     )
                     config = PretrainedConfig(**config)
 
-            rbln_compiled_models = cls._load_compiled_models(model_path_subfolder)
+            compiled_model_names = [cfg.compiled_model_name for cfg in rbln_config.compile_cfgs]
+            rbln_compiled_models = cls._load_compiled_models(model_path_subfolder, compiled_model_names)
 
             if subfolder != "":
                 model_save_dir = Path(model_path_subfolder).absolute().parent
@@ -414,13 +433,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         """
         if cls._rbln_config_class is None:
             rbln_config_class_name = cls.__name__ + "Config"
-            library = importlib.import_module("optimum.rbln")
-            cls._rbln_config_class = getattr(library, rbln_config_class_name, None)
-            if cls._rbln_config_class is None:
-                raise ValueError(
-                    f"RBLN config class {rbln_config_class_name} not found. This is an internal error. "
-                    "Please report it to the developers."
-                )
+            cls._rbln_config_class = get_rbln_config_class(rbln_config_class_name)
         return cls._rbln_config_class
 
     def can_generate(self):

@@ -143,8 +143,7 @@ class RBLNUNet2DConditionModel(RBLNModel):
     hf_library_name = "diffusers"
     auto_model_class = UNet2DConditionModel
     _rbln_config_class = RBLNUNet2DConditionModelConfig
-    output_class = UNet2DConditionOutput
-    output_key = "sample"
+    _output_class = UNet2DConditionOutput
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)

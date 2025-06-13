@@ -31,6 +31,7 @@ _import_structure = {
         "RBLNAutoModelForSequenceClassification",
         "RBLNAutoModelForSpeechSeq2Seq",
         "RBLNAutoModelForVision2Seq",
+        "RBLNAutoModelForImageTextToText",
     ],
     "bart": [
         "RBLNBartForConditionalGeneration",
@@ -80,6 +81,12 @@ _import_structure = {
     ],
     "exaone": ["RBLNExaoneForCausalLM", "RBLNExaoneForCausalLMConfig"],
     "gemma": ["RBLNGemmaForCausalLM", "RBLNGemmaForCausalLMConfig"],
+    "gemma3": [
+        "RBLNGemma3ForCausalLM",
+        "RBLNGemma3ForCausalLMConfig",
+        "RBLNGemma3ForConditionalGeneration",
+        "RBLNGemma3ForConditionalGenerationConfig",
+    ],
     "gpt2": ["RBLNGPT2LMHeadModel", "RBLNGPT2LMHeadModelConfig"],
     "idefics3": [
         "RBLNIdefics3VisionTransformer",
@@ -121,6 +128,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForCTC,
         RBLNAutoModelForDepthEstimation,
         RBLNAutoModelForImageClassification,
+        RBLNAutoModelForImageTextToText,
         RBLNAutoModelForMaskedLM,
         RBLNAutoModelForQuestionAnswering,
         RBLNAutoModelForSeq2SeqLM,
@@ -170,6 +178,12 @@ if TYPE_CHECKING:
     )
     from .exaone import RBLNExaoneForCausalLM, RBLNExaoneForCausalLMConfig
     from .gemma import RBLNGemmaForCausalLM, RBLNGemmaForCausalLMConfig
+    from .gemma3 import (
+        RBLNGemma3ForCausalLM,
+        RBLNGemma3ForCausalLMConfig,
+        RBLNGemma3ForConditionalGeneration,
+        RBLNGemma3ForConditionalGenerationConfig,
+    )
     from .gpt2 import RBLNGPT2LMHeadModel, RBLNGPT2LMHeadModelConfig
     from .idefics3 import (
         RBLNIdefics3ForConditionalGeneration,

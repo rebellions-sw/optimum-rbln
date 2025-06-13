@@ -26,6 +26,7 @@ _import_structure = {
         "RBLNModel",
     ],
     "configuration_utils": [
+        "RBLNAutoConfig",
         "RBLNCompileConfig",
         "RBLNModelConfig",
     ],
@@ -38,6 +39,7 @@ _import_structure = {
         "RBLNAutoModelForCTC",
         "RBLNAutoModelForDepthEstimation",
         "RBLNAutoModelForImageClassification",
+        "RBLNAutoModelForImageTextToText",
         "RBLNAutoModelForMaskedLM",
         "RBLNAutoModelForQuestionAnswering",
         "RBLNAutoModelForSeq2SeqLM",
@@ -78,6 +80,10 @@ _import_structure = {
         "RBLNExaoneForCausalLMConfig",
         "RBLNGemmaForCausalLM",
         "RBLNGemmaForCausalLMConfig",
+        "RBLNGemma3ForCausalLM",
+        "RBLNGemma3ForCausalLMConfig",
+        "RBLNGemma3ForConditionalGeneration",
+        "RBLNGemma3ForConditionalGenerationConfig",
         "RBLNGPT2LMHeadModel",
         "RBLNGPT2LMHeadModelConfig",
         "RBLNIdefics3VisionTransformer",
@@ -197,6 +203,7 @@ _import_structure = {
 
 if TYPE_CHECKING:
     from .configuration_utils import (
+        RBLNAutoConfig,
         RBLNCompileConfig,
         RBLNModelConfig,
     )
@@ -279,6 +286,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForCTC,
         RBLNAutoModelForDepthEstimation,
         RBLNAutoModelForImageClassification,
+        RBLNAutoModelForImageTextToText,
         RBLNAutoModelForMaskedLM,
         RBLNAutoModelForQuestionAnswering,
         RBLNAutoModelForSeq2SeqLM,
@@ -317,6 +325,10 @@ if TYPE_CHECKING:
         RBLNDPTForDepthEstimationConfig,
         RBLNExaoneForCausalLM,
         RBLNExaoneForCausalLMConfig,
+        RBLNGemma3ForCausalLM,
+        RBLNGemma3ForCausalLMConfig,
+        RBLNGemma3ForConditionalGeneration,
+        RBLNGemma3ForConditionalGenerationConfig,
         RBLNGemmaForCausalLM,
         RBLNGemmaForCausalLMConfig,
         RBLNGPT2LMHeadModel,
