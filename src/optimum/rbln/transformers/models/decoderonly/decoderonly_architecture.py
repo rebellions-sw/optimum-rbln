@@ -182,7 +182,6 @@ class DecoderOnlyWrapper(nn.Module):
         self.use_position_ids = use_position_ids
         self.use_inputs_embeds = use_inputs_embeds
         self.use_learned_pos_emb = use_learned_pos_emb
-        self.sliding_window = sliding_window
         self.sliding_window_layers = sliding_window_layers
         self.model_type = model_type
         self.sliding_window = sliding_window
