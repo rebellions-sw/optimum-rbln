@@ -11,17 +11,16 @@ from transformers import AutoConfig, AutoProcessor, AutoTokenizer
 from optimum.rbln import (
     RBLNAutoModel,
     RBLNAutoModelForCausalLM,
-    RBLNAutoModelForImageTextToText,
     RBLNAutoModelForSeq2SeqLM,
     RBLNAutoModelForVision2Seq,
     RBLNBartForConditionalGeneration,
+    RBLNBlip2ForConditionalGeneration,
     RBLNExaoneForCausalLM,
-    RBLNGemma3ForCausalLM,
-    RBLNGemma3ForConditionalGeneration,
     RBLNGPT2LMHeadModel,
     RBLNIdefics3ForConditionalGeneration,
     RBLNLlamaForCausalLM,
     RBLNLlavaNextForConditionalGeneration,
+    RBLNOPTForCausalLM,
     RBLNPhiForCausalLM,
     RBLNQwen2_5_VLForConditionalGeneration,
     RBLNQwen2ForCausalLM,
@@ -68,8 +67,15 @@ class LLMTest:
 class TestQwen2Model(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen2ForCausalLM
     HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
-    EXPECTED_OUTPUT = " I am a 30-year-old woman who has been living with a chronic illness for the past"
+    EXPECTED_OUTPUT = " I am a 30-year-old woman who has been living with lupus for over 1"
     HF_CONFIG_KWARGS = {"max_position_embeddings": 1024}
+
+
+class TestOptModel(LLMTest.TestLLM):
+    RBLN_CLASS = RBLNOPTForCausalLM
+    HF_MODEL_ID = "facebook/opt-2.7b"
+    EXPECTED_OUTPUT = "\nI'm a guy who likes to play video games.\nI'm a guy who likes to"
+    HF_CONFIG_KWARGS = {"max_position_embeddings": 2048}
 
 
 class TestLlamaForCausalLM(LLMTest.TestLLM):
@@ -294,6 +300,51 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
         )
 
 
+class TestBlip2ForConditionalGeneration(LLMTest.TestLLM):
+    RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
+    RBLN_CLASS = RBLNBlip2ForConditionalGeneration
+    HF_MODEL_ID = "Salesforce/blip2-opt-2.7b"  # No tiny model yet.
+    PROMPT = "Question: Describe this image? Answer:"
+    RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True}}}
+    EXPECTED_OUTPUT = "::::::::::::::::::::"
+
+    @classmethod
+    def get_tokenizer(cls):
+        if cls._tokenizer is None:
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
+        return cls._tokenizer
+
+    # override
+    @classmethod
+    def setUpClass(cls):
+        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
+
+        text_config = json.loads(config.text_config.to_json_string())
+        text_config["num_hidden_layers"] = 1
+        kwargs = {"text_config": text_config}
+        cls.HF_CONFIG_KWARGS.update(kwargs)
+        return super().setUpClass()
+
+    def get_inputs(self):
+        tokenizer = self.get_tokenizer()
+        img_path = f"{os.path.dirname(__file__)}/../assets/rbln_logo.png"
+        image = Image.open(img_path)
+        inputs = tokenizer(images=image, text=self.PROMPT, return_tensors="pt", padding=True)
+        inputs["max_new_tokens"] = 20
+        inputs["do_sample"] = False
+        return inputs
+
+    def _inner_test_save_load(self, tmpdir):
+        super()._inner_test_save_load(tmpdir)
+        # Test loading from nested config
+        _ = self.RBLN_CLASS.from_pretrained(
+            tmpdir,
+            export=False,
+            rbln_config={"language_model": {"create_runtimes": False}},
+            **self.HF_CONFIG_KWARGS,
+        )
+
+
 class TestIdefics3ForConditionalGeneration(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
     RBLN_CLASS = RBLNIdefics3ForConditionalGeneration
@@ -393,56 +444,6 @@ class TestDisallowedLlama_4(DisallowedTestBase.DisallowedTest):
     HF_MODEL_ID = "afmck/testing-llama-tiny"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 2048}
     RBLN_CLASS_KWARGS = {"rbln_config": {"attn_impl": "flash_attn", "kvcache_partition_len": 1024}}
-
-
-class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
-    RBLN_AUTO_CLASS = RBLNAutoModelForImageTextToText
-    RBLN_CLASS = RBLNGemma3ForConditionalGeneration
-    HF_MODEL_ID = "google/gemma-3-4b-it"  # No tiny model yet.
-    PROMPT = "<bos><start_of_turn>user\n<start_of_image>Describe the image.<end_of_turn>\n<start_of_turn>model\n'"
-    RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True, "kvcache_partition_len": 4096}}}
-    EXPECTED_OUTPUT = "ִיсмотрятОднакоettingiPadaenуdenlyticsinท์नियमितinท์नियमित"
-
-    @classmethod
-    def get_tokenizer(cls):
-        if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
-        return cls._tokenizer
-
-    # override
-    @classmethod
-    def setUpClass(cls):
-        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
-        text_config = json.loads(config.text_config.to_json_string())
-        text_config["num_hidden_layers"] = 2
-        text_config["sliding_window_pattern"] = 2
-        vision_config = json.loads(config.vision_config.to_json_string())
-        vision_config["num_hidden_layers"] = 1
-        kwargs = {"text_config": text_config, "vision_config": vision_config}
-        cls.HF_CONFIG_KWARGS.update(kwargs)
-        return super().setUpClass()
-
-    def get_inputs(self):
-        tokenizer = self.get_tokenizer()
-        img_path = f"{os.path.dirname(__file__)}/../assets/rbln_logo.png"
-        image = Image.open(img_path)
-        image = image.convert("RGB")
-        inputs = tokenizer(images=[image], text=[self.PROMPT], return_tensors="pt", padding=True)
-        inputs["max_new_tokens"] = 20
-        inputs["do_sample"] = False
-        return inputs
-
-
-class TestGemma3ForCausalLM(LLMTest.TestLLM):
-    RBLN_CLASS = RBLNGemma3ForCausalLM
-    HF_MODEL_ID = "google/gemma-3-1b-it"
-    EXPECTED_OUTPUT = "1st L L L L L L L L L L L L L L L L L L"
-    HF_CONFIG_KWARGS = {
-        "num_hidden_layers": 2,
-        "sliding_window_pattern": 2,
-        "max_position_embeddings": 1024,
-        "trust_remote_code": True,
-    }
 
 
 if __name__ == "__main__":

@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from ..configuration_utils import RBLNModelConfig
 
 
-class _RBLNTransformerEncoderConfig(RBLNModelConfig):
+class RBLNTransformerEncoderConfig(RBLNModelConfig):
     rbln_model_input_names: Optional[List[str]] = None
 
     def __init__(
@@ -25,7 +25,7 @@ class _RBLNTransformerEncoderConfig(RBLNModelConfig):
         max_seq_len: Optional[int] = None,
         batch_size: Optional[int] = None,
         model_input_names: Optional[List[str]] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:
@@ -47,9 +47,12 @@ class _RBLNTransformerEncoderConfig(RBLNModelConfig):
         self.model_input_names = model_input_names or self.rbln_model_input_names
 
 
-class _RBLNImageModelConfig(RBLNModelConfig):
+class RBLNImageModelConfig(RBLNModelConfig):
     def __init__(
-        self, image_size: Optional[Union[int, Tuple[int, int]]] = None, batch_size: Optional[int] = None, **kwargs
+        self,
+        image_size: Optional[Union[int, Tuple[int, int]]] = None,
+        batch_size: Optional[int] = None,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:
@@ -86,32 +89,32 @@ class _RBLNImageModelConfig(RBLNModelConfig):
             return self.image_size["height"]
 
 
-class RBLNModelForQuestionAnsweringConfig(_RBLNTransformerEncoderConfig):
+class RBLNModelForQuestionAnsweringConfig(RBLNTransformerEncoderConfig):
     pass
 
 
-class RBLNModelForSequenceClassificationConfig(_RBLNTransformerEncoderConfig):
+class RBLNModelForSequenceClassificationConfig(RBLNTransformerEncoderConfig):
     pass
 
 
-class RBLNModelForMaskedLMConfig(_RBLNTransformerEncoderConfig):
+class RBLNModelForMaskedLMConfig(RBLNTransformerEncoderConfig):
     pass
 
 
-class RBLNModelForTextEncodingConfig(_RBLNTransformerEncoderConfig):
+class RBLNModelForTextEncodingConfig(RBLNTransformerEncoderConfig):
     pass
 
 
 # FIXME : Appropriate name ?
-class RBLNTransformerEncoderForFeatureExtractionConfig(_RBLNTransformerEncoderConfig):
+class RBLNTransformerEncoderForFeatureExtractionConfig(RBLNTransformerEncoderConfig):
     pass
 
 
-class RBLNModelForImageClassificationConfig(_RBLNImageModelConfig):
+class RBLNModelForImageClassificationConfig(RBLNImageModelConfig):
     pass
 
 
-class RBLNModelForDepthEstimationConfig(_RBLNImageModelConfig):
+class RBLNModelForDepthEstimationConfig(RBLNImageModelConfig):
     pass
 
 
@@ -121,7 +124,7 @@ class RBLNModelForAudioClassificationConfig(RBLNModelConfig):
         batch_size: Optional[int] = None,
         max_length: Optional[int] = None,
         num_mel_bins: Optional[int] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:

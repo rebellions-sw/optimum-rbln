@@ -19,6 +19,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Tuple, Type, Union, runtime_checkable
 
+import numpy as np
 import torch
 
 from .__version__ import __version__
@@ -61,7 +62,7 @@ class RBLNCompileConfig:
     tensor_parallel_size: Optional[int] = None
 
     @staticmethod
-    def normalize_dtype(dtype):
+    def normalize_dtype(dtype: Union[str, torch.dtype, np.dtype]) -> str:
         """
         Convert framework-specific dtype to string representation.
         i.e. torch.float32 -> "float32"
@@ -70,7 +71,7 @@ class RBLNCompileConfig:
             dtype: The input dtype (can be string, torch dtype, or numpy dtype).
 
         Returns:
-            str: The normalized string representation of the dtype.
+            The normalized string representation of the dtype.
         """
         if isinstance(dtype, str):
             return dtype
@@ -147,6 +148,17 @@ class RBLNCompileConfig:
 
 
 RUNTIME_KEYWORDS = ["create_runtimes", "optimize_host_memory", "device", "device_map", "activate_profiler"]
+CONFIG_MAPPING: Dict[str, Type["RBLNModelConfig"]] = {}
+
+
+def get_rbln_config_class(rbln_config_class_name: str) -> Type["RBLNModelConfig"]:
+    cls = getattr(importlib.import_module("optimum.rbln"), rbln_config_class_name, None)
+    if cls is None:
+        if rbln_config_class_name in CONFIG_MAPPING:
+            cls = CONFIG_MAPPING[rbln_config_class_name]
+        else:
+            raise ValueError(f"Configuration for {rbln_config_class_name} not found.")
+    return cls
 
 
 def load_config(path: str) -> Tuple[Type["RBLNModelConfig"], Dict[str, Any]]:
@@ -166,7 +178,7 @@ def load_config(path: str) -> Tuple[Type["RBLNModelConfig"], Dict[str, Any]]:
             )
 
     cls_name = config_file["cls_name"]
-    cls = getattr(importlib.import_module("optimum.rbln"), cls_name)
+    cls = get_rbln_config_class(cls_name)
     return cls, config_file
 
 
@@ -175,7 +187,7 @@ class RBLNAutoConfig:
         cls_name = kwargs.get("cls_name")
         if cls_name is None:
             raise ValueError("`cls_name` is required.")
-        cls = getattr(importlib.import_module("optimum.rbln"), cls_name)
+        cls = get_rbln_config_class(cls_name)
         return cls(**kwargs)
 
     @staticmethod
@@ -183,8 +195,26 @@ class RBLNAutoConfig:
         cls_name = config_dict.get("cls_name")
         if cls_name is None:
             raise ValueError("`cls_name` is required.")
-        cls = getattr(importlib.import_module("optimum.rbln"), cls_name)
+        cls = get_rbln_config_class(cls_name)
         return cls(**config_dict)
+
+    @staticmethod
+    def register(config: Type["RBLNModelConfig"], exist_ok=False):
+        """
+        Register a new configuration for this class.
+
+        Args:
+            config ([`RBLNModelConfig`]): The config to register.
+        """
+        if not issubclass(config, RBLNModelConfig):
+            raise ValueError("`config` must be a subclass of RBLNModelConfig.")
+
+        native_cls = getattr(importlib.import_module("optimum.rbln"), config.__name__, None)
+        if config.__name__ in CONFIG_MAPPING or native_cls is not None:
+            if not exist_ok:
+                raise ValueError(f"Configuration for {config.__name__} already registered.")
+
+        CONFIG_MAPPING[config.__name__] = config
 
     @staticmethod
     def load(
@@ -306,9 +336,6 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         ```python
         # Save to disk
         config.save("/path/to/model")
-
-        # Load configuration from disk
-        loaded_config = RBLNModelConfig.load("/path/to/model")
 
         # Using AutoConfig
         loaded_config = RBLNAutoConfig.load("/path/to/model")
@@ -462,19 +489,25 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         self,
         submodule_config_cls: Type["RBLNModelConfig"],
         submodule_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ) -> "RBLNModelConfig":
-        """
-        Initialize a submodule config from a dict or a RBLNModelConfig.
+        # Initialize a submodule config from a dict or a RBLNModelConfig.
+        # kwargs is specified from the predecessor config.
 
-        kwargs is specified from the predecessor config.
-        """
         if submodule_config is None:
             submodule_config = {}
 
         if isinstance(submodule_config, dict):
             from_predecessor = self._runtime_options.copy()
+            from_predecessor.update(
+                {
+                    "npu": self.npu,
+                    "tensor_parallel_size": self.tensor_parallel_size,
+                    "optimum_rbln_version": self.optimum_rbln_version,
+                }
+            )
             from_predecessor.update(kwargs)
+
             init_kwargs = from_predecessor
             init_kwargs.update(submodule_config)
             submodule_config = submodule_config_cls(**init_kwargs)
@@ -530,7 +563,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         tensor_parallel_size: Optional[int] = None,
         optimum_rbln_version: Optional[str] = None,
         _compile_cfgs: List[RBLNCompileConfig] = [],
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Initialize a RBLN model configuration with runtime options and compile configurations.
@@ -600,10 +633,8 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         return rbln_model_cls
 
     def _prepare_for_serialization(self) -> Dict[str, Any]:
-        """
-        Prepare the attributes map for serialization by converting nested RBLNModelConfig
-        objects to their serializable form.
-        """
+        # Prepare the attributes map for serialization by converting nested RBLNModelConfig
+        # objects to their serializable form.
         serializable_map = {}
         for key, value in self._attributes_map.items():
             if isinstance(value, RBLNSerializableConfigProtocol):
@@ -678,7 +709,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
             json.dump(serializable_data, jsonf, indent=2)
 
     @classmethod
-    def load(cls, path: str, **kwargs) -> "RBLNModelConfig":
+    def load(cls, path: str, **kwargs: Dict[str, Any]) -> "RBLNModelConfig":
         """
         Load a RBLNModelConfig from a path.
 
@@ -711,11 +742,9 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
     def initialize_from_kwargs(
         cls: Type["RBLNModelConfig"],
         rbln_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ) -> Tuple["RBLNModelConfig", Dict[str, Any]]:
-        """
-        Initialize RBLNModelConfig from kwargs.
-        """
+        # Initialize RBLNModelConfig from kwargs.
         kwargs_keys = list(kwargs.keys())
         rbln_kwargs = {key[5:]: kwargs.pop(key) for key in kwargs_keys if key.startswith("rbln_")}
 
@@ -733,16 +762,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         return rbln_config, kwargs
 
     def get_default_values_for_original_cls(self, func_name: str, keys: List[str]) -> Dict[str, Any]:
-        """
-        Get default values for original class attributes from RBLNModelConfig.
-
-        Args:
-            func_name (str): The name of the function to get the default values for.
-            keys (List[str]): The keys of the attributes to get.
-
-        Returns:
-            Dict[str, Any]: The default values for the attributes.
-        """
+        # Get default values for original class attributes from RBLNModelConfig.
         model_cls = self.rbln_model_cls.get_hf_class()
         func = getattr(model_cls, func_name)
         func_signature = inspect.signature(func)

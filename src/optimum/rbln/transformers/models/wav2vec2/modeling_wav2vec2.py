@@ -17,7 +17,7 @@ import torch
 from transformers import AutoModelForMaskedLM, Wav2Vec2ForCTC
 
 from ...modeling_generic import RBLNModelForMaskedLM
-from .configuration_wav2vec import RBLNWav2Vec2ForCTCConfig
+from .configuration_wav2vec2 import RBLNWav2Vec2ForCTCConfig
 
 
 class _Wav2Vec2(torch.nn.Module):

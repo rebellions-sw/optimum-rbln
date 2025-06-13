@@ -26,6 +26,7 @@ _import_structure = {
         "RBLNModel",
     ],
     "configuration_utils": [
+        "RBLNAutoConfig",
         "RBLNCompileConfig",
         "RBLNModelConfig",
     ],
@@ -192,6 +193,7 @@ _import_structure = {
 
 if TYPE_CHECKING:
     from .configuration_utils import (
+        RBLNAutoConfig,
         RBLNCompileConfig,
         RBLNModelConfig,
     )

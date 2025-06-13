@@ -14,7 +14,7 @@
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 from diffusers.pipelines.controlnet.multicontrolnet import MultiControlNetModel
@@ -23,9 +23,6 @@ from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...models.controlnet import RBLNControlNetModel
 
-
-if TYPE_CHECKING:
-    pass
 
 logger = get_logger(__name__)
 

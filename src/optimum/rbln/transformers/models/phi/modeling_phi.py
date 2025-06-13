@@ -27,8 +27,57 @@ class RBLNPhiForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
     A class to convert and run pre-trained transformers based PhiForCausalLM model on RBLN devices.
     It implements the methods to convert a pre-trained transformers PhiForCausalLM model into a RBLN transformer model by:
+
     - transferring the checkpoint weights of the original into an optimized RBLN graph,
     - compiling the resulting graph using the RBLN compiler.
+
+    **Configuration:**
+    This model uses [`RBLNPhiForCausalLMConfig`] for configuration. When calling methods like `from_pretrained` or `from_model`,
+    the `rbln_config` parameter should be an instance of [`RBLNPhiForCausalLMConfig`] or a dictionary conforming to its structure.
+
+    See the [`RBLNPhiForCausalLMConfig`] class for all available configuration options.
+
+    Examples:
+        ```python
+        from optimum.rbln import RBLNPhiForCausalLM
+
+        # Simple usage using rbln_* arguments
+        # `max_seq_len` is automatically inferred from the model config
+        model = RBLNPhiForCausalLM.from_pretrained(
+            "microsoft/phi-2",
+            export=True,
+            rbln_batch_size=1,
+            rbln_tensor_parallel_size=4,
+        )
+
+
+        # Using a config dictionary
+        rbln_config = {
+            "batch_size": 1,
+            "max_seq_len": 4096,
+            "tensor_parallel_size": 4,
+        }
+        model = RBLNPhiForCausalLM.from_pretrained(
+            "microsoft/phi-2",
+            export=True,
+            rbln_config=rbln_config
+        )
+
+
+        # Using a RBLNPhiForCausalLMConfig instance (recommended for type checking)
+        from optimum.rbln import RBLNPhiForCausalLMConfig
+
+        config = RBLNPhiForCausalLMConfig(
+            batch_size=1,
+            max_seq_len=4096,
+            tensor_parallel_size=4
+        )
+        model = RBLNPhiForCausalLM.from_pretrained(
+            "microsoft/phi-2",
+            export=True,
+            rbln_config=config
+        )
+        ```
     """
 
     _decoder_wrapper_cls = PhiWrapper
