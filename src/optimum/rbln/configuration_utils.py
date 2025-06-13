@@ -500,7 +500,15 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
 
         if isinstance(submodule_config, dict):
             from_predecessor = self._runtime_options.copy()
+            from_predecessor.update(
+                {
+                    "npu": self.npu,
+                    "tensor_parallel_size": self.tensor_parallel_size,
+                    "optimum_rbln_version": self.optimum_rbln_version,
+                }
+            )
             from_predecessor.update(kwargs)
+
             init_kwargs = from_predecessor
             init_kwargs.update(submodule_config)
             submodule_config = submodule_config_cls(**init_kwargs)
