@@ -79,6 +79,10 @@ _import_structure = {
         "RBLNQwen2_5_VLForConditionalGeneration",
         "RBLNQwen2_5_VLForConditionalGenerationConfig",
     ],
+    "colqwen2_5": [
+        "RBLNColQwen2_5ForConditionalGeneration",
+        "RBLNColQwen2_5ForConditionalGenerationConfig",
+    ],
     "decoderonly": [
         "RBLNDecoderOnlyModelForCausalLM",
         "RBLNDecoderOnlyModelForCausalLMConfig",
@@ -232,6 +236,10 @@ if TYPE_CHECKING:
         RBLNQwen2_5_VisionTransformerPretrainedModelConfig,
         RBLNQwen2_5_VLForConditionalGeneration,
         RBLNQwen2_5_VLForConditionalGenerationConfig,
+    )
+    from .colqwen2_5 import (
+        RBLNColQwen2_5ForConditionalGeneration,
+        RBLNColQwen2_5ForConditionalGenerationConfig,
     )
     from .resnet import RBLNResNetForImageClassification, RBLNResNetForImageClassificationConfig
     from .roberta import (
