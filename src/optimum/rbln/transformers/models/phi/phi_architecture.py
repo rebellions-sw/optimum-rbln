@@ -48,7 +48,7 @@ class PhiWrapper(DecoderOnlyWrapper):
                 raise NotImplementedError(f"Unknwon attn : {self.attn_impl}")
             new_layer = PhiLayer(layer, new_self_attn)
             new_layers.append(new_layer)
-        new_model = PhiModel(causal_lm.model, new_layers)
+        new_model = PhiModel(causal_lm.model, new_layers, sliding_window_layers=self.sliding_window_layers)
         new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm
 
