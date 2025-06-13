@@ -185,6 +185,7 @@ class DecoderOnlyWrapper(nn.Module):
         self.sliding_window = sliding_window
         self.sliding_window_layers = sliding_window_layers
         self.model_type = model_type
+        self.sliding_window = sliding_window
 
         if self.attn_impl == "flash_attn":
             self.kvcache_partition_len = kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
@@ -215,7 +216,7 @@ class DecoderOnlyWrapper(nn.Module):
                     layer.self_attn,
                     self.use_attention_mask,
                     self.use_position_ids,
-                    kvcache_block_size=self.kvcache_block_size,
+                    kvcache_block_size=self.sliding_window,
                     is_sliding=True,
                 )
             else:

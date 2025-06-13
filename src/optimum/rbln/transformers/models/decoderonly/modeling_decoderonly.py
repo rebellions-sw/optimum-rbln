@@ -416,7 +416,12 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 chunked_attention_mask[:, :, :, step : step + self.rbln_config.prefill_chunk_size] = self.causal_mask
 
             # Define query position
-            query_position = torch.tensor((query_length - 1) % self.rbln_config.prefill_chunk_size, dtype=torch.int16)
+            if step + self.rbln_config.prefill_chunk_size > query_length:
+                query_position = torch.tensor(
+                    (query_length - 1) % self.rbln_config.prefill_chunk_size, dtype=torch.int16
+                )
+            else:
+                query_position = torch.tensor(self.rbln_config.prefill_chunk_size - 1, dtype=torch.int16)
 
             # Forward pass for the current chunk
             logits = super().forward(
@@ -641,6 +646,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             "use_position_ids": rbln_config.use_position_ids,
             "use_inputs_embeds": rbln_config.use_inputs_embeds,
             "model_type": rbln_config.model_type,
+            "sliding_window": rbln_config.sliding_window,
             "sliding_window_layers": rbln_config.sliding_window_layers,
         }
         return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
