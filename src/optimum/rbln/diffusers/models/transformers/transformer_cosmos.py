@@ -230,9 +230,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
             * (rbln_config.latent_width // p_w)
         )
         attention_head_dim = model_config.attention_head_dim
-        hidden_size = (
-            model.config.num_attention_heads * model.config.attention_head_dim
-        )
+        hidden_size = model.config.num_attention_heads * model.config.attention_head_dim
         input_info = [
             (
                 "hidden_states",
