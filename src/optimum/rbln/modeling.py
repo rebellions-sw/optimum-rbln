@@ -14,7 +14,7 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, get_args, get_origin, get_type_hints
+from typing import TYPE_CHECKING, Dict, List, Optional, Union, get_args, get_origin, get_type_hints
 
 import rebel
 import torch
@@ -88,7 +88,7 @@ class RBLNModel(RBLNBaseModel):
         cls,
         model: "PreTrainedModel",
         config: Optional[PretrainedConfig] = None,
-        rbln_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None,
+        rbln_config: Optional[Union[RBLNModelConfig, Dict]] = None,
         model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
         subfolder: str = "",
         **kwargs,
