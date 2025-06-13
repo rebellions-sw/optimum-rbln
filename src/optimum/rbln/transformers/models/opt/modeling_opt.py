@@ -80,6 +80,7 @@ class RBLNOPTForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             "use_position_ids": rbln_config.use_position_ids,
             "use_inputs_embeds": rbln_config.use_inputs_embeds,
             "model_type": rbln_config.model_type,
+            "sliding_window": rbln_config.sliding_window,
             "sliding_window_layers": rbln_config.sliding_window_layers,
         }
 
