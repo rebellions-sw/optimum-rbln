@@ -12,12 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNVQModelConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLN VQModel models, used in Kandinsky.
+
+    This class inherits from RBLNModelConfig and provides specific configuration options
+    for VQModel, which acts similarly to a VAE but uses vector quantization.
+    """
+
     def __init__(
         self,
         batch_size: Optional[int] = None,
@@ -26,7 +33,7 @@ class RBLNVQModelConfig(RBLNModelConfig):
         vqmodel_scale_factor: Optional[float] = None,  # TODO: rename to scaling_factor
         in_channels: Optional[int] = None,
         latent_channels: Optional[int] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:

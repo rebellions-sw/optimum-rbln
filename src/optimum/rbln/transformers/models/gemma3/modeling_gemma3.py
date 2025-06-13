@@ -215,15 +215,16 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
 
         return model_kwargs
 
-    def get_image_features(self, pixel_values: torch.Tensor):
+    def get_image_features(self, pixel_values: torch.Tensor) -> torch.Tensor:
         """
         Projects the last hidden state from the vision model into language model space.
 
         Args:
-            pixel_values (`torch.FloatTensor]` of shape `(batch_size, channels, height, width)`)
-               The tensors corresponding to the input images.
+            pixel_values: (`torch.FloatTensor` of shape `(batch_size, channels, height, width)`)
+                The tensors corresponding to the input images.
+
         Returns:
-            image_features (`torch.Tensor`): Image feature tensor of shape `(num_images, image_length, embed_dim)`).
+            Image feature tensor of shape `(num_images, image_length, embed_dim)`.
         """
         vision_outputs = self.vision_tower(pixel_values).last_hidden_state
         image_features = self.multi_modal_projector(vision_outputs)
@@ -272,7 +273,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         padded_cache_lengths: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
-        **lm_kwargs,
+        **lm_kwargs: Dict[str, Any],
     ) -> Union[Tuple, RBLNDecoderOnlyOutput]:
         # prefill
         if cache_position is None:
@@ -479,8 +480,9 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
             )
 
         # Pad input and cache_position if the last chunk is smaller than `prefill_chunk_size`
+        padding_size = 0
         if query_length % self.prefill_chunk_size != 0:
-            padding_size = self.prefill_chunk_size - query_length % self.prefill_chunk_size
+            padding_size = (self.prefill_chunk_size - query_length) % self.prefill_chunk_size
             # inputs_embeds
             if inputs.dim() == 3:
                 inputs = torch.nn.functional.pad(inputs, (0, 0, 0, padding_size))
@@ -755,21 +757,19 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         cls,
         batch_size: int,
         query_length: int,
-        use_inputs_embeds: bool,
-        use_attention_mask: bool,
-        use_position_ids: bool,
-        max_seq_len: int,
-        kvcache_block_size: int,
-        kvcache_num_blocks: int,
-        num_key_value_heads: int,
-        num_hidden_layers: int,
-        hidden_size: int,
-        head_dim: int,
-        sliding_window: int,
-        sliding_window_pattern: int,
-        dec_batch_size: int,
+        rbln_config: RBLNGemma3ForCausalLMConfig,
+        model_config: PretrainedConfig,
     ):
-        if use_inputs_embeds:
+        num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
+        num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
+        num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
+        hidden_size = getattr(model_config, "n_embd", None) or getattr(model_config, "hidden_size")
+        head_dim = getattr(model_config, "head_dim", None) or hidden_size // num_attention_heads
+        sliding_window = getattr(model_config, "sliding_window", None)
+        sliding_window_pattern = getattr(model_config, "sliding_window_pattern", None)
+        dec_batch_size = max(rbln_config.decoder_batch_sizes)
+
+        if rbln_config.use_inputs_embeds:
             main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
         else:
             main_input = ("input_ids", [batch_size, query_length], "int64")
@@ -778,7 +778,9 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             main_input,
             (
                 "attention_mask",
-                [batch_size, 1, query_length, max_seq_len] if not use_position_ids else [batch_size, max_seq_len],
+                [batch_size, 1, query_length, rbln_config.max_seq_len]
+                if not rbln_config.use_position_ids
+                else [batch_size, rbln_config.max_seq_len],
                 "float32",
             ),
             (
@@ -793,6 +795,13 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             ),
         ]
 
+        max_block_cnt = rbln_config.max_seq_len // rbln_config.kvcache_block_size
+
+        if query_length > 1:
+            input_info.extend([("block_tables", [max_block_cnt], "int16")])
+        else:
+            input_info.extend([("block_tables", [batch_size, max_block_cnt], "int16")])
+
         if query_length > 1:
             input_info.extend(
                 [
@@ -800,7 +809,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
                 ]
             )
 
-        max_block_cnt = max_seq_len // kvcache_block_size
+        max_block_cnt = rbln_config.max_seq_len // rbln_config.kvcache_block_size
 
         if query_length > 1:
             input_info.extend([("global_block_tables", [max_block_cnt], "int16")])
@@ -813,7 +822,12 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             return bool((layer_idx + 1) % sliding_window_pattern)
 
         local_kvcache_shape = [dec_batch_size, num_key_value_heads, sliding_window, head_dim]
-        global_kvcache_shape = [kvcache_num_blocks, num_key_value_heads, kvcache_block_size, head_dim]
+        global_kvcache_shape = [
+            rbln_config.kvcache_num_blocks,
+            num_key_value_heads,
+            rbln_config.kvcache_block_size,
+            head_dim,
+        ]
         input_info.extend(
             [
                 (
@@ -889,30 +903,11 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             )
         logger.info(f"[KVCache] Compiling with num_blocks: {rbln_config.kvcache_num_blocks}")
 
-        num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
-        num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
-        num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
-        hidden_size = getattr(model_config, "n_embd", None) or getattr(model_config, "hidden_size")
-        head_dim = getattr(model_config, "head_dim", None) or hidden_size // num_attention_heads
-        sliding_window = getattr(model_config, "sliding_window", None)
-        sliding_window_pattern = getattr(model_config, "sliding_window_pattern", None)
-
         prefill_input_info = cls.get_input_info(
             batch_size=1,
             query_length=rbln_config.prefill_chunk_size,
-            use_inputs_embeds=rbln_config.use_inputs_embeds,
-            use_attention_mask=rbln_config.use_attention_mask,
-            use_position_ids=rbln_config.use_position_ids,
-            max_seq_len=rbln_config.max_seq_len,
-            kvcache_block_size=rbln_config.kvcache_block_size,
-            kvcache_num_blocks=rbln_config.kvcache_num_blocks,
-            num_key_value_heads=num_key_value_heads,
-            num_hidden_layers=num_hidden_layers,
-            hidden_size=hidden_size,
-            head_dim=head_dim,
-            sliding_window=sliding_window,
-            sliding_window_pattern=sliding_window_pattern,
-            dec_batch_size=max(rbln_config.decoder_batch_sizes),
+            rbln_config=rbln_config,
+            model_config=model_config,
         )
         prefill_compile_config = RBLNCompileConfig(compiled_model_name="prefill", input_info=prefill_input_info)
         image_prefill_compile_config = RBLNCompileConfig(
@@ -924,19 +919,8 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             dec_input_info = cls.get_input_info(
                 batch_size=batch_size,
                 query_length=1,
-                use_inputs_embeds=rbln_config.use_inputs_embeds,
-                use_attention_mask=rbln_config.use_attention_mask,
-                use_position_ids=rbln_config.use_position_ids,
-                max_seq_len=rbln_config.max_seq_len,
-                kvcache_block_size=rbln_config.kvcache_block_size,
-                kvcache_num_blocks=rbln_config.kvcache_num_blocks,
-                num_key_value_heads=num_key_value_heads,
-                num_hidden_layers=num_hidden_layers,
-                hidden_size=hidden_size,
-                head_dim=head_dim,
-                sliding_window=sliding_window,
-                sliding_window_pattern=sliding_window_pattern,
-                dec_batch_size=batch_size,
+                rbln_config=rbln_config,
+                model_config=model_config,
             )
             dec_compile_configs.append(
                 RBLNCompileConfig(compiled_model_name=f"decoder_batch_{batch_size}", input_info=dec_input_info)
