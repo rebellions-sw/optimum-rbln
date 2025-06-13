@@ -15,7 +15,7 @@
 import importlib
 import os
 import shutil
-from abc import ABC, abstractmethod
+from abc import ABC
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
@@ -24,7 +24,7 @@ import rebel
 import torch
 from transformers import AutoConfig, AutoModel, GenerationConfig, PretrainedConfig
 
-from .configuration_utils import RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig
+from .configuration_utils import RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig, get_rbln_config_class
 from .utils.hub import PushToHubMixin, pull_compiled_model_from_hub, validate_files
 from .utils.logging import get_logger
 from .utils.runtime_utils import UnavailableRuntime
@@ -47,40 +47,6 @@ class RBLNBaseModelConfig(RBLNModelConfig):
 
 
 class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
-    """
-    An abstract base class for compiling, loading, and saving neural network models from the huggingface
-    transformers and diffusers libraries to run on RBLN NPU devices.
-
-    This class supports loading and saving models using the `from_pretrained` and `save_pretrained` methods,
-    similar to the huggingface libraries.
-
-    The `from_pretrained` method loads a model corresponding to the given `model_id` from a local repository
-    or the huggingface hub onto the NPU. If the model is a PyTorch model and `export=True` is passed as a
-    kwarg, it compiles the PyTorch model corresponding to the given `model_id` before loading. If `model_id`
-    is an already rbln-compiled model, it can be directly loaded onto the NPU with `export=False`.
-
-    `rbln_npu` is a kwarg required for compilation, specifying the name of the NPU to be used. If this
-    keyword is not specified, the NPU installed on the host machine is used. If no NPU is installed on the
-    host machine, an error occurs.
-
-    `rbln_device` specifies the device to be used at runtime. If not specified, device 0 is used.
-
-    `rbln_create_runtimes` indicates whether to create runtime objects. If False, the runtime does not load
-    the model onto the NPU. This option is particularly useful when you want to perform compilation only on a
-    host machine without an NPU.
-
-    `RBLNModel`, `RBLNModelFor*`, etc. are all child classes of RBLNBaseModel.
-
-    Models compiled in this way can be saved to a local repository using `save_pretrained` or uploaded to
-    the huggingface hub.
-
-    It also supports generation through `generate` (for transformers models that support generation).
-
-    RBLNBaseModel is a class for models consisting of an arbitrary number of `torch.nn.Module`s, and
-    therefore is an abstract class without explicit implementations of `forward` or `export` functions.
-    To inherit from this class, `forward`, `export`, etc. must be implemented.
-    """
-
     model_type = "rbln_model"
     auto_model_class = AutoModel
     config_class = AutoConfig
@@ -156,7 +122,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         subfolder: str = "",
         local_files_only: bool = False,
     ) -> str:
-        """Load the directory containing the compiled model files."""
+        # Load the directory containing the compiled model files.
         model_path = Path(model_id)
 
         if model_path.is_dir():
@@ -178,9 +144,27 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         return str(model_path)
 
     @classmethod
-    def _load_compiled_models(cls, model_path: str):
+    def _load_compiled_models(cls, model_path: str, expected_compiled_model_names: List[str]):
         compiled_models = Path(model_path).glob("*.rbln")
-        rbln_compiled_models = {cm.stem: rebel.RBLNCompiledModel(cm) for cm in compiled_models}
+        expected_compiled_models = [
+            Path(model_path) / f"{compiled_model_name}.rbln" for compiled_model_name in expected_compiled_model_names
+        ]
+        unexpected_compiled_models = [cm for cm in compiled_models if cm not in expected_compiled_models]
+        if unexpected_compiled_models:
+            # TODO(jongho): fix after May release. raise error if unexpected compiled models are found
+            logger.warning(
+                f"Unexpected compiled models found: {[cm.name for cm in unexpected_compiled_models]}. "
+                f"Please check the model path: {model_path}"
+            )
+
+        rbln_compiled_models = {}
+        for compiled_model in expected_compiled_models:
+            if not compiled_model.exists():
+                raise FileNotFoundError(
+                    f"Expected RBLN compiled model '{compiled_model.name}' not found at '{model_path}'. "
+                    "Please ensure all models specified in `rbln_config` are present."
+                )
+            rbln_compiled_models[compiled_model.stem] = rebel.RBLNCompiledModel(compiled_model)
         return rbln_compiled_models
 
     @classmethod
@@ -271,7 +255,8 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
                     )
                     config = PretrainedConfig(**config)
 
-            rbln_compiled_models = cls._load_compiled_models(model_path_subfolder)
+            compiled_model_names = [cfg.compiled_model_name for cfg in rbln_config.compile_cfgs]
+            rbln_compiled_models = cls._load_compiled_models(model_path_subfolder, compiled_model_names)
 
             if subfolder != "":
                 model_save_dir = Path(model_path_subfolder).absolute().parent
@@ -353,19 +338,40 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     def prepare_rbln_config(
         cls, rbln_config: Optional[Union[Dict[str, Any], RBLNModelConfig]] = None, **kwargs
     ) -> Tuple[RBLNModelConfig, Dict[str, Any]]:
-        """
-        Extract rbln-config from kwargs and convert it to RBLNModelConfig.
-        """
+        # Extract rbln-config from kwargs and convert it to RBLNModelConfig.
+
         config_cls = cls.get_rbln_config_class()
         rbln_config, kwargs = config_cls.initialize_from_kwargs(rbln_config, **kwargs)
         return rbln_config, kwargs
 
     @classmethod
-    def from_pretrained(cls, model_id: Union[str, Path], export: bool = False, **kwargs) -> "RBLNBaseModel":
+    def from_pretrained(
+        cls: Type["RBLNBaseModel"],
+        model_id: Union[str, Path],
+        export: bool = False,
+        rbln_config: Optional[Union[Dict, RBLNModelConfig]] = None,
+        **kwargs: Dict[str, Any],
+    ) -> "RBLNBaseModel":
+        """
+        The `from_pretrained()` function is utilized in its standard form as in the HuggingFace transformers library.
+        User can use this function to load a pre-trained model from the HuggingFace library and convert it to a RBLN model to be run on RBLN NPUs.
+
+        Args:
+            model_id: The model id of the pre-trained model to be loaded. It can be downloaded from the HuggingFace model hub or a local path, or a model id of a compiled model using the RBLN Compiler.
+            export: A boolean flag to indicate whether the model should be compiled.
+            rbln_config: Configuration for RBLN model compilation and runtime. This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNLlamaForCausalLMConfig` for Llama models).
+                For detailed configuration options, see the specific model's configuration class documentation.
+
+            kwargs: Additional keyword arguments. Arguments with the prefix 'rbln_' are passed to rbln_config, while the remaining arguments are passed to the HuggingFace library.
+
+        Returns:
+            A RBLN model instance ready for inference on RBLN NPU devices.
+        """
+
         if isinstance(model_id, Path):
             model_id = model_id.as_posix()
         from_pretrained_method = cls._export if export else cls._from_pretrained
-        return from_pretrained_method(model_id=model_id, **kwargs)
+        return from_pretrained_method(model_id=model_id, **kwargs, rbln_config=rbln_config)
 
     @classmethod
     def compile(cls, model, rbln_compile_config: Optional[RBLNCompileConfig] = None, **kwargs):
@@ -392,15 +398,13 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
     @classmethod
     def get_hf_class(cls):
-        """
-        Lazily loads and caches the corresponding HuggingFace model class.
-        Removes 'RBLN' prefix from the class name to get the original class name
-        (e.g., RBLNLlamaForCausalLM -> LlamaForCausalLM) and imports it from
-        the transformers/diffusers module.
+        # Lazily loads and caches the corresponding HuggingFace model class.
+        # Removes 'RBLN' prefix from the class name to get the original class name
+        # (e.g., RBLNLlamaForCausalLM -> LlamaForCausalLM) and imports it from
+        # the transformers/diffusers module.
 
-        Returns:
-            type: The original HuggingFace model class
-        """
+        # Returns:
+        #     type: The original HuggingFace model class
         if cls._hf_class is None:
             hf_cls_name = cls.__name__[4:]
             library = importlib.import_module(cls.hf_library_name)
@@ -409,18 +413,10 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
     @classmethod
     def get_rbln_config_class(cls) -> Type[RBLNModelConfig]:
-        """
-        Lazily loads and caches the corresponding RBLN model config class.
-        """
+        # Lazily loads and caches the corresponding RBLN model config class.
         if cls._rbln_config_class is None:
             rbln_config_class_name = cls.__name__ + "Config"
-            library = importlib.import_module("optimum.rbln")
-            cls._rbln_config_class = getattr(library, rbln_config_class_name, None)
-            if cls._rbln_config_class is None:
-                raise ValueError(
-                    f"RBLN config class {rbln_config_class_name} not found. This is an internal error. "
-                    "Please report it to the developers."
-                )
+            cls._rbln_config_class = get_rbln_config_class(rbln_config_class_name)
         return cls._rbln_config_class
 
     def can_generate(self):
@@ -430,17 +426,15 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         return self
 
     def parameters(self):
-        """
-        Provides a dummy parameter generator for compatibility.
+        # A dummy parameter generator for compatibility.
 
-        This method mimics the interface of torch.nn.Module.parameters()
-        specifically for code that uses `next(model.parameters())` to infer
-        the device or dtype. It yields a single dummy tensor on CPU with float32 dtype.
+        # This method mimics the interface of torch.nn.Module.parameters()
+        # specifically for code that uses `next(model.parameters())` to infer
+        # the device or dtype. It yields a single dummy tensor on CPU with float32 dtype.
 
-        Warning:
-            This does NOT yield the actual model parameters used by the RBLN runtime.
-            Code relying on iterating through all model parameters will not work as expected.
-        """
+        # Warning:
+        #     This does NOT yield the actual model parameters used by the RBLN runtime.
+        #     Code relying on iterating through all model parameters will not work as expected.
         yield torch.tensor([1.0], dtype=torch.float32, device=torch.device("cpu"))
 
     def __call__(self, *args, **kwargs):
@@ -528,7 +522,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
     @staticmethod
     def _raise_missing_compiled_file_error(missing_files: List[str]):
-        """Raises a KeyError with a message indicating missing compiled model files."""
+        # Raises a KeyError with a message indicating missing compiled model files.
 
         if len(missing_files) == 1:
             message = f"The rbln model folder is missing the required '{missing_files[0]}.rbln' file. "
@@ -544,40 +538,3 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             "and ensure the compilation completes successfully."
         )
         raise KeyError(message)
-
-    @classmethod
-    @abstractmethod
-    def _update_rbln_config(cls, **rbln_config_kwargs) -> RBLNModelConfig:
-        pass
-
-    @classmethod
-    @abstractmethod
-    def _create_runtimes(
-        cls,
-        compiled_models: List[rebel.RBLNCompiledModel],
-        rbln_config: RBLNModelConfig,
-    ) -> List[rebel.Runtime]:
-        # compiled_models -> runtimes
-        pass
-
-    @classmethod
-    @abstractmethod
-    def get_pytorch_model(cls, *args, **kwargs):
-        pass
-
-    @classmethod
-    @abstractmethod
-    def from_model(
-        cls,
-        model: "PreTrainedModel",
-        config: Optional[PretrainedConfig] = None,
-        rbln_config: Optional[RBLNModelConfig] = None,
-        model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
-        subfolder: str = "",
-        **kwargs,
-    ):
-        pass
-
-    @abstractmethod
-    def forward(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
-        pass

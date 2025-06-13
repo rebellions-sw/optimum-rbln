@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import importlib
 from typing import TYPE_CHECKING, Dict, Optional, Union
 
 import torch
@@ -23,6 +22,7 @@ from transformers import PretrainedConfig
 from ...configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ...modeling import RBLNModel
 from ...utils.logging import get_logger
+from ...utils.model_utils import get_rbln_model_cls
 from ..configurations import RBLNControlNetModelConfig
 from ..modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 
@@ -98,6 +98,15 @@ class _ControlNetModel_Cross_Attention(torch.nn.Module):
 
 
 class RBLNControlNetModel(RBLNModel):
+    """
+    RBLN implementation of ControlNetModel for diffusion models.
+
+    This model is used to accelerate ControlNetModel models from diffusers library on RBLN NPUs.
+
+    This class inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods
+    the library implements for all its models.
+    """
+
     hf_library_name = "diffusers"
     auto_model_class = ControlNetModel
     output_class = ControlNetOutput
@@ -122,13 +131,10 @@ class RBLNControlNetModel(RBLNModel):
 
     @classmethod
     def update_rbln_config_using_pipe(
-        cls,
-        pipe: RBLNDiffusionMixin,
-        rbln_config: "RBLNDiffusionMixinConfig",
-        submodule_name: str,
+        cls, pipe: RBLNDiffusionMixin, rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
     ) -> "RBLNDiffusionMixinConfig":
-        rbln_vae_cls = getattr(importlib.import_module("optimum.rbln"), f"RBLN{pipe.vae.__class__.__name__}")
-        rbln_unet_cls = getattr(importlib.import_module("optimum.rbln"), f"RBLN{pipe.unet.__class__.__name__}")
+        rbln_vae_cls = get_rbln_model_cls(f"RBLN{pipe.vae.__class__.__name__}")
+        rbln_unet_cls = get_rbln_model_cls(f"RBLN{pipe.unet.__class__.__name__}")
 
         rbln_config.controlnet.max_seq_len = pipe.text_encoder.config.max_position_embeddings
         text_model_hidden_size = pipe.text_encoder_2.config.hidden_size if hasattr(pipe, "text_encoder_2") else None

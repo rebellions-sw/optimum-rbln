@@ -56,10 +56,19 @@ class _PriorTransformer(torch.nn.Module):
 
 
 class RBLNPriorTransformer(RBLNModel):
+    """
+    RBLN implementation of PriorTransformer for diffusion models like Kandinsky V2.2.
+
+    The Prior Transformer takes text and/or image embeddings from encoders (like CLIP) and
+    maps them to a shared latent space that guides the diffusion process to generate the desired image.
+
+    This class inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods
+    the library implements for all its models.
+    """
+
     hf_library_name = "diffusers"
     auto_model_class = PriorTransformer
-    output_class = PriorTransformerOutput
-    output_key = "predicted_image_embedding"
+    _output_class = PriorTransformerOutput
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)

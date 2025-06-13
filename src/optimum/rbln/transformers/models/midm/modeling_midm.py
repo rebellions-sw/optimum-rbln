@@ -24,16 +24,62 @@ logger = logging.get_logger(__name__)
 
 class RBLNMidmLMHeadModel(RBLNDecoderOnlyModelForCausalLM):
     """
-    The Midm Model transformer with a language modeling head on top (linear layer with weights tied to the input
-    embeddings).
+    The MIDM Model transformer with a language modeling head (linear layer) on top.
+    This model inherits from [`RBLNDecoderOnlyModelForCausalLM`]. Check the superclass documentation for the generic methods the library implements for all its models.
 
-    This model inherits from [`RBLNDecoderOnlyModelForCausalLM`]. Check the superclass documentation for the generic methods the
-    library implements for all its model.
+    A class to convert and run pre-trained transformers based MidmForCausalLM model on RBLN devices.
+    It implements the methods to convert a pre-trained transformers MidmForCausalLM model into a RBLN transformer model by:
 
-    It implements the methods to convert a pre-trained transformers Midm model into a RBLN transformer model by:
     - transferring the checkpoint weights of the original into an optimized RBLN graph,
     - compiling the resulting graph using the RBLN compiler.
 
+    **Configuration:**
+    This model uses [`RBLNMidmLMHeadModelConfig`] for configuration. When calling methods like `from_pretrained` or `from_model`,
+    the `rbln_config` parameter should be an instance of [`RBLNMidmLMHeadModelConfig`] or a dictionary conforming to its structure.
+
+    See the [`RBLNMidmLMHeadModelConfig`] class for all available configuration options.
+
+    Examples:
+        ```python
+        from optimum.rbln import RBLNMidmLMHeadModel
+
+        # Simple usage using rbln_* arguments
+        # `max_seq_len` is automatically inferred from the model config
+        model = RBLNMidmLMHeadModel.from_pretrained(
+            "KT-AI/midm-bitext-S-7B-inst-v1",
+            export=True,
+            rbln_batch_size=1,
+            rbln_tensor_parallel_size=4,
+        )
+
+
+        # Using a config dictionary
+        rbln_config = {
+            "batch_size": 1,
+            "max_seq_len": 4096,
+            "tensor_parallel_size": 4,
+        }
+        model = RBLNMidmLMHeadModel.from_pretrained(
+            "KT-AI/midm-bitext-S-7B-inst-v1",
+            export=True,
+            rbln_config=rbln_config
+        )
+
+
+        # Using a RBLNMidmLMHeadModelConfig instance (recommended for type checking)
+        from optimum.rbln import RBLNMidmLMHeadModelConfig
+
+        config = RBLNMidmLMHeadModelConfig(
+            batch_size=1,
+            max_seq_len=4096,
+            tensor_parallel_size=4
+        )
+        model = RBLNMidmLMHeadModel.from_pretrained(
+            "KT-AI/midm-bitext-S-7B-inst-v1",
+            export=True,
+            rbln_config=config
+        )
+        ```
     """
 
     _decoder_wrapper_cls = MidmLMHeadModelWrapper

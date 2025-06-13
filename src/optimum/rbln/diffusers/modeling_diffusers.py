@@ -19,10 +19,11 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
 
 import torch
 
-from ..configuration_utils import ContextRblnConfig, RBLNModelConfig
+from ..configuration_utils import ContextRblnConfig, RBLNModelConfig, get_rbln_config_class
 from ..modeling import RBLNModel
 from ..utils.decorator_utils import remove_compile_time_kwargs
 from ..utils.logging import get_logger
+from ..utils.model_utils import get_rbln_model_cls
 
 
 logger = get_logger(__name__)
@@ -110,18 +111,10 @@ class RBLNDiffusionMixin:
 
     @classmethod
     def get_rbln_config_class(cls) -> Type[RBLNModelConfig]:
-        """
-        Lazily loads and caches the corresponding RBLN model config class.
-        """
+        # Lazily loads and caches the corresponding RBLN model config class.
         if cls._rbln_config_class is None:
             rbln_config_class_name = cls.__name__ + "Config"
-            library = importlib.import_module("optimum.rbln")
-            cls._rbln_config_class = getattr(library, rbln_config_class_name, None)
-            if cls._rbln_config_class is None:
-                raise ValueError(
-                    f"RBLN config class {rbln_config_class_name} not found. This is an internal error. "
-                    "Please report it to the developers."
-                )
+            cls._rbln_config_class = get_rbln_config_class(rbln_config_class_name)
         return cls._rbln_config_class
 
     @classmethod
@@ -143,7 +136,7 @@ class RBLNDiffusionMixin:
         lora_ids: Optional[Union[str, List[str]]] = None,
         lora_weights_names: Optional[Union[str, List[str]]] = None,
         lora_scales: Optional[Union[float, List[float]]] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ) -> "RBLNDiffusionMixin":
         """
         Load a pretrained diffusion pipeline from a model checkpoint, with optional compilation for RBLN NPUs.
@@ -157,24 +150,25 @@ class RBLNDiffusionMixin:
         Args:
             model_id (`str`):
                 The model ID or path to the pretrained model to load. Can be either:
+
                 - A model ID from the HuggingFace Hub
                 - A local path to a saved model directory
-            export (`bool`, *optional*, defaults to `False`):
+            export:
                 If True, takes a PyTorch model from `model_id` and compiles it for RBLN NPU execution.
                 If False, loads an already compiled RBLN model from `model_id` without recompilation.
-            model_save_dir (`os.PathLike`, *optional*):
+            model_save_dir:
                 Directory to save the compiled model artifacts. Only used when `export=True`.
                 If not provided and `export=True`, a temporary directory is used.
-            rbln_config (`Dict[str, Any]`, *optional*, defaults to `{}`):
+            rbln_config:
                 Configuration options for RBLN compilation. Can include settings for specific submodules
                 such as `text_encoder`, `unet`, and `vae`. Configuration can be tailored to the specific
                 pipeline being compiled.
-            lora_ids (`str` or `List[str]`, *optional*):
+            lora_ids:
                 LoRA adapter ID(s) to load and apply before compilation. LoRA weights are fused
                 into the model weights during compilation. Only used when `export=True`.
-            lora_weights_names (`str` or `List[str]`, *optional*):
+            lora_weights_names:
                 Names of specific LoRA weight files to load, corresponding to lora_ids. Only used when `export=True`.
-            lora_scales (`float` or `List[float]`, *optional*):
+            lora_scales:
                 Scaling factor(s) to apply to the LoRA adapter(s). Only used when `export=True`.
             **kwargs:
                 Additional arguments to pass to the underlying diffusion pipeline constructor or the
@@ -182,8 +176,8 @@ class RBLNDiffusionMixin:
                 or the particular diffusion pipeline being used.
 
         Returns:
-            `RBLNDiffusionMixin`: A compiled or loaded diffusion pipeline that can be used for inference on RBLN NPU.
-            The returned object is an instance of the class that called this method, inheriting from RBLNDiffusionMixin.
+            A compiled or loaded diffusion pipeline that can be used for inference on RBLN NPU.
+                The returned object is an instance of the class that called this method, inheriting from RBLNDiffusionMixin.
         """
         rbln_config, kwargs = cls.get_rbln_config_class().initialize_from_kwargs(rbln_config, **kwargs)
 
@@ -210,7 +204,7 @@ class RBLNDiffusionMixin:
                         "Expected 'optimum.rbln'. Please check the model_index.json configuration."
                     )
 
-                submodule_cls: Type[RBLNModel] = getattr(importlib.import_module("optimum.rbln"), class_name)
+                submodule_cls = get_rbln_model_cls(class_name)
                 submodule_config = getattr(rbln_config, submodule_name)
                 submodule = submodule_cls.from_pretrained(
                     model_id, export=False, subfolder=submodule_name, rbln_config=submodule_config
@@ -293,7 +287,6 @@ class RBLNDiffusionMixin:
             elif isinstance(submodule, RBLNModel):
                 pass
             elif submodule_name == "controlnet" and hasattr(submodule, "nets"):
-                # In case of multicontrolnet
                 submodule = cls._compile_multicontrolnet(
                     controlnets=submodule,
                     model_save_dir=model_save_dir,
@@ -301,11 +294,8 @@ class RBLNDiffusionMixin:
                     prefix=prefix,
                 )
             elif isinstance(submodule, torch.nn.Module):
-                submodule_cls: RBLNModel = getattr(
-                    importlib.import_module("optimum.rbln"), f"RBLN{submodule.__class__.__name__}"
-                )
                 subfolder = prefix + submodule_name
-                submodule = submodule_cls.from_model(
+                submodule = submodule_rbln_cls.from_model(
                     model=submodule,
                     subfolder=subfolder,
                     model_save_dir=model_save_dir,

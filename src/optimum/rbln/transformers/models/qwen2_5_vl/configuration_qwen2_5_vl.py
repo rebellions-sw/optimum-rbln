@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from ....configuration_utils import RBLNModelConfig
 from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
@@ -25,7 +25,7 @@ class RBLNQwen2_5_VLForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausal
         self,
         visual: Optional[RBLNModelConfig] = None,
         use_inputs_embeds: bool = True,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         super().__init__(use_inputs_embeds=use_inputs_embeds, **kwargs)
         if not self.use_inputs_embeds:
@@ -37,7 +37,7 @@ class RBLNQwen2_5_VLForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausal
 
 
 class RBLNQwen2_5_VisionTransformerPretrainedModelConfig(RBLNModelConfig):
-    def __init__(self, max_seq_lens: Union[int, List[int]] = None, **kwargs):
+    def __init__(self, max_seq_lens: Union[int, List[int]] = None, **kwargs: Dict[str, Any]):
         """
         Args:
             max_seq_lens (Optional[Union[int, List[int]]]): Maximum sequence lengths for Vision
@@ -54,6 +54,18 @@ class RBLNQwen2_5_VisionTransformerPretrainedModelConfig(RBLNModelConfig):
 
         Raises:
             ValueError: If batch_size is not a positive integer.
+
+        Max Seq Lens:
+            Since `Qwen2_5_VLForConditionalGeneration` performs inference on a per-image or per-frame basis,
+            `max_seq_lens` should be set based on the maximum expected resolution of the input images or video frames,
+            according to the following guidelines:
+
+            1. **Minimum Value**: `max_seq_lens` must be greater than or equal to the number of patches generated from the input image.
+                For example, a 224x224 image with a patch size of 14 results in (224 / 14) * (224 / 14) = 256 patches.
+                Therefore, `max_seq_lens` must be at least 256.
+            2. **Alignment Requirement**: `max_seq_lens` must be a multiple of `(window_size / patch_size)^2` due to the requirements
+                of the window-based attention mechanism. For instance, if `window_size` is 112 and `patch_size` is 14, then
+                `(112 / 14)^2 = 64`, meaning valid values for `max_seq_lens` include 64, 128, 192, 256, etc.
         """
         super().__init__(**kwargs)
 

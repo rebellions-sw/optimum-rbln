@@ -14,7 +14,7 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, get_args, get_origin, get_type_hints
 
 import rebel
 import torch
@@ -35,28 +35,12 @@ logger = get_logger(__name__)
 
 
 class RBLNModel(RBLNBaseModel):
-    """
-    A class that inherits from RBLNBaseModel for models consisting of a single `torch.nn.Module`.
-
-    This class supports all the functionality of RBLNBaseModel, including loading and saving models using
-    the `from_pretrained` and `save_pretrained` methods, compiling PyTorch models for execution on RBLN NPU
-    devices.
-
-    Example:
-        ```python
-        model = RBLNModel.from_pretrained("model_id", export=True, rbln_npu="npu_name")
-        outputs = model(**inputs)
-        ```
-    """
-
-    output_class = None
-    output_key = "last_hidden_state"
+    _output_class = None
 
     @classmethod
     def update_kwargs(cls, kwargs):
-        """
-        Update user-given kwargs to get proper pytorch model.
-        """
+        # Update user-given kwargs to get proper pytorch model.
+
         return kwargs
 
     @classmethod
@@ -67,10 +51,9 @@ class RBLNModel(RBLNBaseModel):
         subfolder: str,
         rbln_config: RBLNModelConfig,
     ):
-        """
-        If you are unavoidably running on a CPU rather than an RBLN device,
-        store the torch tensor, weight, etc. in this function.
-        """
+        # If you are unavoidably running on a CPU rather than an RBLN device,
+        # store the torch tensor, weight, etc. in this function.
+        pass
 
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
@@ -89,11 +72,32 @@ class RBLNModel(RBLNBaseModel):
         cls,
         model: "PreTrainedModel",
         config: Optional[PretrainedConfig] = None,
-        rbln_config: Optional[RBLNModelConfig] = None,
+        rbln_config: Optional[Union[RBLNModelConfig, Dict]] = None,
         model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
         subfolder: str = "",
-        **kwargs,
-    ):
+        **kwargs: Dict[str, Any],
+    ) -> "RBLNModel":
+        """
+        Converts and compiles a pre-trained HuggingFace library model into a RBLN model.
+        This method performs the actual model conversion and compilation process.
+
+        Args:
+            model: The PyTorch model to be compiled. The object must be an instance of the HuggingFace transformers PreTrainedModel class.
+            rbln_config: Configuration for RBLN model compilation and runtime. This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNLlamaForCausalLMConfig` for Llama models).
+                For detailed configuration options, see the specific model's configuration class documentation.
+
+            kwargs: Additional keyword arguments. Arguments with the prefix 'rbln_' are passed to rbln_config, while the remaining arguments are passed to the HuggingFace library.
+
+        The method performs the following steps:
+
+        1. Compiles the PyTorch model into an optimized RBLN graph
+        2. Configures the model for the specified NPU device
+        3. Creates the necessary runtime objects if requested
+        4. Saves the compiled model and configurations
+
+        Returns:
+            A RBLN model instance ready for inference on RBLN NPU devices.
+        """
         preprocessors = kwargs.pop("preprocessors", [])
         rbln_config, kwargs = cls.prepare_rbln_config(rbln_config=rbln_config, **kwargs)
 
@@ -245,16 +249,54 @@ class RBLNModel(RBLNBaseModel):
         # Format output according to task requirements
         return self._prepare_output(output, return_dict)
 
-    def _prepare_output(self, output, return_dict):
-        """
-        Prepare model output based on return_dict flag.
-        This method can be overridden by subclasses to provide task-specific output handling.
-        """
-        if not return_dict:
-            return (output,) if not isinstance(output, (tuple, list)) else output
-        else:
-            if self.output_class is None:
-                return BaseModelOutput(last_hidden_state=output)
+    @classmethod
+    def get_hf_output_class(cls):
+        # Dynamically gets the output class from the corresponding HuggingFace model class.
+        if cls._output_class:
+            return cls._output_class
 
-            # Create output with the appropriate class and key
-            return self.output_class(**{self.output_key: output})
+        hf_class = cls.get_hf_class()
+        if hf_class is None:
+            raise ValueError(f"No HuggingFace model class found for {cls.__name__}")
+
+        hints = get_type_hints(hf_class.forward) if hasattr(hf_class, "forward") else {}
+        ret = hints.get("return")
+
+        if ret is not None:
+            candidates = get_args(ret) if get_origin(ret) is Union else (ret,)
+
+            for t in candidates:
+                if t is type(None):  # Skip NoneType in Union
+                    continue
+                mod = getattr(t, "__module__", "")
+                if "transformers" in mod or "diffusers" in mod:
+                    cls._output_class = t
+                    return t
+
+        # Fallback to BaseModelOutput
+        cls._output_class = BaseModelOutput
+        return BaseModelOutput
+
+    def _prepare_output(self, output, return_dict):
+        # Prepare model output based on return_dict flag.
+        # This method can be overridden by subclasses to provide task-specific output handling.
+        tuple_output = (output,) if not isinstance(output, (tuple, list)) else tuple(output)
+        if not return_dict:
+            return tuple_output
+        else:
+            output_class = self.get_hf_output_class()
+            if hasattr(output_class, "loss"):
+                tuple_output = (None,) + tuple_output
+
+            # Truncate if we have too many outputs, otherwise use as is
+            if hasattr(output_class, "__annotations__"):
+                num_fields = len(output_class.__annotations__)
+                if len(tuple_output) > num_fields:
+                    tuple_output = tuple_output[:num_fields]
+                    logger.warning(
+                        f"Truncating output to {num_fields} fields for {output_class.__name__}. "
+                        f"Expected {num_fields} fields, but got {len(tuple_output)} fields."
+                        "This is unexpected. Please report this issue to the developers."
+                    )
+
+            return output_class(*tuple_output)
