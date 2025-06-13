@@ -19,7 +19,16 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import rebel
 import torch
-from cosmos_guardrail import CosmosSafetyChecker
+
+from ....utils import is_cosmos_guardrail_available
+
+
+if is_cosmos_guardrail_available():
+    from cosmos_guardrail import CosmosSafetyChecker
+else:
+    raise ImportError(
+        "'cosmos-guardrail' is not installed. This package should be installed to use Cosmos pipelines. If current python version is '3.9', please use python version '>=3.10'."
+    )
 
 from optimum.rbln import RBLNLlamaForCausalLM, RBLNSiglipVisionModel
 from optimum.rbln.diffusers.configurations.models.configuration_cosmos_guardrail import (
