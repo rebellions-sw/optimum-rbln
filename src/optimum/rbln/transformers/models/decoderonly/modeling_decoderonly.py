@@ -121,6 +121,36 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             else:
                 raise RuntimeError(NO_BLOCKS_ERROR)
 
+        def get_global_block_tables(batch_idx: int):
+            if self.rbln_config.model_type == "sliding_window":
+                return None
+
+            if self.phase == "prefill":
+                # Track previously used blocks and return them to the free_block_pool and
+                # reset the current batch's block table to empty blocks
+                prev_blocks = self.block_tables[batch_idx][self.block_tables[batch_idx] != self.empty_block].tolist()
+                self.free_block_pool.extend(prev_blocks)
+                self.block_tables[batch_idx].fill_(self.empty_block)
+
+                # Get the start (s) and end (e) positions from cache_position and
+                # iterate over the cache positions to allocate necessary blocks
+                s, e = cache_position[0][0].item(), cache_position[0][-1].item()
+                for position in range(s, e + 1, self.rbln_config.kvcache_block_size):
+                    block_idx = position // self.rbln_config.kvcache_block_size
+                    if batch_idx >= len(self.block_tables) or block_idx >= len(self.block_tables[batch_idx]):
+                        raise IndexError(f"Invalid index: batch_idx={batch_idx}, block_idx={block_idx}")
+                    update_block(batch_idx, block_idx)
+
+                return replace_empty_block(self.block_tables[batch_idx])
+            # Case for 'decoder' phase, iterate over the cache positions to allocate necessary blocks
+            else:
+                for b_idx in range(self.batch_size):
+                    position = cache_position[b_idx][0].item()
+                    block_idx = position // self.rbln_config.kvcache_block_size
+                    update_block(b_idx, block_idx)
+
+                return replace_empty_block(self.block_tables)
+
         def get_local_block_tables(batch_idx: int):
             if self.rbln_config.model_type == "static":
                 return None
@@ -131,31 +161,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     else torch.arange(self.batch_size, dtype=torch.int16).view(self.batch_size, -1)
                 )
 
-        if self.phase == "prefill":
-            # Track previously used blocks and return them to the free_block_pool and
-            # reset the current batch's block table to empty blocks
-            prev_blocks = self.block_tables[batch_idx][self.block_tables[batch_idx] != self.empty_block].tolist()
-            self.free_block_pool.extend(prev_blocks)
-            self.block_tables[batch_idx].fill_(self.empty_block)
-
-            # Get the start (s) and end (e) positions from cache_position and
-            # iterate over the cache positions to allocate necessary blocks
-            s, e = cache_position[0][0].item(), cache_position[0][-1].item()
-            for position in range(s, e + 1, self.rbln_config.kvcache_block_size):
-                block_idx = position // self.rbln_config.kvcache_block_size
-                if batch_idx >= len(self.block_tables) or block_idx >= len(self.block_tables[batch_idx]):
-                    raise IndexError(f"Invalid index: batch_idx={batch_idx}, block_idx={block_idx}")
-                update_block(batch_idx, block_idx)
-
-            return replace_empty_block(self.block_tables[batch_idx]), get_local_block_tables(batch_idx)
-        # Case for 'decoder' phase, iterate over the cache positions to allocate necessary blocks
-        else:
-            for b_idx in range(self.batch_size):
-                position = cache_position[b_idx][0].item()
-                block_idx = position // self.rbln_config.kvcache_block_size
-                update_block(b_idx, block_idx)
-
-            return replace_empty_block(self.block_tables), get_local_block_tables(batch_idx)
+        return get_global_block_tables(batch_idx), get_local_block_tables(batch_idx)
 
     def is_external_block_tables(
         self, block_tables: Optional[torch.Tensor], local_block_tables: Optional[torch.Tensor]
@@ -260,7 +266,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
             attention_mask = self.dec_attn_mask
 
-        if self.batch_size < block_tables.shape[0]:
+        if self.rbln_config.model_type in ["hybrid", "static"] and self.batch_size < block_tables.shape[0]:
             block_tables = block_tables[: self.batch_size]
 
         if attention_mask is not None and self.batch_size < attention_mask.shape[0]:
