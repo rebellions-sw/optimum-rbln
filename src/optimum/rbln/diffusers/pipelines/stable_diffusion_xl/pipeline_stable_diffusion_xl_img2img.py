@@ -19,6 +19,13 @@ from ...modeling_diffusers import RBLNDiffusionMixin
 
 
 class RBLNStableDiffusionXLImg2ImgPipeline(RBLNDiffusionMixin, StableDiffusionXLImg2ImgPipeline):
+    """
+    RBLN-accelerated implementation of Stable Diffusion XL pipeline for high-resolution image-to-image generation.
+
+    This pipeline compiles Stable Diffusion XL models to run efficiently on RBLN NPUs, enabling high-performance
+    inference for transforming input images with enhanced quality and detail preservation.
+    """
+
     original_class = StableDiffusionXLImg2ImgPipeline
     _rbln_config_class = RBLNStableDiffusionXLImg2ImgPipelineConfig
     _submodules = ["text_encoder", "text_encoder_2", "unet", "vae"]

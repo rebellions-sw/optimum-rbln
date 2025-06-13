@@ -41,6 +41,28 @@ class T5EncoderWrapper(torch.nn.Module):
 
 
 class RBLNT5EncoderModel(RBLNTransformerEncoderForFeatureExtraction):
+    """
+    The T5 Model transformer with an encoder-only architecture for feature extraction.
+    This model inherits from [`RBLNTransformerEncoderForFeatureExtraction`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    Important Note:
+        This model supports various sizes of the T5EncoderModel. For optimal performance, it is highly recommended to adjust the tensor parallelism setting
+        based on the model size. Please refer to the [Optimum RBLN Overview](../../../optimum_rbln.md) for guidance on choosing the appropriate tensor parallelism size for your model.
+
+    Examples:
+        ```python
+        from optimum.rbln import RBLNT5EncoderModel
+
+        model = RBLNT5EncoderModel.from_pretrained(
+            "sentence-transformers/sentence-t5-xxl",
+            export=True,
+            rbln_tensor_parallel_size=4,
+        )
+
+        model.save_pretrained("compiled-sentence-t5-xxl")
+        ```
+    """
+
     auto_model_class = AutoModelForTextEncoding
     rbln_model_input_names = ["input_ids", "attention_mask"]
 
@@ -59,6 +81,29 @@ class RBLNT5EncoderModel(RBLNTransformerEncoderForFeatureExtraction):
 
 
 class RBLNT5ForConditionalGeneration(RBLNModelForSeq2SeqLM):
+    """
+    The T5 Model transformer with a language modeling head for conditional generation.
+    This model inherits from [`RBLNModelForSeq2SeqLM`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    Important Note:
+        This model supports various sizes of the T5ForConditionalGeneration. For optimal performance, it is highly recommended to adjust the tensor parallelism setting
+        based on the model size. Please refer to the [Optimum RBLN Overview](../../../optimum_rbln.md) for guidance on choosing the appropriate tensor parallelism size for your model.
+
+
+    Examples:
+        ```python
+        from optimum.rbln import RBLNT5ForConditionalGeneration
+
+        model = RBLNT5ForConditionalGeneration.from_pretrained(
+            "google-t5/t5-11b",
+            export=True,
+            rbln_tensor_parallel_size=4,
+        )
+
+        model.save_pretrained("compiled-sentence-t5-xxl")
+        ```
+    """
+
     support_causal_attn = False
 
     @classmethod

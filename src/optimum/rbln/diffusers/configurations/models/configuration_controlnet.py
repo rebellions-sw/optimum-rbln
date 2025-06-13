@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNControlNetModelConfig(RBLNModelConfig):
+    """Configuration class for RBLN ControlNet models."""
+
     subclass_non_save_attributes = ["_batch_size_is_specified"]
 
     def __init__(
@@ -27,7 +29,7 @@ class RBLNControlNetModelConfig(RBLNModelConfig):
         unet_sample_size: Optional[Tuple[int, int]] = None,
         vae_sample_size: Optional[Tuple[int, int]] = None,
         text_model_hidden_size: Optional[int] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:

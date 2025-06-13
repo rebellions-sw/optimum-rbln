@@ -19,6 +19,13 @@ from ...modeling_diffusers import RBLNDiffusionMixin
 
 
 class RBLNKandinskyV22Img2ImgPipeline(RBLNDiffusionMixin, KandinskyV22Img2ImgPipeline):
+    """
+    RBLN-accelerated implementation of Kandinsky 2.2 pipeline for image-to-image generation.
+
+    This pipeline compiles Kandinsky 2.2 models to run efficiently on RBLN NPUs, enabling high-performance
+    inference for transforming input images with distinctive artistic style and enhanced visual fidelity.
+    """
+
     original_class = KandinskyV22Img2ImgPipeline
     _rbln_config_class = RBLNKandinskyV22Img2ImgPipelineConfig
     _submodules = ["unet", "movq"]

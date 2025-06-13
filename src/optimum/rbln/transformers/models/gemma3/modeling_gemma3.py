@@ -215,15 +215,16 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
 
         return model_kwargs
 
-    def get_image_features(self, pixel_values: torch.Tensor):
+    def get_image_features(self, pixel_values: torch.Tensor) -> torch.Tensor:
         """
         Projects the last hidden state from the vision model into language model space.
 
         Args:
-            pixel_values (`torch.FloatTensor]` of shape `(batch_size, channels, height, width)`)
-               The tensors corresponding to the input images.
+            pixel_values: (`torch.FloatTensor` of shape `(batch_size, channels, height, width)`)
+                The tensors corresponding to the input images.
+
         Returns:
-            image_features (`torch.Tensor`): Image feature tensor of shape `(num_images, image_length, embed_dim)`).
+            Image feature tensor of shape `(num_images, image_length, embed_dim)`.
         """
         vision_outputs = self.vision_tower(pixel_values).last_hidden_state
         image_features = self.multi_modal_projector(vision_outputs)
@@ -272,7 +273,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         padded_cache_lengths: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
-        **lm_kwargs,
+        **lm_kwargs: Dict[str, Any],
     ) -> Union[Tuple, RBLNDecoderOnlyOutput]:
         # prefill
         if cache_position is None:

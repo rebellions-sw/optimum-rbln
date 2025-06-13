@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from ....configuration_utils import RBLNModelConfig
 
@@ -22,6 +22,16 @@ class RBLNIdefics3VisionTransformerConfig(RBLNModelConfig):
 
 
 class RBLNIdefics3ForConditionalGenerationConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLNIdefics3ForConditionalGeneration models.
+
+    This class extends `RBLNModelConfig` to include settings specific to the Idefics3 vision-language model optimized for RBLN devices.
+    It allows configuration of the batch size and separate configurations for the vision and text submodules.
+
+    Attributes:
+        submodules (List[str]): List of submodules included in the model. Defaults to `["vision_model", "text_model"]`.
+    """
+
     submodules = ["vision_model", "text_model"]
 
     def __init__(
@@ -29,7 +39,7 @@ class RBLNIdefics3ForConditionalGenerationConfig(RBLNModelConfig):
         batch_size: Optional[int] = None,
         vision_model: Optional[RBLNModelConfig] = None,
         text_model: Optional[RBLNModelConfig] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:
