@@ -329,14 +329,18 @@ class RBLNCosmosSiglipVisionModel:
 
     @classmethod
     def compile_model(cls, model, rbln_config, model_save_dir, subfolder=""):
-        batch_size = rbln_config.get("batch_size", 1)
-        rbln_device = rbln_config.get("device", 0)
+        if "height" in rbln_config.keys():
+            rbln_config.pop("height")
+
+        if "width" in rbln_config.keys():
+            rbln_config.pop("width")
+
+        rbln_config.update({"image_size": [384, 384]})  # hard set value
+
         compiled_model = cls._origin_class.from_model(
             model,
             export=True,
-            rbln_batch_size=batch_size,
-            rbln_device=rbln_device,
-            rbln_image_size=[384, 384],  # hard coded
+            rbln_config=rbln_config,
             model_save_dir=model_save_dir,
             subfolder=subfolder,
         )
@@ -359,17 +363,22 @@ class RBLNAegis:
 
     @classmethod
     def compile_model(cls, model, rbln_config, model_save_dir, subfolder=""):
-        batch_size = rbln_config.get("batch_size", 1)
-        tensor_parallel_size = rbln_config.get("tensor_parallel_size", 4)
-        rbln_device = rbln_config.get("device", [0, 1, 2, 3])
+        if "height" in rbln_config.keys():
+            rbln_config.pop("height")
+
+        if "width" in rbln_config.keys():
+            rbln_config.pop("width")
+
+        tensor_parallel_size = rbln_config.pop("tensor_parallel_size", 4)
+        rbln_device = rbln_config.pop("device", [0, 1, 2, 3])
 
         model = model.merge_and_unload()
         compiled_model = cls._origin_class.from_model(
             model,
             export=True,
-            rbln_batch_size=batch_size,
             rbln_tensor_parallel_size=tensor_parallel_size,
             rbln_device=rbln_device,
+            rbln_config=rbln_config,
             model_save_dir=model_save_dir,
             subfolder=subfolder,
         )
