@@ -26,11 +26,11 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
         width: Optional[int] = None,
         fps: Optional[int] = None,
         max_seq_len: Optional[int] = None,
+        embedding_dim: Optional[int] = None,
         num_channels_latents: Optional[int] = None,
         num_latent_frames: Optional[int] = None,
         latent_height: Optional[int] = None,
         latent_width: Optional[int] = None,
-        embedding_dim: Optional[int] = None,
         **kwargs,
     ):
         """
@@ -40,11 +40,11 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
             height (Optional[int]): The height in pixels of the generated video. Defaults to 704.
             width (Optional[int]): The width in pixels of the generated video. Defaults to 1280.
             fps (Optional[int]): The frames per second of the generated video.  Defaults to 30.
-            max_seq_len (Optional[int]):
+            max_seq_len (Optional[int]): Maximum sequence length of prompt embeds.
+            embedding_dim (Optional[int]): Embedding vector dimension of prompt embeds.
             num_channels_latents (Optional[int]): The number of channels in latent space.
             latent_height (Optional[int]): The height in pixels in latent space.
             latent_width (Optional[int]): The width in pixels in latent space.
-            embedding_dim (Optional[int]):
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -56,8 +56,8 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
         self.height = height or 704
         self.width = width or 1280
         self.fps = fps or 30
-        self.max_seq_len = max_seq_len or 512
 
+        self.max_seq_len = max_seq_len
         self.num_channels_latents = num_channels_latents
         self.num_latent_frames = num_latent_frames
         self.latent_height = latent_height

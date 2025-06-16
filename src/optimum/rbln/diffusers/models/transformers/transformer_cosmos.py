@@ -195,6 +195,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         ) // pipe.vae_scale_factor_temporal + 1
         rbln_config.transformer.latent_height = rbln_config.transformer.height // pipe.vae_scale_factor_spatial
         rbln_config.transformer.latent_width = rbln_config.transformer.width // pipe.vae_scale_factor_spatial
+        rbln_config.transformer.max_seq_len = pipe.text_encoder.config.n_positions
         rbln_config.transformer.embedding_dim = pipe.text_encoder.encoder.embed_tokens.embedding_dim
 
         return rbln_config
