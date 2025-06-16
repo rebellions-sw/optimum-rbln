@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Any, Dict
+
 import rebel
 
 from ....configuration_utils import RBLNModelConfig
@@ -29,7 +31,7 @@ class RBLNWhisperForConditionalGenerationConfig(RBLNModelConfig):
         use_attention_mask: bool = None,
         enc_max_seq_len: int = None,
         dec_max_seq_len: int = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:

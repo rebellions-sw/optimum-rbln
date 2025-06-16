@@ -111,9 +111,7 @@ class RBLNDiffusionMixin:
 
     @classmethod
     def get_rbln_config_class(cls) -> Type[RBLNModelConfig]:
-        """
-        Lazily loads and caches the corresponding RBLN model config class.
-        """
+        # Lazily loads and caches the corresponding RBLN model config class.
         if cls._rbln_config_class is None:
             rbln_config_class_name = cls.__name__ + "Config"
             cls._rbln_config_class = get_rbln_config_class(rbln_config_class_name)
@@ -138,7 +136,7 @@ class RBLNDiffusionMixin:
         lora_ids: Optional[Union[str, List[str]]] = None,
         lora_weights_names: Optional[Union[str, List[str]]] = None,
         lora_scales: Optional[Union[float, List[float]]] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ) -> "RBLNDiffusionMixin":
         """
         Load a pretrained diffusion pipeline from a model checkpoint, with optional compilation for RBLN NPUs.
@@ -152,24 +150,25 @@ class RBLNDiffusionMixin:
         Args:
             model_id (`str`):
                 The model ID or path to the pretrained model to load. Can be either:
+
                 - A model ID from the HuggingFace Hub
                 - A local path to a saved model directory
-            export (`bool`, *optional*, defaults to `False`):
+            export:
                 If True, takes a PyTorch model from `model_id` and compiles it for RBLN NPU execution.
                 If False, loads an already compiled RBLN model from `model_id` without recompilation.
-            model_save_dir (`os.PathLike`, *optional*):
+            model_save_dir:
                 Directory to save the compiled model artifacts. Only used when `export=True`.
                 If not provided and `export=True`, a temporary directory is used.
-            rbln_config (`Dict[str, Any]`, *optional*, defaults to `{}`):
+            rbln_config:
                 Configuration options for RBLN compilation. Can include settings for specific submodules
                 such as `text_encoder`, `unet`, and `vae`. Configuration can be tailored to the specific
                 pipeline being compiled.
-            lora_ids (`str` or `List[str]`, *optional*):
+            lora_ids:
                 LoRA adapter ID(s) to load and apply before compilation. LoRA weights are fused
                 into the model weights during compilation. Only used when `export=True`.
-            lora_weights_names (`str` or `List[str]`, *optional*):
+            lora_weights_names:
                 Names of specific LoRA weight files to load, corresponding to lora_ids. Only used when `export=True`.
-            lora_scales (`float` or `List[float]`, *optional*):
+            lora_scales:
                 Scaling factor(s) to apply to the LoRA adapter(s). Only used when `export=True`.
             **kwargs:
                 Additional arguments to pass to the underlying diffusion pipeline constructor or the
@@ -177,8 +176,8 @@ class RBLNDiffusionMixin:
                 or the particular diffusion pipeline being used.
 
         Returns:
-            `RBLNDiffusionMixin`: A compiled or loaded diffusion pipeline that can be used for inference on RBLN NPU.
-            The returned object is an instance of the class that called this method, inheriting from RBLNDiffusionMixin.
+            A compiled or loaded diffusion pipeline that can be used for inference on RBLN NPU.
+                The returned object is an instance of the class that called this method, inheriting from RBLNDiffusionMixin.
         """
         rbln_config, kwargs = cls.get_rbln_config_class().initialize_from_kwargs(rbln_config, **kwargs)
 
