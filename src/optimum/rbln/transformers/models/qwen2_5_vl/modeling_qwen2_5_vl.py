@@ -37,6 +37,7 @@ from ....utils.logging import get_logger
 from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyOutput
 from .configuration_qwen2_5_vl import (
     RBLNQwen2_5_VisionTransformerPretrainedModelConfig,
+    RBLNQwen2_5_VLForConditionalGenerationConfig,
 )
 from .qwen2_5_vl_architecture import Qwen2_5_VisionTransformerWrapper, Qwen2_5_VL_LanguageModelWrapper
 
@@ -403,33 +404,19 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         cls,
         batch_size: int,
         query_length: int,
-        use_inputs_embeds: bool,
-        use_attention_mask: bool,
-        use_position_ids: bool,
-        max_seq_len: int,
-        kvcache_block_size: int,
-        kvcache_num_blocks: int,
-        num_key_value_heads: int,
-        num_hidden_layers: int,
-        hidden_size: int,
-        head_dim: int,
+        rbln_config: RBLNQwen2_5_VLForConditionalGenerationConfig,
+        model_config: PretrainedConfig,
     ):
-        input_info = super().get_input_info(
-            batch_size,
-            query_length,
-            use_inputs_embeds,
-            use_attention_mask,
-            use_position_ids,
-            max_seq_len,
-            kvcache_block_size,
-            kvcache_num_blocks,
-            num_key_value_heads,
-            num_hidden_layers,
-            hidden_size,
-            head_dim,
-        )
+        input_info = super().get_input_info(batch_size, query_length, rbln_config, model_config)
         pos_idx = 3
-        input_info.insert(pos_idx, ("position_emb", [2, batch_size, 1, query_length, head_dim], "float32"))
+        input_info.insert(
+            pos_idx,
+            (
+                "position_emb",
+                [2, batch_size, 1, query_length, model_config.hidden_size // model_config.num_attention_heads],
+                "float32",
+            ),
+        )
 
         return input_info
 
