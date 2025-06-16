@@ -60,6 +60,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         use_attention_mask: bool,
         attn_impl: str,
         use_position_ids: bool,
+        output_hidden_states: bool = False,
         **kwargs: Any,
     ) -> None:
         super().__init__(runtime, **kwargs)
@@ -78,6 +79,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         self.kvcache_block_size = kvcache_block_size
         self.empty_block = -1
         self.attn_impl = attn_impl
+        self.output_hidden_states = output_hidden_states
 
         if self.phase == "prefill":
             vocab_size = kwargs.pop("vocab_size")
@@ -251,7 +253,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         if attention_mask is not None and self.batch_size < attention_mask.shape[0]:
             attention_mask = attention_mask[: self.batch_size]
 
-        logits = super().forward(
+        outputs = super().forward(
             inputs,
             cache_position,
             block_tables,
@@ -260,7 +262,10 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_ids if self.use_position_ids else None,
         )
 
-        return RBLNDecoderOnlyOutput(logits=logits)
+        if self.output_hidden_states:
+            return RBLNDecoderOnlyOutput(logits=outputs[0], hidden_states=outputs[1:])
+        else:
+            return RBLNDecoderOnlyOutput(logits=outputs)
 
     def _prepare_prefill_inputs(
         self,
@@ -396,7 +401,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             query_position = torch.tensor((query_length - 1) % self.prefill_chunk_size, dtype=torch.int16)
 
             # Forward pass for the current chunk
-            logits = super().forward(
+            outputs = super().forward(
                 input_chunk,
                 cache_pos_chunk,
                 block_tables,
@@ -404,7 +409,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 query_position,
                 chunked_attention_mask if self.use_attention_mask else None,
                 position_ids_chunk if self.use_position_ids else None,
-                out=out_buffers,
+                out=None if self.output_hidden_states else out_buffers,
             )
 
         # Update decoder attention mask with processed KV-cache length from prefill phase
@@ -412,7 +417,12 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             self.dec_attn_mask[batch_idx].fill_(0)
             self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
 
-        return RBLNDecoderOnlyOutput(logits=logits, padded_cache_lengths=padded_cache_lengths)
+        if self.output_hidden_states:
+            return RBLNDecoderOnlyOutput(
+                logits=outputs[0], hidden_states=outputs[1:], padded_cache_lengths=padded_cache_lengths
+            )
+        else:
+            return RBLNDecoderOnlyOutput(logits=outputs, padded_cache_lengths=padded_cache_lengths)
 
 
 @dataclass
@@ -420,6 +430,7 @@ class RBLNDecoderOnlyOutput(ModelOutput):
     logits: torch.FloatTensor = None
     generate_idx: torch.Tensor = None
     padded_cache_lengths: int = None
+    hidden_states: Tuple[torch.FloatTensor] = None
 
 
 class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
@@ -485,6 +496,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             use_attention_mask=self.rbln_config.use_attention_mask,
             attn_impl=self.rbln_config.attn_impl,
             use_position_ids=self.rbln_config.use_position_ids,
+            output_hidden_states=self.rbln_config.output_hidden_states,
         )
 
         self.decoders = {}
@@ -502,6 +514,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 use_attention_mask=self.rbln_config.use_attention_mask,
                 attn_impl=self.rbln_config.attn_impl,
                 use_position_ids=self.rbln_config.use_position_ids,
+                output_hidden_states=self.rbln_config.output_hidden_states,
             )
 
         # NOTE(eunji): Use a decoder whose batch size matches the model's main batch size for compatibility.
@@ -624,6 +637,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             "use_attention_mask": rbln_config.use_attention_mask,
             "use_position_ids": rbln_config.use_position_ids,
             "use_inputs_embeds": rbln_config.use_inputs_embeds,
+            "output_hidden_states": rbln_config.output_hidden_states,
         }
         return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
 

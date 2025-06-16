@@ -152,6 +152,7 @@ class DecoderOnlyWrapper(nn.Module):
         use_learned_pos_emb: Optional[bool] = None,
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
+        output_hidden_states: bool = False,
     ):
         super().__init__()
         self.config = causal_lm.config
@@ -171,6 +172,7 @@ class DecoderOnlyWrapper(nn.Module):
         self.use_position_ids = use_position_ids
         self.use_inputs_embeds = use_inputs_embeds
         self.use_learned_pos_emb = use_learned_pos_emb
+        self.output_hidden_states = output_hidden_states
 
         if self.attn_impl == "flash_attn":
             self.kvcache_partition_len = kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
@@ -225,8 +227,9 @@ class DecoderOnlyWrapper(nn.Module):
             max_seq_len=max_seq_len,
             kvcache_block_size=self.kvcache_block_size,
             use_learned_pos_emb=self.use_learned_pos_emb,
+            output_hidden_states=self.output_hidden_states,
         )
-        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
+        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model, output_hidden_states=self.output_hidden_states)
         return new_causal_lm
 
     @property
@@ -289,7 +292,7 @@ class DecoderOnlyWrapper(nn.Module):
             rotary_emb,
         ) = self.prepare_forward_args(*args)
 
-        logit = self.causal_lm(
+        outputs = self.causal_lm(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
@@ -301,7 +304,7 @@ class DecoderOnlyWrapper(nn.Module):
             block_tables=block_tables,
         )
 
-        return logit
+        return outputs
 
 
 class DecoderOnlyForCausalLM(nn.Module):
@@ -326,13 +329,14 @@ class DecoderOnlyForCausalLM(nn.Module):
         _phase: Current processing phase ("prefill" or "decode")
     """
 
-    def __init__(self, causal_lm: PreTrainedModel, model: nn.Module):
+    def __init__(self, causal_lm: PreTrainedModel, model: nn.Module, output_hidden_states: bool = False):
         super().__init__()
         self.config = causal_lm.config
         self._original_mod = causal_lm
         self.model = model
         self._phase = "prefill"
         self.lm_head = self._original_mod.lm_head
+        self.output_hidden_states = output_hidden_states
 
     @property
     def phase(self):
@@ -356,7 +360,7 @@ class DecoderOnlyForCausalLM(nn.Module):
         block_tables: Optional[torch.Tensor] = None,
     ):
         # outputs
-        hidden_states = self.model(
+        outputs = self.model(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
@@ -366,6 +370,11 @@ class DecoderOnlyForCausalLM(nn.Module):
             rotary_emb=rotary_emb,
             block_tables=block_tables,
         )
+
+        if self.output_hidden_states:
+            hidden_states, all_hidden_states = outputs
+        else:
+            hidden_states = outputs
 
         if self.phase == "prefill":
             hidden_states = hidden_states[:, query_position.to(torch.int).unsqueeze(0)]
@@ -378,7 +387,10 @@ class DecoderOnlyForCausalLM(nn.Module):
             logits = torch.tanh(logits)
             logits = logits * self.config.final_logit_softcapping
 
-        return logits
+        if self.output_hidden_states:
+            return logits, all_hidden_states
+        else:
+            return logits
 
 
 class DecoderOnlyModel(nn.Module):
@@ -402,6 +414,7 @@ class DecoderOnlyModel(nn.Module):
         max_seq_len=None,
         kvcache_block_size=None,
         use_learned_pos_emb=None,
+        output_hidden_states=False,
     ):
         super().__init__()
         self._original_mod = model
@@ -411,6 +424,7 @@ class DecoderOnlyModel(nn.Module):
         self.kvcache_block_size = kvcache_block_size
         self.max_seq_len = max_seq_len
         self.use_learned_pos_emb = use_learned_pos_emb
+        self.output_hidden_states = output_hidden_states
 
     @property
     def phase(self):
@@ -520,7 +534,12 @@ class DecoderOnlyModel(nn.Module):
         else:
             seq_positions = cache_position[:, :1]
 
+        all_hidden_states = () if self.output_hidden_states else None
+
         for layer in self.layers:
+            if self.output_hidden_states:
+                all_hidden_states += (hidden_states,)
+
             hidden_states = layer(
                 hidden_states=hidden_states,
                 attention_mask=attention_mask,
@@ -532,7 +551,14 @@ class DecoderOnlyModel(nn.Module):
             )
 
         hidden_states = self.get_last_layernorm()(hidden_states)
-        return hidden_states
+
+        if self.output_hidden_states:
+            all_hidden_states += (hidden_states,)
+
+        if self.output_hidden_states:
+            return hidden_states, all_hidden_states
+        else:
+            return hidden_states
 
 
 class DecoderOnlyLayer(nn.Module):

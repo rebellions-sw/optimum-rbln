@@ -47,6 +47,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         prefill_chunk_size: Optional[int] = None,
         kvcache_num_blocks: Optional[int] = None,
         decoder_batch_sizes: Optional[List[int]] = None,
+        output_hidden_states: bool = False,
         **kwargs: Dict[str, Any],
     ):
         """
@@ -201,6 +202,8 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
 
             # Larger batch size should be at the beginning of the list.
             self.decoder_batch_sizes.sort(reverse=True)
+
+        self.output_hidden_states = output_hidden_states
 
     @property
     def use_multiple_decoder(self):

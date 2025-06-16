@@ -68,8 +68,10 @@ class MidmLMHeadModelWrapper(DecoderOnlyWrapper):
             )
             new_layer = MidmLayer(layer, new_self_attn)
             new_layers.append(new_layer)
-        new_model = MidmModel(causal_lm.transformer, new_layers, max_seq_len=max_seq_len)
-        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
+        new_model = MidmModel(
+            causal_lm.transformer, new_layers, max_seq_len=max_seq_len, output_hidden_states=self.output_hidden_states
+        )
+        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model, output_hidden_states=self.output_hidden_states)
         return new_causal_lm
 
 

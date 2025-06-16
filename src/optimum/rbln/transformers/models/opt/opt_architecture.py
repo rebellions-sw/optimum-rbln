@@ -45,8 +45,14 @@ class OPTWrapper(DecoderOnlyWrapper):
             )
             new_layer = OPTDecoderLayer(layer, new_self_attn)
             new_layers.append(new_layer)
-        new_model = OPTModel(causal_lm.model.decoder, new_layers, max_seq_len=max_seq_len, use_learned_pos_emb=True)
-        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
+        new_model = OPTModel(
+            causal_lm.model.decoder,
+            new_layers,
+            max_seq_len=max_seq_len,
+            use_learned_pos_emb=True,
+            output_hidden_states=self.output_hidden_states,
+        )
+        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model, output_hidden_states=self.output_hidden_states)
         return new_causal_lm
 
 

@@ -302,11 +302,11 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel):
                     f"Please run your model with one of these batch sizes or add support for batch size {batch_size}."
                 )
 
-            logits = self.language_model.decoders[batch_size](
+            output = self.language_model.decoders[batch_size](
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
                 position_ids=position_ids if self.rbln_config.language_model.use_position_ids else None,
-            ).logits
+            )
 
-        return RBLNDecoderOnlyOutput(logits=logits, generate_idx=generate_idx)
+        return RBLNDecoderOnlyOutput(logits=output.logits, generate_idx=generate_idx)
