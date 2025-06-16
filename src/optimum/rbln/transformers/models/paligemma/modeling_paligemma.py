@@ -16,6 +16,7 @@ import inspect
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple, Union
 
 import torch
+from rebel.compile_context import CompileContext
 from transformers import (
     AutoModelForVision2Seq,
     PaliGemmaForConditionalGeneration,
@@ -27,7 +28,7 @@ from transformers.modeling_outputs import BaseModelOutputWithPooling
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyOutput
+from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyOutput, RBLNDecoderOnlyModelForCausalLMConfig
 
 
 logger = get_logger(__name__)

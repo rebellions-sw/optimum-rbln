@@ -247,7 +247,7 @@ class DecoderOnlyWrapper(nn.Module):
         inputs_embeds = args.pop(0) if self.use_inputs_embeds else None
         cache_position = args.pop(0)
         block_tables = args.pop(0)
-        query_position = args.pop(0) if self.phase == "prefill" else None
+        query_position = args.pop(0) if "prefill" in self.phase else None
         attention_mask = args.pop(0) if self.use_attention_mask else None
         position_ids = args.pop(0) if self.use_position_ids else None
         past_key_values = args
@@ -376,7 +376,7 @@ class DecoderOnlyForCausalLM(nn.Module):
         else:
             hidden_states = outputs
 
-        if self.phase == "prefill":
+        if "prefill" in self.phase:
             hidden_states = hidden_states[:, query_position.to(torch.int).unsqueeze(0)]
 
         logits = self.lm_head(hidden_states)
@@ -739,7 +739,7 @@ class DecoderOnlyAttention(nn.Module):
         if cos is not None and sin is not None:
             query_states, key_states = self.apply_rotary_pos_embed(query_states, key_states, cos, sin)
 
-        if batch_size > 1 and self.phase == "prefill":
+        if batch_size > 1 and "prefill" in self.phase:
             raise NotImplementedError(f"batch size should be 1 if prefill phase, but got {batch_size}.")
 
         attn_output = self.attention(
