@@ -137,6 +137,10 @@ _import_structure = {
         "RBLNPaliGemmaForConditionalGeneration",
         "RBLNPaliGemmaForConditionalGenerationConfig",
     ],
+    "colpali": [
+        "RBLNColPaliForRetrieval",
+        "RBLNColPaliForRetrievalConfig",
+    ],
     "xlm_roberta": [
         "RBLNXLMRobertaModel",
         "RBLNXLMRobertaModelConfig",
@@ -196,6 +200,10 @@ if TYPE_CHECKING:
         RBLNCLIPVisionModelConfig,
         RBLNCLIPVisionModelWithProjection,
         RBLNCLIPVisionModelWithProjectionConfig,
+    )
+    from .colpali import (
+        RBLNColPaliForRetrieval,
+        RBLNColPaliForRetrievalConfig,
     )
     from .decoderonly import (
         RBLNDecoderOnlyModelForCausalLM,

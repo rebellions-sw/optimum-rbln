@@ -14,12 +14,12 @@
 from typing import TYPE_CHECKING
 
 import torch
+from rebel.compile_context import CompileContext
 
-from ....utils import logging
 from ....modeling import RBLNModel
 from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyModelForCausalLMConfig
 from .gemma_architecture import GemmaWrapper
-from rebel.compile_context import CompileContext
+
 
 if TYPE_CHECKING:
     from transformers import PreTrainedModel
@@ -131,23 +131,23 @@ class RBLNGemmaForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         compiled_prefill = compile_model(
             wrapped_model, prefill_compile_config, prefill_example_inputs, context, rbln_config.quantization
         )
-
-        wrapped_model.phase = "decode"
         compiled_models = {"prefill": compiled_prefill}
-        for batch_size, dec_compile_config in zip(rbln_config.decoder_batch_sizes, rbln_compile_configs[1:]):
-            dec_example_inputs = dec_compile_config.get_dummy_inputs(fill=0, static_tensors=static_tensors)
-            compiled_decoder = compile_model(
-                wrapped_model, dec_compile_config, dec_example_inputs, context, rbln_config.quantization
-            )
-            compiled_models[f"decoder_batch_{batch_size}"] = compiled_decoder
+        if rbln_config.is_generation_mode:
+            wrapped_model.phase = "decode"
+            for batch_size, dec_compile_config in zip(rbln_config.decoder_batch_sizes, rbln_compile_configs[1:]):
+                dec_example_inputs = dec_compile_config.get_dummy_inputs(fill=0, static_tensors=static_tensors)
+                compiled_decoder = compile_model(
+                    wrapped_model, dec_compile_config, dec_example_inputs, context, rbln_config.quantization
+                )
+                compiled_models[f"decoder_batch_{batch_size}"] = compiled_decoder
 
-        # check if the memory is enough to have additional blocks
-        required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
-        if rbln_config.kvcache_num_blocks < required_num_blocks:
-            cls.maybe_suggest_kvcache_num_blocks(
-                compiled_models=compiled_models,
-                model_config=model.config,
-                rbln_config=rbln_config,
-            )
+            # check if the memory is enough to have additional blocks
+            required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
+            if rbln_config.kvcache_num_blocks < required_num_blocks:
+                cls.maybe_suggest_kvcache_num_blocks(
+                    compiled_models=compiled_models,
+                    model_config=model.config,
+                    rbln_config=rbln_config,
+                )
 
         return compiled_models

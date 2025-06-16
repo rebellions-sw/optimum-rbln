@@ -134,6 +134,8 @@ _import_structure = {
         "RBLNXLMRobertaModelConfig",
         "RBLNPaliGemmaForConditionalGeneration",
         "RBLNPaliGemmaForConditionalGenerationConfig",
+        "RBLNColPaliForRetrieval",
+        "RBLNColPaliForRetrievalConfig",
     ],
     "diffusers": [
         "RBLNAutoencoderKL",
@@ -299,6 +301,8 @@ if TYPE_CHECKING:
         RBLNCLIPVisionModelConfig,
         RBLNCLIPVisionModelWithProjection,
         RBLNCLIPVisionModelWithProjectionConfig,
+        RBLNColPaliForRetrieval,
+        RBLNColPaliForRetrievalConfig,
         RBLNDecoderOnlyModelForCausalLM,
         RBLNDecoderOnlyModelForCausalLMConfig,
         RBLNDistilBertForQuestionAnswering,

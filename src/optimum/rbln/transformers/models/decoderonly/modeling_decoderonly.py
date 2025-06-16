@@ -501,26 +501,27 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             output_hidden_states=self.rbln_config.output_hidden_states,
         )
 
-        self.decoders = {}
-        for i, batch_size in enumerate(self.rbln_config.decoder_batch_sizes):
-            self.decoders[batch_size] = RBLNRuntimeModel(
-                runtime=self.model[i + 1],
-                main_input_name=main_input_name,
-                embed_tokens=self.embed_tokens,
-                phase="decode",
-                batch_size=batch_size,
-                dec_attn_mask=dec_attn_mask,
-                block_tables=block_tables,
-                free_block_pool=free_block_pool,
-                kvcache_block_size=self.rbln_config.kvcache_block_size,
-                use_attention_mask=self.rbln_config.use_attention_mask,
-                attn_impl=self.rbln_config.attn_impl,
-                use_position_ids=self.rbln_config.use_position_ids,
-                output_hidden_states=self.rbln_config.output_hidden_states,
-            )
+        if self.rbln_config.is_generation_mode:
+            self.decoders = {}
+            for i, batch_size in enumerate(self.rbln_config.decoder_batch_sizes):
+                self.decoders[batch_size] = RBLNRuntimeModel(
+                    runtime=self.model[i + 1],
+                    main_input_name=main_input_name,
+                    embed_tokens=self.embed_tokens,
+                    phase="decode",
+                    batch_size=batch_size,
+                    dec_attn_mask=dec_attn_mask,
+                    block_tables=block_tables,
+                    free_block_pool=free_block_pool,
+                    kvcache_block_size=self.rbln_config.kvcache_block_size,
+                    use_attention_mask=self.rbln_config.use_attention_mask,
+                    attn_impl=self.rbln_config.attn_impl,
+                    use_position_ids=self.rbln_config.use_position_ids,
+                    output_hidden_states=self.rbln_config.output_hidden_states,
+                )
 
-        # NOTE(eunji): Use a decoder whose batch size matches the model's main batch size for compatibility.
-        self.decoder = self.decoders[self.rbln_config.batch_size]
+            # NOTE(eunji): Use a decoder whose batch size matches the model's main batch size for compatibility.
+            self.decoder = self.decoders[self.rbln_config.batch_size]
 
     @classmethod
     def save_torch_artifacts(
@@ -686,24 +687,25 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         compiled_prefill = compile_model(
             wrapped_model, prefill_compile_config, prefill_example_inputs, context, rbln_config.quantization
         )
-
-        wrapped_model.phase = "decode"
         compiled_models = {"prefill": compiled_prefill}
-        for batch_size, dec_compile_config in zip(rbln_config.decoder_batch_sizes, rbln_compile_configs[1:]):
-            dec_example_inputs = dec_compile_config.get_dummy_inputs(fill=0, static_tensors=static_tensors)
-            compiled_decoder = compile_model(
-                wrapped_model, dec_compile_config, dec_example_inputs, context, rbln_config.quantization
-            )
-            compiled_models[f"decoder_batch_{batch_size}"] = compiled_decoder
 
-        # check if the memory is enough to have additional blocks
-        required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
-        if rbln_config.kvcache_num_blocks < required_num_blocks:
-            cls.maybe_suggest_kvcache_num_blocks(
-                compiled_models=compiled_models,
-                model_config=model.config,
-                rbln_config=rbln_config,
-            )
+        if rbln_config.is_generation_mode:
+            wrapped_model.phase = "decode"
+            for batch_size, dec_compile_config in zip(rbln_config.decoder_batch_sizes, rbln_compile_configs[1:]):
+                dec_example_inputs = dec_compile_config.get_dummy_inputs(fill=0, static_tensors=static_tensors)
+                compiled_decoder = compile_model(
+                    wrapped_model, dec_compile_config, dec_example_inputs, context, rbln_config.quantization
+                )
+                compiled_models[f"decoder_batch_{batch_size}"] = compiled_decoder
+
+            # check if the memory is enough to have additional blocks
+            required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
+            if rbln_config.kvcache_num_blocks < required_num_blocks:
+                cls.maybe_suggest_kvcache_num_blocks(
+                    compiled_models=compiled_models,
+                    model_config=model.config,
+                    rbln_config=rbln_config,
+                )
 
         return compiled_models
 
@@ -985,16 +987,17 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         prefill_compile_config = RBLNCompileConfig(compiled_model_name="prefill", input_info=prefill_input_info)
 
         dec_compile_configs = []
-        for batch_size in rbln_config.decoder_batch_sizes:
-            dec_input_info = cls.get_input_info(
-                batch_size=batch_size,
-                query_length=1,
-                rbln_config=rbln_config,
-                model_config=model_config,
-            )
-            dec_compile_configs.append(
-                RBLNCompileConfig(compiled_model_name=f"decoder_batch_{batch_size}", input_info=dec_input_info)
-            )
+        if rbln_config.is_generation_mode:
+            for batch_size in rbln_config.decoder_batch_sizes:
+                dec_input_info = cls.get_input_info(
+                    batch_size=batch_size,
+                    query_length=1,
+                    rbln_config=rbln_config,
+                    model_config=model_config,
+                )
+                dec_compile_configs.append(
+                    RBLNCompileConfig(compiled_model_name=f"decoder_batch_{batch_size}", input_info=dec_input_info)
+                )
         rbln_config.set_compile_cfgs([prefill_compile_config, *dec_compile_configs])
 
         return rbln_config
@@ -1005,36 +1008,43 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         compiled_models: List[rebel.RBLNCompiledModel],
         rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
     ) -> List[rebel.Runtime]:
-        expected_model_names = [
-            "prefill",
-            *[f"decoder_batch_{batch_size}" for batch_size in rbln_config.decoder_batch_sizes],
-        ]
+        expected_model_names = (
+            [
+                "prefill",
+                *[f"decoder_batch_{batch_size}" for batch_size in rbln_config.decoder_batch_sizes],
+            ]
+            if rbln_config.is_generation_mode
+            else ["prefill"]
+        )
+
         if any(model_name not in rbln_config.device_map for model_name in expected_model_names):
             cls._raise_missing_compiled_file_error(expected_model_names)
 
-        return [
+        rbln_runtimes = [
             rebel.Runtime(
                 compiled_models[0],
                 tensor_type="pt",
                 device=rbln_config.device_map["prefill"],
                 activate_profiler=rbln_config.activate_profiler,
             ),
-            *[
-                rebel.Runtime(
-                    compiled_models[i + 1],
-                    tensor_type="pt",
-                    device=rbln_config.device_map[f"decoder_batch_{batch_size}"],
-                    activate_profiler=rbln_config.activate_profiler,
-                )
-                for i, batch_size in enumerate(rbln_config.decoder_batch_sizes)
-            ],
         ]
+        if rbln_config.is_generation_mode:
+            for i, batch_size in enumerate(rbln_config.decoder_batch_sizes):
+                rbln_runtimes.append(
+                    rebel.Runtime(
+                        compiled_models[i + 1],
+                        tensor_type="pt",
+                        device=rbln_config.device_map[f"decoder_batch_{batch_size}"],
+                        activate_profiler=rbln_config.activate_profiler,
+                    )
+                )
+        return rbln_runtimes
 
     def get_decoder(self):
         return self.decoder
 
     def can_generate(self):
-        return True
+        return self.rbln_config.is_generation_mode
 
     def _reorder_cache(self, past_key_values, beam_idx):
         raise NotImplementedError

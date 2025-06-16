@@ -11,12 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import importlib
 import inspect
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple, Union
 
 import torch
-from rebel.compile_context import CompileContext
 from transformers import (
     AutoModelForVision2Seq,
     PaliGemmaForConditionalGeneration,
@@ -24,11 +23,12 @@ from transformers import (
     PreTrainedModel,
 )
 from transformers.modeling_outputs import BaseModelOutputWithPooling
+from transformers.modeling_utils import no_init_weights
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyOutput, RBLNDecoderOnlyModelForCausalLMConfig
+from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyOutput
 
 
 logger = get_logger(__name__)
@@ -101,6 +101,16 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel):
         {"name": "language_model"},
     ]
 
+    def __post_init__(self, **kwargs):
+        self.vision_tower = LoopVisionTower(self.rbln_submodules[0])
+        self.language_model = self.rbln_submodules[1]
+        self.multi_modal_projector = LoopProjector(self.model[0])
+        self.vocab_size = self.language_model.config.vocab_size
+
+        # # Copied from the original class
+        self.pad_token_id = self.config.pad_token_id if self.config.pad_token_id is not None else -1
+        return super().__post_init__(**kwargs)
+
     def __getattr__(self, __name: str) -> Any:
         def redirect(func):
             return lambda *pargs, **kwargs: func(self, *pargs, **kwargs)
@@ -112,17 +122,7 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel):
         return val
 
     def can_generate(self):
-        return True
-
-    def __post_init__(self, **kwargs):
-        self.vision_tower = LoopVisionTower(self.rbln_submodules[0])
-        self.language_model = self.rbln_submodules[1]
-        self.multi_modal_projector = LoopProjector(self.model[0])
-        self.vocab_size = self.config.text_config.vocab_size
-
-        # Copied from the original class
-        self.pad_token_id = self.config.pad_token_id if self.config.pad_token_id is not None else -1
-        return super().__post_init__(**kwargs)
+        return self.rbln_config.language_model.is_generation_mode
 
     def get_attn_impl(self) -> str:
         return self.rbln_config.language_model.attn_impl
@@ -152,6 +152,23 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel):
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
         rbln_config.set_compile_cfgs([rbln_compile_config])
         return rbln_config
+
+    @classmethod
+    def get_pytorch_model(cls, *args, **kwargs):
+        model = super().get_pytorch_model(*args, **kwargs)
+
+        with no_init_weights():
+            model_cls_name = model.language_model.__class__.__name__
+            causal_model_cls_name = model_cls_name.replace("Model", "ForCausalLM")
+            causal_model_cls = getattr(importlib.import_module("transformers"), causal_model_cls_name)
+            new_text_model = causal_model_cls(model.model.text_model.config)
+
+        new_text_model.lm_head = model.lm_head
+        new_text_model.model = model.language_model
+        model.model.language_model = new_text_model
+        model.model.lm_head = None
+        del model.model.lm_head
+        return model
 
     def prepare_inputs_for_generation(
         self,
@@ -213,7 +230,7 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel):
         """
         vision_outputs = self.vision_tower(pixel_values).last_hidden_state
         image_features = self.multi_modal_projector(vision_outputs)
-        image_features = image_features / (self.config.text_config.hidden_size**0.5)
+        image_features = image_features / (self.language_model.config.hidden_size**0.5)
         return image_features
 
     def _preprocess_prefill(
@@ -278,20 +295,30 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel):
         # prefill
         if cache_position is None:
             logits = []
+            hidden_states = []
+
             inputs_embeds = self._preprocess_prefill(input_ids, inputs_embeds, pixel_values)
             batch_size = inputs_embeds.shape[0]
 
             for b_idx in range(batch_size):
-                cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
+                cache_position = torch.arange(0, torch.sum(attention_mask[b_idx]).item(), dtype=torch.int32)[None, :]
+                inputs_embed = inputs_embeds[b_idx : b_idx + 1, attention_mask[b_idx].bool()]
+                attn_mask = self._update_causal_mask(torch.ones(inputs_embed.shape[:1], dtype=torch.float32))
                 output = self.language_model.prefill_decoder(
-                    inputs_embeds=inputs_embeds[b_idx : b_idx + 1, attention_mask[b_idx].bool()],
-                    attention_mask=self._update_causal_mask(attention_mask[b_idx : b_idx + 1]),
+                    inputs_embeds=inputs_embed,
+                    attention_mask=attn_mask,
                     cache_position=cache_position,
-                    batch_idx=b_idx,
+                    batch_idx=b_idx if self.can_generate() else 0,
                 )
                 logits.append(output.logits)
+                hidden_states.append(output.hidden_states)
 
             logits = torch.cat(logits, dim=0)
+            hidden_states = [
+                torch.cat([hidden_states[b_idx][l_idx] for b_idx in range(len(hidden_states))], dim=0)
+                for l_idx in range(len(hidden_states[0]))
+            ]
+
         # decoder
         else:
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
@@ -309,5 +336,7 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel):
                 cache_position=cache_position,
                 position_ids=position_ids if self.rbln_config.language_model.use_position_ids else None,
             )
+            logits = output.logits
+            hidden_states = output.hidden_states
 
-        return RBLNDecoderOnlyOutput(logits=output.logits, generate_idx=generate_idx)
+        return RBLNDecoderOnlyOutput(logits=logits, generate_idx=generate_idx, hidden_states=hidden_states)
