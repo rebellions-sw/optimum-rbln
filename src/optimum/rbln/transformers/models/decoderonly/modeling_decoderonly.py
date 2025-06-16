@@ -300,6 +300,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 chunked_attention_mask = torch.zeros(
                     1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32
                 )
+        else:
+            chunked_attention_mask = None
 
         # Buffer for storing output logits
         out_buffers = [
