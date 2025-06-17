@@ -132,7 +132,7 @@ class RBLNSiglipVisionModel(RBLNModel):
                 f"Variable output_hidden_states {output_hidden_states} is not equal to rbln_config.output_hidden_states {self.rbln_config.output_hidden_states} "
                 f"Please compile again with the correct argument."
             )
-        import pdb; pdb.set_trace()
+
         if interpolate_pos_encoding != self.rbln_config.interpolate_pos_encoding:
             raise ValueError(
                 f"Variable interpolate_pos_encoding {interpolate_pos_encoding} is not equal to rbln_config.interpolate_pos_encoding {self.rbln_config.interpolate_pos_encoding} "
@@ -149,22 +149,25 @@ class RBLNSiglipVisionModel(RBLNModel):
         if not return_dict:
             return (output,) if not isinstance(output, (tuple, list)) else output
         else:
+            vision_config = self.config.vision_config if hasattr(self.config, "vision_config") else self.config
             if self.rbln_config.output_attentions:
                 attentions = ()
-                for i in range(self.config.vision_config.num_hidden_layers):
+                num_hidden_layers = vision_config.num_hidden_layers
+                for i in range(num_hidden_layers):
                     attentions += (output.pop(),)
             else:
                 attentions = None
 
             if self.rbln_config.output_hidden_states:
                 hidden_states = ()
-                for i in range(self.config.vision_config.num_hidden_layers + 1):
+                num_hidden_layers = vision_config.num_hidden_layers
+                for i in range(num_hidden_layers + 1):
                     hidden_states += (output.pop(),)
             else:
                 hidden_states = None
 
-            pooler_output = output.pop() if getattr(self.config.vision_config, "vision_use_head", True) else None
-            last_hidden_state = output.pop()
+            pooler_output = output.pop() if getattr(vision_config, "vision_use_head", True) else None
+            last_hidden_state = output.pop() if isinstance(output, (tuple, list)) else output
 
             return BaseModelOutputWithPooling(
                 last_hidden_state=last_hidden_state,
