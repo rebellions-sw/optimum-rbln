@@ -34,6 +34,7 @@ class RBLNSiglipVisionModelConfig(RBLNModelConfig):
                 a tuple/list (height, width), or a dictionary with 'height' and 'width' keys.
             interpolate_pos_encoding (Optional[bool]): Whether to interpolate the position encoding.
             output_hidden_states: (Optional[bool]): Whether to return hidden states.
+            output_attentions: (Optional[bool]): Whether to return attentions.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -46,8 +47,8 @@ class RBLNSiglipVisionModelConfig(RBLNModelConfig):
 
         self.image_size = image_size
         self.interpolate_pos_encoding = interpolate_pos_encoding or False
-        self.output_hidden_states = output_hidden_states
-        self.output_attentions = output_attentions
+        self.output_hidden_states = output_hidden_states or False
+        self.output_attentions = output_attentions or False
 
     @property
     def image_width(self):
