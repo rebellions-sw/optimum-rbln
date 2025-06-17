@@ -113,7 +113,7 @@ class RBLNSiglipVisionModel(RBLNModel):
         return_dict: Optional[bool] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
-        interpolate_pos_encoding: Optional[bool] = None,
+        interpolate_pos_encoding: Optional[bool] = False,
         **kwargs,
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
         if len(kwargs) > 0 and any(value is not None for value in kwargs.values()):
@@ -132,7 +132,7 @@ class RBLNSiglipVisionModel(RBLNModel):
                 f"Variable output_hidden_states {output_hidden_states} is not equal to rbln_config.output_hidden_states {self.rbln_config.output_hidden_states} "
                 f"Please compile again with the correct argument."
             )
-
+        import pdb; pdb.set_trace()
         if interpolate_pos_encoding != self.rbln_config.interpolate_pos_encoding:
             raise ValueError(
                 f"Variable interpolate_pos_encoding {interpolate_pos_encoding} is not equal to rbln_config.interpolate_pos_encoding {self.rbln_config.interpolate_pos_encoding} "
