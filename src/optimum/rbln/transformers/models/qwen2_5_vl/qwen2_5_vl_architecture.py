@@ -3,8 +3,14 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
+from transformers import PreTrainedModel
 
 from ..decoderonly.decoderonly_architecture import (
+    DecoderOnlyAttention,
+    DecoderOnlyFlashAttention,
+    DecoderOnlyForCausalLM,
+    DecoderOnlyLayer,
+    DecoderOnlyModel,
     DecoderOnlyWrapper,
     apply_rotary_pos_emb,
 )
@@ -195,3 +201,39 @@ class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
             past_key_values,
             position_embeds,
         )
+
+    def convert_to_rbln_causal_lm(self, causal_lm: PreTrainedModel, max_seq_len: int):
+        new_layers = []
+
+        for layer in causal_lm.model.language_model.layers:
+            if self.attn_impl == "eager":
+                new_self_attn = DecoderOnlyAttention(
+                    layer.self_attn,
+                    self.use_attention_mask,
+                    self.use_position_ids,
+                    kvcache_block_size=self.kvcache_block_size,
+                )
+            elif self.attn_impl == "flash_attn":
+                new_self_attn = DecoderOnlyFlashAttention(
+                    layer.self_attn,
+                    kvcache_partition_len=self.kvcache_partition_len,
+                    kvcache_block_size=self.kvcache_block_size,
+                    use_attention_mask=self.use_attention_mask,
+                    use_position_ids=self.use_position_ids,
+                )
+            else:
+                raise NotImplementedError(f"Unknwon attn : {self.attn_impl}")
+
+            new_layer = DecoderOnlyLayer(layer, new_self_attn)
+            new_layers.append(new_layer)
+
+        new_model = DecoderOnlyModel(
+            causal_lm.model.language_model,
+            new_layers,
+            partition_len=self.kvcache_partition_len,
+            max_seq_len=max_seq_len,
+            kvcache_block_size=self.kvcache_block_size,
+            use_learned_pos_emb=self.use_learned_pos_emb,
+        )
+        new_causal_lm = DecoderOnlyForCausalLM(causal_lm.model, new_model)
+        return new_causal_lm
