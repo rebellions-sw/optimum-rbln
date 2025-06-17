@@ -90,7 +90,12 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
                 1) All values must be less than or equal to the main batch size.
                 2) The list will be sorted in descending order (larger batch sizes first).
                 3) If using multiple decoders, at least one batch size should match the main batch size.
-            cache_impl (Optional[CacheImplType]): The type of model construction. Defaults to "static" which is the all layers are global.
+            cache_impl (Optional[CacheImplType]): Specifies the KV cache implementation strategy. Defaults to "static".
+                - "static": Uses a fixed-size global KV cache for all layers, suitable for standard attention patterns.
+                - "sliding_window": Implements a sliding window KV cache, where each layer maintains a local cache of recent tokens.
+                - "hybrid": Combines both static and sliding window approaches, allowing different layers to use different cache strategies.
+                The choice affects memory usage and attention patterns. When using "sliding_window" or "hybrid", 
+                you must specify the `sliding_window` size and optionally `sliding_window_layers` for hybrid mode.
             sliding_window (Optional[int]): The size of the sliding window. Defaults to None.
             sliding_window_layers (Optional[List[int]]): The layers to use for the sliding window used in the hybrid model. Defaults to None.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
