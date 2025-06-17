@@ -551,9 +551,9 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         ) = self._prepare_prefill_inputs(
             inputs, cache_position, attention_mask, position_embed, token_type_ids=token_type_ids
         )
-        self.dec_attn_mask[batch_idx : batch_idx + 1] = chunked_attention_mask[:1]
         if not is_external_block_tables:
             local_block_tables = torch.tensor([batch_idx], dtype=torch.int16)
+            self.dec_attn_mask[batch_idx : batch_idx + 1] = chunked_attention_mask[:1]
 
         if self.rbln_config.use_attention_mask and self.rbln_config.use_position_ids:
             chunked_attention_mask = torch.zeros(1, self.rbln_config.max_seq_len, dtype=torch.float32)
