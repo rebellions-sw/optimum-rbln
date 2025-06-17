@@ -321,51 +321,6 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             ),
         ]
 
-    
-    def prepare_inputs_for_generation(
-        self,
-        input_ids: torch.LongTensor,
-        generate_idx: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.LongTensor] = None,
-        inputs_embeds: Optional[torch.Tensor] = None,
-        pixel_values=None,
-        pixel_values_videos=None,
-        image_grid_thw=None,
-        video_grid_thw=None,
-        second_per_grid_ts=None,
-        **kwargs,
-    ):
-        model_inputs = {}
-        is_prefill_phase = generate_idx is None
-
-        if is_prefill_phase:
-            generate_idx = attention_mask.sum(dim=-1, keepdim=True).int()
-            cache_position = None
-            model_inputs.update({"input_ids": input_ids})
-        else:
-            if inputs_embeds is not None:
-                raise NotImplementedError("Specifying inputs_embeds in decoder phase is not supported.")
-
-            input_ids = input_ids[:, -1:]
-            cache_position = generate_idx
-            generate_idx = generate_idx + 1
-            model_inputs.update({"input_ids": input_ids})
-
-        model_inputs.update(
-            {
-                "attention_mask": attention_mask,
-                "cache_position": cache_position,
-                "generate_idx": generate_idx,
-                "pixel_values": pixel_values,
-                "pixel_values_videos": pixel_values_videos,
-                "image_grid_thw": image_grid_thw,
-                "video_grid_thw": video_grid_thw,
-                "second_per_grid_ts": second_per_grid_ts,
-            }
-        )
-
-        return model_inputs
-
     def _get_position_embeddings(self, hidden_states, position_ids):
         cos, sin = self.rotary_emb(hidden_states, position_ids)
         mrope_section = self.mrope_section * 2
@@ -644,41 +599,42 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         **kwargs,
     ) -> RBLNDecoderOnlyOutput:
         # Prefill
-        if cache_position is None:
-            import pdb; pdb.set_trace()
-            inputs_embeds, position_embed, rope_deltas = self._preprocess_prefill(
-                input_ids,
-                attention_mask,
-                pixel_values,
-                pixel_values_videos,
-                image_grid_thw,
-                video_grid_thw,
-                second_per_grid_ts,
+        # import pdb; pdb.set_trace()
+        inputs_embeds, position_embed, rope_deltas = self._preprocess_prefill(
+            input_ids,
+            attention_mask,
+            pixel_values,
+            pixel_values_videos,
+            image_grid_thw,
+            video_grid_thw,
+            second_per_grid_ts,
+        )
+        # import pdb; pdb.set_trace()
+        self.rope_deltas = rope_deltas
+        batch_size = inputs_embeds.shape[0]
+
+        projs = []
+        for b_idx in range(batch_size):
+            # cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
+            cache_position = torch.arange(0, inputs_embeds.shape[1], dtype=torch.int32).unsqueeze(0)
+
+            outputs = self.prefill_decoder(
+                inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
+                attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
+                cache_position=cache_position,
+                batch_idx=0,
+                position_embed=position_embed[:, b_idx : b_idx + 1],
             )
-            import pdb; pdb.set_trace()
-            self.rope_deltas = rope_deltas
-            batch_size = inputs_embeds.shape[0]
-
-            projs = []
-            for b_idx in range(batch_size):
-                # cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
-                cache_position = torch.arange(0, 128, dtype=torch.int32).unsqueeze(0)
-
-                last_hidden_states = self.prefill_decoder(
-                    inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
-                    attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
-                    cache_position=cache_position,
-                    batch_idx=b_idx,
-                    position_embed=position_embed[:, b_idx : b_idx + 1],
-                )
-                proj = self.custom_text_proj(last_hidden_states) # TODO(si) RSD pattern 추가
-                projs.append(proj)
-            projs = torch.cat(projs, dim=0)
-            projs = projs / projs.norm(dim=-1, keepdim=True)  # (batch_size, sequence_length, dim)
-            projs = projs * attention_mask.unsqueeze(-1)  # (batch_size, sequence_length, dim)
-            
-            if "pixel_values" is not None and self.mask_non_image_embeddings:
-                # Pools only the image embeddings
-                image_mask = (input_ids == self.config.image_token_id).unsqueeze(-1)
-                projs = projs * image_mask
-            return projs
+            proj = self.custom_text_proj(outputs.logits) # TODO(si) RSD pattern 추가
+            projs.append(proj)
+        projs = torch.cat(projs, dim=0)
+        projs = projs[:, :inputs_embeds.shape[1]]
+        
+        projs = projs / projs.norm(dim=-1, keepdim=True)  # (batch_size, sequence_length, dim)
+        projs = projs * attention_mask.unsqueeze(-1)  # (batch_size, sequence_length, dim)
+        
+        if pixel_values is not None and self.mask_non_image_embeddings:
+            # Pools only the image embeddings
+            image_mask = (input_ids == self.config.image_token_id).unsqueeze(-1)
+            projs = projs * image_mask
+        return projs
