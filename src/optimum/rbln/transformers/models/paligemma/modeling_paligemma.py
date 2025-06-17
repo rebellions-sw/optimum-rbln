@@ -265,18 +265,19 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel):
 
         return inputs_embeds
 
+    # FIXME:: This is not correct.
     def _update_causal_mask(
         self,
         attention_mask,
     ):
-        if self.language_model.rbln_config.use_attention_mask:
+        if not self.language_model.rbln_config.use_attention_mask:
             return attention_mask[0]
         else:
             sequence_length = torch.sum(attention_mask, dim=-1)
             target_length = self.rbln_config.language_model.max_seq_len
             prefill_chunk_size = self.rbln_config.language_model.prefill_chunk_size
             causal_mask = torch.full((prefill_chunk_size, target_length), fill_value=0, dtype=torch.float32)
-            causal_mask[:, :sequence_length] = 1
+            causal_mask[:sequence_length, :sequence_length] = 1
             causal_mask = causal_mask[None, None, :, :]
 
             return causal_mask
@@ -301,9 +302,10 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel):
             batch_size = inputs_embeds.shape[0]
 
             for b_idx in range(batch_size):
-                cache_position = torch.arange(0, torch.sum(attention_mask[b_idx]).item(), dtype=torch.int32)[None, :]
-                inputs_embed = inputs_embeds[b_idx : b_idx + 1, attention_mask[b_idx].bool()]
-                attn_mask = self._update_causal_mask(torch.ones(inputs_embed.shape[:1], dtype=torch.float32))
+                cache_position = torch.arange(0, inputs_embeds.shape[1], dtype=torch.int32)[None, :]
+                inputs_embed = inputs_embeds[b_idx : b_idx + 1]
+                attn_mask = self._update_causal_mask(attention_mask[b_idx : b_idx + 1])
+
                 output = self.language_model.prefill_decoder(
                     inputs_embeds=inputs_embed,
                     attention_mask=attn_mask,
