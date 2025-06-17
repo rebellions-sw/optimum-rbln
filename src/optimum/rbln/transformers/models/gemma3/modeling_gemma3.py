@@ -755,7 +755,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         sliding_window = getattr(model_config, "sliding_window", None)
         sliding_window_pattern = getattr(model_config, "sliding_window_pattern", None)
         if sliding_window_pattern <= model_config.num_hidden_layers:
-            rbln_config.model_type = "hybrid"
+            rbln_config.cache_impl = "hybrid"
             rbln_config.sliding_window = sliding_window
             rbln_config.sliding_window_layers = [
                 i for i in range(model_config.num_hidden_layers) if (i + 1) % sliding_window_pattern > 0

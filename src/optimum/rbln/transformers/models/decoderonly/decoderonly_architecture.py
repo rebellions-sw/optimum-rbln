@@ -21,6 +21,7 @@ from transformers import PretrainedConfig, PreTrainedModel
 
 from ....utils import logging
 from ...modeling_rope_utils import ROPE_INIT_FUNCTIONS
+from .configuration_decoderonly import CacheImplType
 
 
 logger = logging.get_logger(__name__)
@@ -154,7 +155,7 @@ class DecoderOnlyWrapper(nn.Module):
         max_seq_len: int,
         use_rotary_emb: bool,
         attn_impl: str,
-        model_type: str,
+        cache_impl: CacheImplType,
         use_inputs_embeds: bool,
         use_attention_mask: bool,
         use_position_ids: bool,
@@ -183,7 +184,7 @@ class DecoderOnlyWrapper(nn.Module):
         self.use_inputs_embeds = use_inputs_embeds
         self.use_learned_pos_emb = use_learned_pos_emb
         self.sliding_window_layers = sliding_window_layers
-        self.model_type = model_type
+        self.cache_impl = cache_impl
         self.sliding_window = sliding_window
 
         if self.attn_impl == "flash_attn":
@@ -267,8 +268,8 @@ class DecoderOnlyWrapper(nn.Module):
         input_ids = None if self.use_inputs_embeds else args.pop(0)
         inputs_embeds = args.pop(0) if self.use_inputs_embeds else None
         cache_position = args.pop(0)
-        global_block_tables = args.pop(0) if self.model_type in ["hybrid", "static"] else None
-        local_block_tables = args.pop(0) if self.model_type in ["hybrid", "sliding_window"] else None
+        global_block_tables = args.pop(0) if self.cache_impl in ["hybrid", "static"] else None
+        local_block_tables = args.pop(0) if self.cache_impl in ["hybrid", "sliding_window"] else None
         query_position = args.pop(0) if "prefill" in self.phase else None
         attention_mask = args.pop(0) if self.use_attention_mask else None
         position_ids = args.pop(0) if self.use_position_ids else None

@@ -91,7 +91,7 @@ class RBLNQwen2ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         # There seems to be a bug in transformers(v4.52.4). Therefore, similar to when attn_implementation is eager,
         # we set all layers to use sliding window in this version. This should be updated once the bug is fixed.
 
-        rbln_config.model_type = "sliding_window"
+        rbln_config.cache_impl = "sliding_window"
         rbln_config.sliding_window = model_config.sliding_window
         rbln_config.sliding_window_layers = list(range(model_config.num_hidden_layers))
         return rbln_config

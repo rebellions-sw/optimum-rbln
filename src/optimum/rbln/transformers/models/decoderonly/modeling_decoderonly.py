@@ -122,7 +122,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 raise RuntimeError(NO_BLOCKS_ERROR)
 
         def get_global_block_tables(batch_idx: int):
-            if self.rbln_config.model_type == "sliding_window":
+            if self.rbln_config.cache_impl == "sliding_window":
                 return None
 
             if self.phase == "prefill":
@@ -152,7 +152,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 return replace_empty_block(self.block_tables)
 
         def get_local_block_tables(batch_idx: int):
-            if self.rbln_config.model_type == "static":
+            if self.rbln_config.cache_impl == "static":
                 return None
             else:
                 return (
@@ -166,11 +166,11 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
     def is_external_block_tables(
         self, block_tables: Optional[torch.Tensor], local_block_tables: Optional[torch.Tensor]
     ):
-        if self.rbln_config.model_type == "static" and block_tables is None:
+        if self.rbln_config.cache_impl == "static" and block_tables is None:
             return False
-        elif self.rbln_config.model_type == "sliding_window" and local_block_tables is None:
+        elif self.rbln_config.cache_impl == "sliding_window" and local_block_tables is None:
             return False
-        elif self.rbln_config.model_type == "hybrid":
+        elif self.rbln_config.cache_impl == "hybrid":
             if (block_tables is not None) != (local_block_tables is not None):
                 raise ValueError(
                     "Both block_tables and local_block_tables must be provided or neither of them must be provided."
@@ -267,7 +267,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
             attention_mask = self.dec_attn_mask
 
-        if self.rbln_config.model_type in ["hybrid", "static"] and self.batch_size < block_tables.shape[0]:
+        if self.rbln_config.cache_impl in ["hybrid", "static"] and self.batch_size < block_tables.shape[0]:
             block_tables = block_tables[: self.batch_size]
 
         if attention_mask is not None and self.batch_size < attention_mask.shape[0]:
@@ -417,7 +417,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 chunked_attention_mask[:, :, :, step : step + self.rbln_config.prefill_chunk_size] = self.causal_mask
 
             # Define query position
-            if step + self.rbln_config.prefill_chunk_size > query_length:
+            if step + self.rbln_config.prefill_chunk_size >= query_length:
                 query_position = torch.tensor(
                     (query_length - 1) % self.rbln_config.prefill_chunk_size, dtype=torch.int16
                 )
@@ -646,7 +646,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             "use_attention_mask": rbln_config.use_attention_mask,
             "use_position_ids": rbln_config.use_position_ids,
             "use_inputs_embeds": rbln_config.use_inputs_embeds,
-            "model_type": rbln_config.model_type,
+            "cache_impl": rbln_config.cache_impl,
             "sliding_window": rbln_config.sliding_window,
             "sliding_window_layers": rbln_config.sliding_window_layers,
         }
@@ -884,12 +884,12 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         ]
 
         # 3. block_tables
-        if rbln_config.model_type in ["static", "hybrid"]:
+        if rbln_config.cache_impl in ["static", "hybrid"]:
             max_block_cnt = rbln_config.max_seq_len // rbln_config.kvcache_block_size
             input_info.extend(
                 [("block_tables", [max_block_cnt] if is_prefill else [batch_size, max_block_cnt], "int16")]
             )
-        if rbln_config.model_type in ["hybrid", "sliding_window"]:
+        if rbln_config.cache_impl in ["hybrid", "sliding_window"]:
             input_info.extend([("local_block_tables", [1] if is_prefill else [batch_size, 1], "int16")])
 
         # 4. query_position
@@ -946,16 +946,16 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
         # Notes:
         #     Required configuration settings:
-        #     - `model_type`: Must be one of:
+        #     - `cache_impl`: Must be one of:
         #         - "static": All layers use global attention (no sliding window)
         #         - "sliding_window": All layers use sliding window attention
         #         - "hybrid": A mix of global and sliding window attention layers
-        #     - `sliding_window`: Width of the sliding window (required if model_type is "sliding_window" or "hybrid")
-        #     - `sliding_window_layers`: List of layer indices using sliding window attention (required if model_type is "hybrid")
+        #     - `sliding_window`: Width of the sliding window (required if cache_impl is "sliding_window" or "hybrid")
+        #     - `sliding_window_layers`: List of layer indices using sliding window attention (required if cache_impl is "hybrid")
 
         #     Example implementation for a 'sliding_window' model:
         #     ```python
-        #     rbln_config.model_type = "sliding_window"
+        #     rbln_config.cache_impl = "sliding_window"
         #     rbln_config.sliding_window = model_config.sliding_window
         #     rbln_config.sliding_window_layers = [i for i in range(model_config.num_hidden_layers)]
         #     return rbln_config

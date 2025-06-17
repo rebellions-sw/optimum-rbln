@@ -85,7 +85,7 @@ class RBLNMistralForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     def _update_sliding_window_config(
         cls, model_config: PretrainedConfig, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig
     ):
-        rbln_config.model_type = "sliding_window"
+        rbln_config.cache_impl = "sliding_window"
         rbln_config.sliding_window = model_config.sliding_window
         rbln_config.sliding_window_layers = list(range(model_config.num_hidden_layers))
 
