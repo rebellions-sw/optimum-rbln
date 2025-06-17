@@ -247,6 +247,7 @@ class TestWhisperModel(BaseTest.TestModel):
                 data,
                 generate_kwargs={
                     "repetition_penalty": 1.3,
+                    "num_beams": 1,
                 },
                 batch_size=2,
             )
