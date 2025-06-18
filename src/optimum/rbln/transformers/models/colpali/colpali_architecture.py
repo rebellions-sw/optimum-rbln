@@ -7,7 +7,6 @@ from transformers import GemmaModel, PreTrainedModel
 from ..decoderonly.decoderonly_architecture import (
     RotaryEmbedding,
     apply_rotary_pos_emb,
-    slice_and_unsqueeze_cos_sin,
 )
 
 
@@ -87,7 +86,6 @@ class ColPaliModel(nn.Module):
         cos, sin = rotary_emb(hidden_states, seq_len)  # dtype carrier, max_seq_len
         cos = cos[None,None,None,:]
         sin = sin[None,None,None,:]
-        # cos, sin = slice_and_unsqueeze_cos_sin(cos, sin, self.position_ids)
 
         all_hidden_states = () if self.output_hidden_states else None
         for layer in self.layers:
