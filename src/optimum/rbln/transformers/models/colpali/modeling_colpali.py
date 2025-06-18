@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import importlib
 import inspect
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 import torch
@@ -21,13 +21,16 @@ from transformers import (
     ColPaliForRetrieval,
     PretrainedConfig,
     PreTrainedModel,
+    
 )
 from transformers.modeling_utils import no_init_weights
 from transformers.models.colpali.modeling_colpali import ColPaliForRetrievalOutput
+from transformers.models.paligemma.modeling_paligemma import PaliGemmaMultiModalProjector
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
+from .colpali_architecture import RBLNColPaliForRetrievalWrapper
 
 
 logger = get_logger(__name__)
@@ -44,14 +47,34 @@ if TYPE_CHECKING:
 class RBLNColPaliForRetrieval(RBLNModel):
     auto_model_class = None
     _rbln_submodules = [
-        {"name": "vlm"},
+        {"name": "vision_tower"},
     ]
 
     def __post_init__(self, **kwargs):
-        self.vlm = self.rbln_submodules[0]
-        self.embedding_proj_layer = self.model[0]
+        self.vision_tower = self.rbln_submodules[0]
+        self.custom_model = self.model[0]
+
+        artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
+        self.embed_tokens = self._create_embedding_layer()
+        self.embed_tokens.load_state_dict(artifacts["embed_tokens"])
+        self.multi_modal_projector = self._create_multi_modal_projector()
+        self.multi_modal_projector.load_state_dict(artifacts["multi_modal_projector"])
 
         return super().__post_init__(**kwargs)
+
+    def _create_embedding_layer(self):
+        with no_init_weights():
+            embed_tokens = torch.nn.Embedding(
+                self.config.text_config.vocab_size,
+                self.config.text_config.hidden_size,
+                self.config.text_config.pad_token_id,
+            )
+        return embed_tokens
+    
+    def _create_multi_modal_projector(self):
+        with no_init_weights():
+            multi_modal_projector = PaliGemmaMultiModalProjector(self.config.vlm_config)
+        return multi_modal_projector
 
     def __getattr__(self, __name: str) -> Any:
         def redirect(func):
@@ -66,18 +89,27 @@ class RBLNColPaliForRetrieval(RBLNModel):
     def can_generate(self):
         return False
 
-    def get_attn_impl(self) -> str:
-        return self.rbln_config.vlm.language_model.attn_impl
-
-    def get_kvcache_num_blocks(self) -> int:
-        return self.rbln_config.vlm.language_model.kvcache_num_blocks
-
-    def get_input_embeddings(self):
-        return self.vlm.language_model.get_input_embeddings()
-
     @classmethod
     def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
-        return model.embedding_proj_layer
+        return RBLNColPaliForRetrievalWrapper(
+            language_model=model.vlm.model.language_model,
+            embedding_proj_layer=model.embedding_proj_layer,
+            max_seq_len=rbln_config.max_seq_len,
+            output_hidden_states=rbln_config.output_hidden_states,
+        )
+
+    @classmethod
+    def save_torch_artifacts(
+        cls,
+        model: "PreTrainedModel",
+        save_dir_path: Path,
+        subfolder: str,
+        rbln_config: RBLNModelConfig,
+    ):
+        save_dict = {}
+        save_dict["embed_tokens"] = model.vlm.get_input_embeddings().state_dict()
+        save_dict["multi_modal_projector"] = model.vlm.model.multi_modal_projector.state_dict()
+        torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
     @classmethod
     def _update_rbln_config(
@@ -88,8 +120,11 @@ class RBLNColPaliForRetrieval(RBLNModel):
         rbln_config: Optional[RBLNModelConfig] = None,
     ) -> RBLNModelConfig:
         hidden_size = model_config.vlm_config.text_config.hidden_size
-        seq_len = rbln_config.vlm.language_model.max_seq_len
-        input_info = [("last_hidden_state", [rbln_config.batch_size, seq_len, hidden_size], "float32")]
+
+        input_info = [
+            ("inputs_embeds", [rbln_config.batch_size, rbln_config.max_seq_len, hidden_size], "float32"),
+            ("attention_mask", [rbln_config.batch_size, rbln_config.max_seq_len], "float32"),
+        ]
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
         rbln_config.set_compile_cfgs([rbln_compile_config])
 
@@ -98,22 +133,62 @@ class RBLNColPaliForRetrieval(RBLNModel):
     @classmethod
     def get_pytorch_model(cls, *args, **kwargs):
         model = super().get_pytorch_model(*args, **kwargs)
+        model.vision_tower = model.vlm.model.vision_tower
 
-        with no_init_weights():
-            model_cls_name = model.vlm.language_model.__class__.__name__
-            causal_model_cls_name = model_cls_name.replace("Model", "ForCausalLM")
-            causal_model_cls = getattr(importlib.import_module("transformers"), causal_model_cls_name)
-            new_text_model = causal_model_cls(model.vlm.language_model.config)
-
-        new_text_model.model = model.vlm.language_model
-        model.vlm.model.language_model = new_text_model
-        model.vlm.model.lm_head = None
-        del model.vlm.model.lm_head
         return model
+    
+    def get_image_features(self, pixel_values: torch.Tensor):
+        """
+        Projects the last hidden state from the vision model into language model space.
+
+        Args:
+            pixel_values (`torch.FloatTensor]` of shape `(batch_size, channels, height, width)`)
+               The tensors corresponding to the input images.
+        Returns:
+            image_features (`torch.Tensor`): Image feature tensor of shape `(num_images, image_length, embed_dim)`).
+        """
+        vision_outputs = self.vision_tower(pixel_values).last_hidden_state
+        image_features = self.multi_modal_projector(vision_outputs)
+        image_features = image_features / (self.config.text_config.hidden_size**0.5)
+        return image_features
+    
+    
+    def _preprocess_inputs(
+        self,
+        input_ids: Optional[torch.LongTensor] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        pixel_values: Optional[torch.FloatTensor] = None,
+        **kwargs,
+    ):
+        if (input_ids is None) ^ (inputs_embeds is not None):
+            raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
+
+        # Replace image id woth PAD if the image token if OOV, to avoid index-errors
+        if input_ids is not None and self.config.vlm_config.image_token_index >= self.config.text_config.vocab_size:
+            special_image_mask = input_ids == self.config.vlm_config.image_token_index
+            llm_input_ids = input_ids.clone()
+            llm_input_ids[special_image_mask] = 0
+        else:
+            llm_input_ids = input_ids
+
+        if inputs_embeds is None:
+            inputs_embeds = self.embed_tokens(llm_input_ids)
+
+        # Merge text and images
+        if pixel_values is not None:
+            image_features = self.get_image_features(pixel_values)
+            special_image_mask = (input_ids == self.config.vlm_config.image_token_index).unsqueeze(-1)
+            special_image_mask = special_image_mask.expand_as(inputs_embeds).to(inputs_embeds.device)
+
+            image_features = image_features.to(inputs_embeds.device, inputs_embeds.dtype)
+            inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, image_features)
+
+        return inputs_embeds
 
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
         pixel_values: Optional[torch.FloatTensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         output_attentions: Optional[bool] = None,
@@ -129,21 +204,11 @@ class RBLNColPaliForRetrieval(RBLNModel):
 
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        vlm_output = self.vlm(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            pixel_values=pixel_values,
-            output_hidden_states=True,
-            return_dict=True,
-            output_attentions=output_attentions,
-            **kwargs,
-        )
-        vlm_hidden_states = vlm_output.hidden_states if output_hidden_states else None
-        last_hidden_states = vlm_output.hidden_states[-1]  # (batch_size, sequence_length, hidden_size)
-
+        inputs_embeds = self._preprocess_inputs(input_ids=input_ids, inputs_embeds=inputs_embeds, pixel_values=pixel_values)
+        
         embeddings = []
-        for i in range(last_hidden_states.shape[0]):
-            embeddings.append(self.embedding_proj_layer(last_hidden_states[i : i + 1]))
+        for i in range(inputs_embeds.shape[0]): 
+            embeddings.append(self.custom_model(inputs_embeds=inputs_embeds[i:i+1], attention_mask=attention_mask[i:i+1]))
         embeddings = torch.cat(embeddings, dim=0)[:, : attention_mask.shape[-1]]
 
         # L2 normalization
@@ -154,5 +219,5 @@ class RBLNColPaliForRetrieval(RBLNModel):
 
         return ColPaliForRetrievalOutput(
             embeddings=embeddings,
-            hidden_states=vlm_hidden_states,
+            # hidden_states=vlm_hidden_states,
         )

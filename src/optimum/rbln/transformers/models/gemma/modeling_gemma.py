@@ -13,16 +13,12 @@
 # limitations under the License.
 from typing import TYPE_CHECKING
 
-import torch
-from rebel.compile_context import CompileContext
-
-from ....modeling import RBLNModel
-from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyModelForCausalLMConfig
+from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM
 from .gemma_architecture import GemmaWrapper
 
 
 if TYPE_CHECKING:
-    from transformers import PreTrainedModel
+    pass
 
 
 class RBLNGemmaForCausalLM(RBLNDecoderOnlyModelForCausalLM):

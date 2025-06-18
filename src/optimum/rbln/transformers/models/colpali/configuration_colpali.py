@@ -17,12 +17,14 @@ from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNColPaliForRetrievalConfig(RBLNModelConfig):
-    submodules = ["vlm"]
+    submodules = ["vision_tower"]
 
     def __init__(
         self,
         batch_size: Optional[int] = None,
-        vlm: Optional[RBLNModelConfig] = None,
+        max_seq_len: Optional[int] = None,
+        output_hidden_states: Optional[bool] = None,
+        vision_tower: Optional[RBLNModelConfig] = None,
         **kwargs,
     ):
         """
@@ -37,4 +39,6 @@ class RBLNColPaliForRetrievalConfig(RBLNModelConfig):
         """
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
-        self.vlm = vlm
+        self.vision_tower = vision_tower
+        self.max_seq_len = max_seq_len
+        self.output_hidden_states = output_hidden_states
