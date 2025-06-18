@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import torch
 from transformers import CLIPTextConfig, CLIPTextModel, CLIPVisionConfig, CLIPVisionModel
+from transformers.modeling_outputs import BaseModelOutputWithPooling
 from transformers.models.clip.modeling_clip import CLIPTextModelOutput, CLIPVisionModelOutput
 
 from ....configuration_utils import RBLNCompileConfig
@@ -85,6 +86,27 @@ class RBLNCLIPTextModel(RBLNModel):
         # This method can be overridden by subclasses to provide task-specific output handling.
 
         if not return_dict:
+            return output
+        else:
+            return BaseModelOutputWithPooling(
+                last_hidden_state=output[0],
+                pooler_output=output[1],
+                hidden_states=tuple(output[2:]) if len(output) > 2 else None,
+            )
+
+
+class RBLNCLIPTextModelWithProjection(RBLNCLIPTextModel):
+    def forward(self, input_ids: torch.LongTensor, return_dict: bool = None, **kwargs) -> torch.FloatTensor:
+        # To ignore using attention_mask, we override forward method.
+        output = super().forward(input_ids, return_dict=return_dict)
+        return output
+
+    def _prepare_output(self, output, return_dict):
+        """
+        Prepare model output based on return_dict flag.
+        This method can be overridden by subclasses to provide task-specific output handling.
+        """
+        if not return_dict:
             return (output,) if not isinstance(output, (tuple, list)) else output
         else:
             return CLIPTextModelOutput(
@@ -92,10 +114,6 @@ class RBLNCLIPTextModel(RBLNModel):
                 last_hidden_state=output[1],
                 hidden_states=output[2:],
             )
-
-
-class RBLNCLIPTextModelWithProjection(RBLNCLIPTextModel):
-    pass
 
 
 class _VisionEncoder(torch.nn.Module):

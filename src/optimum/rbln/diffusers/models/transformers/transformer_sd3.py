@@ -44,7 +44,7 @@ class SD3Transformer2DModelWrapper(torch.nn.Module):
         encoder_hidden_states: torch.FloatTensor = None,
         pooled_projections: torch.FloatTensor = None,
         timestep: torch.LongTensor = None,
-        # need controlnet support?
+        # TODO: need controlnet support?
         block_controlnet_hidden_states: List = None,
         joint_attention_kwargs: Optional[Dict[str, Any]] = None,
         return_dict: bool = True,
