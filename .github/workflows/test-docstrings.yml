@@ -1,11 +1,7 @@
 name: Test Docstring Parsing
 
 on:
-  pull_request:
-    branches:
-      - main    
-    paths:
-      - 'src/**/*.py'
+  workflow_call:
 
 jobs:
   test-docstrings:
