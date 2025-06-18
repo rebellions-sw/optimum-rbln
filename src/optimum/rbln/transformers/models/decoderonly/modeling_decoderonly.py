@@ -596,7 +596,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         def redirect(func):
             return lambda *pargs, **kwargs: func(self, *pargs, **kwargs)
 
-        val = getattr(self.get_hf_class(), __name, None) or getattr(PreTrainedModel, __name)
+        val = getattr(self.get_hf_class(), __name, None)
         if isinstance(val, Callable) and "self" in set(inspect.signature(val).parameters):
             return redirect(val)
         return val
