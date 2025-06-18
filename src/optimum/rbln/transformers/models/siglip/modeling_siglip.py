@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Optional, Tuple, Union, Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
 
 import torch
 from transformers import SiglipVisionConfig, SiglipVisionModel
@@ -89,6 +89,11 @@ class RBLNSiglipVisionModel(RBLNModel):
         if rbln_config.image_size is None:
             raise ValueError("`rbln_image_size` should be specified!")
 
+        if rbln_config.output_attentions is None:
+            rbln_config.output_attentions = getattr(model_config, "output_attentions", False)
+        if rbln_config.output_hidden_states is None:
+            rbln_config.output_hidden_states = getattr(model_config, "output_hidden_states", False)
+
         rbln_compile_config = RBLNCompileConfig(
             input_info=[
                 (
@@ -111,8 +116,8 @@ class RBLNSiglipVisionModel(RBLNModel):
         self,
         pixel_values: torch.Tensor,
         return_dict: bool = None,
-        output_attentions: bool = False, #FIXME
-        output_hidden_states: bool = False, #FIXME
+        output_attentions: bool = None,
+        output_hidden_states: bool = None,
         interpolate_pos_encoding: bool = False,
         **kwargs: Dict[str, Any],
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
@@ -121,8 +126,11 @@ class RBLNSiglipVisionModel(RBLNModel):
                 f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__.__name__}."
             )
 
-        # output_attentions, output_hidden_states, interpolate_pos_encoding is False by default.
-        # difference from huggingface which get from config.output_attentions, config.output_hidden_states, config.interpolate_pos_encoding
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        )
+
         if output_attentions != self.rbln_config.output_attentions:
             raise ValueError(
                 f"Variable output_attentions {output_attentions} is not equal to rbln_config.output_attentions {self.rbln_config.output_attentions} "
