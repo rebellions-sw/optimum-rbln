@@ -83,7 +83,7 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          paths: ["{file_path.parent.parent.parent.parent}"]
+          paths: ["{Path(__file__).parent.parent / "src"}"]
           options:
             show_source: false
             filters: ["!^_"]
