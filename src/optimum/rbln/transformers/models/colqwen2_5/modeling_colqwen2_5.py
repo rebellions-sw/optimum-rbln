@@ -77,23 +77,24 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         ).fill_(-1)
         free_block_pool = deque(x for x in range(self.rbln_config.kvcache_num_blocks))
 
-        self.prefill_decoder = RBLNRuntimeModel(
-            runtime=self.model[0],
-            main_input_name=main_input_name,
-            embed_tokens=self.embed_tokens,
-            phase="prefill",
-            batch_size=self.rbln_config.batch_size,
-            dec_attn_mask=dec_attn_mask,
-            block_tables=block_tables,
-            free_block_pool=free_block_pool,
-            kvcache_block_size=self.rbln_config.kvcache_block_size,
-            vocab_size=self.config.vocab_size,
-            prefill_chunk_size=self.rbln_config.prefill_chunk_size,
-            max_seq_len=self.rbln_config.max_seq_len,
-            use_attention_mask=self.rbln_config.use_attention_mask,
-            attn_impl=self.rbln_config.attn_impl,
-            use_position_ids=self.rbln_config.use_position_ids,
-        )
+        # # TODO delete RBLNRuntimeModel 
+        # self.prefill_decoder = RBLNRuntimeModel(
+        #     runtime=self.model[0],
+        #     main_input_name=main_input_name,
+        #     embed_tokens=self.embed_tokens,
+        #     phase="prefill",
+        #     batch_size=self.rbln_config.batch_size,
+        #     dec_attn_mask=dec_attn_mask,
+        #     block_tables=block_tables,
+        #     free_block_pool=free_block_pool,
+        #     kvcache_block_size=self.rbln_config.kvcache_block_size,
+        #     vocab_size=self.config.vocab_size,
+        #     prefill_chunk_size=self.rbln_config.prefill_chunk_size,
+        #     max_seq_len=self.rbln_config.max_seq_len,
+        #     use_attention_mask=self.rbln_config.use_attention_mask,
+        #     attn_impl=self.rbln_config.attn_impl,
+        #     use_position_ids=self.rbln_config.use_position_ids,
+        # )
         
         self.visual = self.rbln_submodules[0]
         self.mrope_section = self.config.rope_scaling["mrope_section"]
@@ -193,7 +194,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             )
 
         return compiled_models
-    
+
     @classmethod
     def get_input_info(
         cls,
@@ -202,12 +203,64 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         rbln_config: RBLNColQwen2_5ForConditionalGenerationConfig,
         model_config: PretrainedConfig,
     ):
-        input_info = super().get_input_info(
-            batch_size,
-            query_length,
-            rbln_config=rbln_config,
-            model_config=model_config,
+        num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
+        num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
+        num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
+        hidden_size = getattr(model_config, "n_embd", None) or getattr(model_config, "hidden_size")
+        head_dim = getattr(model_config, "head_dim", None) or hidden_size // num_attention_heads
+
+        if rbln_config.use_inputs_embeds:
+            main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
+        else:
+            main_input = ("input_ids", [batch_size, query_length], "int64")
+
+        input_info = [
+            main_input,
+            (
+                "cache_position",
+                [batch_size, query_length],
+                "int32",
+            ),
+        ]
+
+        max_block_cnt = rbln_config.max_seq_len // rbln_config.kvcache_block_size
+
+        if query_length > 1:
+            input_info.extend([("block_tables", [max_block_cnt], "int16")])
+        else:
+            input_info.extend([("block_tables", [batch_size, max_block_cnt], "int16")])
+
+        if query_length > 1:
+            input_info.extend(
+                [
+                    ("query_position", [], "int16"),
+                ]
+            )
+        if rbln_config.use_attention_mask:
+            input_info.extend(
+                [
+                    ("attention_mask", [batch_size, 1, query_length, rbln_config.max_seq_len], "float32"),
+                ]
+            )
+        if rbln_config.use_position_ids:
+            input_info.append(("position_ids", [batch_size, query_length], "int32"))
+
+        input_info.extend(
+            [
+                (
+                    f"past_key_values_{i}",
+                    [
+                        rbln_config.kvcache_num_blocks,
+                        num_key_value_heads,
+                        rbln_config.kvcache_block_size,
+                        head_dim,
+                    ],
+                    "float32",
+                )
+                for i in range(num_hidden_layers * 2)
+            ]
         )
+        
         pos_idx = 3
         input_info.insert(
             pos_idx,
@@ -219,7 +272,35 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         )
         query_position = input_info.pop(pos_idx+1) # remove query postion
         assert query_position[0] == "query_position", print(query_position[0], "is deleted.")
+
         return input_info
+    
+    # @classmethod
+    # def get_input_info(
+    #     cls,
+    #     batch_size: int,
+    #     query_length: int,
+    #     rbln_config: RBLNColQwen2_5ForConditionalGenerationConfig,
+    #     model_config: PretrainedConfig,
+    # ):
+    #     input_info = super().get_input_info(
+    #         batch_size,
+    #         query_length,
+    #         rbln_config=rbln_config,
+    #         model_config=model_config,
+    #     )
+    #     pos_idx = 3
+    #     input_info.insert(
+    #         pos_idx,
+    #         (
+    #             "position_emb",
+    #             [2, batch_size, 1, query_length, model_config.hidden_size // model_config.num_attention_heads],
+    #             "float32",
+    #         ),
+    #     )
+    #     query_position = input_info.pop(pos_idx+1) # remove query postion
+    #     assert query_position[0] == "query_position", print(query_position[0], "is deleted.")
+    #     return input_info
 
     @classmethod
     def _update_rbln_config(
@@ -253,28 +334,6 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
         max_num_blocks = required_num_blocks
 
-        if rbln_config.attn_impl == "flash_attn":
-            estimated_max_num_blocks = cls.get_maximum_num_blocks(
-                config=model_config,
-                tensor_parallel_size=rbln_config.tensor_parallel_size or 1,
-                kvcache_block_size=rbln_config.kvcache_block_size,
-                nbits_per_param=16 if not rbln_config.quantization else 4,  # TODO(jongho): FIX Ad-hoc
-                n_model_params=sum(p.numel() for p in model.parameters()),
-                num_runtimes=1 + len(rbln_config.decoder_batch_sizes),
-            )
-
-            max_num_blocks = min(max_num_blocks, estimated_max_num_blocks)
-
-            flash_min_blocks = rbln_config.max_seq_len // rbln_config.kvcache_block_size + 1
-            if max_num_blocks < flash_min_blocks:
-                max_num_blocks = flash_min_blocks
-
-            if max_num_blocks < rbln_config.batch_size:
-                raise RuntimeError(
-                    f"Batch size ({rbln_config.batch_size}) exceeds available KV cache blocks ({max_num_blocks}). "
-                    "Ensure the number of blocks is at least equal to the batch size."
-                )
-
         if rbln_config.kvcache_num_blocks is None:
             rbln_config.kvcache_num_blocks = max_num_blocks
         elif rbln_config.kvcache_num_blocks > max_num_blocks:
@@ -292,7 +351,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
 
         prefill_input_info = cls.get_input_info(
             batch_size=1,
-            query_length=rbln_config.prefill_chunk_size,
+            query_length=rbln_config.max_seq_len,
             rbln_config=rbln_config,
             model_config=model_config
         )
@@ -340,6 +399,13 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
     ):
         batch_size = input_ids.shape[0]
         inputs_embeds = self.embed_tokens(input_ids)
+        
+        if pixel_values is not None and image_grid_thw is not None:
+            offsets = image_grid_thw[:, 1] * image_grid_thw[:, 2]  # (batch_size,)
+            pixel_values = torch.cat(
+                [pixel_sequence[:offset] for pixel_sequence, offset in zip(pixel_values, offsets)],
+                dim=0,
+            )
 
         if pixel_values is not None:
             image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
@@ -353,7 +419,6 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             mask = input_ids == self.config.image_token_id
             mask_unsqueezed = mask.unsqueeze(-1)
             mask_expanded = mask_unsqueezed.expand_as(inputs_embeds)
-
             image_embeds = image_embeds.to(inputs_embeds.device, inputs_embeds.dtype)
             inputs_embeds = inputs_embeds.masked_scatter(mask_expanded, image_embeds)
 
@@ -583,6 +648,78 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
 
             return position_ids, mrope_position_deltas
 
+    def _prepare_prefill_inputs(
+        self,
+        inputs: torch.Tensor,
+        cache_position: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_embed: Optional[torch.Tensor] = None,
+    ):
+        """
+        Prepare inputs for prefill phase.
+        """
+        # Handle continuous batching in a compiled graph by extracting valid inputs
+        # If an attention mask is provided, select only the valid (non-masked) inputs
+        inputs = inputs[:, attention_mask.bool()] if attention_mask is not None else inputs
+        if position_embed is not None:
+            position_embed = (
+                position_embed[:, :, :, attention_mask.bool(), :] if attention_mask is not None else position_embed
+            )
+
+        query_length = inputs.shape[1]
+        if query_length > self.rbln_config.max_seq_len:
+            raise ValueError(
+                f"Input length ({query_length}) exceeds the maximum allowed sequence length ({self.rbln_config.max_seq_len})."
+            )
+
+        # Initialize attention mask for chunked processing # NOTE never used
+        # chunked_attention_mask = (
+        #     torch.zeros(1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.max_seq_len, dtype=torch.float32)
+        #     if self.rbln_config.use_attention_mask
+        #     else None
+        # )
+        
+        # left padding -> right padding # TODO(si) : make generalize
+        fliped_attention_mask = torch.flip(attention_mask, dims=[-1]).unsqueeze(0)
+
+
+        # Pad input and cache_position if the last chunk is smaller than `prefill_chunk_size`
+        # if query_length % self.prefill_chunk_size != 0: # chunked prefill 써야하냐? 안써도 될 것 같은데 -> chunk 는 Default
+            # padding_size = (self.prefill_chunk_size - query_length) % self.prefill_chunk_size
+        if query_length % self.rbln_config.max_seq_len != 0: # chunked prefill 써야하냐? 안써도 될 것 같은데 -> chunk 는 Default
+            padding_size = (self.rbln_config.max_seq_len - query_length) % self.rbln_config.max_seq_len
+
+            # inputs_embeds
+            if inputs.dim() == 3:
+                inputs = torch.nn.functional.pad(inputs, (0, 0, 0, padding_size))
+            # inputs_ids
+            else:
+                inputs = torch.nn.functional.pad(inputs, (0, padding_size))
+
+            cache_position = torch.arange(
+                        0,
+                        query_length + padding_size,
+                        dtype=torch.int32,
+                    ).unsqueeze(0)
+
+            if position_embed is not None:
+                position_embed = torch.nn.functional.pad(position_embed, (0, 0, 0, padding_size))
+
+        # Overwrite position_ids and padded_cache_lengths
+        position_ids = None
+        padded_cache_lengths = 0
+
+        return (
+            inputs,
+            cache_position,
+            # chunked_attention_mask,
+            fliped_attention_mask,
+            position_ids,
+            position_embed,
+            padded_cache_lengths,
+            query_length,
+        )
+    
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
@@ -599,7 +736,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         **kwargs,
     ) -> RBLNDecoderOnlyOutput:
         # Prefill
-        # import pdb; pdb.set_trace()
+
         inputs_embeds, position_embed, rope_deltas = self._preprocess_prefill(
             input_ids,
             attention_mask,
@@ -614,25 +751,55 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         batch_size = inputs_embeds.shape[0]
 
         projs = []
+        attention_mask_batches = []
         for b_idx in range(batch_size):
-            # cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
             cache_position = torch.arange(0, inputs_embeds.shape[1], dtype=torch.int32).unsqueeze(0)
+            # import pdb; pdb.set_trace()
 
-            outputs = self.prefill_decoder(
-                inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
-                attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
-                cache_position=cache_position,
-                batch_idx=0,
-                position_embed=position_embed[:, b_idx : b_idx + 1],
+            # outputs = self.prefill_decoder(
+            #     inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
+            #     attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
+            #     cache_position=cache_position,
+            #     batch_idx=b_idx,
+            #     position_embed=position_embed[:, b_idx : b_idx + 1],
+            # )
+            
+            (
+                inputs_embeds_batch,
+                cache_position_batch,
+                attention_mask_batch,
+                _,
+                position_embed_batch,
+                _,
+                _,
+            ) = self._prepare_prefill_inputs(
+                inputs_embeds[b_idx : b_idx + 1], cache_position, attention_mask[b_idx], position_embed[:, b_idx : b_idx + 1],
             )
-            proj = self.custom_text_proj(outputs.logits) # TODO(si) RSD pattern 추가
+            
+            # import pdb; pdb.set_trace()
+            outputs = self.model[0](
+                inputs_embeds=inputs_embeds_batch, 
+                cache_position=cache_position_batch, 
+                block_tables=torch.tensor([0], dtype=torch.int16),
+                position_emb=position_embed_batch
+                                    )
+
+            proj = self.custom_text_proj(outputs) # TODO(si) RSD pattern 추가
             projs.append(proj)
+            attention_mask_batches.append(attention_mask_batch)
+            # import pdb; pdb.set_trace()
+            
         projs = torch.cat(projs, dim=0)
         projs = projs[:, :inputs_embeds.shape[1]]
         
-        projs = projs / projs.norm(dim=-1, keepdim=True)  # (batch_size, sequence_length, dim)
-        projs = projs * attention_mask.unsqueeze(-1)  # (batch_size, sequence_length, dim)
+        attention_mask_batches = torch.cat(attention_mask_batches, dim=0)
         
+        # import pdb; pdb.set_trace()
+        
+        projs = projs / projs.norm(dim=-1, keepdim=True)  # (batch_size, sequence_length, dim)
+        # projs = projs * attention_mask.unsqueeze(-1)  # (batch_size, sequence_length, dim)
+        projs = projs * attention_mask_batches.unsqueeze(-1)  # (batch_size, sequence_length, dim)
+        # import pdb; pdb.set_trace()
         if pixel_values is not None and self.mask_non_image_embeddings:
             # Pools only the image embeddings
             image_mask = (input_ids == self.config.image_token_id).unsqueeze(-1)
