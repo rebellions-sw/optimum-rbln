@@ -1,0 +1,67 @@
+name: Test Docstring Parsing
+
+on:
+  pull_request:
+    branches:
+      - main    
+    paths:
+      - 'src/**/*.py'
+
+jobs:
+  test-docstrings:
+    runs-on: ubuntu-latest-rbln
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Get full git history for file diff
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        pip install mkdocs mkdocs-material mkdocstrings mkdocstrings-python
+    
+    - name: Get changed Python files
+      id: changed-files
+      run: |
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          # For PR, compare with base branch
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep '\.py$' | grep 'src/' || true)
+        else
+          # For push, compare with previous commit
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep '\.py$' | grep 'src/' || true)
+        fi
+        
+        echo "Changed Python files:"
+        echo "$CHANGED_FILES"
+        
+        # Convert to JSON array for matrix
+        if [ -n "$CHANGED_FILES" ]; then
+          FILES_JSON=$(echo "$CHANGED_FILES" | jq -R -s -c 'split("\n")[:-1]')
+          echo "files=$FILES_JSON" >> $GITHUB_OUTPUT
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+        else
+          echo "has_changes=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Test docstring parsing
+      if: steps.changed-files.outputs.has_changes == 'true'
+      run: |
+        FILES='${{ steps.changed-files.outputs.files }}'
+        echo "$FILES" | jq -r '.[]' | while read -r file; do
+          echo "Testing: $file"
+          python scripts/validate_docstrings.py "$file"
+          
+          if [ $? -ne 0 ]; then
+            echo "❌ Docstring test failed for $file"
+            exit 1
+          fi
+        done
+    
+    - name: No changes detected
+      if: steps.changed-files.outputs.has_changes == 'false'
+      run: echo "No Python files changed in src/ directories" 
