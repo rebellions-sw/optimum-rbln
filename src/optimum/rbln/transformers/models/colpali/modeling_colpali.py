@@ -182,7 +182,6 @@ class RBLNColPaliForRetrieval(RBLNModel):
 
             image_features = image_features.to(inputs_embeds.device, inputs_embeds.dtype)
             inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, image_features)
-
         return inputs_embeds
 
     def forward(
@@ -208,7 +207,9 @@ class RBLNColPaliForRetrieval(RBLNModel):
         
         embeddings = []
         for i in range(inputs_embeds.shape[0]): 
-            embeddings.append(self.custom_model(inputs_embeds=inputs_embeds[i:i+1], attention_mask=attention_mask[i:i+1]))
+            inputs_embed = torch.nn.functional.pad(inputs_embeds[i:i+1], (0,0,0, self.rbln_config.max_seq_len - inputs_embeds.shape[1]))    
+            attn_mask = torch.nn.functional.pad(attention_mask[i:i+1], (0,self.rbln_config.max_seq_len - attention_mask.shape[1])).to(torch.float32)
+            embeddings.append(self.custom_model(inputs_embeds=inputs_embed, attention_mask=attn_mask))
         embeddings = torch.cat(embeddings, dim=0)[:, : attention_mask.shape[-1]]
 
         # L2 normalization

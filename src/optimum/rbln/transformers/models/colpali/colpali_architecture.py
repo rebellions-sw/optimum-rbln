@@ -52,6 +52,7 @@ class RBLNColPaliForRetrievalWrapper(nn.Module):
 
     def forward(self, inputs_embeds: torch.Tensor, attention_mask: torch.Tensor):
         attention_mask = (1.0 - attention_mask) * torch.finfo(torch.float32).min
+        attention_mask = attention_mask[:,None,None,None,:]
 
         hidden_states, all_hidden_states = self.language_model(
             inputs_embeds=inputs_embeds, attention_mask=attention_mask, rotary_emb=self.rotary_emb
@@ -72,6 +73,7 @@ class ColPaliModel(nn.Module):
         self.output_hidden_states = output_hidden_states
         self.norm = self._original_mod.norm
         self.position_ids = torch.arange(max_seq_len, dtype=torch.int64).view(1, -1)
+        self.hidden_size = self._original_mod.config.hidden_size
 
     def forward(
         self,
@@ -79,8 +81,7 @@ class ColPaliModel(nn.Module):
         attention_mask: torch.Tensor = None,
         rotary_emb: Optional[Union[nn.Module, torch.Tensor]] = None,
     ):
-        
-        hidden_states = inputs_embeds
+        hidden_states = inputs_embeds * self.hidden_size**0.5
 
         seq_len = inputs_embeds.shape[1]
         cos, sin = rotary_emb(hidden_states, seq_len)  # dtype carrier, max_seq_len
