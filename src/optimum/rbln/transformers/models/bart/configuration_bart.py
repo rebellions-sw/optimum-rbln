@@ -17,8 +17,18 @@ from ..seq2seq import RBLNModelForSeq2SeqLMConfig
 
 
 class RBLNBartModelConfig(RBLNTransformerEncoderForFeatureExtractionConfig):
-    pass
+    """
+    Configuration class for RBLNBartModel.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized BART models for feature extraction tasks.
+    """
 
 
 class RBLNBartForConditionalGenerationConfig(RBLNModelForSeq2SeqLMConfig):
-    pass
+    """
+    Configuration class for RBLNBartForConditionalGeneration.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized BART models for conditional text generation tasks.
+    """

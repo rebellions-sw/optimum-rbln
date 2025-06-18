@@ -18,6 +18,13 @@ from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNSiglipVisionModelConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLNSiglipVisionModel.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized SigLIP vision models for image encoding in multimodal tasks.
+    """
+
     def __init__(
         self,
         batch_size: Optional[int] = None,
