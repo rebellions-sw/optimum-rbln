@@ -126,9 +126,9 @@ class RBLNSiglipVisionModel(RBLNModel):
                 f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__.__name__}."
             )
 
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = output_attentions if output_attentions is not None else self.rbln_config.output_attentions
         output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+            output_hidden_states if output_hidden_states is not None else self.rbln_config.output_hidden_states
         )
 
         if output_attentions != self.rbln_config.output_attentions:
