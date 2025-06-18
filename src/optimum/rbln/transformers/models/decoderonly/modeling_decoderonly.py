@@ -88,7 +88,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 torch.ones(1, 1, self.prefill_chunk_size, self.prefill_chunk_size), diagonal=1
             )
 
-    def get_block_tables(self, cache_position: torch.Tensor, batch_idx: int = None):
+    def get_block_tables(self, cache_position: torch.Tensor, batch_idx: int = None) -> torch.Tensor:
         """
         Manages and returns the KV cache block tables.
         Updates the block tables based on the given cache_position, allocating new blocks or reusing existing ones as needed.
@@ -98,7 +98,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             batch_idx (int, optional): Specific batch index, used when phase is 'prefill'.
 
         Returns:
-            torch.Tensor: Updated block tables.
+            Updated block tables.
         """
 
         NO_BLOCKS_ERROR = (
@@ -427,6 +427,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
     This class serves as the foundation for various decoder-only architectures like GPT, LLaMA, etc.
 
     The class provides core functionality for:
+
     1. Converting pre-trained transformer models to RBLN-optimized format
     2. Handling the compilation process for RBLN devices
     3. Managing inference operations for causal language modeling
@@ -509,7 +510,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
     @classmethod
     def save_torch_artifacts(
         cls,
-        model: "PreTrainedModel",
+        model: PreTrainedModel,
         save_dir_path: Path,
         subfolder: str,
         rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
@@ -543,7 +544,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
     def get_quantized_model(
         cls,
         model_id: str,
-        config: Optional["PretrainedConfig"] = None,
+        config: Optional[PretrainedConfig] = None,
         use_auth_token: Optional[Union[bool, str]] = None,
         revision: Optional[str] = None,
         force_download: bool = False,
@@ -582,16 +583,15 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         return model
 
     def __getattr__(self, __name: str) -> Any:
-        """
-        Special method to delegate attribute access to the original Huggingface LM class.
-        This method is called when an attribute is not found in the current instance's dictionary.
-        It enables transparent access to the original model's attributes and methods while maintaining
-        proper method binding.
+        # Special method to delegate attribute access to the original Huggingface LM class.
+        # This method is called when an attribute is not found in the current instance's dictionary.
+        # It enables transparent access to the original model's attributes and methods while maintaining
+        # proper method binding.
 
-        The method implements a delegation pattern that:
-        1. For methods: Creates a wrapper that properly binds 'self' to method calls
-        2. For other attributes: Returns them directly from the original class
-        """
+        # The method implements a delegation pattern that:
+
+        # 1. For methods: Creates a wrapper that properly binds 'self' to method calls
+        # 2. For other attributes: Returns them directly from the original class
 
         def redirect(func):
             return lambda *pargs, **kwargs: func(self, *pargs, **kwargs)
@@ -604,7 +604,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
     @classmethod
     def get_pytorch_model(
         cls, *args, rbln_config: Optional[RBLNDecoderOnlyModelForCausalLMConfig] = None, **kwargs
-    ) -> "PreTrainedModel":
+    ) -> PreTrainedModel:
         if rbln_config and rbln_config.quantization:
             model = cls.get_quantized_model(*args, **kwargs)
         else:
@@ -613,7 +613,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         return model
 
     @classmethod
-    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: "RBLNDecoderOnlyModelForCausalLMConfig"):
+    def wrap_model_if_needed(cls, model: PreTrainedModel, rbln_config: "RBLNDecoderOnlyModelForCausalLMConfig"):
         wrapper_cfg = {
             "max_seq_len": rbln_config.max_seq_len,
             "attn_impl": rbln_config.attn_impl,
@@ -628,7 +628,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
     @classmethod
     @torch.inference_mode()
-    def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNDecoderOnlyModelForCausalLMConfig):
+    def get_compiled_model(cls, model: PreTrainedModel, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig):
         wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
 
         rbln_compile_configs = rbln_config.compile_cfgs
@@ -898,8 +898,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
     def _update_rbln_config(
         cls,
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
-        model: Optional["PreTrainedModel"] = None,
-        model_config: Optional["PretrainedConfig"] = None,
+        model: Optional[PreTrainedModel] = None,
+        model_config: Optional[PretrainedConfig] = None,
         rbln_config: Optional[RBLNDecoderOnlyModelForCausalLMConfig] = None,
     ) -> RBLNDecoderOnlyModelForCausalLMConfig:
         if rbln_config.max_seq_len is None:

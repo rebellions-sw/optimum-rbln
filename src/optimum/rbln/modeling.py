@@ -237,7 +237,38 @@ class RBLNModel(RBLNBaseModel):
             for compiled_model in compiled_models
         ]
 
-    def forward(self, *args, return_dict: Optional[bool] = None, **kwargs):
+    def forward(self, *args: Any, return_dict: Optional[bool] = None, **kwargs: Dict[str, Any]) -> Any:
+        """
+        Defines the forward pass of the RBLN model, providing a drop-in replacement for HuggingFace PreTrainedModel.
+
+        This method executes the compiled RBLN model on RBLN NPU devices while maintaining full compatibility
+        with HuggingFace transformers and diffusers APIs. The RBLNModel can be used as a direct substitute
+        for any HuggingFace nn.Module/PreTrainedModel, enabling seamless integration into existing workflows.
+
+        Args:
+            *args: Variable length argument list containing model inputs. The format matches the original
+                HuggingFace model's forward method signature (e.g., input_ids, attention_mask for
+                transformers models, or sample, timestep for diffusers models).
+            return_dict:
+                Whether to return outputs as a dictionary-like object or as a tuple. When `None`:
+                - For transformers models: Uses `self.config.use_return_dict` (typically `True`)
+                - For diffusers models: Defaults to `True`
+            **kwargs: Arbitrary keyword arguments containing additional model inputs and parameters,
+                matching the original HuggingFace model's interface.
+
+        Returns:
+            Model outputs in the same format as the original HuggingFace model.
+
+            - If `return_dict=True`: Returns a dictionary-like object (e.g., BaseModelOutput,
+                CausalLMOutput) with named fields such as `logits`, `hidden_states`, etc.
+            - If `return_dict=False`: Returns a tuple containing the raw model outputs.
+
+        Note:
+            - This method maintains the exact same interface as the original HuggingFace model's forward method
+            - The compiled model runs on RBLN NPU hardware for accelerated inference
+            - All HuggingFace model features (generation, attention patterns, etc.) are preserved
+            - Can be used directly in HuggingFace pipelines, transformers.Trainer, and other workflows
+        """
         if self.hf_library_name == "transformers":
             return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         else:
