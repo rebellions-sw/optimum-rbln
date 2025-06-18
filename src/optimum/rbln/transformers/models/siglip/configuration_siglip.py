@@ -47,8 +47,8 @@ class RBLNSiglipVisionModelConfig(RBLNModelConfig):
 
         self.image_size = image_size
         self.interpolate_pos_encoding = interpolate_pos_encoding or False
-        self.output_hidden_states = output_hidden_states
-        self.output_attentions = output_attentions
+        self.output_hidden_states = output_hidden_states or False
+        self.output_attentions = output_attentions or False
 
     @property
     def image_width(self):

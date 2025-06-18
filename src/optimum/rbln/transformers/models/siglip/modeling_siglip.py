@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Optional, Tuple, Union, Any, Dict
 
 import torch
 from transformers import SiglipVisionConfig, SiglipVisionModel
@@ -109,18 +109,20 @@ class RBLNSiglipVisionModel(RBLNModel):
 
     def forward(
         self,
-        pixel_values,
-        return_dict: Optional[bool] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        interpolate_pos_encoding: Optional[bool] = False,
-        **kwargs,
+        pixel_values: torch.Tensor,
+        return_dict: bool = None,
+        output_attentions: bool = False, #FIXME
+        output_hidden_states: bool = False, #FIXME
+        interpolate_pos_encoding: bool = False,
+        **kwargs: Dict[str, Any],
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
         if len(kwargs) > 0 and any(value is not None for value in kwargs.values()):
             logger.warning(
                 f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__.__name__}."
             )
 
+        # output_attentions, output_hidden_states, interpolate_pos_encoding is False by default.
+        # difference from huggingface which get from config.output_attentions, config.output_hidden_states, config.interpolate_pos_encoding
         if output_attentions != self.rbln_config.output_attentions:
             raise ValueError(
                 f"Variable output_attentions {output_attentions} is not equal to rbln_config.output_attentions {self.rbln_config.output_attentions} "
