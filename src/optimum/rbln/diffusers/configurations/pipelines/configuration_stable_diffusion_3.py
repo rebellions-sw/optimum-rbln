@@ -20,10 +20,6 @@ from ..models import RBLNAutoencoderKLConfig, RBLNSD3Transformer2DModelConfig
 
 
 class RBLNStableDiffusion3PipelineBaseConfig(RBLNModelConfig):
-    """
-    Base configuration for Stable Diffusion 3 pipelines.
-    """
-
     submodules = ["transformer", "text_encoder", "text_encoder_2", "text_encoder_3", "vae"]
     _vae_uses_encoder = False
 

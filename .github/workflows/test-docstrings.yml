@@ -50,7 +50,7 @@ jobs:
         FILES='${{ steps.changed-files.outputs.files }}'
         echo "$FILES" | jq -r '.[]' | while read -r file; do
           echo "Testing: $file"
-          python scripts/validate_docstrings.py "$file"
+          python .github/scripts/validate_docstrings.py "$file"
           
           if [ $? -ne 0 ]; then
             echo "❌ Docstring test failed for $file"
