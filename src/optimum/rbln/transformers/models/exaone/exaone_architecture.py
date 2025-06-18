@@ -60,9 +60,13 @@ class ExaoneForCausalLMWrapper(DecoderOnlyWrapper):
             new_layer = ExaoneLayer(layer, new_self_attn)
             new_layers.append(new_layer)
         new_model = ExaoneModel(
-            causal_lm.transformer, new_layers, partition_len=self.kvcache_partition_len, max_seq_len=max_seq_len
+            causal_lm.transformer,
+            new_layers,
+            partition_len=self.kvcache_partition_len,
+            max_seq_len=max_seq_len,
+            output_hidden_states=self.output_hidden_states,
         )
-        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
+        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model, output_hidden_states=self.output_hidden_states)
         return new_causal_lm
 
 

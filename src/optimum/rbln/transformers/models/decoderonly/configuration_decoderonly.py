@@ -47,6 +47,8 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         prefill_chunk_size: Optional[int] = None,
         kvcache_num_blocks: Optional[int] = None,
         decoder_batch_sizes: Optional[List[int]] = None,
+        output_hidden_states: bool = False,
+        is_generation_mode: bool = True,
         **kwargs: Dict[str, Any],
     ):
         """
@@ -85,6 +87,10 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
                 1) All values must be less than or equal to the main batch size.
                 2) The list will be sorted in descending order (larger batch sizes first).
                 3) If using multiple decoders, at least one batch size should match the main batch size.
+            is_generation_mode (bool): Whether the model is used for generation (autoregressive decoding) or single forward pass.
+                If True, the model will be configured for generation with KV cache and other generation-specific optimizations.
+                If False, the model will be configured for a single forward pass without generation-specific features.
+                Defaults to False.
 
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
@@ -201,6 +207,9 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
 
             # Larger batch size should be at the beginning of the list.
             self.decoder_batch_sizes.sort(reverse=True)
+
+        self.output_hidden_states = output_hidden_states
+        self.is_generation_mode = is_generation_mode
 
     @property
     def use_multiple_decoder(self):

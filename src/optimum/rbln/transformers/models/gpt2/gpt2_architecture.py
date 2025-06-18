@@ -45,8 +45,10 @@ class GPT2Wrapper(DecoderOnlyWrapper):
             )
             new_layer = GPT2Layer(layer, new_self_attn)
             new_layers.append(new_layer)
-        new_model = GPT2Model(causal_lm.transformer, new_layers, max_seq_len=max_seq_len)
-        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
+        new_model = GPT2Model(
+            causal_lm.transformer, new_layers, max_seq_len=max_seq_len, output_hidden_states=self.output_hidden_states
+        )
+        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model, output_hidden_states=self.output_hidden_states)
         return new_causal_lm
 
 

@@ -133,6 +133,14 @@ _import_structure = {
     "vit": ["RBLNViTForImageClassification", "RBLNViTForImageClassificationConfig"],
     "wav2vec2": ["RBLNWav2Vec2ForCTC", "RBLNWav2Vec2ForCTCConfig"],
     "whisper": ["RBLNWhisperForConditionalGeneration", "RBLNWhisperForConditionalGenerationConfig"],
+    "paligemma": [
+        "RBLNPaliGemmaForConditionalGeneration",
+        "RBLNPaliGemmaForConditionalGenerationConfig",
+    ],
+    "colpali": [
+        "RBLNColPaliForRetrieval",
+        "RBLNColPaliForRetrievalConfig",
+    ],
     "xlm_roberta": [
         "RBLNXLMRobertaModel",
         "RBLNXLMRobertaModelConfig",
@@ -193,6 +201,10 @@ if TYPE_CHECKING:
         RBLNCLIPVisionModelWithProjection,
         RBLNCLIPVisionModelWithProjectionConfig,
     )
+    from .colpali import (
+        RBLNColPaliForRetrieval,
+        RBLNColPaliForRetrievalConfig,
+    )
     from .decoderonly import (
         RBLNDecoderOnlyModelForCausalLM,
         RBLNDecoderOnlyModelForCausalLMConfig,
@@ -225,6 +237,10 @@ if TYPE_CHECKING:
     from .midm import RBLNMidmLMHeadModel, RBLNMidmLMHeadModelConfig
     from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig
     from .opt import RBLNOPTForCausalLM, RBLNOPTForCausalLMConfig
+    from .paligemma import (
+        RBLNPaliGemmaForConditionalGeneration,
+        RBLNPaliGemmaForConditionalGenerationConfig,
+    )
     from .phi import RBLNPhiForCausalLM, RBLNPhiForCausalLMConfig
     from .qwen2 import RBLNQwen2ForCausalLM, RBLNQwen2ForCausalLMConfig
     from .qwen2_5_vl import (

@@ -85,8 +85,9 @@ class Gemma3ForCausalLMWrapper(DecoderOnlyWrapper):
             new_layers,
             partition_len=self.kvcache_partition_len,
             max_seq_len=max_seq_len,
+            output_hidden_states=self.output_hidden_states,
         )
-        new_causal_lm = Gemma3ForCausalLM(causal_lm, new_model)
+        new_causal_lm = Gemma3ForCausalLM(causal_lm, new_model, output_hidden_states=self.output_hidden_states)
         return new_causal_lm
 
     def forward(self, *args):

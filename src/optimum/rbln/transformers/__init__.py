@@ -120,6 +120,10 @@ _import_structure = {
         "RBLNXLMRobertaForSequenceClassificationConfig",
         "RBLNXLMRobertaModel",
         "RBLNXLMRobertaModelConfig",
+        "RBLNPaliGemmaForConditionalGeneration",
+        "RBLNPaliGemmaForConditionalGenerationConfig",
+        "RBLNColPaliForRetrieval",
+        "RBLNColPaliForRetrievalConfig",
     ],
 }
 
@@ -164,6 +168,8 @@ if TYPE_CHECKING:
         RBLNCLIPVisionModelConfig,
         RBLNCLIPVisionModelWithProjection,
         RBLNCLIPVisionModelWithProjectionConfig,
+        RBLNColPaliForRetrieval,
+        RBLNColPaliForRetrievalConfig,
         RBLNDecoderOnlyModelForCausalLM,
         RBLNDecoderOnlyModelForCausalLMConfig,
         RBLNDistilBertForQuestionAnswering,
@@ -194,6 +200,8 @@ if TYPE_CHECKING:
         RBLNMistralForCausalLMConfig,
         RBLNOPTForCausalLM,
         RBLNOPTForCausalLMConfig,
+        RBLNPaliGemmaForConditionalGeneration,
+        RBLNPaliGemmaForConditionalGenerationConfig,
         RBLNPhiForCausalLM,
         RBLNPhiForCausalLMConfig,
         RBLNQwen2_5_VisionTransformerPretrainedModel,

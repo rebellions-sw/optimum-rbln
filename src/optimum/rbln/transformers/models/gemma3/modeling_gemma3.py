@@ -589,7 +589,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                 if torch.any(token_type_ids_padded[:, step : step + self.prefill_chunk_size] == 0):
                     raise ValueError("All tokens of image_prefill should be the same image.")
                 else:
-                    logits = self.image_prefill(
+                    outputs = self.image_prefill(
                         input_chunk,
                         chunked_attention_mask,
                         cache_pos_chunk,
@@ -601,7 +601,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                     )
             else:
                 # Forward pass for the current chunk
-                logits = self.prefill(
+                outputs = self.prefill(
                     input_chunk,
                     chunked_attention_mask,
                     cache_pos_chunk,
@@ -611,10 +611,19 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                     local_block_tables,
                     out=out_buffers,
                 )
-
-        return RBLNGemma3ForCausalLMOutput(
-            logits=logits, padded_cache_lengths=padded_cache_lengths, attention_mask=chunked_attention_mask
-        )
+        if self.output_hidden_states:
+            return RBLNGemma3ForCausalLMOutput(
+                logits=outputs[0],
+                padded_cache_lengths=padded_cache_lengths,
+                attention_mask=chunked_attention_mask,
+                hidden_states=outputs[1],
+            )
+        else:
+            return RBLNGemma3ForCausalLMOutput(
+                logits=outputs,
+                padded_cache_lengths=padded_cache_lengths,
+                attention_mask=chunked_attention_mask,
+            )
 
     def decode_forward(
         self,
@@ -665,9 +674,12 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         if attention_mask is not None and self.batch_size < attention_mask.shape[0]:
             attention_mask = attention_mask[: self.batch_size]
 
-        logits = self.decode(inputs, attention_mask, cache_position, position_ids, block_tables, local_block_tables)
+        outputs = self.decode(inputs, attention_mask, cache_position, position_ids, block_tables, local_block_tables)
 
-        return RBLNDecoderOnlyOutput(logits=logits)
+        if self.output_hidden_states:
+            return RBLNDecoderOnlyOutput(logits=outputs[0], hidden_states=outputs[1])
+        else:
+            return RBLNDecoderOnlyOutput(logits=outputs)
 
 
 class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
@@ -720,6 +732,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             use_attention_mask=self.rbln_config.use_attention_mask,
             attn_impl=self.rbln_config.attn_impl,
             use_position_ids=self.rbln_config.use_position_ids,
+            output_hidden_states=self.rbln_config.output_hidden_states,
         )
 
         self.decoders = {}
@@ -737,6 +750,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
                 use_attention_mask=self.rbln_config.use_attention_mask,
                 attn_impl=self.rbln_config.attn_impl,
                 use_position_ids=self.rbln_config.use_position_ids,
+                output_hidden_states=self.rbln_config.output_hidden_states,
             )
 
         # NOTE(eunji): Use a decoder whose batch size matches the model's main batch size for compatibility.

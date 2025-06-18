@@ -13,39 +13,12 @@
 # limitations under the License.
 from typing import Optional
 
-import rebel
-
 from ....configuration_utils import RBLNModelConfig
-from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
+from ..gemma import RBLNGemmaForCausalLMConfig
 from ..siglip.configuration_siglip import RBLNSiglipVisionModelConfig
 
 
-class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
-    def __init__(
-        self,
-        prefill_chunk_size: Optional[int] = None,
-        use_position_ids: Optional[bool] = None,
-        use_attention_mask: Optional[bool] = None,
-        **kwargs,
-    ):
-        # use_attention_mask and use_position_ids are always True for Gemma3
-        use_attention_mask = use_attention_mask or True
-        use_position_ids = use_position_ids or True
-        prefill_chunk_size = prefill_chunk_size or 256
-
-        super().__init__(
-            prefill_chunk_size=prefill_chunk_size,
-            use_attention_mask=use_attention_mask,
-            use_position_ids=use_position_ids,
-            **kwargs,
-        )
-
-        npu = self.npu or rebel.get_npu_name()
-        if npu == "RBLN-CA02":
-            raise NotImplementedError("Gemma3 is currently not supported on RBLN-CA02")
-
-
-class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):
+class RBLNPaliGemmaForConditionalGenerationConfig(RBLNModelConfig):
     submodules = ["vision_tower", "language_model"]
 
     def __init__(
@@ -71,4 +44,4 @@ class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
         self.vision_tower = self.init_submodule_config(RBLNSiglipVisionModelConfig, vision_tower)
-        self.language_model = self.init_submodule_config(RBLNGemma3ForCausalLMConfig, language_model)
+        self.language_model = self.init_submodule_config(RBLNGemmaForCausalLMConfig, language_model)
