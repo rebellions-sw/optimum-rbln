@@ -168,7 +168,8 @@ class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
         input_ids = None if self.use_inputs_embeds else args.pop(0)
         inputs_embeds = args.pop(0) if self.use_inputs_embeds else None
         cache_position = args.pop(0)
-        block_tables = args.pop(0)
+        global_block_tables = args.pop(0)
+        local_block_tables = None
         position_embeds = args.pop(0)
         query_position = args.pop(0) if self.phase == "prefill" else None
         position_ids = None
@@ -194,7 +195,8 @@ class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
             input_ids,
             inputs_embeds,
             cache_position,
-            block_tables,
+            global_block_tables,
+            local_block_tables,
             query_position,
             attention_mask,
             position_ids,
@@ -234,6 +236,7 @@ class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
             max_seq_len=max_seq_len,
             kvcache_block_size=self.kvcache_block_size,
             use_learned_pos_emb=self.use_learned_pos_emb,
+            sliding_window_layers=self.sliding_window_layers,
         )
         new_causal_lm = DecoderOnlyForCausalLM(causal_lm.model, new_model)
         return new_causal_lm
