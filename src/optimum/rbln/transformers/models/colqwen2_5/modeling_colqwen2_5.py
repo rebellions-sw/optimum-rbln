@@ -101,10 +101,6 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config)
         self.rope_deltas = torch.zeros(self.rbln_config.batch_size)
         self.mask_non_image_embeddings = kwargs.get("mask_non_image_embeddings", False)
-        
-        artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
-        self.custom_text_proj = self._create_custom_proj_layer()
-        self.custom_text_proj.load_state_dict(artifacts["custom_text_proj"])
 
     @classmethod
     def save_torch_artifacts(
@@ -117,18 +113,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         if rbln_config.use_inputs_embeds:
             save_dict = {}
             save_dict["embed_tokens"] = model.get_input_embeddings().state_dict()
-            from collections import OrderedDict
-            save_dict["custom_text_proj"] = OrderedDict({'weight' : model.custom_text_proj.state_dict()['base_layer.weight']})
             torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
-
-    def _create_custom_proj_layer(self):
-        with no_init_weights():
-            custom_text_proj = torch.nn.Linear(
-                in_features=self.config.hidden_size,
-                out_features=128, # TODO(si) make generalize
-                bias=False
-            )
-        return custom_text_proj
     
     @classmethod
     def update_kwargs(cls, kwargs):
@@ -784,7 +769,6 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 position_emb=position_embed_batch
                                     )
 
-            proj = self.custom_text_proj(outputs) # TODO(si) RSD pattern 추가
             projs.append(proj)
             attention_mask_batches.append(attention_mask_batch)
             # import pdb; pdb.set_trace()
