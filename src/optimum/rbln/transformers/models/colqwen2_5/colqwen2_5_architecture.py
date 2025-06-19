@@ -48,7 +48,9 @@ class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
             kvcache_block_size=self.kvcache_block_size,
             use_learned_pos_emb=self.use_learned_pos_emb,
         )
-        # new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
+        
+        # custom_text_projection layer from origin_model
+        self.custom_text_proj = causal_lm.custom_text_proj
         return new_model
         
     def prepare_forward_args(self, *args):
@@ -110,4 +112,6 @@ class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
             rotary_emb=rotary_emb,
             block_tables=block_tables,
         )
-        return last_hidden_states
+        proj = self.custom_text_proj(last_hidden_states)
+        
+        return proj
