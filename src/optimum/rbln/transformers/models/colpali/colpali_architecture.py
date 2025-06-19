@@ -187,12 +187,12 @@ class ColPaliAttention(nn.Module):
         query_states, key_states, value_states = self.projection(hidden_states=hidden_states)
 
         query_states = query_states.view(batch_size,  query_length, 1, self.num_heads, self.head_dim).transpose(1, 3)
-        key_states = key_states.view(batch_size, 1, query_length, self.num_key_value_heads, self.head_dim).transpose(
-            2, 3
+        key_states = key_states.view(batch_size, query_length, 1, self.num_key_value_heads, self.head_dim).transpose(
+            1, 3
         )
         value_states = value_states.view(
-            batch_size, 1, query_length, self.num_key_value_heads, self.head_dim
-        ).transpose(2, 3)
+            batch_size, query_length, 1, self.num_key_value_heads, self.head_dim
+        ).transpose(1, 3)
 
         if cos is not None and sin is not None:
             query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
@@ -201,7 +201,7 @@ class ColPaliAttention(nn.Module):
         attn_weights = attn_weights + attention_mask
         attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32)
         attn_output = torch.matmul(attn_weights, value_states)
-        attn_output = attn_output.transpose(2, 3)
+        attn_output = attn_output.transpose(1, 3)
 
         attn_output = attn_output.reshape(batch_size, query_length, -1)
         attn_output = self.o_proj(attn_output)
