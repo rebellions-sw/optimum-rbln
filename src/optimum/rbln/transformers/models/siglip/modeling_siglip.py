@@ -166,7 +166,7 @@ class RBLNSiglipVisionModel(RBLNModel):
             if self.rbln_config.output_hidden_states:
                 hidden_states = ()
                 num_hidden_layers = vision_config.num_hidden_layers
-                for i in range(num_hidden_layers + 1):
+                for _ in range(num_hidden_layers + 1):
                     hidden_states += (output.pop(0),)
             else:
                 hidden_states = None
@@ -174,7 +174,7 @@ class RBLNSiglipVisionModel(RBLNModel):
             if self.rbln_config.output_attentions:
                 attentions = ()
                 num_hidden_layers = vision_config.num_hidden_layers
-                for i in range(num_hidden_layers):
+                for _ in range(num_hidden_layers):
                     attentions += (output.pop(0),)
             else:
                 attentions = None
