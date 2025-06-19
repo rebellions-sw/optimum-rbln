@@ -66,16 +66,16 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         else:
             self.embed_tokens = None
 
-        # Initialize shared resources to be used across Runtime instances (prefill and decode phases)
-        dec_attn_mask = torch.zeros(
-            self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=torch.float32
-        )
-        block_tables = torch.zeros(
-            self.rbln_config.batch_size,
-            self.rbln_config.max_seq_len // self.rbln_config.kvcache_block_size,
-            dtype=torch.int16,
-        ).fill_(-1)
-        free_block_pool = deque(x for x in range(self.rbln_config.kvcache_num_blocks))
+        # # Initialize shared resources to be used across Runtime instances (prefill and decode phases)
+        # dec_attn_mask = torch.zeros(
+        #     self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=torch.float32
+        # )
+        # block_tables = torch.zeros(
+        #     self.rbln_config.batch_size,
+        #     self.rbln_config.max_seq_len // self.rbln_config.kvcache_block_size,
+        #     dtype=torch.int16,
+        # ).fill_(-1)
+        # free_block_pool = deque(x for x in range(self.rbln_config.kvcache_num_blocks))
 
         # # TODO delete RBLNRuntimeModel 
         # self.prefill_decoder = RBLNRuntimeModel(
