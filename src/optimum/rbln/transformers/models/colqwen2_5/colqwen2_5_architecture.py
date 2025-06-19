@@ -48,7 +48,9 @@ class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
             kvcache_block_size=self.kvcache_block_size,
             use_learned_pos_emb=self.use_learned_pos_emb,
         )
-        # new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
+        
+        # set the custom_text_proj from origin_model
+        self.custom_text_proj = causal_lm.custom_text_proj
         return new_model
         
     def prepare_forward_args(self, *args):
@@ -58,7 +60,6 @@ class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
         cache_position = args.pop(0)
         block_tables = args.pop(0)
         position_embeds = args.pop(0)
-        # query_position = args.pop(0) if self.phase == "prefill" else None
         position_ids = None
         attention_mask = args.pop(0) if self.use_attention_mask else None
         past_key_values = args
@@ -83,7 +84,6 @@ class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
             inputs_embeds,
             cache_position,
             block_tables,
-            # query_position,
             attention_mask,
             position_ids,
             past_key_values,
@@ -96,7 +96,6 @@ class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
             inputs_embeds,
             cache_position,
             block_tables,
-            # query_position,
             attention_mask,
             position_ids,
             past_key_values,
@@ -109,11 +108,10 @@ class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
             attention_mask=attention_mask,
             cache_position=cache_position,
             position_ids=position_ids,
-            # query_position=query_position,
             past_key_values=past_key_values,
             rotary_emb=rotary_emb,
             block_tables=block_tables,
-            # use_cache=False,
-            # output_hidden_states=True
         )
-        return last_hidden_states
+        proj = self.custom_text_proj(last_hidden_states)
+        
+        return proj

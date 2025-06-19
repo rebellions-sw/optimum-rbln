@@ -19,7 +19,7 @@ from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausa
 
 
 class RBLNColQwen2_5ForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausalLMConfig):
-    submodules = ["visual"]
+    # submodules = ["visual"]
 
     def __init__(
         self,

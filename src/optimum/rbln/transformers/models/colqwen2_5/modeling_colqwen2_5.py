@@ -49,9 +49,9 @@ if TYPE_CHECKING:
 
 class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
     auto_model_class = AutoModelForVision2Seq
-    _rbln_submodules = [
-        {"name": "visual"},
-    ]
+    # _rbln_submodules = [
+    #     {"name": "visual"},
+    # ]
     _decoder_wrapper_cls = ColQwen2_5_LanguageModelWrapper
     _use_rotary_emb = False
 
@@ -77,34 +77,15 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         ).fill_(-1)
         free_block_pool = deque(x for x in range(self.rbln_config.kvcache_num_blocks))
 
-        # # TODO delete RBLNRuntimeModel 
-        # self.prefill_decoder = RBLNRuntimeModel(
-        #     runtime=self.model[0],
-        #     main_input_name=main_input_name,
-        #     embed_tokens=self.embed_tokens,
-        #     phase="prefill",
-        #     batch_size=self.rbln_config.batch_size,
-        #     dec_attn_mask=dec_attn_mask,
-        #     block_tables=block_tables,
-        #     free_block_pool=free_block_pool,
-        #     kvcache_block_size=self.rbln_config.kvcache_block_size,
-        #     vocab_size=self.config.vocab_size,
-        #     prefill_chunk_size=self.rbln_config.prefill_chunk_size,
-        #     max_seq_len=self.rbln_config.max_seq_len,
-        #     use_attention_mask=self.rbln_config.use_attention_mask,
-        #     attn_impl=self.rbln_config.attn_impl,
-        #     use_position_ids=self.rbln_config.use_position_ids,
-        # )
-        
         self.visual = self.rbln_submodules[0]
         self.mrope_section = self.config.rope_scaling["mrope_section"]
         self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config)
         self.rope_deltas = torch.zeros(self.rbln_config.batch_size)
         self.mask_non_image_embeddings = kwargs.get("mask_non_image_embeddings", False)
         
-        artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
-        self.custom_text_proj = self._create_custom_proj_layer()
-        self.custom_text_proj.load_state_dict(artifacts["custom_text_proj"])
+        # artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
+        # self.custom_text_proj = self._create_custom_proj_layer()
+        # self.custom_text_proj.load_state_dict(artifacts["custom_text_proj"])
 
     @classmethod
     def save_torch_artifacts(
@@ -117,18 +98,18 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         if rbln_config.use_inputs_embeds:
             save_dict = {}
             save_dict["embed_tokens"] = model.get_input_embeddings().state_dict()
-            from collections import OrderedDict
-            save_dict["custom_text_proj"] = OrderedDict({'weight' : model.custom_text_proj.state_dict()['base_layer.weight']})
-            torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
+            # from collections import OrderedDict
+            # save_dict["custom_text_proj"] = OrderedDict({'weight' : model.custom_text_proj.state_dict()['base_layer.weight']})
+            # torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
-    def _create_custom_proj_layer(self):
-        with no_init_weights():
-            custom_text_proj = torch.nn.Linear(
-                in_features=self.config.hidden_size,
-                out_features=128, # TODO(si) make generalize
-                bias=False
-            )
-        return custom_text_proj
+    # def _create_custom_proj_layer(self):
+    #     with no_init_weights():
+    #         custom_text_proj = torch.nn.Linear(
+    #             in_features=self.config.hidden_size,
+    #             out_features=128, # TODO(si) make generalize
+    #             bias=False
+    #         )
+    #     return custom_text_proj
     
     @classmethod
     def update_kwargs(cls, kwargs):
@@ -274,33 +255,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         assert query_position[0] == "query_position", print(query_position[0], "is deleted.")
 
         return input_info
-    
-    # @classmethod
-    # def get_input_info(
-    #     cls,
-    #     batch_size: int,
-    #     query_length: int,
-    #     rbln_config: RBLNColQwen2_5ForConditionalGenerationConfig,
-    #     model_config: PretrainedConfig,
-    # ):
-    #     input_info = super().get_input_info(
-    #         batch_size,
-    #         query_length,
-    #         rbln_config=rbln_config,
-    #         model_config=model_config,
-    #     )
-    #     pos_idx = 3
-    #     input_info.insert(
-    #         pos_idx,
-    #         (
-    #             "position_emb",
-    #             [2, batch_size, 1, query_length, model_config.hidden_size // model_config.num_attention_heads],
-    #             "float32",
-    #         ),
-    #     )
-    #     query_position = input_info.pop(pos_idx+1) # remove query postion
-    #     assert query_position[0] == "query_position", print(query_position[0], "is deleted.")
-    #     return input_info
+
 
     @classmethod
     def _update_rbln_config(
@@ -784,8 +739,8 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 position_emb=position_embed_batch
                                     )
 
-            proj = self.custom_text_proj(outputs) # TODO(si) RSD pattern 추가
-            projs.append(proj)
+            # proj = self.custom_text_proj(outputs) # TODO(si) RSD pattern 추가
+            projs.append(outputs)
             attention_mask_batches.append(attention_mask_batch)
             # import pdb; pdb.set_trace()
             
