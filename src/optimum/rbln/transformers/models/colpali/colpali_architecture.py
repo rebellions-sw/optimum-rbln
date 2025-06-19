@@ -186,7 +186,7 @@ class ColPaliAttention(nn.Module):
 
         query_states, key_states, value_states = self.projection(hidden_states=hidden_states)
 
-        query_states = query_states.view(batch_size, 1, query_length, self.num_heads, self.head_dim).transpose(2, 3)
+        query_states = query_states.view(batch_size,  query_length, 1, self.num_heads, self.head_dim).transpose(1, 3)
         key_states = key_states.view(batch_size, 1, query_length, self.num_key_value_heads, self.head_dim).transpose(
             2, 3
         )
