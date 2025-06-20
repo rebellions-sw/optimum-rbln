@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import bisect
 import inspect
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
@@ -75,16 +76,35 @@ class LoopLanguageModel:
         self.language_model = language_model
         self.rbln_config = rbln_config
 
-    def forward(self, inputs_embeds: torch.Tensor, attention_mask: torch.Tensor, **kwargs):
-        embeddings = []
-        for i in range(inputs_embeds.shape[0]):
-            inputs_embed = torch.nn.functional.pad(
-                inputs_embeds[i : i + 1], (0, 0, 0, self.rbln_config.max_seq_len - inputs_embeds.shape[1])
+    def prepare_inputs(self, inputs_embeds: torch.Tensor, attention_mask: torch.Tensor):
+        input_len = inputs_embeds.shape[1]
+        idx = bisect.bisect_left(self.rbln_config.max_seq_lens, input_len)
+        if idx == len(self.rbln_config.max_seq_lens):
+            raise ValueError(
+                f"Required seq_len({input_len}) is larger than available max_seq_lens({self.rbln_config.max_seq_lens})."
             )
-            attn_mask = torch.nn.functional.pad(
-                attention_mask[i : i + 1], (0, self.rbln_config.max_seq_len - attention_mask.shape[1])
-            ).to(torch.float32)
-            embeddings.append(self.language_model(inputs_embeds=inputs_embed, attention_mask=attn_mask))
+        else:
+            max_seq_len = self.rbln_config.max_seq_lens[idx]
+
+        inputs_embed = torch.nn.functional.pad(inputs_embeds, (0, 0, 0, max_seq_len - input_len))
+        attn_mask = torch.nn.functional.pad(attention_mask, (0, max_seq_len - input_len)).to(torch.float32)
+        position_ids = torch.arange(max_seq_len, dtype=torch.int32).view(1, -1)
+
+        return inputs_embed, attn_mask, position_ids
+
+    def forward(self, inputs_embeds: torch.Tensor, attention_mask: torch.Tensor, **kwargs):
+        padded_inputs_embed, padded_attn_mask, padded_position_ids = self.prepare_inputs(inputs_embeds, attention_mask)
+
+        input_batch_size = inputs_embeds.shape[0]
+        embeddings = []
+        for i in range(input_batch_size):
+            embedding = self.language_model(
+                inputs_embeds=padded_inputs_embed[i : i + 1],
+                attention_mask=padded_attn_mask[i : i + 1],
+                position_ids=padded_position_ids,
+            )
+            embeddings.append(embedding)
+
         embeddings = torch.cat(embeddings, dim=0)[:, : attention_mask.shape[-1]]
 
         return embeddings
@@ -146,7 +166,7 @@ class RBLNColPaliForRetrieval(RBLNModel):
         return RBLNColPaliForRetrievalWrapper(
             language_model=model.vlm.model.language_model,
             embedding_proj_layer=model.embedding_proj_layer,
-            max_seq_len=rbln_config.max_seq_len,
+            max_seq_len=max(rbln_config.max_seq_lens),
             output_hidden_states=rbln_config.output_hidden_states,
         )
 
@@ -172,12 +192,21 @@ class RBLNColPaliForRetrieval(RBLNModel):
         rbln_config: Optional[RBLNModelConfig] = None,
     ) -> RBLNModelConfig:
         hidden_size = model_config.vlm_config.text_config.hidden_size
+        if rbln_config.max_seq_lens is None:
+            rbln_config.max_seq_lens = [model_config.vlm_config.text_config.max_position_embeddings]
 
-        input_info = [
-            ("inputs_embeds", [rbln_config.batch_size, rbln_config.max_seq_len, hidden_size], "float32"),
-            ("attention_mask", [rbln_config.batch_size, rbln_config.max_seq_len], "float32"),
-        ]
-        rbln_compile_config = RBLNCompileConfig(input_info=input_info)
+        rbln_config.max_seq_lens = sorted(set(rbln_config.max_seq_lens))
+
+        input_infos = []
+        for max_seq_len in rbln_config.max_seq_lens:
+            input_info = [
+                ("inputs_embeds", [1, max_seq_len, hidden_size], "float32"),
+                ("attention_mask", [1, max_seq_len], "float32"),
+                ("position_ids", [1, max_seq_len], "int32"),
+            ]
+            input_infos.append(input_info)
+
+        rbln_compile_config = RBLNCompileConfig(input_info=input_infos)
         rbln_config.set_compile_cfgs([rbln_compile_config])
 
         return rbln_config

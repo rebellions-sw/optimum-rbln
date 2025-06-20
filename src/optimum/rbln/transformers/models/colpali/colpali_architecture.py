@@ -10,6 +10,14 @@ from ..decoderonly.decoderonly_architecture import (
 )
 
 
+def slice_and_unsqueeze_cos_sin(cos, sin, position_ids):
+    """Slice cos[cache_position], sin[cache_position] vector for the query."""
+    cos = cos[position_ids[0]][None, None, None, :, :]
+    sin = sin[position_ids[0]][None, None, None, :, :]
+
+    return cos, sin
+
+
 class RBLNColPaliForRetrievalWrapper(nn.Module):
     def __init__(
         self,
@@ -49,12 +57,15 @@ class RBLNColPaliForRetrievalWrapper(nn.Module):
 
         return new_model
 
-    def forward(self, inputs_embeds: torch.Tensor, attention_mask: torch.Tensor):
+    def forward(self, inputs_embeds: torch.Tensor, attention_mask: torch.Tensor, position_ids: torch.Tensor):
         attention_mask = (1.0 - attention_mask) * torch.finfo(torch.float32).min
         attention_mask = attention_mask[:, None, None, None, :]
 
         hidden_states, all_hidden_states = self.language_model(
-            inputs_embeds=inputs_embeds, attention_mask=attention_mask, rotary_emb=self.rotary_emb
+            inputs_embeds=inputs_embeds,
+            attention_mask=attention_mask,
+            rotary_emb=self.rotary_emb,
+            position_ids=position_ids,
         )
         embeddings = self.embedding_proj_layer(hidden_states)
 
@@ -66,28 +77,27 @@ class RBLNColPaliForRetrievalWrapper(nn.Module):
 
 class ColPaliModel(nn.Module):
     def __init__(
-        self, model, layers: List["ColPaliLayer"], output_hidden_states: bool = False, max_seq_len: int = None
+        self, model, layers: List["ColPaliLayer"], output_hidden_states: bool = False, max_seq_len: int = 2048
     ):
         super().__init__()
         self._original_mod = model
         self.layers = nn.ModuleList(layers)
         self.output_hidden_states = output_hidden_states
         self.norm = self._original_mod.norm
-        self.position_ids = torch.arange(max_seq_len, dtype=torch.int64).view(1, -1)
         self.hidden_size = self._original_mod.config.hidden_size
+        self.max_seq_len = max_seq_len
 
     def forward(
         self,
         inputs_embeds: Optional[torch.Tensor] = None,
         attention_mask: torch.Tensor = None,
         rotary_emb: Optional[Union[nn.Module, torch.Tensor]] = None,
+        position_ids: Optional[torch.Tensor] = None,
     ):
         hidden_states = inputs_embeds * self.hidden_size**0.5
 
-        seq_len = inputs_embeds.shape[1]
-        cos, sin = rotary_emb(hidden_states, seq_len)  # dtype carrier, max_seq_len
-        cos = cos[None, None, None, :]
-        sin = sin[None, None, None, :]
+        cos, sin = rotary_emb(hidden_states, self.max_seq_len)  # dtype carrier, max_seq_len
+        cos, sin = slice_and_unsqueeze_cos_sin(cos, sin, position_ids)
 
         all_hidden_states = () if self.output_hidden_states else None
         for layer in self.layers:
