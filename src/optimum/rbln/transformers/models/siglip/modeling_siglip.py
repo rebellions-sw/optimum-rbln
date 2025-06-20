@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
 
 import torch
 from transformers import SiglipVisionConfig, SiglipVisionModel
@@ -89,6 +89,11 @@ class RBLNSiglipVisionModel(RBLNModel):
         if rbln_config.image_size is None:
             raise ValueError("`rbln_image_size` should be specified!")
 
+        if rbln_config.output_attentions is None:
+            rbln_config.output_attentions = getattr(model_config, "output_attentions", False)
+        if rbln_config.output_hidden_states is None:
+            rbln_config.output_hidden_states = getattr(model_config, "output_hidden_states", False)
+
         rbln_compile_config = RBLNCompileConfig(
             input_info=[
                 (
@@ -109,33 +114,38 @@ class RBLNSiglipVisionModel(RBLNModel):
 
     def forward(
         self,
-        pixel_values: Optional[torch.FloatTensor] = None,
+        pixel_values: torch.Tensor,
         return_dict: bool = None,
-        output_attentions: Optional[bool] = None,
+        output_attentions: bool = None,
         output_hidden_states: bool = None,
         interpolate_pos_encoding: bool = False,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
         if len(kwargs) > 0 and any(value is not None for value in kwargs.values()):
             logger.warning(
                 f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__.__name__}."
             )
 
+        output_attentions = output_attentions if output_attentions is not None else self.rbln_config.output_attentions
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.rbln_config.output_hidden_states
+        )
+
         if output_attentions != self.rbln_config.output_attentions:
             raise ValueError(
-                f"Variable output_attentions {output_attentions} is not equal to rbln_config.output_attentions {self.rbln_config.output_attentions}"
+                f"Variable output_attentions {output_attentions} is not equal to rbln_config.output_attentions {self.rbln_config.output_attentions} "
                 f"Please compile again with the correct argument."
             )
 
         if output_hidden_states != self.rbln_config.output_hidden_states:
             raise ValueError(
-                f"Variable output_hidden_states {output_hidden_states} is not equal to rbln_config.output_hidden_states {self.rbln_config.output_hidden_states}"
+                f"Variable output_hidden_states {output_hidden_states} is not equal to rbln_config.output_hidden_states {self.rbln_config.output_hidden_states} "
                 f"Please compile again with the correct argument."
             )
 
         if interpolate_pos_encoding != self.rbln_config.interpolate_pos_encoding:
             raise ValueError(
-                f"Variable interpolate_pos_encoding {interpolate_pos_encoding} is not equal to rbln_config.interpolate_pos_encoding {self.rbln_config.interpolate_pos_encoding}"
+                f"Variable interpolate_pos_encoding {interpolate_pos_encoding} is not equal to rbln_config.interpolate_pos_encoding {self.rbln_config.interpolate_pos_encoding} "
                 f"Please compile again with the correct argument."
             )
 
@@ -149,22 +159,25 @@ class RBLNSiglipVisionModel(RBLNModel):
         if not return_dict:
             return (output,) if not isinstance(output, (tuple, list)) else output
         else:
-            if self.rbln_config.output_attentions:
-                attentions = ()
-                for i in range(self.config.vision_config.num_hidden_layers):
-                    attentions += (output.pop(),)
-            else:
-                attentions = None
+            last_hidden_state = output.pop(0) if isinstance(output, (tuple, list)) else output
+            vision_config = self.config.vision_config if hasattr(self.config, "vision_config") else self.config
+            pooler_output = output.pop(0) if getattr(vision_config, "vision_use_head", True) else None
 
             if self.rbln_config.output_hidden_states:
                 hidden_states = ()
-                for i in range(self.config.vision_config.num_hidden_layers + 1):
-                    hidden_states += (output.pop(),)
+                num_hidden_layers = vision_config.num_hidden_layers
+                for _ in range(num_hidden_layers + 1):
+                    hidden_states += (output.pop(0),)
             else:
                 hidden_states = None
 
-            pooler_output = output.pop() if getattr(self.config.vision_config, "vision_use_head", True) else None
-            last_hidden_state = output.pop()
+            if self.rbln_config.output_attentions:
+                attentions = ()
+                num_hidden_layers = vision_config.num_hidden_layers
+                for _ in range(num_hidden_layers):
+                    attentions += (output.pop(0),)
+            else:
+                attentions = None
 
             return BaseModelOutputWithPooling(
                 last_hidden_state=last_hidden_state,

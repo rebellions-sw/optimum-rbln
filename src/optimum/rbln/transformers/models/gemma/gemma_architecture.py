@@ -52,7 +52,11 @@ class GemmaWrapper(DecoderOnlyWrapper):
             new_layer = DecoderOnlyLayer(layer, new_self_attn)
             new_layers.append(new_layer)
         new_model = GemmaModel(
-            causal_lm.model, new_layers, partition_len=self.kvcache_partition_len, max_seq_len=max_seq_len
+            causal_lm.model,
+            new_layers,
+            partition_len=self.kvcache_partition_len,
+            max_seq_len=max_seq_len,
+            sliding_window_layers=self.sliding_window_layers,
         )
         new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm

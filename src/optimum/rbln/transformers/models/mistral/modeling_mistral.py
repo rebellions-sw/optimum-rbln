@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from transformers import PretrainedConfig
+
 from ....utils import logging
-from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM
+from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyModelForCausalLMConfig
 from .mistral_architecture import MistralForCausalLMWrapper
 
 
@@ -78,3 +80,13 @@ class RBLNMistralForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     """
 
     _decoder_wrapper_cls = MistralForCausalLMWrapper
+
+    @classmethod
+    def _update_sliding_window_config(
+        cls, model_config: PretrainedConfig, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig
+    ):
+        rbln_config.cache_impl = "sliding_window"
+        rbln_config.sliding_window = model_config.sliding_window
+        rbln_config.sliding_window_layers = list(range(model_config.num_hidden_layers))
+
+        return rbln_config
