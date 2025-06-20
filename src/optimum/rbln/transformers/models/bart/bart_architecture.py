@@ -22,6 +22,7 @@ from transformers.modeling_attn_mask_utils import (
 from transformers.utils import logging
 
 from ..seq2seq.seq2seq_architecture import (
+    Seq2SeqCrossAttention,
     Seq2SeqDecoder,
     Seq2SeqDecoderLayer,
     Seq2SeqDecoderWrapper,
@@ -45,7 +46,8 @@ class BartDecoderWrapper(Seq2SeqDecoderWrapper):
         new_layers = []
         for layer in model.get_decoder().layers:
             self_attn = BartSelfAttention(layer.self_attn, use_attention_mask=self.use_attention_mask)
-            new_layers.append(BartDecoderLayer(layer, self_attn))
+            cross_attn = BartCrossAttention(layer.encoder_attn)
+            new_layers.append(BartDecoderLayer(layer, self_attn, cross_attn))
 
         decoder_model = BartDecoder(model.get_decoder(), new_layers)
         new_model = BartForConditionalGeneration(model, decoder_model)
@@ -153,3 +155,14 @@ class BartSelfAttention(Seq2SeqSelfAttention):
         key_states = self.k_proj(hidden_states)
         value_states = self.v_proj(hidden_states)
         return query_states, key_states, value_states
+
+
+class BartCrossAttention(Seq2SeqCrossAttention):
+    def __post_init__(self):
+        self.q_proj = self._original_mod.q_proj
+        self.k_proj = self._original_mod.k_proj
+        self.v_proj = self._original_mod.v_proj
+        self.out_proj = self._original_mod.out_proj
+        self.num_heads = self._original_mod.num_heads
+        self.head_dim = self._original_mod.embed_dim // self._original_mod.num_heads
+        self.embed_dim = self._original_mod.embed_dim
