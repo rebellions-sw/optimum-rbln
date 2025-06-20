@@ -22,10 +22,10 @@ from transformers import (
     PretrainedConfig,
     PreTrainedModel,
 )
+from transformers.modeling_outputs import BaseModelOutputWithPooling
 from transformers.modeling_utils import no_init_weights
 from transformers.models.colpali.modeling_colpali import ColPaliForRetrievalOutput
 from transformers.models.paligemma.modeling_paligemma import PaliGemmaMultiModalProjector
-from transformers.modeling_outputs import BaseModelOutputWithPooling
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
