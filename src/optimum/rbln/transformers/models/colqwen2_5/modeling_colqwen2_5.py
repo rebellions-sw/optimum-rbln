@@ -780,7 +780,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 position_embed=position_embed[:, b_idx : b_idx + 1],
             )
             
-            fliped_attention_mask_batch = torch.flip(attention_mask, dims=[-1]).unsqueeze(0)
+            fliped_attention_mask_batch = torch.flip(attention_mask, dims=[-1])
 
             projs.append(proj)
             attention_mask_batches.append(fliped_attention_mask_batch)
