@@ -58,6 +58,13 @@ class _SiglipVisionModel(torch.nn.Module):
 
 
 class RBLNSiglipVisionModel(RBLNModel):
+    """
+    RBLN optimized SigLIP vision model.
+
+    This class provides hardware-accelerated inference for SigLIP vision models
+    on RBLN devices, supporting image encoding for multimodal vision-language tasks.
+    """
+
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNSiglipVisionModelConfig) -> torch.nn.Module:
         wrapper_cfg = {

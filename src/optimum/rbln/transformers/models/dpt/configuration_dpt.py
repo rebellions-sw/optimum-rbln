@@ -16,4 +16,9 @@ from ...configuration_generic import RBLNModelForDepthEstimationConfig
 
 
 class RBLNDPTForDepthEstimationConfig(RBLNModelForDepthEstimationConfig):
-    pass
+    """
+    Configuration class for RBLNDPTForDepthEstimation.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized DPT (Dense Prediction Transformer) models for depth estimation tasks.
+    """

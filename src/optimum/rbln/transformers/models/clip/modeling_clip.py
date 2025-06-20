@@ -43,6 +43,13 @@ class _TextEncoder(torch.nn.Module):
 
 
 class RBLNCLIPTextModel(RBLNModel):
+    """
+    RBLN optimized CLIP text encoder model.
+
+    This class provides hardware-accelerated inference for CLIP text encoders
+    on RBLN devices, supporting text encoding for multimodal tasks.
+    """
+
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNCLIPTextModelConfig) -> torch.nn.Module:
         return _TextEncoder(model).eval()
@@ -95,7 +102,12 @@ class RBLNCLIPTextModel(RBLNModel):
 
 
 class RBLNCLIPTextModelWithProjection(RBLNCLIPTextModel):
-    pass
+    """
+    RBLN optimized CLIP text encoder model with projection layer.
+
+    This class extends RBLNCLIPTextModel with a projection layer for
+    multimodal embedding alignment tasks.
+    """
 
 
 class _VisionEncoder(torch.nn.Module):
@@ -109,6 +121,13 @@ class _VisionEncoder(torch.nn.Module):
 
 
 class RBLNCLIPVisionModel(RBLNModel):
+    """
+    RBLN optimized CLIP vision encoder model.
+
+    This class provides hardware-accelerated inference for CLIP vision encoders
+    on RBLN devices, supporting image encoding for multimodal tasks.
+    """
+
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNCLIPVisionModelConfig) -> torch.nn.Module:
         return _VisionEncoder(model).eval()
@@ -182,6 +201,13 @@ class RBLNCLIPVisionModel(RBLNModel):
 
 
 class RBLNCLIPVisionModelWithProjection(RBLNCLIPVisionModel):
+    """
+    RBLN optimized CLIP vision encoder model with projection layer.
+
+    This class extends RBLNCLIPVisionModel with a projection layer for
+    multimodal embedding alignment tasks.
+    """
+
     def forward(
         self,
         pixel_values: Optional[torch.FloatTensor] = None,

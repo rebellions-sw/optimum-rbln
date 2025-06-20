@@ -16,4 +16,9 @@ from ...configuration_generic import RBLNModelForImageClassificationConfig
 
 
 class RBLNViTForImageClassificationConfig(RBLNModelForImageClassificationConfig):
-    ""
+    """
+    Configuration class for RBLNViTForImageClassification.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized Vision Transformer (ViT) models for image classification tasks.
+    """

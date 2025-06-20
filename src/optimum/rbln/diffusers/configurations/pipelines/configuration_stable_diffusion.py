@@ -20,10 +20,6 @@ from ..models import RBLNAutoencoderKLConfig, RBLNUNet2DConditionModelConfig
 
 
 class RBLNStableDiffusionPipelineBaseConfig(RBLNModelConfig):
-    """
-    Base configuration for Stable Diffusion pipelines.
-    """
-
     submodules = ["text_encoder", "unet", "vae"]
     _vae_uses_encoder = False
 

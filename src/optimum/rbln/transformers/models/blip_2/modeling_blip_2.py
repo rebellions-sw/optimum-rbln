@@ -65,6 +65,13 @@ class LoopProjector:
 
 
 class RBLNBlip2VisionModel(RBLNModel):
+    """
+    RBLN optimized BLIP-2 vision encoder model.
+
+    This class provides hardware-accelerated inference for BLIP-2 vision encoders
+    on RBLN devices, supporting image encoding for multimodal vision-language tasks.
+    """
+
     def get_input_embeddings(self):
         return self.embeddings
 
@@ -136,6 +143,14 @@ class RBLNBlip2VisionModel(RBLNModel):
 
 
 class RBLNBlip2QFormerModel(RBLNModel):
+    """
+    RBLN optimized BLIP-2 Q-Former model.
+
+    This class provides hardware-accelerated inference for BLIP-2 Q-Former models
+    on RBLN devices, which bridge vision and language modalities through cross-attention
+    mechanisms for multimodal understanding tasks.
+    """
+
     def get_input_embeddings(self):
         return self.embeddings.word_embeddings
 

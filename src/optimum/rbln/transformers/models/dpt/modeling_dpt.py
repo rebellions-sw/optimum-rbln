@@ -17,4 +17,9 @@ from ...modeling_generic import RBLNModelForDepthEstimation
 
 
 class RBLNDPTForDepthEstimation(RBLNModelForDepthEstimation):
-    pass
+    """
+    RBLN optimized DPT model for depth estimation tasks.
+
+    This class provides hardware-accelerated inference for DPT (Dense Prediction Transformer)
+    models on RBLN devices, supporting monocular depth estimation from single images.
+    """
