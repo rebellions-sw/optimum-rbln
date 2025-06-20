@@ -1,18 +1,13 @@
-import math
-from typing import Tuple
-
-import torch
-import torch.nn as nn
-from transformers import PretrainedConfig, PreTrainedModel
+from transformers import PreTrainedModel
 
 from ..decoderonly.decoderonly_architecture import (
-    DecoderOnlyWrapper,
-    DecoderOnlyModel,
     DecoderOnlyAttention,
     DecoderOnlyFlashAttention,
     DecoderOnlyLayer,
-    apply_rotary_pos_emb,
+    DecoderOnlyModel,
+    DecoderOnlyWrapper,
 )
+
 
 class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
     def convert_to_rbln_causal_lm(self, causal_lm: PreTrainedModel, max_seq_len: int):
@@ -48,11 +43,11 @@ class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
             kvcache_block_size=self.kvcache_block_size,
             use_learned_pos_emb=self.use_learned_pos_emb,
         )
-        
+
         # custom_text_projection layer from origin_model
         self.custom_text_proj = causal_lm.custom_text_proj
         return new_model
-        
+
     def prepare_forward_args(self, *args):
         args = list(args)
         input_ids = None if self.use_inputs_embeds else args.pop(0)
@@ -101,7 +96,7 @@ class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
             past_key_values,
             rotary_emb,
         ) = self.prepare_forward_args(*args)
-        
+
         last_hidden_states = self.causal_lm(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
@@ -113,5 +108,5 @@ class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
             block_tables=block_tables,
         )
         proj = self.custom_text_proj(last_hidden_states)
-        
+
         return proj

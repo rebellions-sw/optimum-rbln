@@ -197,6 +197,10 @@ if TYPE_CHECKING:
         RBLNCLIPVisionModelWithProjection,
         RBLNCLIPVisionModelWithProjectionConfig,
     )
+    from .colqwen2_5 import (
+        RBLNColQwen2_5ForConditionalGeneration,
+        RBLNColQwen2_5ForConditionalGenerationConfig,
+    )
     from .decoderonly import (
         RBLNDecoderOnlyModelForCausalLM,
         RBLNDecoderOnlyModelForCausalLMConfig,
@@ -236,10 +240,6 @@ if TYPE_CHECKING:
         RBLNQwen2_5_VisionTransformerPretrainedModelConfig,
         RBLNQwen2_5_VLForConditionalGeneration,
         RBLNQwen2_5_VLForConditionalGenerationConfig,
-    )
-    from .colqwen2_5 import (
-        RBLNColQwen2_5ForConditionalGeneration,
-        RBLNColQwen2_5ForConditionalGenerationConfig,
     )
     from .resnet import RBLNResNetForImageClassification, RBLNResNetForImageClassificationConfig
     from .roberta import (

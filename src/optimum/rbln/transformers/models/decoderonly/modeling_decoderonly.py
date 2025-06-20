@@ -400,10 +400,10 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 cache_pos_chunk,
                 block_tables,
                 position_embed_chunk if position_embed is not None else None,
-                # query_position,
+                query_position,
                 chunked_attention_mask if self.use_attention_mask else None,
                 position_ids_chunk if self.use_position_ids else None,
-                # out=out_buffers,
+                out=out_buffers,
             )
 
         # Update decoder attention mask with processed KV-cache length from prefill phase

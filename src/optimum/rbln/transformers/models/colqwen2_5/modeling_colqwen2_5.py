@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import inspect
-from pathlib import Path
 from collections import deque
-from typing import TYPE_CHECKING, Any, Deque, Callable, List, Optional, Tuple, Union
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Deque, List, Optional, Union
 
 import rebel
 import torch
@@ -26,7 +25,6 @@ from transformers import (
     PreTrainedModel,
     Qwen2_5_VLForConditionalGeneration,
 )
-from transformers.modeling_utils import no_init_weights
 from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     Qwen2_5_VLRotaryEmbedding,
 )
@@ -34,9 +32,16 @@ from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
 from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyOutput, set_default_values, validate_attention_method, RBLNRuntimeModel
+from ..decoderonly.modeling_decoderonly import (
+    RBLNDecoderOnlyModelForCausalLM,
+    RBLNDecoderOnlyOutput,
+    RBLNRuntimeModel,
+    set_default_values,
+    validate_attention_method,
+)
 from .colqwen2_5_architecture import ColQwen2_5_LanguageModelWrapper
 from .configuration_colqwen2_5 import RBLNColQwen2_5ForConditionalGenerationConfig
+
 
 logger = get_logger(__name__)
 
@@ -47,7 +52,8 @@ if TYPE_CHECKING:
         AutoTokenizer,
         PretrainedConfig,
     )
-    
+
+
 class RBLNRuntimeModelForColqwen(RBLNRuntimeModel):
     def __init__(
         self,
@@ -63,8 +69,20 @@ class RBLNRuntimeModelForColqwen(RBLNRuntimeModel):
         use_position_ids: bool,
         **kwargs: Any,
     ) -> None:
-        super().__init__(runtime, phase, batch_size, None, block_tables, free_block_pool, kvcache_block_size, use_attention_mask, attn_impl, use_position_ids, **kwargs)
-    
+        super().__init__(
+            runtime,
+            phase,
+            batch_size,
+            None,
+            block_tables,
+            free_block_pool,
+            kvcache_block_size,
+            use_attention_mask,
+            attn_impl,
+            use_position_ids,
+            **kwargs,
+        )
+
     def _prepare_prefill_inputs(
         self,
         inputs: torch.Tensor,
@@ -176,7 +194,7 @@ class RBLNRuntimeModelForColqwen(RBLNRuntimeModel):
         ) = self._prepare_prefill_inputs(
             inputs, cache_position, attention_mask, position_embed, token_type_ids=token_type_ids
         )
-        
+
         projs = []
         # Process input in chunks of size `prefill_chunk_size`
         for step in range(0, query_length, self.prefill_chunk_size):
@@ -215,6 +233,7 @@ class RBLNRuntimeModelForColqwen(RBLNRuntimeModel):
         return torch.concat(projs, dim=-2)
         # return RBLNDecoderOnlyOutput(logits=logits, padded_cache_lengths=padded_cache_lengths)
 
+
 class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
     auto_model_class = AutoModelForVision2Seq
     _rbln_submodules = [
@@ -245,7 +264,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         ).fill_(-1)
         free_block_pool = deque(x for x in range(self.rbln_config.kvcache_num_blocks))
 
-        # TODO delete RBLNRuntimeModel 
+        # TODO delete RBLNRuntimeModel
         self.prefill_decoder = RBLNRuntimeModelForColqwen(
             runtime=self.model[0],
             main_input_name=main_input_name,
@@ -263,7 +282,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             attn_impl=self.rbln_config.attn_impl,
             use_position_ids=self.rbln_config.use_position_ids,
         )
-        
+
         self.visual = self.rbln_submodules[0]
         self.mrope_section = self.config.rope_scaling["mrope_section"]
         self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config)
@@ -278,11 +297,10 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         subfolder: str,
         rbln_config: RBLNColQwen2_5ForConditionalGenerationConfig,
     ):
-
         save_dict = {}
         save_dict["embed_tokens"] = model.get_input_embeddings().state_dict()
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
-    
+
     @classmethod
     def update_kwargs(cls, kwargs):
         kwargs.update(
@@ -337,7 +355,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         )
 
         compiled_models = {"prefill": compiled_prefill}
-        
+
         required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
         if rbln_config.kvcache_num_blocks < required_num_blocks:
             cls.maybe_suggest_kvcache_num_blocks(
@@ -347,7 +365,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             )
 
         return compiled_models
-    
+
     @classmethod
     def get_input_info(
         cls,
@@ -371,7 +389,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 "float32",
             ),
         )
-        query_position = input_info.pop(pos_idx+1) # remove query postion
+        query_position = input_info.pop(pos_idx + 1)  # remove query postion
         assert query_position[0] == "query_position", print(query_position[0], "is deleted.")
         return input_info
 
@@ -406,7 +424,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
 
         required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
         max_num_blocks = required_num_blocks
-        
+
         if rbln_config.attn_impl == "flash_attn":
             estimated_max_num_blocks = cls.get_maximum_num_blocks(
                 config=model_config,
@@ -450,7 +468,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         rbln_config.set_compile_cfgs([prefill_compile_config])
 
         return rbln_config
-    
+
     @classmethod
     def _create_runtimes(
         cls,
@@ -489,7 +507,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
     ):
         batch_size = input_ids.shape[0]
         inputs_embeds = self.embed_tokens(input_ids)
-        
+
         if pixel_values is not None and image_grid_thw is not None:
             offsets = image_grid_thw[:, 1] * image_grid_thw[:, 2]  # (batch_size,)
             pixel_values = torch.cat(
@@ -544,7 +562,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             image_nums = (vision_tokens == image_token_id).sum()
             video_nums = (vision_tokens == video_token_id).sum()
             # position_ids, rope_deltas = self.get_rope_index(
-            position_ids, rope_deltas = Qwen2_5_VLForConditionalGeneration.get_rope_index(    
+            position_ids, rope_deltas = Qwen2_5_VLForConditionalGeneration.get_rope_index(
                 self,
                 input_id,
                 image_grid_thw[image_idx : image_idx + image_nums] if image_grid_thw is not None else None,
@@ -562,7 +580,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         rope_deltas = torch.stack(all_rope_deltas)
 
         return inputs_embeds, all_position_embeds, rope_deltas
-    
+
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
@@ -578,8 +596,6 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         return_dict: Optional[bool] = None,
         **kwargs,
     ) -> RBLNDecoderOnlyOutput:
-        # Prefill
-
         inputs_embeds, position_embed, rope_deltas = self._preprocess_prefill(
             input_ids,
             attention_mask,
@@ -605,17 +621,17 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 batch_idx=b_idx,
                 position_embed=position_embed[:, b_idx : b_idx + 1],
             )
-            
+
             fliped_attention_mask_batch = torch.flip(attention_mask, dims=[-1])
 
             projs.append(proj)
             attention_mask_batches.append(fliped_attention_mask_batch)
-            
+
         projs = torch.cat(projs, dim=0)
-        projs = projs[:, :inputs_embeds.shape[1]]
-        
+        projs = projs[:, : inputs_embeds.shape[1]]
+
         attention_mask_batches = torch.cat(attention_mask_batches, dim=0)
-        
+
         projs = projs / projs.norm(dim=-1, keepdim=True)  # (batch_size, sequence_length, dim)
         projs = projs * attention_mask_batches.unsqueeze(-1)  # (batch_size, sequence_length, dim)
         return projs

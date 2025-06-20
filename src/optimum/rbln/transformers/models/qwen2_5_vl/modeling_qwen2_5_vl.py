@@ -332,7 +332,7 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
             output = torch.cat(depadded_output, dim=0)
 
             output_hidden_states.append(output)
-        
+
         # import pdb; pdb.set_trace()
         hidden_states = torch.cat(output_hidden_states)
         reverse_indices = torch.argsort(window_index)
