@@ -1,17 +1,20 @@
 import torch
+from colpali_engine.models import ColQwen2_5, ColQwen2_5_Processor
 from PIL import Image
 
-from colpali_engine.models import ColQwen2_5, ColQwen2_5_Processor
 from optimum.rbln import RBLNColQwen2_5ForConditionalGeneration
 
+
 model = ColQwen2_5.from_pretrained(
-        "Metric-AI/colqwen2.5-3b-multilingual",
-        torch_dtype=torch.float32,
-        device_map="cpu",  # or "mps" if on Apple Silicon
-    ).eval()
+    "Metric-AI/colqwen2.5-3b-multilingual",
+    torch_dtype=torch.float32,
+    device_map="cpu",  # or "mps" if on Apple Silicon
+).eval()
 processor = ColQwen2_5_Processor.from_pretrained("Metric-AI/colqwen2.5-3b-multilingual")
 
 from peft.tuners.lora.layer import Linear as LoraLinear
+
+
 for m in model.modules():
     if isinstance(m, LoraLinear):
         m.merge(safe_merge=False)
