@@ -21,6 +21,7 @@ from transformers import PretrainedConfig, PreTrainedModel
 
 from ....utils import logging
 from ...modeling_rope_utils import ROPE_INIT_FUNCTIONS
+from .configuration_decoderonly import CacheImplType
 
 
 logger = logging.get_logger(__name__)
@@ -30,6 +31,7 @@ DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH = 32_768
 MIN_FLASH_ATTN_MAX_SEQ_LEN = 8_192
 MIN_FLASH_ATTN_PARTITION_LENGTH = 4_096
 MAX_FLASH_ATTN_PARTITION_LENGTH = 32_768
+MAX_SLIDING_WINDOW_SIZE = 32_768
 
 
 def set_default_values(
@@ -114,6 +116,13 @@ def validate_attention_method(attn_impl: str, kvcache_partition_len: int, kvcach
             )
 
 
+def validate_sliding_window_size(sliding_window: int, prefill_chunk_size: int):
+    if sliding_window > MAX_SLIDING_WINDOW_SIZE - prefill_chunk_size:
+        raise ValueError(
+            f"Sliding window size ({sliding_window}) must be less than 32768 - prefill_chunk_size ({32768 - prefill_chunk_size})"
+        )
+
+
 class DecoderOnlyWrapper(nn.Module):
     """A wrapper class for decoder-only language models that handles RBLN-specific optimizations and requirements.
 
@@ -146,12 +155,15 @@ class DecoderOnlyWrapper(nn.Module):
         max_seq_len: int,
         use_rotary_emb: bool,
         attn_impl: str,
+        cache_impl: CacheImplType,
         use_inputs_embeds: bool,
         use_attention_mask: bool,
         use_position_ids: bool,
         use_learned_pos_emb: Optional[bool] = None,
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
+        sliding_window: Optional[int] = None,
+        sliding_window_layers: Optional[List[int]] = None,
     ):
         super().__init__()
         self.config = causal_lm.config
@@ -171,6 +183,9 @@ class DecoderOnlyWrapper(nn.Module):
         self.use_position_ids = use_position_ids
         self.use_inputs_embeds = use_inputs_embeds
         self.use_learned_pos_emb = use_learned_pos_emb
+        self.sliding_window_layers = sliding_window_layers
+        self.cache_impl = cache_impl
+        self.sliding_window = sliding_window
 
         if self.attn_impl == "flash_attn":
             self.kvcache_partition_len = kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
@@ -186,7 +201,6 @@ class DecoderOnlyWrapper(nn.Module):
             )
 
         self.causal_lm = self.convert_to_rbln_causal_lm(causal_lm, max_seq_len)
-
         self.num_hidden_layers = getattr(self.config, "num_hidden_layers", None) or getattr(self.config, "n_layer")
         self._phase = "prefill"
 
@@ -195,25 +209,35 @@ class DecoderOnlyWrapper(nn.Module):
 
     def convert_to_rbln_causal_lm(self, causal_lm: PreTrainedModel, max_seq_len: int):
         new_layers = []
-
-        for layer in causal_lm.model.layers:
-            if self.attn_impl == "eager":
+        for layer_idx, layer in enumerate(causal_lm.model.layers):
+            if layer_idx in self.sliding_window_layers:
+                # Flash attention is not yet supported for sliding window attention.
                 new_self_attn = DecoderOnlyAttention(
                     layer.self_attn,
                     self.use_attention_mask,
                     self.use_position_ids,
-                    kvcache_block_size=self.kvcache_block_size,
-                )
-            elif self.attn_impl == "flash_attn":
-                new_self_attn = DecoderOnlyFlashAttention(
-                    layer.self_attn,
-                    kvcache_partition_len=self.kvcache_partition_len,
-                    kvcache_block_size=self.kvcache_block_size,
-                    use_attention_mask=self.use_attention_mask,
-                    use_position_ids=self.use_position_ids,
+                    kvcache_block_size=self.sliding_window,
+                    is_sliding=True,
                 )
             else:
-                raise NotImplementedError(f"Unknwon attn : {self.attn_impl}")
+                if self.attn_impl == "eager":
+                    new_self_attn = DecoderOnlyAttention(
+                        layer.self_attn,
+                        self.use_attention_mask,
+                        self.use_position_ids,
+                        kvcache_block_size=self.kvcache_block_size,
+                        is_sliding=False,
+                    )
+                elif self.attn_impl == "flash_attn":
+                    new_self_attn = DecoderOnlyFlashAttention(
+                        layer.self_attn,
+                        kvcache_partition_len=self.kvcache_partition_len,
+                        kvcache_block_size=self.kvcache_block_size,
+                        use_attention_mask=self.use_attention_mask,
+                        use_position_ids=self.use_position_ids,
+                    )
+                else:
+                    raise NotImplementedError(f"Unknwon attn : {self.attn_impl}")
 
             new_layer = DecoderOnlyLayer(layer, new_self_attn)
             new_layers.append(new_layer)
@@ -225,6 +249,7 @@ class DecoderOnlyWrapper(nn.Module):
             max_seq_len=max_seq_len,
             kvcache_block_size=self.kvcache_block_size,
             use_learned_pos_emb=self.use_learned_pos_emb,
+            sliding_window_layers=self.sliding_window_layers,
         )
         new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm
@@ -243,8 +268,9 @@ class DecoderOnlyWrapper(nn.Module):
         input_ids = None if self.use_inputs_embeds else args.pop(0)
         inputs_embeds = args.pop(0) if self.use_inputs_embeds else None
         cache_position = args.pop(0)
-        block_tables = args.pop(0)
-        query_position = args.pop(0) if self.phase == "prefill" else None
+        global_block_tables = args.pop(0) if self.cache_impl in ["hybrid", "static"] else None
+        local_block_tables = args.pop(0) if self.cache_impl in ["hybrid", "sliding_window"] else None
+        query_position = args.pop(0) if "prefill" in self.phase else None
         attention_mask = args.pop(0) if self.use_attention_mask else None
         position_ids = args.pop(0) if self.use_position_ids else None
         past_key_values = args
@@ -264,16 +290,22 @@ class DecoderOnlyWrapper(nn.Module):
             _past_key_values.append(past_key_value)
         past_key_values = _past_key_values
 
+        if hasattr(self, "rotary_emb_global") and hasattr(self, "rotary_emb_local"):
+            rotary_emb = (self.rotary_emb_global, self.rotary_emb_local)
+        else:
+            rotary_emb = self.rotary_emb
+
         return (
             input_ids,
             inputs_embeds,
             cache_position,
-            block_tables,
+            global_block_tables,
+            local_block_tables,
             query_position,
             attention_mask,
             position_ids,
             past_key_values,
-            self.rotary_emb,
+            rotary_emb,
         )
 
     def forward(self, *args):
@@ -281,7 +313,8 @@ class DecoderOnlyWrapper(nn.Module):
             input_ids,
             inputs_embeds,
             cache_position,
-            block_tables,
+            global_block_tables,
+            local_block_tables,
             query_position,
             attention_mask,
             position_ids,
@@ -298,7 +331,8 @@ class DecoderOnlyWrapper(nn.Module):
             query_position=query_position,
             past_key_values=past_key_values,
             rotary_emb=rotary_emb,
-            block_tables=block_tables,
+            global_block_tables=global_block_tables,
+            local_block_tables=local_block_tables,
         )
 
         return logit
@@ -353,7 +387,8 @@ class DecoderOnlyForCausalLM(nn.Module):
         query_position: torch.Tensor = None,
         past_key_values: Tuple[Tuple[torch.Tensor]] = None,
         rotary_emb: nn.Module = None,
-        block_tables: Optional[torch.Tensor] = None,
+        global_block_tables: Optional[torch.Tensor] = None,
+        local_block_tables: Optional[torch.Tensor] = None,
     ):
         # outputs
         hidden_states = self.model(
@@ -362,12 +397,14 @@ class DecoderOnlyForCausalLM(nn.Module):
             attention_mask=attention_mask,
             cache_position=cache_position,
             position_ids=position_ids,
+            query_position=query_position,
             past_key_values=past_key_values,
             rotary_emb=rotary_emb,
-            block_tables=block_tables,
+            global_block_tables=global_block_tables,
+            local_block_tables=local_block_tables,
         )
 
-        if self.phase == "prefill":
+        if "prefill" in self.phase:
             hidden_states = hidden_states[:, query_position.to(torch.int).unsqueeze(0)]
 
         logits = self.lm_head(hidden_states)
@@ -402,6 +439,7 @@ class DecoderOnlyModel(nn.Module):
         max_seq_len=None,
         kvcache_block_size=None,
         use_learned_pos_emb=None,
+        sliding_window_layers=None,
     ):
         super().__init__()
         self._original_mod = model
@@ -411,6 +449,7 @@ class DecoderOnlyModel(nn.Module):
         self.kvcache_block_size = kvcache_block_size
         self.max_seq_len = max_seq_len
         self.use_learned_pos_emb = use_learned_pos_emb
+        self.sliding_window_layers = sliding_window_layers
 
     @property
     def phase(self):
@@ -441,6 +480,16 @@ class DecoderOnlyModel(nn.Module):
         cache_pos_for_partitions = torch.clamp(cs - pidx * partition_len, 0, partition_len)
         return cache_pos_for_partitions
 
+    def get_local_cache_positions(self, position_ids, query_position):
+        max_cache_len = self._original_mod.config.sliding_window
+        valid_input_len = 1 if query_position is None else query_position + 1
+        cache_seq_len = torch.clamp(position_ids, max=max_cache_len)[:, :1]  # past seen tokens
+        cache_offset = (
+            torch.clamp(position_ids, max=max_cache_len)[:, :1] + valid_input_len
+        )  # cache offset for next steps
+
+        return cache_seq_len, cache_offset
+
     def get_last_layernorm(self) -> nn.LayerNorm:
         return self._original_mod.norm
 
@@ -459,9 +508,11 @@ class DecoderOnlyModel(nn.Module):
         attention_mask: torch.Tensor = None,
         cache_position: torch.Tensor = None,
         position_ids: torch.Tensor = None,
+        query_position: torch.Tensor = None,
         past_key_values: Tuple[Tuple[torch.Tensor]] = None,
         rotary_emb: Optional[Union[nn.Module, torch.Tensor]] = None,
-        block_tables: Optional[torch.Tensor] = None,
+        global_block_tables: Optional[torch.Tensor] = None,
+        local_block_tables: Optional[torch.Tensor] = None,
     ):
         # retrieve input_ids and inputs_embeds
         if (input_ids is None) ^ (inputs_embeds is not None):
@@ -511,7 +562,7 @@ class DecoderOnlyModel(nn.Module):
             hidden_states = hidden_states + position_embeds
             cos, sin = None, None
 
-        # (batch, seq_len) -> (batch,)
+        # Get sequence positions for flash attention
         if self.attn_impl == "flash_attn":
             seq_positions = cache_position[:, 0]
             seq_positions = self.convert_sequence_positions_for_flash_attn(
@@ -520,15 +571,20 @@ class DecoderOnlyModel(nn.Module):
         else:
             seq_positions = cache_position[:, :1]
 
-        for layer in self.layers:
+        # Get local cache positions for sliding window layers
+        if len(self.sliding_window_layers) > 0:
+            sliding_cache_pos = self.get_local_cache_positions(position_ids, query_position)
+
+        for layer_idx, layer in enumerate(self.layers):
+            is_sliding = True if layer_idx in self.sliding_window_layers else False
             hidden_states = layer(
                 hidden_states=hidden_states,
                 attention_mask=attention_mask,
-                seq_positions=seq_positions,
+                seq_positions=sliding_cache_pos if is_sliding else seq_positions,
                 past_key_values=past_key_values,
                 cos=cos,
                 sin=sin,
-                block_tables=block_tables,
+                block_tables=local_block_tables if is_sliding else global_block_tables,
             )
 
         hidden_states = self.get_last_layernorm()(hidden_states)
@@ -625,7 +681,7 @@ class DecoderOnlyAttention(nn.Module):
         self_attn: Original attention module from the base model
     """
 
-    def __init__(self, self_attn, use_attention_mask, use_position_ids, kvcache_block_size):
+    def __init__(self, self_attn, use_attention_mask, use_position_ids, kvcache_block_size, is_sliding=False):
         super().__init__()
         self._original_mod = self_attn
         self.layer_idx = self_attn.layer_idx
@@ -645,6 +701,7 @@ class DecoderOnlyAttention(nn.Module):
 
         self.use_attention_mask = use_attention_mask
         self.use_position_ids = use_position_ids
+        self.is_sliding = is_sliding
         self.attention = self.get_attention()
         self.kvcache_block_size = kvcache_block_size
         self.__post_init__()
@@ -659,9 +716,14 @@ class DecoderOnlyAttention(nn.Module):
         self.attention.phase = phase
 
     def get_attention(self):
-        return AttentionOp(
-            self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask, self.use_position_ids
-        )
+        if self.is_sliding:
+            return SlidingWindowAttentionOp(
+                self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask, self.use_position_ids
+            )
+        else:
+            return AttentionOp(
+                self.num_heads, self.head_dim, self.num_key_value_heads, self.use_attention_mask, self.use_position_ids
+            )
 
     def __post_init__(self):
         self.q_proj = self._original_mod.q_proj
@@ -708,12 +770,14 @@ class DecoderOnlyAttention(nn.Module):
         value_states = value_states.view(batch_size, query_length, self.num_key_value_heads, self.head_dim).transpose(
             1, 2
         )
-        # b, num_head, query, head_dim
+        if hasattr(self, "q_norm") and hasattr(self, "k_norm"):
+            query_states = self.q_norm(query_states)
+            key_states = self.k_norm(key_states)
 
         if cos is not None and sin is not None:
             query_states, key_states = self.apply_rotary_pos_embed(query_states, key_states, cos, sin)
 
-        if batch_size > 1 and self.phase == "prefill":
+        if batch_size > 1 and "prefill" in self.phase:
             raise NotImplementedError(f"batch size should be 1 if prefill phase, but got {batch_size}.")
 
         attn_output = self.attention(
@@ -987,7 +1051,10 @@ class DecoderOnlyFlashAttention(DecoderOnlyAttention):
         value_states = value_states.view(batch_size, query_length, self.num_key_value_heads, self.head_dim).transpose(
             1, 2
         )
-        # b, num_head, query, head_dim
+
+        if hasattr(self, "q_norm") and hasattr(self, "k_norm"):
+            query_states = self.q_norm(query_states)
+            key_states = self.k_norm(key_states)
 
         if cos is not None and sin is not None:
             query_states, key_states = self.apply_rotary_pos_embed(query_states, key_states, cos, sin)
