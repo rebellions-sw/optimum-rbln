@@ -17,6 +17,7 @@ import importlib.util
 import warnings
 from dataclasses import dataclass
 
+from diffusers.utils.import_utils import _is_package_available
 from packaging.version import Version
 
 
@@ -132,6 +133,10 @@ RBLN_VERSION_COMPATS = {
 
 def is_rbln_available() -> bool:
     return importlib.util.find_spec("rebel-compiler") is not None
+
+
+def is_cosmos_guardrail_available() -> bool:
+    return _is_package_available("cosmos_guardrail")[0]
 
 
 def check_version_compats() -> None:
