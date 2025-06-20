@@ -25,18 +25,19 @@ model = RBLNColQwen2_5ForConditionalGeneration.from_model(
             "device": 0,
         },
         "tensor_parallel_size": 4,
-        "max_seq_len": 192, # TODO support large max_seq_len
+        "max_seq_len": 114_688,
+        "kvcache_partition_len": 16_384,
     },
 )
 model.save_pretrained("colqwen2.5-3b-multilingual")
 
 # Your inputs
 images = [
-    Image.new("RGB", (32, 32), color="white"),
+    # Image.new("RGB", (32, 32), color="white"),
     Image.new("RGB", (32, 32), color="black"),
 ]
 queries = [
-    "Is attention really all you need?",
+    # "Is attention really all you need?",
     "What is the amount of bananas farmed in Salvador?",
 ]
 
