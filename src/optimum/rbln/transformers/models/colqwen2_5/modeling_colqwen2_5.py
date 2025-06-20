@@ -60,13 +60,9 @@ class RBLNRuntimeModelForColqwen(RBLNRuntimeModel):
         runtime: rebel.Runtime,
         phase: str,
         batch_size: int,
-        # dec_attn_mask: torch.Tensor,
         block_tables: torch.Tensor,
         free_block_pool: Deque,
-        kvcache_block_size: int,
-        use_attention_mask: bool,
-        attn_impl: str,
-        use_position_ids: bool,
+        rbln_config: RBLNColQwen2_5ForConditionalGenerationConfig,
         **kwargs: Any,
     ) -> None:
         super().__init__(
@@ -76,10 +72,7 @@ class RBLNRuntimeModelForColqwen(RBLNRuntimeModel):
             None,
             block_tables,
             free_block_pool,
-            kvcache_block_size,
-            use_attention_mask,
-            attn_impl,
-            use_position_ids,
+            rbln_config,
             **kwargs,
         )
 
@@ -89,7 +82,6 @@ class RBLNRuntimeModelForColqwen(RBLNRuntimeModel):
         cache_position: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         position_embed: Optional[torch.Tensor] = None,
-        local_block_tables: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
     ):
         """
@@ -104,30 +96,21 @@ class RBLNRuntimeModelForColqwen(RBLNRuntimeModel):
             )
 
         query_length = inputs.shape[1]
-        if query_length > self.max_seq_len:
+        if query_length > self.rbln_config.max_seq_len:
             raise ValueError(
-                f"Input length ({query_length}) exceeds the maximum allowed sequence length ({self.max_seq_len})."
+                f"Input length ({query_length}) exceeds the maximum allowed sequence length ({self.rbln_config.max_seq_len})."
             )
 
         # Initialize attention mask for chunked processing
         chunked_attention_mask = (
-            torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
-            if self.use_attention_mask
+            torch.zeros(1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.max_seq_len, dtype=torch.float32)
+            if self.rbln_config.use_attention_mask
             else None
         )
 
-        # # Buffer for storing output logits
-        # out_buffers = [
-        #     torch.empty(
-        #         size=self.output_size,
-        #         dtype=torch.float32,
-        #         device="cpu",
-        #     )
-        # ]
-
         # Pad input and cache_position if the last chunk is smaller than `prefill_chunk_size`
-        if query_length % self.prefill_chunk_size != 0:
-            padding_size = (self.prefill_chunk_size - query_length) % self.prefill_chunk_size
+        if query_length % self.rbln_config.prefill_chunk_size != 0:
+            padding_size = (self.rbln_config.prefill_chunk_size - query_length) % self.rbln_config.prefill_chunk_size
             # inputs_embeds
             if inputs.dim() == 3:
                 inputs = torch.nn.functional.pad(inputs, (0, 0, 0, padding_size))
@@ -150,18 +133,11 @@ class RBLNRuntimeModelForColqwen(RBLNRuntimeModel):
             if position_embed is not None:
                 position_embed = torch.nn.functional.pad(position_embed, (0, 0, 0, padding_size))
 
-        # Overwrite position_ids and padded_cache_lengths
-        position_ids = None
-        padded_cache_lengths = 0
-
         return (
             inputs,
             cache_position,
             chunked_attention_mask,
-            # out_buffers,
-            position_ids,
             position_embed,
-            padded_cache_lengths,
             query_length,
         )
 
@@ -186,10 +162,7 @@ class RBLNRuntimeModelForColqwen(RBLNRuntimeModel):
             inputs,
             cache_position,
             chunked_attention_mask,
-            # out_buffers,
-            position_ids,
             position_embed,
-            padded_cache_lengths,
             query_length,
         ) = self._prepare_prefill_inputs(
             inputs, cache_position, attention_mask, position_embed, token_type_ids=token_type_ids
@@ -197,27 +170,20 @@ class RBLNRuntimeModelForColqwen(RBLNRuntimeModel):
 
         projs = []
         # Process input in chunks of size `prefill_chunk_size`
-        for step in range(0, query_length, self.prefill_chunk_size):
+        for step in range(0, query_length, self.rbln_config.prefill_chunk_size):
             # Extract the current chunk of inputs and cache positions
-            input_chunk = inputs[:, step : step + self.prefill_chunk_size]
-            cache_pos_chunk = cache_position[:, step : step + self.prefill_chunk_size]
-            position_ids_chunk = (
-                position_ids[:, step : step + self.prefill_chunk_size] if position_ids is not None else None
-            )
+            input_chunk = inputs[:, step : step + self.rbln_config.prefill_chunk_size]
+            cache_pos_chunk = cache_position[:, step : step + self.rbln_config.prefill_chunk_size]
             if position_embed is not None:
-                position_embed_chunk = position_embed[:, :, :, step : step + self.prefill_chunk_size, :]
+                position_embed_chunk = position_embed[:, :, :, step : step + self.rbln_config.prefill_chunk_size, :]
 
-            if self.use_attention_mask and not self.use_position_ids:
+            if self.rbln_config.use_attention_mask and not self.rbln_config.use_position_ids:
                 # Update attention mask to ensure proper causal behavior
-                if step >= self.prefill_chunk_size:
-                    chunked_attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
-                chunked_attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
-
-            # Define query position
-            # query_position = torch.tensor((query_length - 1) % self.prefill_chunk_size, dtype=torch.int16)
+                if step >= self.rbln_config.prefill_chunk_size:
+                    chunked_attention_mask[:, :, :, step - self.rbln_config.prefill_chunk_size : step] = 1
+                chunked_attention_mask[:, :, :, step : step + self.rbln_config.prefill_chunk_size] = self.causal_mask
 
             # Forward pass for the current chunk
-            # proj = super().forward(
             proj = self.runtime(
                 inputs_embeds=input_chunk,
                 cache_position=cache_pos_chunk,
@@ -226,12 +192,7 @@ class RBLNRuntimeModelForColqwen(RBLNRuntimeModel):
             )
             projs.append(proj)
 
-        # # Update decoder attention mask with processed KV-cache length from prefill phase
-        # if not is_external_block_tables and self.use_attention_mask:
-        #     self.dec_attn_mask[batch_idx].fill_(0)
-        #     self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
         return torch.concat(projs, dim=-2)
-        # return RBLNDecoderOnlyOutput(logits=logits, padded_cache_lengths=padded_cache_lengths)
 
 
 class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
@@ -253,10 +214,6 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         else:
             self.embed_tokens = None
 
-        # Initialize shared resources to be used across Runtime instances (prefill and decode phases)
-        # dec_attn_mask = torch.zeros(
-        #     self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=torch.float32
-        # )
         block_tables = torch.zeros(
             self.rbln_config.batch_size,
             self.rbln_config.max_seq_len // self.rbln_config.kvcache_block_size,
@@ -271,16 +228,10 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             embed_tokens=self.embed_tokens,
             phase="prefill",
             batch_size=self.rbln_config.batch_size,
-            # dec_attn_mask=dec_attn_mask,
             block_tables=block_tables,
             free_block_pool=free_block_pool,
-            kvcache_block_size=self.rbln_config.kvcache_block_size,
+            rbln_config=self.rbln_config,
             vocab_size=self.config.vocab_size,
-            prefill_chunk_size=self.rbln_config.prefill_chunk_size,
-            max_seq_len=self.rbln_config.max_seq_len,
-            use_attention_mask=self.rbln_config.use_attention_mask,
-            attn_impl=self.rbln_config.attn_impl,
-            use_position_ids=self.rbln_config.use_position_ids,
         )
 
         self.visual = self.rbln_submodules[0]
@@ -561,7 +512,6 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             vision_tokens = input_id[0][vision_start_indices + 1]
             image_nums = (vision_tokens == image_token_id).sum()
             video_nums = (vision_tokens == video_token_id).sum()
-            # position_ids, rope_deltas = self.get_rope_index(
             position_ids, rope_deltas = Qwen2_5_VLForConditionalGeneration.get_rope_index(
                 self,
                 input_id,
