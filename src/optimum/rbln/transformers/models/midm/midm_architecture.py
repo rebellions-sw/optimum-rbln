@@ -68,7 +68,12 @@ class MidmLMHeadModelWrapper(DecoderOnlyWrapper):
             )
             new_layer = MidmLayer(layer, new_self_attn)
             new_layers.append(new_layer)
-        new_model = MidmModel(causal_lm.transformer, new_layers, max_seq_len=max_seq_len)
+        new_model = MidmModel(
+            causal_lm.transformer,
+            new_layers,
+            max_seq_len=max_seq_len,
+            sliding_window_layers=self.sliding_window_layers,
+        )
         new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm
 
