@@ -322,7 +322,6 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
                 sin_full_padded[None, None, :, :],
             )
 
-            # import pdb; pdb.set_trace()
             # Depadding
             depadded_output = []
             for i, valid_len in enumerate(window_valid_lengths):
@@ -332,11 +331,8 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
             output = torch.cat(depadded_output, dim=0)
 
             output_hidden_states.append(output)
-
-        # import pdb; pdb.set_trace()
         hidden_states = torch.cat(output_hidden_states)
         reverse_indices = torch.argsort(window_index)
-        # import pdb; pdb.set_trace()
         hidden_states = hidden_states[reverse_indices, :]
         return hidden_states
 
