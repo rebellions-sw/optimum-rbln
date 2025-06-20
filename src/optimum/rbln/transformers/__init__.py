@@ -50,6 +50,8 @@ _import_structure = {
         "RBLNBlip2QFormerModelConfig",
         "RBLNBlip2VisionModel",
         "RBLNBlip2VisionModelConfig",
+        "RBLNColPaliForRetrieval",
+        "RBLNColPaliForRetrievalConfig",
         "RBLNCLIPTextModel",
         "RBLNCLIPTextModelConfig",
         "RBLNCLIPTextModelWithProjection",
