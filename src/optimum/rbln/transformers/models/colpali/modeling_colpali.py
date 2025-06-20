@@ -25,6 +25,7 @@ from transformers import (
 from transformers.modeling_utils import no_init_weights
 from transformers.models.colpali.modeling_colpali import ColPaliForRetrievalOutput
 from transformers.models.paligemma.modeling_paligemma import PaliGemmaMultiModalProjector
+from transformers.modeling_outputs import BaseModelOutputWithPooling
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
@@ -43,6 +44,58 @@ if TYPE_CHECKING:
     )
 
 
+class LoopVisionTower:
+    def __init__(self, vision_tower: RBLNModel) -> None:
+        self.vision_tower = vision_tower
+
+    def forward(self, pixel_values, **kwargs):
+        # Loop instead of batch
+        # shape of pixel_values : [batch, num_patches, num_channel, height, width]
+        batch_size = pixel_values.shape[0]
+        outputs = []
+        for i in range(batch_size):
+            outputs.append(self.vision_tower(pixel_values[i : i + 1]))
+
+        last_hidden_states = [output.last_hidden_state for output in outputs]
+        last_hidden_states = torch.cat(last_hidden_states, dim=0)
+
+        return BaseModelOutputWithPooling(
+            last_hidden_state=last_hidden_states,
+        )
+
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        return self.forward(*args, **kwds)
+
+    def __repr__(self) -> str:
+        return repr(self.vision_tower)
+
+
+class LoopLanguageModel:
+    def __init__(self, language_model: RBLNModel, rbln_config: RBLNModelConfig) -> None:
+        self.language_model = language_model
+        self.rbln_config = rbln_config
+
+    def forward(self, inputs_embeds: torch.Tensor, attention_mask: torch.Tensor, **kwargs):
+        embeddings = []
+        for i in range(inputs_embeds.shape[0]):
+            inputs_embed = torch.nn.functional.pad(
+                inputs_embeds[i : i + 1], (0, 0, 0, self.rbln_config.max_seq_len - inputs_embeds.shape[1])
+            )
+            attn_mask = torch.nn.functional.pad(
+                attention_mask[i : i + 1], (0, self.rbln_config.max_seq_len - attention_mask.shape[1])
+            ).to(torch.float32)
+            embeddings.append(self.language_model(inputs_embeds=inputs_embed, attention_mask=attn_mask))
+        embeddings = torch.cat(embeddings, dim=0)[:, : attention_mask.shape[-1]]
+
+        return embeddings
+
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        return self.forward(*args, **kwds)
+
+    def __repr__(self) -> str:
+        return repr(self.language_model)
+
+
 class RBLNColPaliForRetrieval(RBLNModel):
     auto_model_class = None
     _rbln_submodules = [
@@ -50,8 +103,8 @@ class RBLNColPaliForRetrieval(RBLNModel):
     ]
 
     def __post_init__(self, **kwargs):
-        self.vision_tower = self.rbln_submodules[0]
-        self.custom_model = self.model[0]
+        self.vision_tower = LoopVisionTower(self.rbln_submodules[0])
+        self.language_model = LoopLanguageModel(self.model[0], self.rbln_config)
 
         artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
         self.embed_tokens = self._create_embedding_layer()
@@ -172,6 +225,7 @@ class RBLNColPaliForRetrieval(RBLNModel):
             inputs_embeds = self.embed_tokens(llm_input_ids)
 
         # Merge text and images
+        image_features = None
         if pixel_values is not None:
             image_features = self.get_image_features(pixel_values)
             special_image_mask = (input_ids == self.config.vlm_config.image_token_index).unsqueeze(-1)
@@ -179,7 +233,8 @@ class RBLNColPaliForRetrieval(RBLNModel):
 
             image_features = image_features.to(inputs_embeds.device, inputs_embeds.dtype)
             inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, image_features)
-        return inputs_embeds
+
+        return inputs_embeds, image_features
 
     def forward(
         self,
@@ -200,21 +255,11 @@ class RBLNColPaliForRetrieval(RBLNModel):
 
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        inputs_embeds = self._preprocess_inputs(
+        inputs_embeds, image_features = self._preprocess_inputs(
             input_ids=input_ids, inputs_embeds=inputs_embeds, pixel_values=pixel_values
         )
 
-        embeddings = []
-        for i in range(inputs_embeds.shape[0]):
-            inputs_embed = torch.nn.functional.pad(
-                inputs_embeds[i : i + 1], (0, 0, 0, self.rbln_config.max_seq_len - inputs_embeds.shape[1])
-            )
-            attn_mask = torch.nn.functional.pad(
-                attention_mask[i : i + 1], (0, self.rbln_config.max_seq_len - attention_mask.shape[1])
-            ).to(torch.float32)
-            embeddings.append(self.custom_model(inputs_embeds=inputs_embed, attention_mask=attn_mask))
-        embeddings = torch.cat(embeddings, dim=0)[:, : attention_mask.shape[-1]]
-
+        embeddings = self.language_model(inputs_embeds=inputs_embeds, attention_mask=attention_mask)
         # L2 normalization
         embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)  # (batch_size, sequence_length, dim)
 
