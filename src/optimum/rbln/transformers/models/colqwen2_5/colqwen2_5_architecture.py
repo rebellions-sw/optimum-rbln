@@ -42,6 +42,7 @@ class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
             max_seq_len=max_seq_len,
             kvcache_block_size=self.kvcache_block_size,
             use_learned_pos_emb=self.use_learned_pos_emb,
+            sliding_window_layers=self.sliding_window_layers,
         )
 
         # custom_text_projection layer from origin_model
@@ -53,7 +54,8 @@ class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
         input_ids = None if self.use_inputs_embeds else args.pop(0)
         inputs_embeds = args.pop(0) if self.use_inputs_embeds else None
         cache_position = args.pop(0)
-        block_tables = args.pop(0)
+        global_block_tables = args.pop(0)
+        local_block_tables = None
         position_embeds = args.pop(0)
         position_ids = None
         attention_mask = args.pop(0) if self.use_attention_mask else None
@@ -78,7 +80,8 @@ class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
             input_ids,
             inputs_embeds,
             cache_position,
-            block_tables,
+            global_block_tables,
+            local_block_tables,
             attention_mask,
             position_ids,
             past_key_values,
@@ -90,7 +93,8 @@ class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
             input_ids,
             inputs_embeds,
             cache_position,
-            block_tables,
+            global_block_tables,
+            local_block_tables,
             attention_mask,
             position_ids,
             past_key_values,
@@ -105,7 +109,8 @@ class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
             position_ids=position_ids,
             past_key_values=past_key_values,
             rotary_emb=rotary_emb,
-            block_tables=block_tables,
+            global_block_tables=global_block_tables,
+            local_block_tables=local_block_tables,
         )
         proj = self.custom_text_proj(last_hidden_states)
 

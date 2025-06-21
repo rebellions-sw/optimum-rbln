@@ -221,8 +221,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         ).fill_(-1)
         free_block_pool = deque(x for x in range(self.rbln_config.kvcache_num_blocks))
 
-        # TODO delete RBLNRuntimeModel
-        self.prefill_decoder = RBLNRuntimeModelForColqwen(
+        self.prefill = RBLNRuntimeModelForColqwen(
             runtime=self.model[0],
             main_input_name=main_input_name,
             embed_tokens=self.embed_tokens,
@@ -560,28 +559,26 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         batch_size = inputs_embeds.shape[0]
 
         projs = []
-        attention_mask_batches = []
+        max_size = self.rbln_config.prefill_chunk_size * (inputs_embeds.shape[1] // self.rbln_config.prefill_chunk_size + 1)
         for b_idx in range(batch_size):
             cache_position = torch.arange(0, inputs_embeds.shape[1], dtype=torch.int32).unsqueeze(0)
 
-            proj = self.prefill_decoder(
+            proj = self.prefill(
                 inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
                 attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                 cache_position=cache_position,
                 batch_idx=b_idx,
                 position_embed=position_embed[:, b_idx : b_idx + 1],
             )
-
-            fliped_attention_mask_batch = torch.flip(attention_mask, dims=[-1])
-
-            projs.append(proj)
-            attention_mask_batches.append(fliped_attention_mask_batch)
-
+            pad_size = (0, 0, 0, max_size - proj.shape[1], 0, 0)
+            padded_proj = torch.nn.functional.pad(proj, pad_size, "constant", 1e-8) # For normaliztion, fill non-zero value
+            projs.append(padded_proj)
+        
+        # post process 
         projs = torch.cat(projs, dim=0)
         projs = projs[:, : inputs_embeds.shape[1]]
-
-        attention_mask_batches = torch.cat(attention_mask_batches, dim=0)
-
         projs = projs / projs.norm(dim=-1, keepdim=True)  # (batch_size, sequence_length, dim)
-        projs = projs * attention_mask_batches.unsqueeze(-1)  # (batch_size, sequence_length, dim)
+
+        fliped_attention_mask_batch = torch.flip(attention_mask, dims=[-1])
+        projs = projs * fliped_attention_mask_batch.unsqueeze(-1)  # (batch_size, sequence_length, dim)
         return projs
