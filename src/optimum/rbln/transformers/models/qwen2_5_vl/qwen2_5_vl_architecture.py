@@ -79,7 +79,7 @@ class Qwen2_5_VLVisionFullAttention(nn.Module):
         super().__init__()
         self._origin_model = model
         self.num_heads = model.num_heads
-        self.head_dim = model.head_dim
+        self.head_dim = getattr(model, "head_dim", model.proj.in_features // model.num_heads)
         self.qkv = model.qkv
         self.proj = model.proj
 
@@ -114,7 +114,7 @@ class Qwen2_5_VLVisionWindowAttention(nn.Module):
         super().__init__()
         self._origin_model = model
         self.num_heads = model.num_heads
-        self.head_dim = model.head_dim
+        self.head_dim = getattr(model, "head_dim", model.proj.in_features // model.num_heads)
         self.qkv = model.qkv
         self.proj = model.proj
         self.window_seq_len = window_seq_len

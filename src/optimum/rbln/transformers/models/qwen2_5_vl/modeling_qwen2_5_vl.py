@@ -334,7 +334,6 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
         hidden_states = torch.cat(output_hidden_states)
         reverse_indices = torch.argsort(window_index)
         hidden_states = hidden_states[reverse_indices, :]
-
         return hidden_states
 
 
