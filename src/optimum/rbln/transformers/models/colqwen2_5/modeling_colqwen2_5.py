@@ -559,7 +559,9 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         batch_size = inputs_embeds.shape[0]
 
         projs = []
-        max_size = self.rbln_config.prefill_chunk_size * (inputs_embeds.shape[1] // self.rbln_config.prefill_chunk_size + 1)
+        max_size = self.rbln_config.prefill_chunk_size * (
+            inputs_embeds.shape[1] // self.rbln_config.prefill_chunk_size + 1
+        )
         for b_idx in range(batch_size):
             cache_position = torch.arange(0, inputs_embeds.shape[1], dtype=torch.int32).unsqueeze(0)
 
@@ -571,10 +573,12 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 position_embed=position_embed[:, b_idx : b_idx + 1],
             )
             pad_size = (0, 0, 0, max_size - proj.shape[1], 0, 0)
-            padded_proj = torch.nn.functional.pad(proj, pad_size, "constant", 1e-8) # For normaliztion, fill non-zero value
+            padded_proj = torch.nn.functional.pad(
+                proj, pad_size, "constant", 1e-8
+            )  # For normaliztion, fill non-zero value
             projs.append(padded_proj)
-        
-        # post process 
+
+        # post process
         projs = torch.cat(projs, dim=0)
         projs = projs[:, : inputs_embeds.shape[1]]
         projs = projs / projs.norm(dim=-1, keepdim=True)  # (batch_size, sequence_length, dim)
