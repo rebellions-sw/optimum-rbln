@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Optional, Tuple
 
 from ....configuration_utils import RBLNModelConfig
 from ....utils.logging import get_logger
@@ -31,6 +31,7 @@ class RBLNRetinaFaceConfig(RBLNModelConfig):
     ):
         """
         Args:
+            batch_size (Optional[int]): The batch size for inference. This variable is explicitly set to 1.
             height (Optional[int]): The width of input for inference. Defaults to 704.
             width (Optional[int]): The width of input for inference. Defaults to 1280.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
@@ -49,11 +50,14 @@ class RBLNVideoSafetyModelConfig(RBLNModelConfig):
         self,
         batch_size: Optional[int] = None,
         input_size: Optional[int] = None,
+        image_size: Optional[Tuple[int, int]] = None,
         **kwargs,
     ):
         """
         Args:
             batch_size (Optional[int]): The batch size for inference. Defaults to 1.
+            input_size (Optional[int]): The input size of MLP classifier on the embeddings from SigLIP for each frame. Defaults to 1152.
+            image_size (Optional[Tuple[int, int]]): The image size of Video Content Safety Filter (SigLIP).
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -62,3 +66,4 @@ class RBLNVideoSafetyModelConfig(RBLNModelConfig):
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
         self.input_size = 1152  # hard coded
+        self.image_size = image_size
