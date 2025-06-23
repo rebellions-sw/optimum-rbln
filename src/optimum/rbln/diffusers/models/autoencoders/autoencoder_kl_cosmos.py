@@ -39,6 +39,17 @@ logger = get_logger(__name__)
 
 
 class RBLNAutoencoderKLCosmos(RBLNModel):
+    """
+    RBLN implementation of AutoencoderKLCosmos for diffusion models.
+
+    This model is used to accelerate AutoencoderKLCosmos models from diffusers library on RBLN NPUs.
+    It can be configured to include both encoder and decoder, or just the decoder part for latent-to-video
+    conversion.
+
+    This class inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods
+    the library implements for all its models.
+    """
+
     auto_model_class = AutoencoderKLCosmos
     hf_library_name = "diffusers"
     _rbln_config_class = RBLNAutoencoderKLCosmosConfig
