@@ -185,7 +185,10 @@ class RBLNUNet2DConditionModel(RBLNModel):
         rbln_config: RBLNUNet2DConditionModelConfig,
         image_size: Optional[Tuple[int, int]] = None,
     ) -> Tuple[int, int]:
-        scale_factor = pipe.movq_scale_factor if hasattr(pipe, "movq_scale_factor") else pipe.vae_scale_factor
+        if hasattr(pipe, "image_processor"):
+            scale_factor = pipe.image_processor.vae_scale_factor
+        else:
+            scale_factor = pipe.movq_scale_factor if hasattr(pipe, "movq_scale_factor") else pipe.vae_scale_factor
 
         if image_size is None:
             if "Img2Img" in pipe.__class__.__name__:
