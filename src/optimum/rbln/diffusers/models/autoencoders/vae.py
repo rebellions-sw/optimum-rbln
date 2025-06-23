@@ -21,7 +21,6 @@ from ....utils.runtime_utils import RBLNPytorchRuntime
 
 
 if TYPE_CHECKING:
-    import torch
     from diffusers import AutoencoderKL, AutoencoderKLCosmos, VQModel
 
 
