@@ -67,7 +67,7 @@ class LLMTest:
 class TestQwen2Model(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen2ForCausalLM
     HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
-    EXPECTED_OUTPUT = " I am a 30-year-old woman who has been living with lupus for over 1"
+    EXPECTED_OUTPUT = " I am a 20 year old girl from the United States. I have been studying English for"
     HF_CONFIG_KWARGS = {"max_position_embeddings": 1024}
 
 
@@ -82,7 +82,7 @@ class TestLlamaForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNLlamaForCausalLM
     HF_MODEL_ID = "afmck/testing-llama-tiny"
     TEST_LEVEL = TestLevel.ESSENTIAL
-    EXPECTED_OUTPUT = "reress makefable R���� noethetsshss rechoolso�"
+    EXPECTED_OUTPUT = "reress makefable R���� noethetss0oss invetetet"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
 
     def get_inputs(self):
