@@ -497,12 +497,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             self.rbln_config.max_seq_len // self.rbln_config.kvcache_block_size,
             dtype=torch.int16,
         ).fill_(-1)
-        max_valid_blocks = (
-            self.rbln_config.kvcache_num_blocks
-            if self.rbln_config.attn_impl == "eager"
-            else self.rbln_config.kvcache_num_blocks - 1
-        )
-        free_block_pool = deque(x for x in range(max_valid_blocks))
+        free_block_pool = deque(x for x in range(self.rbln_config.kvcache_num_blocks))
 
         self.prefill_decoder = RBLNRuntimeModel(
             runtime=self.model[0],
