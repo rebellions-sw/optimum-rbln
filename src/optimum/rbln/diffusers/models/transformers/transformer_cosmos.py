@@ -95,6 +95,7 @@ class CosmosTransformer3DModelWrapper(torch.nn.Module):
 
 class RBLNCosmosTransformer3DModel(RBLNModel):
     """RBLN wrapper for the Cosmos Transformer model."""
+
     hf_library_name = "diffusers"
     auto_model_class = CosmosTransformer3DModel
 

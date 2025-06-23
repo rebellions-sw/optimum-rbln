@@ -23,6 +23,13 @@ logger = get_logger(__name__)
 
 
 class RBLNCosmosTextToWorldPipeline(RBLNDiffusionMixin, CosmosTextToWorldPipeline):
+    """
+    RBLN-accelerated implementation of Cosmos Text to World pipeline for text-to-video generation.
+
+    This pipeline compiles Cosmos Text to World models to run efficiently on RBLN NPUs, enabling high-performance
+    inference for generating images with distinctive artistic style and enhanced visual quality.
+    """
+
     original_class = CosmosTextToWorldPipeline
     _submodules = ["text_encoder", "transformer", "vae"]
     _optional_components = ["safety_checker"]
