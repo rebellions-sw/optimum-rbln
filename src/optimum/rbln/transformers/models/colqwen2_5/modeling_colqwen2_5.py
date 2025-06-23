@@ -12,9 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections import deque
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Deque, List, Optional, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Union
 
 import rebel
 import torch
@@ -33,12 +31,11 @@ from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ..decoderonly.modeling_decoderonly import (
-    RBLNDecoderOnlyModelForCausalLM,
-    RBLNDecoderOnlyOutput,
     RBLNRuntimeModel,
     set_default_values,
     validate_attention_method,
 )
+from ..qwen2_5_vl.modeling_qwen2_5_vl import RBLNQwen2_5_VLForConditionalGeneration
 from .colqwen2_5_architecture import ColQwen2_5_LanguageModelWrapper
 from .configuration_colqwen2_5 import RBLNColQwen2_5ForConditionalGenerationConfig
 
@@ -54,91 +51,23 @@ if TYPE_CHECKING:
     )
 
 
-class RBLNRuntimeModelForColqwen(RBLNRuntimeModel):
+class RBLNRuntimeModelForColQwen2_5(RBLNRuntimeModel):
     def __init__(
         self,
         runtime: rebel.Runtime,
-        phase: str,
         batch_size: int,
-        block_tables: torch.Tensor,
-        free_block_pool: Deque,
         rbln_config: RBLNColQwen2_5ForConditionalGenerationConfig,
         **kwargs: Any,
     ) -> None:
         super().__init__(
             runtime,
-            phase,
+            "prefill",
             batch_size,
             None,
-            block_tables,
-            free_block_pool,
+            None,
+            None,
             rbln_config,
             **kwargs,
-        )
-
-    def _prepare_prefill_inputs(
-        self,
-        inputs: torch.Tensor,
-        cache_position: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_embed: Optional[torch.Tensor] = None,
-        token_type_ids: Optional[torch.Tensor] = None,
-    ):
-        """
-        Prepare inputs for prefill phase.
-        """
-        # Handle continuous batching in a compiled graph by extracting valid inputs
-        # If an attention mask is provided, select only the valid (non-masked) inputs
-        inputs = inputs[:, attention_mask.bool()] if attention_mask is not None else inputs
-        if position_embed is not None:
-            position_embed = (
-                position_embed[:, :, :, attention_mask.bool(), :] if attention_mask is not None else position_embed
-            )
-
-        query_length = inputs.shape[1]
-        if query_length > self.rbln_config.max_seq_len:
-            raise ValueError(
-                f"Input length ({query_length}) exceeds the maximum allowed sequence length ({self.rbln_config.max_seq_len})."
-            )
-
-        # Initialize attention mask for chunked processing
-        chunked_attention_mask = (
-            torch.zeros(1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.max_seq_len, dtype=torch.float32)
-            if self.rbln_config.use_attention_mask
-            else None
-        )
-
-        # Pad input and cache_position if the last chunk is smaller than `prefill_chunk_size`
-        if query_length % self.rbln_config.prefill_chunk_size != 0:
-            padding_size = (self.rbln_config.prefill_chunk_size - query_length) % self.rbln_config.prefill_chunk_size
-            # inputs_embeds
-            if inputs.dim() == 3:
-                inputs = torch.nn.functional.pad(inputs, (0, 0, 0, padding_size))
-            # inputs_ids
-            else:
-                inputs = torch.nn.functional.pad(inputs, (0, padding_size))
-
-            cache_position = torch.cat(
-                [
-                    cache_position,
-                    torch.arange(
-                        query_length,
-                        query_length + padding_size,
-                        dtype=torch.int32,
-                    ).unsqueeze(0),
-                ],
-                dim=-1,
-            )
-
-            if position_embed is not None:
-                position_embed = torch.nn.functional.pad(position_embed, (0, 0, 0, padding_size))
-
-        return (
-            inputs,
-            cache_position,
-            chunked_attention_mask,
-            position_embed,
-            query_length,
         )
 
     def prefill_forward(
@@ -162,7 +91,10 @@ class RBLNRuntimeModelForColqwen(RBLNRuntimeModel):
             inputs,
             cache_position,
             chunked_attention_mask,
+            _,
+            _,
             position_embed,
+            _,
             query_length,
         ) = self._prepare_prefill_inputs(
             inputs, cache_position, attention_mask, position_embed, token_type_ids=token_type_ids
@@ -195,7 +127,7 @@ class RBLNRuntimeModelForColqwen(RBLNRuntimeModel):
         return torch.concat(projs, dim=-2)
 
 
-class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
+class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGeneration):
     auto_model_class = AutoModelForVision2Seq
     _rbln_submodules = [
         {"name": "visual"},
@@ -206,29 +138,16 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
     def __post_init__(self, **kwargs):
         main_input_name = self.main_input_name
 
-        if self.rbln_config.use_inputs_embeds:
-            main_input_name = "inputs_embeds"
-            artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
-            self.embed_tokens = self._create_embedding_layer()
-            self.embed_tokens.load_state_dict(artifacts["embed_tokens"])
-        else:
-            self.embed_tokens = None
+        main_input_name = "inputs_embeds"
+        artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
+        self.embed_tokens = self._create_embedding_layer()
+        self.embed_tokens.load_state_dict(artifacts["embed_tokens"])
 
-        block_tables = torch.zeros(
-            self.rbln_config.batch_size,
-            self.rbln_config.max_seq_len // self.rbln_config.kvcache_block_size,
-            dtype=torch.int16,
-        ).fill_(-1)
-        free_block_pool = deque(x for x in range(self.rbln_config.kvcache_num_blocks))
-
-        self.prefill = RBLNRuntimeModelForColqwen(
+        self.prefill = RBLNRuntimeModelForColQwen2_5(
             runtime=self.model[0],
             main_input_name=main_input_name,
             embed_tokens=self.embed_tokens,
-            phase="prefill",
             batch_size=self.rbln_config.batch_size,
-            block_tables=block_tables,
-            free_block_pool=free_block_pool,
             rbln_config=self.rbln_config,
             vocab_size=self.config.vocab_size,
         )
@@ -237,28 +156,9 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         self.mrope_section = self.config.rope_scaling["mrope_section"]
         self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config)
         self.rope_deltas = torch.zeros(self.rbln_config.batch_size)
-        self.mask_non_image_embeddings = kwargs.get("mask_non_image_embeddings", False)
 
-    @classmethod
-    def save_torch_artifacts(
-        cls,
-        model: "PreTrainedModel",
-        save_dir_path: Path,
-        subfolder: str,
-        rbln_config: RBLNColQwen2_5ForConditionalGenerationConfig,
-    ):
-        save_dict = {}
-        save_dict["embed_tokens"] = model.get_input_embeddings().state_dict()
-        torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
-
-    @classmethod
-    def update_kwargs(cls, kwargs):
-        kwargs.update(
-            {
-                "_attn_implementation": "eager",
-            }
-        )
-        return super().update_kwargs(kwargs)
+    def can_generate(self):
+        return False
 
     @classmethod
     @torch.inference_mode()
@@ -305,15 +205,6 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         )
 
         compiled_models = {"prefill": compiled_prefill}
-
-        required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
-        if rbln_config.kvcache_num_blocks < required_num_blocks:
-            cls.maybe_suggest_kvcache_num_blocks(
-                compiled_models=compiled_models,
-                model_config=model.config,
-                rbln_config=rbln_config,
-            )
-
         return compiled_models
 
     @classmethod
@@ -330,16 +221,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             rbln_config=rbln_config,
             model_config=model_config,
         )
-        pos_idx = 3
-        input_info.insert(
-            pos_idx,
-            (
-                "position_emb",
-                [2, batch_size, 1, query_length, model_config.hidden_size // model_config.num_attention_heads],
-                "float32",
-            ),
-        )
-        query_position = input_info.pop(pos_idx + 1)  # remove query postion
+        query_position = input_info.pop(4)  # remove query postion
         assert query_position[0] == "query_position", print(query_position[0], "is deleted.")
         return input_info
 
@@ -375,37 +257,8 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
         max_num_blocks = required_num_blocks
 
-        if rbln_config.attn_impl == "flash_attn":
-            estimated_max_num_blocks = cls.get_maximum_num_blocks(
-                config=model_config,
-                tensor_parallel_size=rbln_config.tensor_parallel_size or 1,
-                kvcache_block_size=rbln_config.kvcache_block_size,
-                nbits_per_param=16 if not rbln_config.quantization else 4,  # TODO(jongho): FIX Ad-hoc
-                n_model_params=sum(p.numel() for p in model.parameters()),
-                num_runtimes=1 + len(rbln_config.decoder_batch_sizes),
-            )
-
-            max_num_blocks = min(max_num_blocks, estimated_max_num_blocks)
-
-            flash_min_blocks = rbln_config.max_seq_len // rbln_config.kvcache_block_size + 1
-            if max_num_blocks < flash_min_blocks:
-                max_num_blocks = flash_min_blocks
-
-            if max_num_blocks < rbln_config.batch_size:
-                raise RuntimeError(
-                    f"Batch size ({rbln_config.batch_size}) exceeds available KV cache blocks ({max_num_blocks}). "
-                    "Ensure the number of blocks is at least equal to the batch size."
-                )
-
         if rbln_config.kvcache_num_blocks is None:
             rbln_config.kvcache_num_blocks = max_num_blocks
-        elif rbln_config.kvcache_num_blocks > max_num_blocks:
-            logger.warning(
-                f"The set `kvcache_num_blocks` ({rbln_config.kvcache_num_blocks}) is greater"
-                f" than the estimated maximum number of blocks ({max_num_blocks})."
-                "This can cause a failure during model compilation."
-            )
-        logger.info(f"[KVCache] Compiling with num_blocks: {rbln_config.kvcache_num_blocks}")
 
         prefill_input_info = cls.get_input_info(
             batch_size=1,
@@ -438,97 +291,8 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             ),
         ]
 
-    def _get_position_embeddings(self, hidden_states, position_ids):
-        cos, sin = self.rotary_emb(hidden_states, position_ids)
-        mrope_section = self.mrope_section * 2
-        cos = torch.cat([m[i % 3] for i, m in enumerate(cos.split(mrope_section, dim=-1))], dim=-1).unsqueeze(1)
-        sin = torch.cat([m[i % 3] for i, m in enumerate(sin.split(mrope_section, dim=-1))], dim=-1).unsqueeze(1)
-        return torch.stack([cos, sin])
-
-    def _preprocess_prefill(
-        self,
-        input_ids: torch.LongTensor = None,
-        attention_mask: torch.Tensor = None,
-        pixel_values: torch.Tensor = None,
-        pixel_values_videos: torch.FloatTensor = None,
-        image_grid_thw: torch.LongTensor = None,
-        video_grid_thw: torch.LongTensor = None,
-        second_per_grid_ts: torch.Tensor = None,
-    ):
-        batch_size = input_ids.shape[0]
-        inputs_embeds = self.embed_tokens(input_ids)
-
-        if pixel_values is not None and image_grid_thw is not None:
-            offsets = image_grid_thw[:, 1] * image_grid_thw[:, 2]  # (batch_size,)
-            pixel_values = torch.cat(
-                [pixel_sequence[:offset] for pixel_sequence, offset in zip(pixel_values, offsets)],
-                dim=0,
-            )
-
-        if pixel_values is not None:
-            image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
-            n_image_tokens = (input_ids == self.config.image_token_id).sum().item()
-            n_image_features = image_embeds.shape[0]
-            if n_image_tokens != n_image_features:
-                raise ValueError(
-                    f"Image features and image tokens do not match: tokens: {n_image_tokens}, features {n_image_features}"
-                )
-
-            mask = input_ids == self.config.image_token_id
-            mask_unsqueezed = mask.unsqueeze(-1)
-            mask_expanded = mask_unsqueezed.expand_as(inputs_embeds)
-            image_embeds = image_embeds.to(inputs_embeds.device, inputs_embeds.dtype)
-            inputs_embeds = inputs_embeds.masked_scatter(mask_expanded, image_embeds)
-
-        if pixel_values_videos is not None:
-            video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
-            n_video_tokens = (input_ids == self.config.video_token_id).sum().item()
-            n_video_features = video_embeds.shape[0]
-            if n_video_tokens != n_video_features:
-                raise ValueError(
-                    f"Video features and video tokens do not match: tokens: {n_video_tokens}, features {n_video_features}"
-                )
-
-            mask = input_ids == self.config.video_token_id
-            mask_unsqueezed = mask.unsqueeze(-1)
-            mask_expanded = mask_unsqueezed.expand_as(inputs_embeds)
-            inputs_embeds = inputs_embeds.masked_scatter(mask_expanded, video_embeds)
-
-        max_inputs_len = input_ids.shape[1]
-
-        head_dim = getattr(self.config, "head_dim", None) or self.config.hidden_size // self.config.num_attention_heads
-        all_position_embeds = torch.zeros(2, batch_size, 1, max_inputs_len, head_dim)
-        all_rope_deltas = []
-
-        image_token_id = self.config.image_token_id
-        video_token_id = self.config.video_token_id
-        vision_start_token_id = self.config.vision_start_token_id
-        image_idx, video_idx = 0, 0
-
-        for b_idx in range(batch_size):
-            input_id = input_ids[b_idx : b_idx + 1][:, attention_mask[b_idx].bool()]
-            vision_start_indices = torch.argwhere(input_id == vision_start_token_id).squeeze(1)
-            vision_tokens = input_id[0][vision_start_indices + 1]
-            image_nums = (vision_tokens == image_token_id).sum()
-            video_nums = (vision_tokens == video_token_id).sum()
-            position_ids, rope_deltas = Qwen2_5_VLForConditionalGeneration.get_rope_index(
-                self,
-                input_id,
-                image_grid_thw[image_idx : image_idx + image_nums] if image_grid_thw is not None else None,
-                video_grid_thw[video_idx : video_idx + video_nums] if video_grid_thw is not None else None,
-                second_per_grid_ts[video_idx : video_idx + video_nums] if second_per_grid_ts is not None else None,
-            )
-            image_idx += image_nums
-            video_idx += video_nums
-
-            position_embed = self._get_position_embeddings(inputs_embeds, position_ids)
-            mask_indices = torch.nonzero(attention_mask[b_idx], as_tuple=True)[0]
-            all_position_embeds[:, b_idx : b_idx + 1].index_copy_(dim=-2, index=mask_indices, source=position_embed)
-            all_rope_deltas.append(rope_deltas)
-
-        rope_deltas = torch.stack(all_rope_deltas)
-
-        return inputs_embeds, all_position_embeds, rope_deltas
+    def get_rope_index(self, *args, **kwargs):
+        return Qwen2_5_VLForConditionalGeneration.get_rope_index(self, *args, **kwargs)
 
     def forward(
         self,
@@ -544,7 +308,14 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         generate_idx: Optional[torch.Tensor] = None,
         return_dict: Optional[bool] = None,
         **kwargs,
-    ) -> RBLNDecoderOnlyOutput:
+    ) -> torch.Tensor:
+        if pixel_values is not None and image_grid_thw is not None:
+            offsets = image_grid_thw[:, 1] * image_grid_thw[:, 2]  # (batch_size,)
+            pixel_values = torch.cat(
+                [pixel_sequence[:offset] for pixel_sequence, offset in zip(pixel_values, offsets)],
+                dim=0,
+            )
+
         inputs_embeds, position_embed, rope_deltas = self._preprocess_prefill(
             input_ids,
             attention_mask,
@@ -562,6 +333,13 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         max_size = self.rbln_config.prefill_chunk_size * (
             inputs_embeds.shape[1] // self.rbln_config.prefill_chunk_size + 1
         )
+
+        block_tables = torch.arange(
+            0,
+            self.rbln_config.max_seq_len // self.rbln_config.kvcache_block_size,
+            dtype=torch.int16,
+        )
+
         for b_idx in range(batch_size):
             cache_position = torch.arange(0, inputs_embeds.shape[1], dtype=torch.int32).unsqueeze(0)
 
@@ -569,7 +347,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
                 attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                 cache_position=cache_position,
-                batch_idx=b_idx,
+                block_tables=block_tables,
                 position_embed=position_embed[:, b_idx : b_idx + 1],
             )
             pad_size = (0, 0, 0, max_size - proj.shape[1], 0, 0)

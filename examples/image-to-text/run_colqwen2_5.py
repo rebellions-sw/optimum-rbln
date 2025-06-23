@@ -9,7 +9,7 @@ from optimum.rbln import RBLNColQwen2_5ForConditionalGeneration
 model = ColQwen2_5.from_pretrained(
     "Metric-AI/colqwen2.5-3b-multilingual",
     torch_dtype=torch.float32,
-    device_map="cpu",  # or "mps" if on Apple Silicon
+    device_map="cpu",
 ).eval()
 processor = ColQwen2_5_Processor.from_pretrained("Metric-AI/colqwen2.5-3b-multilingual")
 
@@ -35,11 +35,11 @@ model.save_pretrained("colqwen2.5-3b-multilingual")
 
 # Your inputs
 images = [
-    # Image.new("RGB", (32, 32), color="white"),
+    Image.new("RGB", (32, 32), color="white"),
     Image.new("RGB", (32, 32), color="black"),
 ]
 queries = [
-    # "Is attention really all you need?",
+    "Is attention really all you need?",
     "What is the amount of bananas farmed in Salvador?",
 ]
 
