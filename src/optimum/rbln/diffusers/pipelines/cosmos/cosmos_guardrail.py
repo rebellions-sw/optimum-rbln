@@ -27,7 +27,7 @@ if is_cosmos_guardrail_available():
     from cosmos_guardrail import CosmosSafetyChecker
 else:
     raise ImportError(
-        "'cosmos-guardrail' is not installed. This package should be installed to use Cosmos pipelines. If current python version is '3.9', please use python version '>=3.10'."
+        "'cosmos-guardrail' is not installed. Please install it to use the safety checker for Cosmos: `pip install cosmos_guardrail`. If current python version is '3.9', please use python version '>=3.10'."
     )
 
 from optimum.rbln import RBLNLlamaForCausalLM, RBLNSiglipVisionModel
