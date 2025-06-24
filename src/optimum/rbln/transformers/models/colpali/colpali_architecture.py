@@ -2,7 +2,7 @@ from typing import List, Optional, Tuple, Union
 
 import torch
 from torch import nn
-from transformers import GemmaModel, PreTrainedModel
+from transformers import GemmaForCausalLM, GemmaModel
 
 from ..decoderonly.decoderonly_architecture import (
     RotaryEmbedding,
@@ -21,17 +21,17 @@ def slice_and_unsqueeze_cos_sin(cos, sin, position_ids):
 class RBLNColPaliForRetrievalWrapper(nn.Module):
     def __init__(
         self,
-        language_model: PreTrainedModel,
+        causal_lm: GemmaForCausalLM,
         embedding_proj_layer: nn.Module,
         max_seq_len: int,
         output_hidden_states: bool = False,
     ):
         super().__init__()
-        self.text_config = language_model.config
+        self.text_config = causal_lm.config
         self.rotary_emb = self.get_rotary_emb(max_seq_len=max_seq_len)
 
         self.output_hidden_states = output_hidden_states
-        self.language_model = self.convert_to_rbln_language_model(language_model, max_seq_len)
+        self.language_model = self.convert_to_rbln_language_model(causal_lm.model, max_seq_len)
 
         self.num_hidden_layers = getattr(self.text_config, "num_hidden_layers", None)
         self.embedding_proj_layer = embedding_proj_layer
@@ -39,9 +39,9 @@ class RBLNColPaliForRetrievalWrapper(nn.Module):
     def get_rotary_emb(self, max_seq_len):
         return RotaryEmbedding(config=self.text_config, max_seq_len_cached=max_seq_len)
 
-    def convert_to_rbln_language_model(self, language_model: GemmaModel, max_seq_len: int):
+    def convert_to_rbln_language_model(self, gemma_model: GemmaModel, max_seq_len: int):
         new_layers = []
-        for layer in language_model.layers:
+        for layer in gemma_model.layers:
             new_self_attn = ColPaliAttention(
                 layer.self_attn,
             )
@@ -49,7 +49,7 @@ class RBLNColPaliForRetrievalWrapper(nn.Module):
             new_layers.append(new_layer)
 
         new_model = ColPaliModel(
-            language_model,
+            gemma_model,
             new_layers,
             output_hidden_states=self.output_hidden_states,
             max_seq_len=max_seq_len,

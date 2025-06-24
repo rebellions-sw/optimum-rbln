@@ -164,7 +164,7 @@ class RBLNColPaliForRetrieval(RBLNModel):
     @classmethod
     def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
         return RBLNColPaliForRetrievalWrapper(
-            language_model=model.vlm.model.language_model,
+            causal_lm=model.vlm.language_model,
             embedding_proj_layer=model.embedding_proj_layer,
             max_seq_len=max(rbln_config.max_seq_lens),
             output_hidden_states=rbln_config.output_hidden_states,
@@ -180,7 +180,7 @@ class RBLNColPaliForRetrieval(RBLNModel):
     ):
         save_dict = {}
         save_dict["embed_tokens"] = model.vlm.get_input_embeddings().state_dict()
-        save_dict["multi_modal_projector"] = model.vlm.model.multi_modal_projector.state_dict()
+        save_dict["multi_modal_projector"] = model.vlm.multi_modal_projector.state_dict()
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
     @classmethod
@@ -212,9 +212,17 @@ class RBLNColPaliForRetrieval(RBLNModel):
         return rbln_config
 
     @classmethod
+    def from_model(cls, model: "PreTrainedModel", *args, **kwargs):
+        model.vision_tower = model.vlm.vision_tower
+        del model.vlm.vision_tower
+        model = super().from_model(model, *args, **kwargs)
+        return model
+
+    @classmethod
     def get_pytorch_model(cls, *args, **kwargs):
         model = super().get_pytorch_model(*args, **kwargs)
         model.vision_tower = model.vlm.model.vision_tower
+        del model.vlm.model.vision_tower
 
         return model
 
