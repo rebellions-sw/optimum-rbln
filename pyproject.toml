@@ -32,7 +32,7 @@ dependencies = [
     "torchaudio<=2.6.0",
     "torchvision<=0.21.0",
     "accelerate>=1.0.1",
-    "transformers==4.50.3",
+    "transformers==4.51.3",
     "diffusers @ git+https://github.com/huggingface/diffusers.git@6c7fad7ec8b2417c92326804e1751658874fd43b",
     "packaging>=24.1",
     "cosmos-guardrail @ git+https://github.com/yiyixuxu/cosmos-guardrail.git@bcdd61ba485c6f1aaee3661bc9022fdc1183fe8a ; python_version >= '3.10'",

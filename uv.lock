@@ -1240,7 +1240,7 @@ requires-dist = [
     { name = "torchaudio", marker = "sys_platform == 'darwin'", specifier = "<=2.6.0" },
     { name = "torchvision", marker = "sys_platform != 'darwin'", specifier = "<=0.21.0", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torchvision", marker = "sys_platform == 'darwin'", specifier = "<=0.21.0" },
-    { name = "transformers", specifier = "==4.50.3" },
+    { name = "transformers", specifier = "==4.51.3" },
 ]
 
 [package.metadata.requires-dev]
@@ -2284,7 +2284,7 @@ wheels = [
 
 [[package]]
 name = "transformers"
-version = "4.50.3"
+version = "4.51.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "filelock", marker = "sys_platform == 'linux'" },
@@ -2298,9 +2298,9 @@ dependencies = [
     { name = "tokenizers", marker = "sys_platform == 'linux'" },
     { name = "tqdm", marker = "sys_platform == 'linux'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c0/29/37877123d6633a188997d75dc17d6f526745d63361794348ce748db23d49/transformers-4.50.3.tar.gz", hash = "sha256:1d795d24925e615a8e63687d077e4f7348c2702eb87032286eaa76d83cdc684f", size = 8774363, upload-time = "2025-03-28T18:21:02.878Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f1/11/7414d5bc07690002ce4d7553602107bf969af85144bbd02830f9fb471236/transformers-4.51.3.tar.gz", hash = "sha256:e292fcab3990c6defe6328f0f7d2004283ca81a7a07b2de9a46d67fd81ea1409", size = 8941266, upload-time = "2025-04-14T08:15:00.485Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/aa/22/733a6fc4a6445d835242f64c490fdd30f4a08d58f2b788613de3f9170692/transformers-4.50.3-py3-none-any.whl", hash = "sha256:6111610a43dec24ef32c3df0632c6b25b07d9711c01d9e1077bdd2ff6b14a38c", size = 10180411, upload-time = "2025-03-28T18:20:59.265Z" },
+    { url = "https://files.pythonhosted.org/packages/a9/b6/5257d04ae327b44db31f15cce39e6020cc986333c715660b1315a9724d82/transformers-4.51.3-py3-none-any.whl", hash = "sha256:fd3279633ceb2b777013234bbf0b4f5c2d23c4626b05497691f00cfda55e8a83", size = 10383940, upload-time = "2025-04-14T08:13:43.023Z" },
 ]
 
 [[package]]
