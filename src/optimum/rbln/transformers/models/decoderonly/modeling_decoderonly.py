@@ -177,8 +177,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 )
             elif block_tables is None and local_block_tables is None:
                 return False
-        else:
-            return True
+
+        return True
 
     def forward(
         self,
