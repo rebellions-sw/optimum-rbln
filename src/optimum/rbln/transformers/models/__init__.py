@@ -69,10 +69,6 @@ _import_structure = {
         "RBLNCLIPVisionModelWithProjection",
         "RBLNCLIPVisionModelWithProjectionConfig",
     ],
-    "colpali": [
-        "RBLNColPaliForRetrieval",
-        "RBLNColPaliForRetrievalConfig",
-    ],
     "distilbert": [
         "RBLNDistilBertForQuestionAnswering",
         "RBLNDistilBertForQuestionAnsweringConfig",
@@ -196,10 +192,6 @@ if TYPE_CHECKING:
         RBLNCLIPVisionModelConfig,
         RBLNCLIPVisionModelWithProjection,
         RBLNCLIPVisionModelWithProjectionConfig,
-    )
-    from .colpali import (
-        RBLNColPaliForRetrieval,
-        RBLNColPaliForRetrievalConfig,
     )
     from .decoderonly import (
         RBLNDecoderOnlyModelForCausalLM,
