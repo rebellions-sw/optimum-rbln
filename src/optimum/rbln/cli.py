@@ -81,7 +81,8 @@ Examples:
   optimum-rbln-cli ./bert_compiled --class RBLNBertForSequenceClassification --model-id bert-base-uncased --batch-size 8 --max-seq-len 512
 
   # Use auto model class
-  optimum-rbln-cli ./auto_compiled --class RBLNAutoModelForCausalLM --model-id gpt2 --batch-size 1
+  optimum-rbln-cli ./auto_compiled --class RBLNAutoModelForCausalLM --model-id openai-community/gpt2
+ --batch-size 1
 
   # Use nested rbln_config arguments
   optimum-rbln-cli ./stable_diffusion_compiled --class RBLNStableDiffusionPipeline --model-id runwayml/stable-diffusion-v1-5 --unet.batch_size 2 --vae.batch_size 1
