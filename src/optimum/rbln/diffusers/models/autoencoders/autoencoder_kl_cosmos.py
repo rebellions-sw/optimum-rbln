@@ -92,20 +92,22 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
             hidden_states = F.pad(hidden_states, (*self.spatial_pad, 0, 0), mode=self.pad_mode, value=0.0)
             return super(CosmosCausalConv3d, self).forward(hidden_states)
 
-        original_forward = CosmosCausalConv3d.forward
-        CosmosCausalConv3d.forward = replaced_forward
+        try:
+            original_forward = CosmosCausalConv3d.forward
+            CosmosCausalConv3d.forward = replaced_forward
 
-        compiled_models = {}
-        if rbln_config.uses_encoder:
-            encoder_model, decoder_model = cls.wrap_model_if_needed(model, rbln_config)
-            enc_compiled_model = cls.compile(encoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
-            compiled_models["encoder"] = enc_compiled_model
-        else:
-            decoder_model = cls.wrap_model_if_needed(model, rbln_config)
-        dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[-1])
-        compiled_models["decoder"] = dec_compiled_model
+            compiled_models = {}
+            if rbln_config.uses_encoder:
+                encoder_model, decoder_model = cls.wrap_model_if_needed(model, rbln_config)
+                enc_compiled_model = cls.compile(encoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
+                compiled_models["encoder"] = enc_compiled_model
+            else:
+                decoder_model = cls.wrap_model_if_needed(model, rbln_config)
+            dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[-1])
+            compiled_models["decoder"] = dec_compiled_model
 
-        CosmosCausalConv3d.forward = original_forward
+        finally:
+            CosmosCausalConv3d.forward = original_forward
 
         return compiled_models
 
