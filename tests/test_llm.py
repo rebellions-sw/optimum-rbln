@@ -67,7 +67,7 @@ class LLMTest:
 class TestQwen2Model(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen2ForCausalLM
     HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
-    EXPECTED_OUTPUT = " I am a 20 year old girl from the United States. [28 chars] for"
+    EXPECTED_OUTPUT = " I am a 20 year old girl from the United States. I have been studying English for"
     HF_CONFIG_KWARGS = {"max_position_embeddings": 1024}
 
 
