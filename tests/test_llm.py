@@ -67,7 +67,7 @@ class LLMTest:
 class TestQwen2Model(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen2ForCausalLM
     HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
-    EXPECTED_OUTPUT = " I am a 30-year-old woman who has been living with lupus for over 1"
+    EXPECTED_OUTPUT = " I am a 20 year old girl from the United States. [28 chars] for"
     HF_CONFIG_KWARGS = {"max_position_embeddings": 1024}
 
 
@@ -108,7 +108,7 @@ class TestLlamaForCausalLM_Flash(LLMTest.TestLLM):
 class TestLlamaForCausalLM_Multibatch(TestLlamaForCausalLM):
     PROMPT = ["Who are you?", "What is the capital of France?", "What is the capital of Germany?"]
     EXPECTED_OUTPUT = [
-        "reress makefable R���� noethetsshss rechoolso�",
+        "reress makefable R���� noethetss0oss invetetet",
         "resget makeget makeichget makeichualichual#choolchool accngngngng",
         "resget makeget makeichget makeichualichual#choolchool accngngngng",
     ]

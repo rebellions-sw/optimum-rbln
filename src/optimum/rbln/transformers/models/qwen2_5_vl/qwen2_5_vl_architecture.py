@@ -204,10 +204,11 @@ class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
             position_embeds,
         )
 
-    def convert_to_rbln_causal_lm(self, causal_lm: PreTrainedModel, max_seq_len: int):
+    def convert_to_rbln_causal_lm(self, model: PreTrainedModel, max_seq_len: int):
         new_layers = []
+        causal_lm = model.model
 
-        for layer in causal_lm.model.language_model.layers:
+        for layer in causal_lm.layers:
             if self.attn_impl == "eager":
                 new_self_attn = DecoderOnlyAttention(
                     layer.self_attn,
@@ -230,7 +231,7 @@ class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
             new_layers.append(new_layer)
 
         new_model = DecoderOnlyModel(
-            causal_lm.model.language_model,
+            causal_lm,
             new_layers,
             partition_len=self.kvcache_partition_len,
             max_seq_len=max_seq_len,
@@ -238,5 +239,5 @@ class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
             use_learned_pos_emb=self.use_learned_pos_emb,
             sliding_window_layers=self.sliding_window_layers,
         )
-        new_causal_lm = DecoderOnlyForCausalLM(causal_lm.model, new_model)
+        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
         return new_causal_lm
