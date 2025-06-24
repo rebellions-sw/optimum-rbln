@@ -559,7 +559,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         (
             inputs,
             cache_position,
-            chunked_attention_mask,
+            padded_attention_mask,
             out_buffers,
             position_ids,
             position_embed,
@@ -571,7 +571,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         )
         if not is_external_block_tables:
             local_block_tables = torch.tensor([batch_idx], dtype=torch.int16)
-            self.dec_attn_mask[batch_idx : batch_idx + 1] = chunked_attention_mask[:1]
+            self.dec_attn_mask[batch_idx : batch_idx + 1] = padded_attention_mask[:1]
 
         if self.rbln_config.use_attention_mask and self.rbln_config.use_position_ids:
             chunked_attention_mask = torch.zeros(1, self.rbln_config.max_seq_len, dtype=torch.float32)
@@ -587,18 +587,10 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                 else None
             )
 
-            # Not used in Gemma3 yet.
             if self.rbln_config.use_attention_mask:
                 if self.rbln_config.use_position_ids:
-                    chunked_attention_mask[0, step : step + self.rbln_config.prefill_chunk_size] = self.dec_attn_mask[
-                        batch_idx, step : step + self.rbln_config.prefill_chunk_size
-                    ]
-                else:
-                    # Update attention mask to ensure proper causal behavior
-                    if step >= self.rbln_config.prefill_chunk_size:
-                        chunked_attention_mask[:, :, :, step - self.rbln_config.prefill_chunk_size : step] = 1
-                    chunked_attention_mask[:, :, :, step : step + self.rbln_config.prefill_chunk_size] = (
-                        self.causal_mask
+                    chunked_attention_mask[0, step : step + self.rbln_config.prefill_chunk_size] = (
+                        padded_attention_mask[0, step : step + self.rbln_config.prefill_chunk_size]
                     )
 
             # Define query position
