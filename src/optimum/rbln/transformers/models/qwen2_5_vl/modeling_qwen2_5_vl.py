@@ -391,14 +391,6 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         return True
 
     @classmethod
-    def get_pytorch_model(cls, *args, **kwargs):
-        model = super().get_pytorch_model(*args, **kwargs)
-        model.model.lm_head = model.lm_head
-        model.lm_head = None
-        del model.lm_head
-        return model
-
-    @classmethod
     def update_kwargs(cls, kwargs):
         kwargs.update(
             {
