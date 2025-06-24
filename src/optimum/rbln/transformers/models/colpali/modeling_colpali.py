@@ -213,16 +213,17 @@ class RBLNColPaliForRetrieval(RBLNModel):
 
     @classmethod
     def from_model(cls, model: "PreTrainedModel", *args, **kwargs):
-        model.vision_tower = model.vlm.vision_tower
-        del model.vlm.vision_tower
+        if not hasattr(model, "vision_tower"):
+            model.vision_tower = model.vlm.vision_tower
+            del model.vlm.vision_tower
         model = super().from_model(model, *args, **kwargs)
         return model
 
     @classmethod
     def get_pytorch_model(cls, *args, **kwargs):
         model = super().get_pytorch_model(*args, **kwargs)
-        model.vision_tower = model.vlm.model.vision_tower
-        del model.vlm.model.vision_tower
+        model.vision_tower = model.vlm.vision_tower
+        del model.vlm.vision_tower
 
         return model
 

@@ -21,7 +21,6 @@ class RBLNColPaliForRetrievalConfig(RBLNModelConfig):
 
     def __init__(
         self,
-        batch_size: Optional[int] = None,
         max_seq_lens: Optional[List[int]] = None,
         output_hidden_states: Optional[bool] = None,
         vision_tower: Optional[RBLNModelConfig] = None,
@@ -37,7 +36,6 @@ class RBLNColPaliForRetrievalConfig(RBLNModelConfig):
             ValueError: If batch_size is not a positive integer.
         """
         super().__init__(**kwargs)
-        self.batch_size = batch_size or 1
         self.vision_tower = vision_tower
         self.max_seq_lens = max_seq_lens
         self.output_hidden_states = output_hidden_states
