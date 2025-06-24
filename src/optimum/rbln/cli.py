@@ -182,11 +182,7 @@ Examples:
 
         # Print model info
         if hasattr(compiled_model, "rbln_config"):
-            print(f"Batch size: {compiled_model.rbln_config.batch_size}")
-            if hasattr(compiled_model.rbln_config, "tensor_parallel_size"):
-                print(f"Tensor parallel size: {compiled_model.rbln_config.tensor_parallel_size}")
-            if hasattr(compiled_model.rbln_config, "max_seq_len"):
-                print(f"Max sequence length: {compiled_model.rbln_config.max_seq_len}")
+            print(f"rbln_config: {compiled_model.rbln_config}")
 
     except Exception as e:
         print(f"❌ Error during model compilation: {e}", file=sys.stderr)
