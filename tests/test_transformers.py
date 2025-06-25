@@ -12,6 +12,7 @@ from optimum.rbln import (
     RBLNBertForMaskedLM,
     RBLNBertForQuestionAnswering,
     RBLNCLIPTextModel,
+    RBLNColPaliForRetrieval,
     RBLNDPTForDepthEstimation,
     RBLNResNetForImageClassification,
     RBLNT5EncoderModel,
@@ -337,6 +338,15 @@ class TestXLMRobertaModel(BaseTest.TestModel):
 class TestCLIPModel(BaseTest.TestModel):
     RBLN_CLASS = RBLNCLIPTextModel
     HF_MODEL_ID = "hf-internal-testing/tiny-random-CLIPModel"
+    GENERATION_KWARGS = {
+        "input_ids": RANDOM_INPUT_IDS,
+        "attention_mask": RANDOM_ATTN_MASK,
+    }
+    
+    
+class TestColPaliModel(BaseTest.TestModel):
+    RBLN_CLASS = RBLNColPaliForRetrieval
+    HF_MODEL_ID = "vidore/colpali-v1.3-hf"
     GENERATION_KWARGS = {
         "input_ids": RANDOM_INPUT_IDS,
         "attention_mask": RANDOM_ATTN_MASK,
