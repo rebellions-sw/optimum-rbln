@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 
 import torch
 from transformers import (
-    ColPaliForRetrieval,
     PretrainedConfig,
     PreTrainedModel,
 )
@@ -30,6 +29,7 @@ from transformers.models.paligemma.modeling_paligemma import PaliGemmaMultiModal
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from .colpali_architecture import RBLNColPaliForRetrievalWrapper
+
 
 if TYPE_CHECKING:
     from transformers import (
