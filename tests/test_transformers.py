@@ -342,8 +342,8 @@ class TestCLIPModel(BaseTest.TestModel):
         "input_ids": RANDOM_INPUT_IDS,
         "attention_mask": RANDOM_ATTN_MASK,
     }
-    
-    
+
+
 class TestColPaliModel(BaseTest.TestModel):
     RBLN_CLASS = RBLNColPaliForRetrieval
     HF_MODEL_ID = "vidore/colpali-v1.3-hf"
