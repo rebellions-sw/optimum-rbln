@@ -94,20 +94,40 @@ class LoopLanguageModel:
 
     def forward(self, inputs_embeds: torch.Tensor, attention_mask: torch.Tensor, **kwargs):
         padded_inputs_embed, padded_attn_mask, padded_position_ids = self.prepare_inputs(inputs_embeds, attention_mask)
-
         input_batch_size = inputs_embeds.shape[0]
-        embeddings = []
+        input_seq_len = inputs_embeds.shape[1]
+
+        all_embeddings = []
+        all_hidden_states = []
         for i in range(input_batch_size):
-            embedding = self.language_model(
+            outputs = self.language_model(
                 inputs_embeds=padded_inputs_embed[i : i + 1],
                 attention_mask=padded_attn_mask[i : i + 1],
                 position_ids=padded_position_ids,
             )
-            embeddings.append(embedding)
 
-        embeddings = torch.cat(embeddings, dim=0)[:, : attention_mask.shape[-1]]
+            if self.rbln_config.output_hidden_states:
+                embedding = outputs[0]
+                hidden_states = outputs[1:]
+            else:
+                embedding = outputs
+                hidden_states = None
 
-        return embeddings
+            all_embeddings.append(embedding)
+            all_hidden_states.append(hidden_states)
+
+        embeddings = torch.cat(all_embeddings, dim=0)[:, :input_seq_len]
+        if self.rbln_config.output_hidden_states:
+            hidden_states = [
+                torch.cat(
+                    [batch_hidden_states[layer_idx][:, :input_seq_len] for batch_hidden_states in all_hidden_states],
+                    dim=0,
+                )
+                for layer_idx in range(len(all_hidden_states[0]))
+            ]
+            return embeddings, hidden_states
+        else:
+            return embeddings
 
     def __call__(self, *args: Any, **kwds: Any) -> Any:
         return self.forward(*args, **kwds)
@@ -194,8 +214,10 @@ class RBLNColPaliForRetrieval(RBLNModel):
         hidden_size = model_config.vlm_config.text_config.hidden_size
         if rbln_config.max_seq_lens is None:
             rbln_config.max_seq_lens = [model_config.vlm_config.text_config.max_position_embeddings]
-
         rbln_config.max_seq_lens = sorted(set(rbln_config.max_seq_lens))
+
+        if rbln_config.output_hidden_states is None:
+            rbln_config.output_hidden_states = model_config.vlm_config.text_config.output_hidden_states
 
         input_infos = []
         for max_seq_len in rbln_config.max_seq_lens:
@@ -291,20 +313,35 @@ class RBLNColPaliForRetrieval(RBLNModel):
         if output_attentions is not None:
             logger.warning("output_attentions is not supported for RBLNColPaliForRetrieval")
 
+        if output_hidden_states is not None and output_hidden_states != self.rbln_config.output_hidden_states:
+            raise ValueError(
+                f"Variable output_hidden_states {output_hidden_states} is not equal to rbln_config.output_hidden_states {self.rbln_config.output_hidden_states} "
+                f"Please compile again with the correct argument."
+            )
+
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         inputs_embeds, image_features = self._preprocess_inputs(
             input_ids=input_ids, inputs_embeds=inputs_embeds, pixel_values=pixel_values
         )
 
-        embeddings = self.language_model(inputs_embeds=inputs_embeds, attention_mask=attention_mask)
+        # Embedding_proj_layer is fused on the bottom of the language model.
+        outputs = self.language_model(inputs_embeds=inputs_embeds, attention_mask=attention_mask)
+
+        embeddings = outputs if not self.rbln_config.output_hidden_states else outputs[0]
+        hidden_states = None if not self.rbln_config.output_hidden_states else outputs[1]
+
         # L2 normalization
         embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)  # (batch_size, sequence_length, dim)
 
         if attention_mask is not None:
             embeddings = embeddings * attention_mask.unsqueeze(-1)  # (batch_size, sequence_length, dim)
 
-        return ColPaliForRetrievalOutput(
-            embeddings=embeddings,
-            # hidden_states=vlm_hidden_states,
-        )
+        if not return_dict:
+            return embeddings, image_features
+        else:
+            return ColPaliForRetrievalOutput(
+                embeddings=embeddings,
+                hidden_states=hidden_states,
+                image_hidden_states=image_features,
+            )

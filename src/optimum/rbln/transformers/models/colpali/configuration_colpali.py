@@ -28,9 +28,9 @@ class RBLNColPaliForRetrievalConfig(RBLNModelConfig):
     ):
         """
         Args:
-            batch_size (Optional[int]): The batch size for inference. Defaults to 1.
             vision_tower (Optional[RBLNModelConfig]): Configuration for the vision encoder component.
-            language_model (Optional[RBLNModelConfig]): Configuration for the language model component.
+            max_seq_lens (Optional[List[int]]): The maximum sequence lengths for the language model.
+            output_hidden_states (Optional[bool]): Whether to output the hidden states of the language model.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
         Raises:
             ValueError: If batch_size is not a positive integer.
