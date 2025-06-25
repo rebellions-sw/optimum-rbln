@@ -29,7 +29,6 @@ from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
 
 from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
-from ....utils.logging import get_logger
 from ..decoderonly.modeling_decoderonly import (
     RBLNRuntimeModel,
     set_default_values,
@@ -39,8 +38,6 @@ from ..qwen2_5_vl.modeling_qwen2_5_vl import RBLNQwen2_5_VLForConditionalGenerat
 from .colqwen2_5_architecture import ColQwen2_5_LanguageModelWrapper
 from .configuration_colqwen2_5 import RBLNColQwen2_5ForConditionalGenerationConfig
 
-
-logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from transformers import (
@@ -155,10 +152,6 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
         self.visual = self.rbln_submodules[0]
         self.mrope_section = self.config.rope_scaling["mrope_section"]
         self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config)
-        self.rope_deltas = torch.zeros(self.rbln_config.batch_size)
-
-    def can_generate(self):
-        return False
 
     @classmethod
     @torch.inference_mode()
@@ -316,7 +309,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
                 dim=0,
             )
 
-        inputs_embeds, position_embed, rope_deltas = self._preprocess_prefill(
+        inputs_embeds, position_embed, _ = self._preprocess_prefill(
             input_ids,
             attention_mask,
             pixel_values,
@@ -325,8 +318,6 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
             video_grid_thw,
             second_per_grid_ts,
         )
-
-        self.rope_deltas = rope_deltas
         batch_size = inputs_embeds.shape[0]
 
         projs = []

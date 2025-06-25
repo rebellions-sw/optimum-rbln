@@ -15,10 +15,10 @@
 from typing import Optional
 
 from ....configuration_utils import RBLNModelConfig
-from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
+from ..qwen2_5_vl.configuration_qwen2_5_vl import RBLNQwen2_5_VLForConditionalGenerationConfig
 
 
-class RBLNColQwen2_5ForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausalLMConfig):
+class RBLNColQwen2_5ForConditionalGenerationConfig(RBLNQwen2_5_VLForConditionalGenerationConfig):
     submodules = ["visual"]
 
     def __init__(
