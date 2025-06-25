@@ -45,8 +45,6 @@ class LoopVisionTower:
         self.vision_tower = vision_tower
 
     def forward(self, pixel_values, **kwargs):
-        # Loop instead of batch
-        # shape of pixel_values : [batch, num_patches, num_channel, height, width]
         batch_size = pixel_values.shape[0]
         outputs = []
         for i in range(batch_size):
