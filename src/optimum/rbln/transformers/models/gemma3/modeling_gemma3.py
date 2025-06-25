@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import importlib
 import inspect
 from collections import deque
 from dataclasses import dataclass
@@ -123,23 +122,6 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
 
     def can_generate(self):
         return True
-
-    @classmethod
-    def get_pytorch_model(cls, *args, **kwargs):
-        model = super().get_pytorch_model(*args, **kwargs)
-
-        with no_init_weights():
-            model_cls_name = model.model.language_model.__class__.__name__
-            causal_model_cls_name = model_cls_name.replace("TextModel", "ForCausalLM")
-            causal_model_cls = getattr(importlib.import_module("transformers"), causal_model_cls_name)
-            new_language_model = causal_model_cls(model.model.language_model.config)
-
-        new_language_model.lm_head = model.lm_head
-        new_language_model.model = model.model.language_model
-        model.model.language_model = new_language_model
-        model.lm_head = None
-        del model.lm_head
-        return model
 
     def __post_init__(self, **kwargs):
         self.vision_tower = LoopVisionTower(self.rbln_submodules[0])
