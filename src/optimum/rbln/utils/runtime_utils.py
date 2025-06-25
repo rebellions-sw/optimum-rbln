@@ -106,21 +106,36 @@ class ContextRblnConfig:
         self.create_runtimes = create_runtimes
         self.optimize_host_mem = optimize_host_mem
         self.activate_profiler = activate_profiler
+        self._previous_context = None
 
     def __enter__(self):
-        self._local.device = self.device
-        self._local.device_map = self.device_map
-        self._local.create_runtimes = self.create_runtimes
-        self._local.optimize_host_memory = self.optimize_host_mem
-        self._local.activate_profiler = self.activate_profiler
+        self._previous_context = {
+            "device": getattr(self._local, "device", None),
+            "device_map": getattr(self._local, "device_map", None),
+            "create_runtimes": getattr(self._local, "create_runtimes", None),
+            "optimize_host_memory": getattr(self._local, "optimize_host_memory", None),
+            "activate_profiler": getattr(self._local, "activate_profiler", None),
+        }
+
+        if self.device is not None:
+            self._local.device = self.device
+        if self.device_map is not None:
+            self._local.device_map = self.device_map
+        if self.create_runtimes is not None:
+            self._local.create_runtimes = self.create_runtimes
+        if self.optimize_host_mem is not None:
+            self._local.optimize_host_memory = self.optimize_host_mem
+        if self.activate_profiler is not None:
+            self._local.activate_profiler = self.activate_profiler
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._local.device = None
-        self._local.device_map = None
-        self._local.create_runtimes = None
-        self._local.optimize_host_memory = None
-        self._local.activate_profiler = None
+        if self._previous_context is not None:
+            self._local.device = self._previous_context["device"]
+            self._local.device_map = self._previous_context["device_map"]
+            self._local.create_runtimes = self._previous_context["create_runtimes"]
+            self._local.optimize_host_memory = self._previous_context["optimize_host_memory"]
+            self._local.activate_profiler = self._previous_context["activate_profiler"]
 
     @classmethod
     def get_current_context(cls):
