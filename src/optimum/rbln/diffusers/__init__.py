@@ -56,6 +56,7 @@ _import_structure = {
         "RBLNVQModelConfig",
         "RBLNRetinaFaceConfig",
         "RBLNVideoSafetyModelConfig",
+        "RBLNSafetyCheckerConfig",
     ],
     "pipelines": [
         "RBLNCosmosTextToWorldPipeline",
@@ -132,6 +133,7 @@ if TYPE_CHECKING:
         RBLNUNet2DConditionModelConfig,
         RBLNVideoSafetyModelConfig,
         RBLNVQModelConfig,
+        RBLNSafetyCheckerConfig,
     )
     from .modeling_diffusers import RBLNDiffusionMixin
     from .models import (

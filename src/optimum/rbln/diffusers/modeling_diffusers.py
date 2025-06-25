@@ -305,6 +305,27 @@ class RBLNDiffusionMixin:
                 raise ValueError(f"Unknown class of submodule({submodule_name}) : {submodule.__class__.__name__} ")
 
             compiled_submodules[submodule_name] = submodule
+            
+        for component_name in cls._optional_components:
+            submodule = passed_submodules.get(component_name) or getattr(model, submodule_name, None)
+            
+            if submodule is None:
+                raise ValueError(f"submodule ({component_name}) cannot be accessed since it is not provided.")
+            
+            import os
+            if isinstance(submodule, torch.nn.Module):
+                subfolder = prefix + component_name
+                
+                model_save_dir = model_save_dir or ""
+                submodule = submodule_rbln_cls.compile_submodules(
+                    model=submodule,
+                    rbln_config=getattr(rbln_config, component_name),
+                    model_save_dir=os.path.join(model_save_dir, component_name),
+                )
+            else:
+                raise ValueError(f"Unknown class of submodule({submodule_name}) : {submodule.__class__.__name__} ")
+                
+            compiled_submodules[submodule_name] = submodule
         return compiled_submodules
 
     @classmethod

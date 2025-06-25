@@ -4,6 +4,7 @@ from .models import (
     RBLNControlNetModelConfig,
     RBLNCosmosTransformer3DModelConfig,
     RBLNPriorTransformerConfig,
+    RBLNSafetyCheckerConfig,
     RBLNRetinaFaceConfig,
     RBLNSD3Transformer2DModelConfig,
     RBLNUNet2DConditionModelConfig,

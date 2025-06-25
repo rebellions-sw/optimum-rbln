@@ -7,12 +7,12 @@ import torch
 from cosmos_guardrail import CosmosSafetyChecker
 from diffusers.utils import export_to_video
 
-from optimum.rbln import RBLNCosmosPipeline, RBLNCosmosSafetyChecker
+from optimum.rbln import RBLNCosmosTextToWorldPipeline, RBLNCosmosSafetyChecker
 
 
 def main(
     model_id: str = "nvidia/Cosmos-1.0-Diffusion-7B-Text2World",
-    from_diffusers: bool = False,
+    from_diffusers: bool = True,
     prompt: str = None,
     steps: int = 36,
     height: int = 704,
@@ -27,26 +27,26 @@ def main(
         model = CosmosSafetyChecker()
 
     if from_diffusers:
-        checker = RBLNCosmosSafetyChecker.compile_submodules(
-            model=model,
-            model_save_dir=safety_checker_dir,
-            rbln_height=height,
-            rbln_width=width,
-            rbln_config={
-                "text_guardrail": {
-                    "device": [
-                        0,
-                        1,
-                        2,
-                        3,
-                    ]
-                },
-                "video_guardrail": {"device": 3},
-            },
-        )
-        pipe = RBLNCosmosPipeline.from_pretrained(
+        # checker = RBLNCosmosSafetyChecker.compile_submodules(
+        #     model=model,
+        #     model_save_dir=safety_checker_dir,
+        #     rbln_height=height,
+        #     rbln_width=width,
+        #     rbln_config={
+        #         "text_guardrail": {
+        #             "device": [
+        #                 0,
+        #                 1,
+        #                 2,
+        #                 3,
+        #             ]
+        #         },
+        #         "video_guardrail": {"device": 3},
+        #     },
+        # )
+        pipe = RBLNCosmosTextToWorldPipeline.from_pretrained(
             model_id,
-            safety_checker=checker,
+            # safety_checker=checker,
             export=True,
             rbln_height=height,
             rbln_width=width,
@@ -61,6 +61,19 @@ def main(
                 "vae": {
                     "device": 2,
                 },
+                "safety_checker": {
+                    "height": height,
+                    "width": width,
+                    "text_guardrail": {
+                        "device": [
+                            0,
+                            1,
+                            2,
+                            3,
+                        ]
+                        },
+                    "video_guardrail": {"device": 3},
+                }
             },
         )
         pipe.save_pretrained(os.path.basename(model_id))
@@ -80,7 +93,7 @@ def main(
                 "video_guardrail": {"device": 3},
             },
         )
-        pipe = RBLNCosmosPipeline.from_pretrained(
+        pipe = RBLNCosmosTextToWorldPipeline.from_pretrained(
             model_id,
             safety_checker=checker,
             export=False,
