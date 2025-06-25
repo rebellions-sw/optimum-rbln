@@ -35,8 +35,8 @@ model.save_pretrained("colqwen2.5-3b-multilingual")
 
 # Your inputs
 images = [
-    Image.new("RGB", (32, 32), color="white"),
-    Image.new("RGB", (32, 32), color="black"),
+    Image.open("./img1.jpeg"),
+    Image.open("./img2.jpeg"),
 ]
 queries = [
     "How many don't are mentioned  in this infographic image?\nAnswer briefly.",
