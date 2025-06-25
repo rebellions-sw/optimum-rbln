@@ -118,7 +118,7 @@ class LoopLanguageModel:
                 )
                 for layer_idx in range(len(all_hidden_states[0]))
             ]
-            return embeddings, hidden_states
+            return embeddings, tuple(hidden_states)
         else:
             return embeddings
 
@@ -374,7 +374,7 @@ class RBLNColPaliForRetrieval(RBLNModel):
             embeddings = embeddings * attention_mask.unsqueeze(-1)  # (batch_size, sequence_length, dim)
 
         if not return_dict:
-            return embeddings, image_features
+            return (embeddings, hidden_states, image_features)
         else:
             return ColPaliForRetrievalOutput(
                 embeddings=embeddings,
