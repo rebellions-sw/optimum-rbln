@@ -309,6 +309,8 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
         return_dict: Optional[bool] = None,
         **kwargs,
     ) -> torch.Tensor:
+        
+        # Handle the custom "pixel_values" input obtained with `ColQwen2Processor` through unpadding
         if pixel_values is not None and image_grid_thw is not None:
             offsets = image_grid_thw[:, 1] * image_grid_thw[:, 2]  # (batch_size,)
             pixel_values = torch.cat(
