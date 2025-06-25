@@ -348,8 +348,8 @@ class TestColPaliModel(BaseTest.TestModel):
     RBLN_CLASS = RBLNColPaliForRetrieval
     HF_MODEL_ID = "thkim93/colpali-hf-1layer"
     GENERATION_KWARGS = {
-        "input_ids": torch.full((1,1024),fill_value=257152,dtype=torch.int32),
-        "attention_mask": torch.ones((1,1024),dtype=torch.int32),
+        "input_ids": torch.full((1, 1024), fill_value=257152, dtype=torch.int32),
+        "attention_mask": torch.ones((1, 1024), dtype=torch.int32),
         "pixel_values": torch.randn(1, 3, 448, 448, generator=torch.manual_seed(42)),
     }
 
