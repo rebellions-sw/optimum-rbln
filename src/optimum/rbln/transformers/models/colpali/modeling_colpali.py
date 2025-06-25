@@ -13,9 +13,8 @@
 # limitations under the License.
 
 import bisect
-import inspect
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import torch
 from transformers import (
@@ -30,11 +29,7 @@ from transformers.models.paligemma.modeling_paligemma import PaliGemmaMultiModal
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
-from ....utils.logging import get_logger
 from .colpali_architecture import RBLNColPaliForRetrievalWrapper
-
-
-logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from transformers import (
@@ -223,19 +218,6 @@ class RBLNColPaliForRetrieval(RBLNModel):
             multi_modal_projector = PaliGemmaMultiModalProjector(self.config.vlm_config)
         return multi_modal_projector
 
-    def __getattr__(self, __name: str) -> Any:
-        def redirect(func):
-            return lambda *pargs, **kwargs: func(self, *pargs, **kwargs)
-
-        val = getattr(ColPaliForRetrieval, __name)
-
-        if isinstance(val, Callable) and "self" in set(inspect.signature(val).parameters):
-            return redirect(val)
-        return val
-
-    def can_generate(self):
-        return False
-
     @classmethod
     def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
         return RBLNColPaliForRetrievalWrapper(
@@ -307,14 +289,13 @@ class RBLNColPaliForRetrieval(RBLNModel):
         return model
 
     def get_image_features(self, pixel_values: torch.Tensor):
-        """
-        Projects the last hidden state from the vision model into language model space.
-        Args:
-            pixel_values (`torch.FloatTensor]` of shape `(batch_size, channels, height, width)`)
-               The tensors corresponding to the input images.
-        Returns:
-            image_features (`torch.Tensor`): Image feature tensor of shape `(num_images, image_length, embed_dim)`).
-        """
+        # Projects the last hidden state from the vision model into language model space.
+        # Args:
+        #     pixel_values (`torch.FloatTensor]` of shape `(batch_size, channels, height, width)`)
+        #        The tensors corresponding to the input images.
+        # Returns:
+        #     image_features (`torch.Tensor`): Image feature tensor of shape `(num_images, image_length, embed_dim)`).
+
         vision_outputs = self.vision_tower(pixel_values).last_hidden_state
         image_features = self.multi_modal_projector(vision_outputs)
         image_features = image_features / (self.config.text_config.hidden_size**0.5)
@@ -367,8 +348,8 @@ class RBLNColPaliForRetrieval(RBLNModel):
         if pixel_values is not None:
             pixel_values = pixel_values.to(dtype=self.dtype)
 
-        if output_attentions is not None:
-            logger.warning("output_attentions is not supported for RBLNColPaliForRetrieval")
+        if output_attentions:
+            raise ValueError("output_attentions is not supported for RBLNColPaliForRetrieval")
 
         if output_hidden_states is not None and output_hidden_states != self.rbln_config.output_hidden_states:
             raise ValueError(
