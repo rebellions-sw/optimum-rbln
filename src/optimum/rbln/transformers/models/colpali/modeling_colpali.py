@@ -137,6 +137,61 @@ class LoopLanguageModel:
 
 
 class RBLNColPaliForRetrieval(RBLNModel):
+    """
+    The ColPali Model transformer for document retrieval using vision-language models.
+    This model inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    A class to convert and run pre-trained transformers based ColPaliForRetrieval model on RBLN devices.
+    It implements the methods to convert a pre-trained transformers ColPaliForRetrieval model into a RBLN transformer model by:
+
+    - transferring the checkpoint weights of the original into an optimized RBLN graph,
+    - compiling the resulting graph using the RBLN compiler.
+
+    **Configuration:**
+    This model uses [`RBLNColPaliForRetrievalConfig`] for configuration. When calling methods like `from_pretrained` or `from_model`,
+    the `rbln_config` parameter should be an instance of [`RBLNColPaliForRetrievalConfig`] or a dictionary conforming to its structure.
+
+    See the [`RBLNColPaliForRetrievalConfig`] class for all available configuration options.
+
+    Examples:
+        ```python
+        from optimum.rbln import RBLNColPaliForRetrieval
+
+        # Simple usage using rbln_* arguments
+        # `max_seq_lens` is automatically inferred from the model config
+        model = RBLNColPaliForRetrieval.from_pretrained(
+            "vidore/colpali-v1.3-hf",
+            export=True,
+            rbln_max_seq_lens=1152,
+        )
+
+        # Using a config dictionary
+        rbln_config = {
+            "max_seq_lens": 1152,
+            "output_hidden_states": False,
+        }
+        model = RBLNColPaliForRetrieval.from_pretrained(
+            "vidore/colpali-v1.3-hf",
+            export=True,
+            rbln_config=rbln_config
+        )
+
+        # Using a RBLNColPaliForRetrievalConfig instance (recommended for type checking)
+        from optimum.rbln import RBLNColPaliForRetrievalConfig
+
+        config = RBLNColPaliForRetrievalConfig(
+            max_seq_lens=1152,
+            output_hidden_states=False,
+            tensor_parallel_size=4
+        )
+        model = RBLNColPaliForRetrieval.from_pretrained(
+            "vidore/colpali-v1.3-hf",
+            export=True,
+            rbln_config=config
+        )
+        ```
+    """
+
     auto_model_class = None
     _rbln_submodules = [
         {"name": "vision_tower"},
@@ -214,6 +269,8 @@ class RBLNColPaliForRetrieval(RBLNModel):
         hidden_size = model_config.vlm_config.text_config.hidden_size
         if rbln_config.max_seq_lens is None:
             rbln_config.max_seq_lens = [model_config.vlm_config.text_config.max_position_embeddings]
+        if isinstance(rbln_config.max_seq_lens, int):
+            rbln_config.max_seq_lens = [rbln_config.max_seq_lens]
         rbln_config.max_seq_lens = sorted(set(rbln_config.max_seq_lens))
 
         if rbln_config.output_hidden_states is None:
