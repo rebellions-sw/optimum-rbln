@@ -21,7 +21,7 @@ from ....utils.logging import get_logger
 logger = get_logger(__name__)
 
 
-class RBLNSafetyCheckerConfig(RBLNModelConfig):
+class RBLNCosmosSafetyCheckerConfig(RBLNModelConfig):
     def __init__(
         self,
         batch_size: Optional[int] = None,

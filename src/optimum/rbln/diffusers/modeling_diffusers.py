@@ -210,14 +210,16 @@ class RBLNDiffusionMixin:
                     model_id, export=False, subfolder=submodule_name, rbln_config=submodule_config
                 )
                 kwargs[submodule_name] = submodule
-
+        
+        from functools import partial
+        from unittest.mock import patch
         with ContextRblnConfig(
             device=rbln_config.device,
             device_map=rbln_config.device_map,
             create_runtimes=rbln_config.create_runtimes,
             optimize_host_mem=rbln_config.optimize_host_memory,
             activate_profiler=rbln_config.activate_profiler,
-        ):
+        ) and patch("torch.load", partial(torch.load, weights_only=True, map_location=torch.device("cpu"))):
             model = super().from_pretrained(pretrained_model_name_or_path=model_id, **kwargs)
 
         if not export:
@@ -306,21 +308,25 @@ class RBLNDiffusionMixin:
 
             compiled_submodules[submodule_name] = submodule
             
-        for component_name in cls._optional_components:
-            submodule = passed_submodules.get(component_name) or getattr(model, submodule_name, None)
+        for submodule_name in cls._optional_components:
+            submodule = passed_submodules.get(submodule_name) or getattr(model, submodule_name, None)
             
             if submodule is None:
-                raise ValueError(f"submodule ({component_name}) cannot be accessed since it is not provided.")
+                raise ValueError(f"submodule ({submodule_name}) cannot be accessed since it is not provided.")
+            
+            submodule_rbln_cls: Type[RBLNModel] = getattr(rbln_config, submodule_name).rbln_model_cls
+            rbln_config = submodule_rbln_cls.update_rbln_config_using_pipe(model, rbln_config, submodule_name)
             
             import os
             if isinstance(submodule, torch.nn.Module):
-                subfolder = prefix + component_name
-                
+                subfolder = prefix + submodule_name
+                import pdb; pdb.set_trace()
                 model_save_dir = model_save_dir or ""
-                submodule = submodule_rbln_cls.compile_submodules(
+                submodule = submodule_rbln_cls.from_model(
                     model=submodule,
-                    rbln_config=getattr(rbln_config, component_name),
-                    model_save_dir=os.path.join(model_save_dir, component_name),
+                    subfolder=subfolder,
+                    model_save_dir=model_save_dir,
+                    rbln_config=getattr(rbln_config, submodule_name),
                 )
             else:
                 raise ValueError(f"Unknown class of submodule({submodule_name}) : {submodule.__class__.__name__} ")

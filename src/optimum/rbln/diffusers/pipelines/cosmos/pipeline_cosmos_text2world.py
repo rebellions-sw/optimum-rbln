@@ -31,7 +31,7 @@ class RBLNCosmosTextToWorldPipeline(RBLNDiffusionMixin, CosmosTextToWorldPipelin
     """
 
     original_class = CosmosTextToWorldPipeline
-    _submodules = ["text_encoder", "transformer", "vae"]
+    # _submodules = ["text_encoder", "transformer", "vae"]
     _optional_components = ["safety_checker"]
 
     def handle_additional_kwargs(self, **kwargs):

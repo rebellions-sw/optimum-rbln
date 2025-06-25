@@ -17,7 +17,7 @@ from typing import Optional
 from ....configuration_utils import RBLNModelConfig
 from ....transformers import RBLNT5EncoderModelConfig
 from ....utils.logging import get_logger
-from ..models import RBLNAutoencoderKLCosmosConfig, RBLNCosmosTransformer3DModelConfig, RBLNSafetyCheckerConfig
+from ..models import RBLNAutoencoderKLCosmosConfig, RBLNCosmosTransformer3DModelConfig, RBLNCosmosSafetyCheckerConfig
 
 
 logger = get_logger(__name__)
@@ -33,7 +33,7 @@ class _RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
         text_encoder: Optional[RBLNT5EncoderModelConfig] = None,
         transformer: Optional[RBLNCosmosTransformer3DModelConfig] = None,
         vae: Optional[RBLNAutoencoderKLCosmosConfig] = None,
-        safety_checker: Optional[RBLNSafetyCheckerConfig] = None,
+        safety_checker: Optional[RBLNCosmosSafetyCheckerConfig] = None,
         *,
         batch_size: Optional[int] = None,
         height: Optional[int] = None,
@@ -84,7 +84,7 @@ class _RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
             num_frames=num_frames,
         )
         self.safety_checker = self.init_submodule_config(
-            RBLNSafetyCheckerConfig,
+            RBLNCosmosSafetyCheckerConfig,
             safety_checker,
             batch_size=batch_size,
             height=height,

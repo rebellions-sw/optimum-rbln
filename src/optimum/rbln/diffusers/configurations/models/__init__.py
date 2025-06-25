@@ -2,7 +2,7 @@ from .configuration_autoencoder_kl import RBLNAutoencoderKLConfig
 from .configuration_autoencoder_kl_cosmos import RBLNAutoencoderKLCosmosConfig
 from .configuration_controlnet import RBLNControlNetModelConfig
 from .configuration_cosmos_guardrail import (
-    RBLNSafetyCheckerConfig,
+    RBLNCosmosSafetyCheckerConfig,
     RBLNRetinaFaceConfig,
     RBLNVideoSafetyModelConfig,
 )

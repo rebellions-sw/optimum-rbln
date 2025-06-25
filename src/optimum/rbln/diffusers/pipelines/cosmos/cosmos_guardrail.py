@@ -15,7 +15,7 @@ import os
 from abc import abstractmethod
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, Type
 
 import rebel
 import torch
@@ -24,7 +24,7 @@ from ....utils import is_cosmos_guardrail_available
 
 
 if is_cosmos_guardrail_available():
-    from cosmos_guardrail import CosmosSafetyChecker
+    from cosmos_guardrail import CosmosSafetyChecker, GuardrailRunner, Blocklist
 else:
     raise ImportError(
         "'cosmos-guardrail' is not installed. Please install it to use the safety checker for Cosmos: `pip install cosmos_guardrail`. If current python version is '3.9', please use python version '>=3.10'."
@@ -35,6 +35,8 @@ from optimum.rbln.diffusers.configurations.models.configuration_cosmos_guardrail
     RBLNRetinaFaceConfig,
     RBLNVideoSafetyModelConfig,
 )
+from optimum.rbln.utils.submodule import SubModulesMixin
+from optimum.rbln.utils.model_utils import get_rbln_model_cls
 
 from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig
 from ....utils.hub import validate_files
@@ -426,7 +428,7 @@ def update_submodule_config(fn):
     return merged_rbln_config_fn
 
 
-class RBLNCosmosSafetyChecker:
+class RBLNCosmosSafetyChecker(CosmosSafetyChecker, SubModulesMixin):
     original_class = CosmosSafetyChecker
     _rbln_modules = [RBLNRetinaFace, RBLNCosmosSiglipVisionModel, RBLNVideoSafetyModel, RBLNAegis]
     _guardrails = ["video_guardrail", "video_guardrail", "video_guardrail", "text_guardrail"]
@@ -435,17 +437,73 @@ class RBLNCosmosSafetyChecker:
     _additional_modules = [None, "encoder.model", None, None]
     _target_model_names = ["net", "vision_model", "model", "model"]
     _subfolders = ["", "encoder", "model", ""]
-
+    
+    COSMOS_GUARDRAIL_CHECKPOINT = "nvidia/Cosmos-1.0-Guardrail"
+    _rbln_submodules = [{
+    }]
+    def __init__(
+        self,
+        models: List[rebel.Runtime],
+        rbln_config: "RBLNModelConfig",
+        model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
+        rbln_compiled_models: Optional[rebel.RBLNCompiledModel] = None,
+        subfolder: str = "",
+    ) -> None:
+        self.text_guardrail = GuardrailRunner(
+            # safety_models=[
+                Blocklist(COSMOS_GUARDRAIL_CHECKPOINT),
+                models[0],
+            # ]
+        )
+        self.video_guardrail = GuardrailRunner(
+            safety_models=[models[1]],
+            postprocessors=[models[2]],
+        )
+        
     @classmethod
-    @update_submodule_config
-    def compile_submodules(
+    def update_rbln_config_using_pipe(
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
+    ) -> "RBLNDiffusionMixinConfig":
+        return rbln_config
+    
+    # @update_submodule_config
+    @classmethod
+    def from_model(
         cls,
-        model: torch.nn.Module,
-        rbln_config: Optional[dict[str, str]] = {},
-        model_save_dir: str = "cosmos_safety_checker",
+        model: "CosmosSafetyChecker",
+        rbln_config: Optional[Union[RBLNModelConfig, Dict]] = None,
+        model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
+        subfolder: str = "",
+        **kwargs: Dict[str, Any],
     ):
-        save_dir_path = Path(model_save_dir)
-        save_dir_path.mkdir(exist_ok=True)
+        # Directory to save compile artifacts(.rbln) and original configs
+        if model_save_dir is None:
+            save_dir = TemporaryDirectory()
+            save_dir_path = Path(save_dir.name)
+        else:
+            save_dir = model_save_dir
+            if isinstance(save_dir, TemporaryDirectory):
+                save_dir_path = Path(model_save_dir.name)
+            else:
+                save_dir_path = Path(model_save_dir)
+                save_dir_path.mkdir(exist_ok=True)
+
+        base_dir = Path(save_dir_path / subfolder)
+        base_dir.mkdir(exist_ok=True).mkdir(exist_ok=True)
+        
+        # Load submodules
+        if len(cls._rbln_submodules) > 0:
+            rbln_submodules = cls._load_submodules(
+                model=model,
+                model_save_dir=base_dir,
+                rbln_config=rbln_config,
+                **kwargs,
+            )
+        else:
+            rbln_submodules = []
+            
+            
+
         for i, target_model_name in enumerate(cls._target_model_names):
             guardrail = cls._guardrails[i]
             submodule = cls._submodules[i]
@@ -466,34 +524,162 @@ class RBLNCosmosSafetyChecker:
             )
             delattr(target_model, target_model_name)
             setattr(target_model, target_model_name, compiled_model)
-        return model
+        return cls(
+            
+        )
 
     @classmethod
-    @update_submodule_config
-    def load_submodules(
-        cls,
-        model: torch.nn.Module,
-        rbln_config: Optional[dict[str, str]] = {},
-        model_save_dir: str = "cosmos_safety_checker",
-    ):
-        for i, target_model_name in enumerate(cls._target_model_names):
-            guardrail = cls._guardrails[i]
-            submodule = cls._submodules[i]
-            additional_module = cls._additional_modules[i]
-            rbln_module = cls._rbln_modules[i]
+    def _export_submodules_from_model(
+        cls, model: "PreTrainedModel", model_save_dir: str, rbln_config: RBLNModelConfig, **kwargs
+    ) -> List["RBLNModel"]:
+        rbln_submodules = []
+        submodule_prefix = getattr(cls, "_rbln_submodule_prefix", None)
 
-            save_dir_path = Path(model_save_dir) / f"{guardrail}/{submodule}"
+        for submodule in cls._rbln_submodules:
+            submodule_name = submodule["name"]
+            if submodule_prefix is not None:
+                torch_submodule: torch.nn.Module = getattr(model, submodule_prefix)
+                torch_submodule = getattr(torch_submodule, submodule_name)
+            else:
+                torch_submodule: torch.nn.Module = getattr(model, submodule_name)
 
-            target_model = getattr(getattr(model, guardrail), submodule)[cls._module_ids[i]]
-            if additional_module is not None:
-                for m in additional_module.split("."):
-                    target_model = getattr(target_model, m)
+            cls_name = torch_submodule.__class__.__name__
+            submodule_cls: Type[Union["RBLNSimpleModel", "RBLNModel"] ] = get_rbln_model_cls(f"RBLN{cls_name}")
+            submodule_rbln_config = getattr(rbln_config, submodule_name) or {}
 
-            compiled_model = rbln_module.load_compiled_model(
-                save_dir_path,
-                rbln_config=rbln_config.get(guardrail, {}),
-                subfolder=cls._subfolders[i],
+            if isinstance(submodule_rbln_config, dict):
+                submodule_rbln_config_class = submodule_cls.get_rbln_config_class()
+                submodule_rbln_config = submodule_rbln_config_class(**submodule_rbln_config)
+                setattr(rbln_config, submodule_name, submodule_rbln_config)
+
+            submodule_rbln_config = submodule_cls._update_submodule_config(model, submodule_rbln_config)
+
+            rbln_submodule = submodule_cls.from_model(
+                model=torch_submodule,
+                config=torch_submodule.config,
+                subfolder=submodule_name,
+                model_save_dir=model_save_dir,
+                rbln_config=submodule_rbln_config,
+                **kwargs,
             )
-            delattr(target_model, target_model_name)
-            setattr(target_model, target_model_name, compiled_model)
-        return model
+
+            rbln_submodules.append(rbln_submodule)
+
+        return rbln_submodules
+    
+    @classmethod
+    def _load_submodules(cls, model_save_dir, rbln_config: RBLNModelConfig, model=None, **kwargs):
+        # Two ways :
+        # 1. Compile from pytorch object
+        # 2. Load from compiled file
+        if model is not None:
+            return cls._export_submodules_from_model(
+                model=model, model_save_dir=model_save_dir, rbln_config=rbln_config, **kwargs
+            )
+
+        else:
+            return cls._load_submodules_from_compiled_models(
+                model_save_dir=model_save_dir, rbln_config=rbln_config, **kwargs
+            )
+            
+    # @classmethod
+    # @update_submodule_config
+    # def load_submodules(
+    #     cls,
+    #     model: torch.nn.Module,
+    #     rbln_config: Optional[dict[str, str]] = {},
+    #     model_save_dir: str = "safety_checker",
+    # ):
+    #     for i, target_model_name in enumerate(cls._target_model_names):
+    #         guardrail = cls._guardrails[i]
+    #         submodule = cls._submodules[i]
+    #         additional_module = cls._additional_modules[i]
+    #         rbln_module = cls._rbln_modules[i]
+
+    #         save_dir_path = Path(model_save_dir) / f"{guardrail}/{submodule}"
+
+    #         target_model = getattr(getattr(model, guardrail), submodule)[cls._module_ids[i]]
+    #         if additional_module is not None:
+    #             for m in additional_module.split("."):
+    #                 target_model = getattr(target_model, m)
+
+    #         compiled_model = rbln_module.load_compiled_model(
+    #             save_dir_path,
+    #             rbln_config=rbln_config.get(guardrail, {}),
+    #             subfolder=cls._subfolders[i],
+    #         )
+    #         delattr(target_model, target_model_name)
+    #         setattr(target_model, target_model_name, compiled_model)
+    #     return model
+
+# class RBLNCosmosSafetyChecker:
+#     original_class = CosmosSafetyChecker
+#     _rbln_modules = [RBLNRetinaFace, RBLNCosmosSiglipVisionModel, RBLNVideoSafetyModel, RBLNAegis]
+#     _guardrails = ["video_guardrail", "video_guardrail", "video_guardrail", "text_guardrail"]
+#     _submodules = ["postprocessors", "safety_models", "safety_models", "safety_models"]
+#     _module_ids = [0, 0, 0, 1]
+#     _additional_modules = [None, "encoder.model", None, None]
+#     _target_model_names = ["net", "vision_model", "model", "model"]
+#     _subfolders = ["", "encoder", "model", ""]
+
+#     @classmethod
+#     @update_submodule_config
+#     def compile_submodules(
+#         cls,
+#         model: torch.nn.Module,
+#         rbln_config: Optional[dict[str, str]] = {},
+#         model_save_dir: str = "safety_checker",
+#     ):
+#         save_dir_path = Path(model_save_dir)
+#         save_dir_path.mkdir(exist_ok=True)
+#         for i, target_model_name in enumerate(cls._target_model_names):
+#             guardrail = cls._guardrails[i]
+#             submodule = cls._submodules[i]
+#             additional_module = cls._additional_modules[i]
+
+#             save_dir_path = Path(model_save_dir) / f"{guardrail}/{submodule}"
+#             os.makedirs(save_dir_path, exist_ok=True)
+#             target_model = getattr(getattr(model, guardrail), submodule)[cls._module_ids[i]]
+#             if additional_module is not None:
+#                 for m in additional_module.split("."):
+#                     target_model = getattr(target_model, m)
+#             compile_target = getattr(target_model, target_model_name) if additional_module is None else target_model
+#             compiled_model = cls._rbln_modules[i].compile_model(
+#                 compile_target,
+#                 rbln_config=rbln_config.get(guardrail, {}),
+#                 model_save_dir=save_dir_path,
+#                 subfolder=cls._subfolders[i],
+#             )
+#             delattr(target_model, target_model_name)
+#             setattr(target_model, target_model_name, compiled_model)
+#         return model
+
+#     @classmethod
+#     @update_submodule_config
+#     def load_submodules(
+#         cls,
+#         model: torch.nn.Module,
+#         rbln_config: Optional[dict[str, str]] = {},
+#         model_save_dir: str = "safety_checker",
+#     ):
+#         for i, target_model_name in enumerate(cls._target_model_names):
+#             guardrail = cls._guardrails[i]
+#             submodule = cls._submodules[i]
+#             additional_module = cls._additional_modules[i]
+#             rbln_module = cls._rbln_modules[i]
+
+#             save_dir_path = Path(model_save_dir) / f"{guardrail}/{submodule}"
+
+#             target_model = getattr(getattr(model, guardrail), submodule)[cls._module_ids[i]]
+#             if additional_module is not None:
+#                 for m in additional_module.split("."):
+#                     target_model = getattr(target_model, m)
+
+#             compiled_model = rbln_module.load_compiled_model(
+#                 save_dir_path,
+#                 rbln_config=rbln_config.get(guardrail, {}),
+#                 subfolder=cls._subfolders[i],
+#             )
+#             delattr(target_model, target_model_name)
+#             setattr(target_model, target_model_name, compiled_model)
+#         return model

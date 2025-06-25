@@ -750,7 +750,6 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
 
         if isinstance(rbln_config, dict):
             rbln_config.update(rbln_kwargs)
-            import pdb; pdb.set_trace()
             rbln_config = cls(**rbln_config)
 
         elif rbln_config is None:
