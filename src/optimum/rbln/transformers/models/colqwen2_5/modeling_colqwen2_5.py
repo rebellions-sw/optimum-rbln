@@ -144,7 +144,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
             runtime=self.model[0],
             main_input_name=main_input_name,
             embed_tokens=self.embed_tokens,
-            batch_size=self.rbln_config.batch_size,
+            batch_size=1,
             rbln_config=self.rbln_config,
             vocab_size=self.config.vocab_size,
         )
@@ -152,6 +152,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
         self.visual = self.rbln_submodules[0]
         self.mrope_section = self.config.rope_scaling["mrope_section"]
         self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config)
+        self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
 
     @classmethod
     @torch.inference_mode()
@@ -174,10 +175,8 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
                 static_tensors[name] = tensor
                 context.mark_static_address(tensor)
 
-        def compile_model(wrapped_model, compile_config, example_inputs, compile_context, quantization):
+        def compile_model(wrapped_model, compile_config, example_inputs, compile_context):
             try:
-                if quantization:
-                    quantization.maybe_set_quantization_env()
                 original_linear = torch.nn.functional.linear
                 torch.nn.functional.linear = torch.ops.rbln_custom_ops.linear
                 compiled_model = RBLNModel.compile(
@@ -189,13 +188,9 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
                 return compiled_model
             finally:
                 torch.nn.functional.linear = original_linear
-                if quantization:
-                    quantization.maybe_reset_quantization_env()
 
         wrapped_model.phase = "prefill"
-        compiled_prefill = compile_model(
-            wrapped_model, prefill_compile_config, prefill_example_inputs, context, rbln_config.quantization
-        )
+        compiled_prefill = compile_model(wrapped_model, prefill_compile_config, prefill_example_inputs, context)
 
         compiled_models = {"prefill": compiled_prefill}
         return compiled_models
@@ -247,7 +242,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
             max_seq_len=rbln_config.max_seq_len,
         )
 
-        required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
+        required_num_blocks = rbln_config.max_seq_len // rbln_config.kvcache_block_size
         max_num_blocks = required_num_blocks
 
         if rbln_config.kvcache_num_blocks is None:
@@ -325,12 +320,6 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
             inputs_embeds.shape[1] // self.rbln_config.prefill_chunk_size + 1
         )
 
-        block_tables = torch.arange(
-            0,
-            self.rbln_config.max_seq_len // self.rbln_config.kvcache_block_size,
-            dtype=torch.int16,
-        )
-
         for b_idx in range(batch_size):
             cache_position = torch.arange(0, inputs_embeds.shape[1], dtype=torch.int32).unsqueeze(0)
 
@@ -338,7 +327,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
                 inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
                 attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                 cache_position=cache_position,
-                block_tables=block_tables,
+                block_tables=self.block_tables,
                 position_embed=position_embed[:, b_idx : b_idx + 1],
             )
             pad_size = (0, 0, 0, max_size - proj.shape[1], 0, 0)

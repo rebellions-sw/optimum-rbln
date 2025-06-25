@@ -24,6 +24,7 @@ class RBLNColQwen2_5ForConditionalGenerationConfig(RBLNQwen2_5_VLForConditionalG
     def __init__(
         self,
         visual: Optional[RBLNModelConfig] = None,
+        batch_size: Optional[int] = None,
         use_inputs_embeds: bool = True,
         **kwargs,
     ):
@@ -33,4 +34,7 @@ class RBLNColQwen2_5ForConditionalGenerationConfig(RBLNQwen2_5_VLForConditionalG
                 "RBLNColQwen2_5ForConditionalGenerationConfig does not allow `use_inputs_embeds` to be set to False, "
                 "as RBLNColQwen2_5ForConditionalGeneration accepts only `inputs_embeds` as input."
             )
+        if batch_size is not None and batch_size != 1:
+            raise ValueError("batch_size is not supported for RBLNColQwen2_5ForConditionalGenerationConfig")
+
         self.visual = visual
