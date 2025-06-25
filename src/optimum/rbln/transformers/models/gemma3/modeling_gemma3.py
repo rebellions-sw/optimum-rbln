@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import importlib
 import inspect
 from collections import deque
 from dataclasses import dataclass
@@ -122,6 +123,23 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
 
     def can_generate(self):
         return True
+
+    @classmethod
+    def get_pytorch_model(cls, *args, **kwargs):
+        model = super().get_pytorch_model(*args, **kwargs)
+
+        with no_init_weights():
+            model_cls_name = model.model.language_model.__class__.__name__
+            causal_model_cls_name = model_cls_name.replace("TextModel", "ForCausalLM")
+            causal_model_cls = getattr(importlib.import_module("transformers"), causal_model_cls_name)
+            new_language_model = causal_model_cls(model.model.language_model.config)
+
+        new_language_model.lm_head = model.lm_head
+        new_language_model.model = model.model.language_model
+        model.model.language_model = new_language_model
+        model.lm_head = None
+        del model.lm_head
+        return model
 
     def __post_init__(self, **kwargs):
         self.vision_tower = LoopVisionTower(self.rbln_submodules[0])
@@ -541,7 +559,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         (
             inputs,
             cache_position,
-            chunked_attention_mask,
+            padded_attention_mask,
             out_buffers,
             position_ids,
             position_embed,
@@ -553,7 +571,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         )
         if not is_external_block_tables:
             local_block_tables = torch.tensor([batch_idx], dtype=torch.int16)
-            self.dec_attn_mask[batch_idx : batch_idx + 1] = chunked_attention_mask[:1]
+            self.dec_attn_mask[batch_idx : batch_idx + 1] = padded_attention_mask[:1]
 
         if self.rbln_config.use_attention_mask and self.rbln_config.use_position_ids:
             chunked_attention_mask = torch.zeros(1, self.rbln_config.max_seq_len, dtype=torch.float32)
@@ -569,18 +587,10 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                 else None
             )
 
-            # Not used in Gemma3 yet.
             if self.rbln_config.use_attention_mask:
                 if self.rbln_config.use_position_ids:
-                    chunked_attention_mask[0, step : step + self.rbln_config.prefill_chunk_size] = self.dec_attn_mask[
-                        batch_idx, step : step + self.rbln_config.prefill_chunk_size
-                    ]
-                else:
-                    # Update attention mask to ensure proper causal behavior
-                    if step >= self.rbln_config.prefill_chunk_size:
-                        chunked_attention_mask[:, :, :, step - self.rbln_config.prefill_chunk_size : step] = 1
-                    chunked_attention_mask[:, :, :, step : step + self.rbln_config.prefill_chunk_size] = (
-                        self.causal_mask
+                    chunked_attention_mask[0, step : step + self.rbln_config.prefill_chunk_size] = (
+                        padded_attention_mask[0, step : step + self.rbln_config.prefill_chunk_size]
                     )
 
             # Define query position
