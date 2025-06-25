@@ -16,6 +16,7 @@ from abc import abstractmethod
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Dict, List, Optional, Tuple, Union, Type
+import importlib
 
 import rebel
 import torch
@@ -24,21 +25,24 @@ from ....utils import is_cosmos_guardrail_available
 
 
 if is_cosmos_guardrail_available():
-    from cosmos_guardrail import CosmosSafetyChecker, GuardrailRunner, Blocklist
+    from cosmos_guardrail.cosmos_guardrail import CosmosSafetyChecker, GuardrailRunner, Blocklist, VideoContentSafetyFilter
+    # from cosmos_guardrail.cosmos_guardrail import CosmosSafetyChecker, Blocklist, VideoContentSafetyFilter
 else:
     raise ImportError(
         "'cosmos-guardrail' is not installed. Please install it to use the safety checker for Cosmos: `pip install cosmos_guardrail`. If current python version is '3.9', please use python version '>=3.10'."
     )
 
-from optimum.rbln import RBLNLlamaForCausalLM, RBLNSiglipVisionModel
+from optimum.rbln import RBLNLlamaForCausalLM, RBLNSiglipVisionModel, RBLNSiglipEncoderConfig, RBLNVideoContentSafetyFilterConfig
 from optimum.rbln.diffusers.configurations.models.configuration_cosmos_guardrail import (
     RBLNRetinaFaceConfig,
     RBLNVideoSafetyModelConfig,
 )
+from optimum.rbln.transformers.models.siglip.modeling_siglip import _SiglipVisionModel
+
 from optimum.rbln.utils.submodule import SubModulesMixin
 from optimum.rbln.utils.model_utils import get_rbln_model_cls
 
-from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig
+from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig, get_rbln_config_class
 from ....utils.hub import validate_files
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import UnavailableRuntime
@@ -76,12 +80,14 @@ class RBLNSimpleModel:
         model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
         rbln_compiled_models: Optional[rebel.RBLNCompiledModel] = None,
         subfolder: str = "",
+        rbln_submodules: List[Union["RBLNBaseModel", "RBLNSimpleModel"]] = [],
     ):
         self.model = models
         self.rbln_config = rbln_config
         self.compiled_models = rbln_compiled_models
         self.model_save_dir = model_save_dir
         self.subfolder = subfolder
+        self.rbln_submodules = rbln_submodules
 
     @classmethod
     def load_compiled_model(
@@ -175,7 +181,10 @@ class RBLNSimpleModel:
     @abstractmethod
     def _update_rbln_config(cls, **rbln_config_kwargs) -> RBLNModelConfig:
         pass
-
+    
+    def from_model(cls, model, rbln_config, model_save_dir, subfolder="", **kwargs):
+        return cls.compile_model(model, rbln_config, model_save_dir, subfolder=subfolder)
+    
     @classmethod
     def compile_model(cls, model, rbln_config, model_save_dir, subfolder="", **kwargs):
         rbln_config, kwargs = cls.prepare_rbln_config(rbln_config=rbln_config, **kwargs)
@@ -259,6 +268,14 @@ class RBLNSimpleModel:
     def __call__(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
         output = self.model[0](*args, **kwargs)
         return output
+    
+    @classmethod
+    def get_rbln_config_class(cls) -> Type[RBLNModelConfig]:
+        # Lazily loads and caches the corresponding RBLN model config class.
+        if cls._rbln_config_class is None:
+            rbln_config_class_name = cls.__name__ + "Config"
+            cls._rbln_config_class = get_rbln_config_class(rbln_config_class_name)
+        return cls._rbln_config_class
 
 
 class RBLNRetinaFace(RBLNSimpleModel):
@@ -311,8 +328,23 @@ class RBLNVideoSafetyModel(RBLNSimpleModel):
     def network(self, x):
         return self(x)
 
+class RBLNSigLIPEncoder(RBLNSiglipVisionModel):
+    _rbln_config_class = RBLNSiglipEncoderConfig
+    @classmethod
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: "RBLNSiglipVisionModelConfig") -> torch.nn.Module:
+        wrapper_cfg = {
+            "interpolate_pos_encoding": rbln_config.interpolate_pos_encoding,
+            "output_hidden_states": rbln_config.output_hidden_states,
+            "output_attentions": rbln_config.output_attentions,
+        }
+        return _SiglipVisionModel(model.model, **wrapper_cfg).eval()
+    
+    @classmethod
+    def _update_submodule_config(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
+        rbln_config.image_size = [384, 384]
+        return rbln_config
 
-class RBLNCosmosSiglipVisionModel:
+class RBLNCosmosSiglipVisionModel: # TODO(si) : delete
     _origin_class = RBLNSiglipVisionModel
 
     @classmethod
@@ -347,6 +379,128 @@ class RBLNCosmosSiglipVisionModel:
             subfolder=subfolder,
         )
         return compiled_model
+
+class RBLNVideoContentSafetyFilter(VideoContentSafetyFilter, SubModulesMixin):
+    _rbln_config_class = RBLNVideoContentSafetyFilterConfig
+    _rbln_submodules = [{
+        "name" : "encoder"
+    }, 
+       {
+        "name" : "model"
+    },]
+    def __init__(
+        self,
+        models: List[rebel.Runtime],
+        rbln_config: "RBLNModelConfig",
+        model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
+        rbln_compiled_models: Optional[rebel.RBLNCompiledModel] = None,
+        subfolder: str = "",
+        rbln_submodules: List[Union["RBLNBaseModel", "RBLNSimpleModel"]] = [],
+    ) -> None:
+        self.encoder = models[0]
+        self.model = models[1]
+        
+        self.rbln_config = rbln_config
+        if not rbln_config.is_frozen():
+            raise RuntimeError("`rbln_config` must be frozen. Please call `rbln_config.freeze()` first.")
+        self.model_save_dir = Path(model_save_dir)
+        self.rbln_compiled_models = rbln_compiled_models
+        self.subfolder = subfolder
+        self.rbln_submodules = rbln_submodules
+    
+    @classmethod
+    def _export_submodules_from_model(
+        cls, model: "PreTrainedModel", model_save_dir: str, rbln_config: RBLNModelConfig, **kwargs
+    ) -> List["RBLNBaseModel"]:
+        rbln_submodules = []
+        submodule_prefix = getattr(cls, "_rbln_submodule_prefix", None)
+        # TODO(si) : SipLIPEncoder -> config 가 없음 -> siglipencoder.model을 from model로 넘겨주는게 나으려나 아니면 prefix를 추가해놓는게 나으려나...
+        for submodule in cls._rbln_submodules:
+            submodule_name = submodule["name"]
+            import pdb; pdb.set_trace()
+            if submodule_prefix is not None:
+                torch_submodule: torch.nn.Modules = getattr(model, submodule_prefix)
+                torch_submodule = getattr(torch_submodule, submodule_name)
+            else:
+                torch_submodule: torch.nn.Modules = getattr(model, submodule_name)
+
+            cls_name = torch_submodule.__class__.__name__
+            # try :
+            #     submodule_cls: Type["RBLNBaseModel"] = getattr(importlib.import_module("optimum.rbln"), f"RBLN{cls_name}")
+            # except :
+            #     submodule_cls: Type["RBLNSimpleModel"] = globals()[f"RBLN{cls_name}"]
+            submodule_cls: Type["RBLNSimpleModel"] = globals()[f"RBLN{cls_name}"]
+            submodule_rbln_config = getattr(rbln_config, submodule_name) or {}
+
+            if isinstance(submodule_rbln_config, dict):
+                submodule_rbln_config_class = submodule_cls.get_rbln_config_class()
+                submodule_rbln_config = submodule_rbln_config_class(**submodule_rbln_config)
+                setattr(rbln_config, submodule_name, submodule_rbln_config)
+
+            submodule_rbln_config = submodule_cls._update_submodule_config(model, submodule_rbln_config)
+
+            import pdb; pdb.set_trace()
+            rbln_submodule = submodule_cls.from_model(
+                model=torch_submodule,
+                config=torch_submodule.config if hasattr(torch_submodule, "config") else None,
+                subfolder=submodule_name,
+                model_save_dir=model_save_dir,
+                rbln_config=submodule_rbln_config,
+                **kwargs,
+            )
+
+            rbln_submodules.append(rbln_submodule)
+
+        return rbln_submodules
+        
+    @classmethod
+    def from_model(
+        cls,
+        model: "VideoContentSafetyFilter",
+        rbln_config: Optional[Union[RBLNModelConfig, Dict]] = None,
+        model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
+        subfolder: str = "",
+        **kwargs: Dict[str, Any],
+    ):
+        # Directory to save compile artifacts(.rbln) and original configs
+        if model_save_dir is None:
+            save_dir = TemporaryDirectory()
+            save_dir_path = Path(save_dir.name)
+        else:
+            save_dir = model_save_dir
+            if isinstance(save_dir, TemporaryDirectory):
+                save_dir_path = Path(model_save_dir.name)
+            else:
+                save_dir_path = Path(model_save_dir)
+                save_dir_path.mkdir(exist_ok=True)
+
+        base_dir = Path(save_dir_path / subfolder)
+        base_dir.mkdir(exist_ok=True)
+        
+        # Load submodules
+        if len(cls._rbln_submodules) > 0:
+            if hasattr(kwargs, "config") : # FIXME(si) make general
+                if kwargs["config"] is None :
+                    kwargs.pop('config')
+            rbln_submodules = cls._load_submodules(
+                model=model,
+                model_save_dir=base_dir,
+                rbln_config=rbln_config,
+                **kwargs,
+            )
+        else:
+            rbln_submodules = []
+        return cls(
+        # TODO(si) fill the init args   
+        )
+        
+    @classmethod
+    def get_rbln_config_class(cls) -> Type[RBLNModelConfig]:
+        # Lazily loads and caches the corresponding RBLN model config class.
+        if cls._rbln_config_class is None:
+            rbln_config_class_name = cls.__name__ + "Config"
+            cls._rbln_config_class = get_rbln_config_class(rbln_config_class_name)
+        return cls._rbln_config_class
 
 
 class RBLNAegis:
@@ -439,8 +593,13 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker, SubModulesMixin):
     _subfolders = ["", "encoder", "model", ""]
     
     COSMOS_GUARDRAIL_CHECKPOINT = "nvidia/Cosmos-1.0-Guardrail"
+    _rbln_submodule_prefix = ["video_guardrail", "text_guardrail"]
     _rbln_submodules = [{
-    }]
+        "name" : "safety_models"
+    }, 
+       {
+        "name" : "postprocessors"
+    },]
     def __init__(
         self,
         models: List[rebel.Runtime],
@@ -448,17 +607,19 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker, SubModulesMixin):
         model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
         rbln_compiled_models: Optional[rebel.RBLNCompiledModel] = None,
         subfolder: str = "",
+        rbln_submodules: List[Union["RBLNBaseModel", "RBLNSimpleModel"]] = [],
     ) -> None:
-        self.text_guardrail = GuardrailRunner(
-            # safety_models=[
-                Blocklist(COSMOS_GUARDRAIL_CHECKPOINT),
-                models[0],
-            # ]
-        )
-        self.video_guardrail = GuardrailRunner(
-            safety_models=[models[1]],
-            postprocessors=[models[2]],
-        )
+        pass
+        # self.text_guardrail = GuardrailRunner(
+        #     safety_models=[
+        #         Blocklist(COSMOS_GUARDRAIL_CHECKPOINT),
+        #         models[0],
+        #     ]
+        # )
+        # self.video_guardrail = GuardrailRunner(
+        #     safety_models=[models[1]],
+        #     postprocessors=[models[2]],
+        # )
         
     @classmethod
     def update_rbln_config_using_pipe(
@@ -489,7 +650,7 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker, SubModulesMixin):
                 save_dir_path.mkdir(exist_ok=True)
 
         base_dir = Path(save_dir_path / subfolder)
-        base_dir.mkdir(exist_ok=True).mkdir(exist_ok=True)
+        base_dir.mkdir(exist_ok=True)
         
         # Load submodules
         if len(cls._rbln_submodules) > 0:
@@ -499,33 +660,11 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker, SubModulesMixin):
                 rbln_config=rbln_config,
                 **kwargs,
             )
+            import pdb; pdb.set_trace()
         else:
             rbln_submodules = []
-            
-            
-
-        for i, target_model_name in enumerate(cls._target_model_names):
-            guardrail = cls._guardrails[i]
-            submodule = cls._submodules[i]
-            additional_module = cls._additional_modules[i]
-
-            save_dir_path = Path(model_save_dir) / f"{guardrail}/{submodule}"
-            os.makedirs(save_dir_path, exist_ok=True)
-            target_model = getattr(getattr(model, guardrail), submodule)[cls._module_ids[i]]
-            if additional_module is not None:
-                for m in additional_module.split("."):
-                    target_model = getattr(target_model, m)
-            compile_target = getattr(target_model, target_model_name) if additional_module is None else target_model
-            compiled_model = cls._rbln_modules[i].compile_model(
-                compile_target,
-                rbln_config=rbln_config.get(guardrail, {}),
-                model_save_dir=save_dir_path,
-                subfolder=cls._subfolders[i],
-            )
-            delattr(target_model, target_model_name)
-            setattr(target_model, target_model_name, compiled_model)
         return cls(
-            
+        # TODO(si) fill the init args   
         )
 
     @classmethod
@@ -534,36 +673,47 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker, SubModulesMixin):
     ) -> List["RBLNModel"]:
         rbln_submodules = []
         submodule_prefix = getattr(cls, "_rbln_submodule_prefix", None)
+        for prefix in submodule_prefix:
+            for submodule in cls._rbln_submodules:
+                # TODO(si) : model architecture parsing
+                submodule_name = submodule["name"]
+                if prefix is not None: # FIXME(si) dont need if-else
+                    torch_submodule: torch.nn.Module = getattr(model, prefix)
+                    torch_submodule = getattr(torch_submodule, submodule_name)
+                else:
+                    torch_submodule: torch.nn.Module = getattr(model, submodule_name)
 
-        for submodule in cls._rbln_submodules:
-            submodule_name = submodule["name"]
-            if submodule_prefix is not None:
-                torch_submodule: torch.nn.Module = getattr(model, submodule_prefix)
-                torch_submodule = getattr(torch_submodule, submodule_name)
-            else:
-                torch_submodule: torch.nn.Module = getattr(model, submodule_name)
+                if torch_submodule is None : # text_guardrail post_processor
+                    continue
 
-            cls_name = torch_submodule.__class__.__name__
-            submodule_cls: Type[Union["RBLNSimpleModel", "RBLNModel"] ] = get_rbln_model_cls(f"RBLN{cls_name}")
-            submodule_rbln_config = getattr(rbln_config, submodule_name) or {}
+                if isinstance(torch_submodule, list):
+                    torch_submodule = torch_submodule[0] if prefix == "video_guardrail" else torch_submodule[1] # FIXME(si) monkey patch
+                
+                cls_name = torch_submodule.__class__.__name__
+                # submodule_cls: Type[Union["RBLNSimpleModel", "RBLNModel"] ] = get_rbln_model_cls(f"RBLN{cls_name}")
+                # submodule_cls: Type[Union["RBLNSimpleModel", "RBLNBaseModel"]] = getattr(importlib.import_module("optimum.rbln"), f"RBLN{cls_name}")
+                submodule_cls: Type[Union["RBLNSimpleModel", "RBLNBaseModel"]] = globals()[f"RBLN{cls_name}"] # FIXME(si), is it better then define into __init__.py?
+                submodule_rbln_config = getattr(rbln_config, prefix) or {}
+                import pdb; pdb.set_trace()
 
-            if isinstance(submodule_rbln_config, dict):
-                submodule_rbln_config_class = submodule_cls.get_rbln_config_class()
-                submodule_rbln_config = submodule_rbln_config_class(**submodule_rbln_config)
-                setattr(rbln_config, submodule_name, submodule_rbln_config)
+                if isinstance(submodule_rbln_config, dict):
+                    submodule_rbln_config_class = submodule_cls.get_rbln_config_class()
+                    submodule_rbln_config = submodule_rbln_config_class(**submodule_rbln_config)
+                    setattr(rbln_config, submodule_name, submodule_rbln_config)
 
-            submodule_rbln_config = submodule_cls._update_submodule_config(model, submodule_rbln_config)
+                submodule_rbln_config = submodule_cls._update_submodule_config(model, submodule_rbln_config)
 
-            rbln_submodule = submodule_cls.from_model(
-                model=torch_submodule,
-                config=torch_submodule.config,
-                subfolder=submodule_name,
-                model_save_dir=model_save_dir,
-                rbln_config=submodule_rbln_config,
-                **kwargs,
-            )
+                rbln_submodule = submodule_cls.from_model(
+                    model=torch_submodule,
+                    config=torch_submodule.config if hasattr(torch_submodule, "config") else None,
+                    subfolder=f"{prefix}/{submodule_name}", # FIXME(si) tmp -> PATH
+                    model_save_dir=model_save_dir,
+                    rbln_config=submodule_rbln_config,
+                    **kwargs,
+                )
+                import pdb; pdb.set_trace()
 
-            rbln_submodules.append(rbln_submodule)
+                rbln_submodules.append(rbln_submodule)
 
         return rbln_submodules
     

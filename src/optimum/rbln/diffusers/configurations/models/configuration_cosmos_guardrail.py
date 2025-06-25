@@ -17,9 +17,13 @@ from typing import Optional, Tuple, Dict
 from ....configuration_utils import RBLNModelConfig
 from ....utils.logging import get_logger
 
+from optimum.rbln import RBLNSiglipVisionModelConfig
 
 logger = get_logger(__name__)
 
+
+class RBLNSiglipEncoderConfig(RBLNSiglipVisionModelConfig):
+    pass
 
 class RBLNCosmosSafetyCheckerConfig(RBLNModelConfig):
     def __init__(
@@ -47,8 +51,26 @@ class RBLNCosmosSafetyCheckerConfig(RBLNModelConfig):
         self.width = width or 1280
         self.text_guardrail = text_guardrail
         self.video_guardrail = video_guardrail
-        
 
+class RBLNVideoContentSafetyFilterConfig(RBLNModelConfig):
+    def __init__(
+        self,
+        encoder: Optional[Dict] = None,
+        model: Optional[Dict] = None,    
+        **kwargs,
+    ):
+        """
+        Args:
+            encoder (Optional[int]): The config of submodule named encoder
+            model (Optional[int]): The config of submodule named model
+            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+
+        Raises:
+            ValueError: If batch_size is not a positive integer.
+        """
+        super().__init__(**kwargs)
+        self.encoder = encoder
+        self.model = model
 class RBLNRetinaFaceConfig(RBLNModelConfig):
     def __init__(
         self,

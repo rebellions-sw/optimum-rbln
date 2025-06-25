@@ -10,6 +10,8 @@ from .models import (
     RBLNUNet2DConditionModelConfig,
     RBLNVideoSafetyModelConfig,
     RBLNVQModelConfig,
+    RBLNSiglipEncoderConfig,
+    RBLNVideoContentSafetyFilterConfig,
 )
 from .pipelines import (
     RBLNCosmosTextToWorldPipelineConfig,

@@ -316,11 +316,9 @@ class RBLNDiffusionMixin:
             
             submodule_rbln_cls: Type[RBLNModel] = getattr(rbln_config, submodule_name).rbln_model_cls
             rbln_config = submodule_rbln_cls.update_rbln_config_using_pipe(model, rbln_config, submodule_name)
-            
-            import os
+
             if isinstance(submodule, torch.nn.Module):
                 subfolder = prefix + submodule_name
-                import pdb; pdb.set_trace()
                 model_save_dir = model_save_dir or ""
                 submodule = submodule_rbln_cls.from_model(
                     model=submodule,
