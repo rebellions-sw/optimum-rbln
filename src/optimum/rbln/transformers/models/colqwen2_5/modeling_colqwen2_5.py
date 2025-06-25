@@ -36,7 +36,7 @@ from ..decoderonly.modeling_decoderonly import (
 )
 from ..qwen2_5_vl.modeling_qwen2_5_vl import RBLNQwen2_5_VLForConditionalGeneration
 from .colqwen2_5_architecture import ColQwen2_5_LanguageModelWrapper
-from .configuration_colqwen2_5 import RBLNColQwen2_5ForConditionalGenerationConfig
+from .configuration_colqwen2_5 import RBLNColQwen2_5ForRetrievalConfig
 
 
 if TYPE_CHECKING:
@@ -53,7 +53,7 @@ class RBLNRuntimeModelForColQwen2_5(RBLNRuntimeModel):
         self,
         runtime: rebel.Runtime,
         batch_size: int,
-        rbln_config: RBLNColQwen2_5ForConditionalGenerationConfig,
+        rbln_config: RBLNColQwen2_5ForRetrievalConfig,
         **kwargs: Any,
     ) -> None:
         super().__init__(
@@ -137,7 +137,7 @@ class RBLNRuntimeModelForColQwen2_5(RBLNRuntimeModel):
         return embedding
 
 
-class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGeneration):
+class RBLNColQwen2_5ForRetrieval(RBLNQwen2_5_VLForConditionalGeneration):
     auto_model_class = AutoModelForVision2Seq
     _rbln_submodules = [
         {"name": "visual"},
@@ -169,7 +169,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
 
     @classmethod
     @torch.inference_mode()
-    def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNColQwen2_5ForConditionalGenerationConfig):
+    def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNColQwen2_5ForRetrievalConfig):
         wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
 
         rbln_compile_configs = rbln_config.compile_cfgs
@@ -213,7 +213,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
         cls,
         batch_size: int,
         query_length: int,
-        rbln_config: RBLNColQwen2_5ForConditionalGenerationConfig,
+        rbln_config: RBLNColQwen2_5ForRetrievalConfig,
         model_config: PretrainedConfig,
     ):
         input_info = super().get_input_info(
@@ -232,8 +232,8 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
         model: Optional["PreTrainedModel"] = None,
         model_config: Optional["PretrainedConfig"] = None,
-        rbln_config: Optional[RBLNColQwen2_5ForConditionalGenerationConfig] = None,
-    ) -> RBLNColQwen2_5ForConditionalGenerationConfig:
+        rbln_config: Optional[RBLNColQwen2_5ForRetrievalConfig] = None,
+    ) -> RBLNColQwen2_5ForRetrievalConfig:
         if rbln_config.max_seq_len is None:
             rbln_config.max_seq_len = getattr(model_config, "max_position_embeddings", None) or getattr(
                 model_config, "n_positions", None
@@ -277,7 +277,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
     def _create_runtimes(
         cls,
         compiled_models: List[rebel.RBLNCompiledModel],
-        rbln_config: RBLNColQwen2_5ForConditionalGenerationConfig,
+        rbln_config: RBLNColQwen2_5ForRetrievalConfig,
     ) -> List[rebel.Runtime]:
         expected_model_names = ["prefill"]
         if any(model_name not in rbln_config.device_map for model_name in expected_model_names):

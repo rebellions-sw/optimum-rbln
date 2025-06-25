@@ -13,6 +13,6 @@
 # limitations under the License.
 
 from .configuration_colqwen2_5 import (
-    RBLNColQwen2_5ForConditionalGenerationConfig,
+    RBLNColQwen2_5ForRetrievalConfig,
 )
-from .modeling_colqwen2_5 import RBLNColQwen2_5ForConditionalGeneration
+from .modeling_colqwen2_5 import RBLNColQwen2_5ForRetrieval
