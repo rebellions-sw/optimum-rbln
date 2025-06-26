@@ -13,7 +13,11 @@
 # limitations under the License.
 
 
+import inspect
+from typing import Any, Callable
+
 from transformers import AutoModelForCausalLM
+from transformers.generation.utils import GenerationMixin
 
 from ....utils import logging
 from ..decoderonly import RBLNDecoderOnlyModelForCausalLM
@@ -85,8 +89,19 @@ class RBLNExaoneForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
     _decoder_wrapper_cls = ExaoneForCausalLMWrapper
     _hf_class = AutoModelForCausalLM
+    _supports_cache_class = True
 
     @classmethod
     def from_pretrained(cls, *args, **kwargs):
         kwargs.setdefault("trust_remote_code", True)
         return super().from_pretrained(*args, **kwargs)
+
+    def __getattr__(self, __name: str) -> Any:
+        def redirect(func):
+            return lambda *pargs, **kwargs: func(self, *pargs, **kwargs)
+
+        val = getattr(GenerationMixin, __name)
+
+        if isinstance(val, Callable) and "self" in set(inspect.signature(val).parameters):
+            return redirect(val)
+        return val
