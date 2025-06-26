@@ -25,7 +25,7 @@ from ....utils import is_cosmos_guardrail_available
 
 
 if is_cosmos_guardrail_available():
-    from cosmos_guardrail.cosmos_guardrail import CosmosSafetyChecker, GuardrailRunner, Blocklist, VideoContentSafetyFilter
+    from cosmos_guardrail.cosmos_guardrail import CosmosSafetyChecker, GuardrailRunner, Blocklist, VideoContentSafetyFilter, SigLIPEncoder
     # from cosmos_guardrail.cosmos_guardrail import CosmosSafetyChecker, Blocklist, VideoContentSafetyFilter
 else:
     raise ImportError(
@@ -328,7 +328,7 @@ class RBLNVideoSafetyModel(RBLNSimpleModel):
     def network(self, x):
         return self(x)
 
-class RBLNSigLIPEncoder(RBLNSiglipVisionModel):
+class RBLNSigLIPEncoder(RBLNSiglipVisionModel, SigLIPEncoder):
     _rbln_config_class = RBLNSiglipEncoderConfig
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: "RBLNSiglipVisionModelConfig") -> torch.nn.Module:

@@ -16,7 +16,29 @@ from typing import Optional
 
 from ....configuration_utils import RBLNModelConfig
 
+class RBLNSiglipModelConfig(RBLNModelConfig):
+    def __init__(
+        self,
+        batch_size: Optional[int] = None,
+        vision_model: Optional[int] = None,
+        # text_model: Optional[int] = None,
+        **kwargs,
+    ):
+        """
+        Args:
+            batch_size (Optional[int]): The batch size for image processing. Defaults to 1.
+            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
+        Raises:
+            ValueError: If batch_size is not a positive integer.
+        """
+        super().__init__(**kwargs)
+        self.batch_size = batch_size or 1
+        if not isinstance(self.batch_size, int) or self.batch_size < 0:
+            raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
+
+        self.vision_model = vision_model
+        # self.text_model = text_model
 class RBLNSiglipVisionModelConfig(RBLNModelConfig):
     def __init__(
         self,
