@@ -16,4 +16,12 @@ from ...modeling_generic import RBLNModelForQuestionAnswering
 
 
 class RBLNDistilBertForQuestionAnswering(RBLNModelForQuestionAnswering):
+    """
+    RBLN optimized DistilBERT model for question answering tasks.
+
+    This class provides hardware-accelerated inference for DistilBERT models
+    on RBLN devices, supporting extractive question answering tasks where
+    the model predicts start and end positions of answers in text.
+    """
+
     rbln_model_input_names = ["input_ids", "attention_mask"]

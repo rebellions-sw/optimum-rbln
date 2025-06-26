@@ -34,7 +34,12 @@ class RBLNCLIPTextModelConfig(RBLNModelConfig):
 
 
 class RBLNCLIPTextModelWithProjectionConfig(RBLNCLIPTextModelConfig):
-    pass
+    """
+    Configuration class for RBLNCLIPTextModelWithProjection.
+
+    This configuration inherits from RBLNCLIPTextModelConfig and stores
+    configuration parameters for CLIP text models with projection layers.
+    """
 
 
 class RBLNCLIPVisionModelConfig(RBLNModelConfig):
@@ -76,4 +81,9 @@ class RBLNCLIPVisionModelConfig(RBLNModelConfig):
 
 
 class RBLNCLIPVisionModelWithProjectionConfig(RBLNCLIPVisionModelConfig):
-    pass
+    """
+    Configuration class for RBLNCLIPVisionModelWithProjection.
+
+    This configuration inherits from RBLNCLIPVisionModelConfig and stores
+    configuration parameters for CLIP vision models with projection layers.
+    """

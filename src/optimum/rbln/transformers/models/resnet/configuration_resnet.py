@@ -17,4 +17,9 @@ from ...configuration_generic import RBLNModelForImageClassificationConfig
 
 
 class RBLNResNetForImageClassificationConfig(RBLNModelForImageClassificationConfig):
-    ""
+    """
+    Configuration class for RBLNResNetForImageClassification.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized ResNet models for image classification tasks.
+    """

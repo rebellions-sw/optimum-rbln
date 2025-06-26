@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import inspect
-from typing import TYPE_CHECKING, Any, Callable
+from typing import Any, Callable
 
 from transformers import BartForConditionalGeneration, PreTrainedModel
 
@@ -27,19 +27,28 @@ from .configuration_bart import RBLNBartForConditionalGenerationConfig
 logger = get_logger()
 
 
-if TYPE_CHECKING:
-    from transformers import PreTrainedModel
-
-
 class RBLNBartModel(RBLNTransformerEncoderForFeatureExtraction):
-    pass
+    """
+    RBLN optimized BART model for feature extraction tasks.
+
+    This class provides hardware-accelerated inference for BART encoder models
+    on RBLN devices, optimized for feature extraction use cases.
+    """
 
 
 class RBLNBartForConditionalGeneration(RBLNModelForSeq2SeqLM):
+    """
+    RBLN optimized BART model for conditional text generation tasks.
+
+    This class provides hardware-accelerated inference for BART models
+    on RBLN devices, supporting sequence-to-sequence generation tasks
+    such as summarization, translation, and text generation.
+    """
+
     support_causal_attn = True
 
     @classmethod
-    def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: RBLNBartForConditionalGenerationConfig):
+    def wrap_model_if_needed(self, model: PreTrainedModel, rbln_config: RBLNBartForConditionalGenerationConfig):
         return BartWrapper(
             model, enc_max_seq_len=rbln_config.enc_max_seq_len, use_attention_mask=rbln_config.use_attention_mask
         )
