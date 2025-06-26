@@ -96,7 +96,7 @@ class RBLNSigLIPEncoder(SigLIPEncoder):
         torch.nn.Module.__init__(self)
         if is_compiled_dir(checkpoint_id):
             self.checkpoint_dir = (
-                pathlib.Path(checkpoint_id) / "video_content_safety_filter" / "siglip_encoder"
+                pathlib.Path(checkpoint_id) / "safety_checker" / "video_content_safety_filter" / "siglip_encoder"
             ).as_posix()
             self.processor = SiglipProcessor.from_pretrained(self.checkpoint_dir)
             self.model = RBLNSiglipVisionModel.from_pretrained(
@@ -104,7 +104,7 @@ class RBLNSigLIPEncoder(SigLIPEncoder):
                 rbln_device=rbln_config.siglip_encoder.device,
             )
         else:
-            SigLIPEncoder.__init__(self, model_name, checkpoint_id)
+            super().__init__(model_name, checkpoint_id)
             model = self.model
             del self.model
             self.model = RBLNSiglipVisionModel.from_model(
@@ -132,7 +132,7 @@ class RBLNRetinaFaceFilter(RetinaFaceFilter):
         torch.nn.Module.__init__(self)
         if is_compiled_dir(checkpoint_id):
             self.compiled_model = rebel.RBLNCompiledModel(
-                pathlib.Path(checkpoint_id) / "face_blur_filter" / "retinaface.rbln"
+                pathlib.Path(checkpoint_id) / "safety_checker" / "face_blur_filter" / "retinaface.rbln"
             )
             self.cfg = cfg_re50
             self.batch_size = batch_size
@@ -140,7 +140,7 @@ class RBLNRetinaFaceFilter(RetinaFaceFilter):
             self.cfg["pretrain"] = False
         else:
             with patch("torch.load", partial(torch.load, weights_only=True, map_location=torch.device("cpu"))):
-                RetinaFaceFilter.__init__(self, checkpoint_id)
+                super().__init__(checkpoint_id)
             net = self.net
             del self.net
             self.compiled_model = rebel.compile_from_torch(
@@ -180,7 +180,7 @@ class RBLNVideoSafetyModel(VideoSafetyModel):
     def load_runtime(self, checkpoint_id: str):
         if is_compiled_dir(checkpoint_id):
             self.compiled_model = rebel.RBLNCompiledModel(
-                pathlib.Path(checkpoint_id) / "video_content_safety_filter" / "video_safety_model.rbln"
+                pathlib.Path(checkpoint_id) / "safety_checker" / "video_content_safety_filter" / "video_safety_model.rbln"
             )
         else:
             # Load model from checkpoint
@@ -251,12 +251,12 @@ class RBLNAegis(Aegis):
     ) -> None:
         if is_compiled_dir(checkpoint_id):
             torch.nn.Module.__init__(self)
-            cache_dir = pathlib.Path(checkpoint_id) / "aegis"
+            cache_dir = pathlib.Path(checkpoint_id) / "safety_checker" / "aegis"
             self.tokenizer = AutoTokenizer.from_pretrained(cache_dir)
             self.model = RBLNAutoModelForCausalLM.from_pretrained(cache_dir, rbln_device=rbln_config.aegis.device)
 
         else:
-            Aegis.__init__(self, checkpoint_id, base_model_id, aegis_adapter)
+            super().__init__(checkpoint_id, base_model_id, aegis_adapter)
             model = self.model.merge_and_unload()  # peft merge
             del self.model
 
@@ -297,7 +297,12 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker):
 
         if rbln_config is None:
             rbln_config = RBLNCosmosSafetyCheckerConfig()
-
+        with patch("torch.load", partial(torch.load, weights_only=True, map_location=torch.device("cpu"))):
+            self.video_guardrail = GuardrailRunner(
+                safety_models=[RBLNVideoContentSafetyFilter(checkpoint_id, rbln_config=rbln_config)],
+                postprocessors=[RBLNRetinaFaceFilter(checkpoint_id, rbln_config=rbln_config)],
+            )
+        
         self.text_guardrail = GuardrailRunner(
             safety_models=[
                 Blocklist(COSMOS_GUARDRAIL_CHECKPOINT),  # Changed since it cannot be saved
@@ -305,10 +310,6 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker):
             ]
         )
 
-        self.video_guardrail = GuardrailRunner(
-            safety_models=[RBLNVideoContentSafetyFilter(checkpoint_id, rbln_config=rbln_config)],
-            postprocessors=[RBLNRetinaFaceFilter(checkpoint_id, rbln_config=rbln_config)],
-        )
 
         self.rbln_config = rbln_config
 
