@@ -194,13 +194,16 @@ class RBLNColQwen2_5ForRetrieval(RBLNQwen2_5_VLForConditionalGeneration):
         return Qwen2_5_VLForConditionalGeneration.get_rope_index(self, *args, **kwargs)
 
     def _preprocess_chunked_prefill(self, inputs_embeds, attention_mask, position_embed):
+        # valid sequence length of inputs_embeds
         query_length = inputs_embeds.shape[1] if attention_mask is None else torch.sum(attention_mask.view(-1)).item()
+        
         # extract valid inputs
         inputs_embeds = inputs_embeds[:, attention_mask.bool()] if attention_mask is not None else inputs_embeds
         position_embed = (
             position_embed[:, :, :, attention_mask.bool(), :] if attention_mask is not None else position_embed
         )
-        # adding padding for chunked prefill
+        
+        # add padding for chunked prefill
         padding_size = (
             self.rbln_config.prefill_chunk_size - (query_length % self.rbln_config.prefill_chunk_size)
         ) % self.rbln_config.prefill_chunk_size
@@ -243,6 +246,7 @@ class RBLNColQwen2_5ForRetrieval(RBLNQwen2_5_VLForConditionalGeneration):
         return self._postprocess_chunked_prefill(projs, attention_mask)
 
     def _postprocess_chunked_prefill(self, projs, attention_mask):
+        # index copy for attention mask
         if attention_mask is not None:
             embedding = torch.full(
                 (1, attention_mask.shape[-1], projs.shape[-1]),
