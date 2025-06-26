@@ -19,6 +19,10 @@ from .....transformers import RBLNSiglipVisionModelConfig
 
 
 class RBLNVideoContentSafetyFilterConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLN Video Content Safety Filter.
+    """
+
     def __init__(
         self,
         batch_size: Optional[int] = None,
@@ -33,6 +37,10 @@ class RBLNVideoContentSafetyFilterConfig(RBLNModelConfig):
 
 
 class RBLNRetinaFaceFilterConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLN Retina Face Filter.
+    """
+
     def __init__(
         self,
         batch_size: Optional[int] = None,
@@ -45,6 +53,10 @@ class RBLNRetinaFaceFilterConfig(RBLNModelConfig):
 
 
 class RBLNCosmosSafetyCheckerConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLN Cosmos Safety Checker.
+    """
+
     submodules = ["aegis", "video_content_safety_filter", "face_blur_filter", "siglip_encoder"]
 
     def __init__(
