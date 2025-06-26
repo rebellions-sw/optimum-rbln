@@ -12,13 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, List, Optional, Union
+from typing import TYPE_CHECKING, List, Optional, Union
 
 import rebel
 import torch
 from rebel.compile_context import CompileContext
 from transformers import (
-    AutoModelForVision2Seq,
     PretrainedConfig,
     PreTrainedModel,
     Qwen2_5_VLForConditionalGeneration,
@@ -30,7 +29,6 @@ from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
 from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ..decoderonly.modeling_decoderonly import (
-    RBLNRuntimeModel,
     set_default_values,
     validate_attention_method,
 )
@@ -48,97 +46,9 @@ if TYPE_CHECKING:
     )
 
 
-class RBLNRuntimeModelForColQwen2_5(RBLNRuntimeModel):
-    def __init__(
-        self,
-        runtime: rebel.Runtime,
-        batch_size: int,
-        rbln_config: RBLNColQwen2_5ForRetrievalConfig,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(
-            runtime,
-            "prefill",
-            batch_size,
-            None,
-            None,
-            None,
-            rbln_config,
-            **kwargs,
-        )
-
-    def prefill_forward(
-        self,
-        inputs: torch.Tensor,
-        cache_position: torch.Tensor = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        batch_idx: int = None,
-        block_tables: torch.Tensor = None,
-        is_external_block_tables: bool = None,
-        position_embed: Optional[torch.Tensor] = None,
-        local_block_tables: Optional[torch.Tensor] = None,
-        token_type_ids: Optional[torch.Tensor] = None,
-    ) -> torch.FloatTensor:
-        """
-        Performs chunked prefill for efficient KV-cache updates and memory optimization.
-        Instead of processing the entire sequence at once, the input is divided into chunks of size `prefill_chunk_size`,
-        and each chunk is processed sequentially. This allows for better memory utilization and compatibility with continuous batching.
-        """
-        (
-            inputs,
-            cache_position,
-            chunked_attention_mask,
-            _,
-            _,
-            position_embed,
-            _,
-            query_length,
-        ) = self._prepare_prefill_inputs(
-            inputs, cache_position, attention_mask, position_embed, token_type_ids=token_type_ids
-        )
-
-        projs = []
-        # Process input in chunks of size `prefill_chunk_size`
-        for step in range(0, query_length, self.rbln_config.prefill_chunk_size):
-            # Extract the current chunk of inputs and cache positions
-            input_chunk = inputs[:, step : step + self.rbln_config.prefill_chunk_size]
-            cache_pos_chunk = cache_position[:, step : step + self.rbln_config.prefill_chunk_size]
-            if position_embed is not None:
-                position_embed_chunk = position_embed[:, :, :, step : step + self.rbln_config.prefill_chunk_size, :]
-
-            if self.rbln_config.use_attention_mask and not self.rbln_config.use_position_ids:
-                # Update attention mask to ensure proper causal behavior
-                if step >= self.rbln_config.prefill_chunk_size:
-                    chunked_attention_mask[:, :, :, step - self.rbln_config.prefill_chunk_size : step] = 1
-                chunked_attention_mask[:, :, :, step : step + self.rbln_config.prefill_chunk_size] = self.causal_mask
-
-            # Forward pass for the current chunk
-            proj = self.runtime(
-                inputs_embeds=input_chunk,
-                cache_position=cache_pos_chunk,
-                block_tables=block_tables,
-                position_emb=position_embed_chunk if position_embed is not None else None,
-            )
-            projs.append(proj)
-
-        projs = torch.concat(projs, dim=-2)[:, :query_length]
-
-        if attention_mask is not None:
-            embedding = torch.full(
-                (1, attention_mask.shape[-1], projs.shape[-1]),
-                fill_value=1e-10,
-                dtype=projs.dtype,
-            )
-            mask_indices = torch.nonzero(attention_mask, as_tuple=True)[0]
-            embedding.index_copy_(dim=-2, index=mask_indices, source=projs)
-        else:
-            embedding = projs
-
-        return embedding
-
-
 class RBLNColQwen2_5ForRetrieval(RBLNQwen2_5_VLForConditionalGeneration):
-    auto_model_class = AutoModelForVision2Seq
+    main_input_name = "inputs_embeds"
+    auto_model_class = None
     _rbln_submodules = [
         {"name": "visual"},
     ]
@@ -146,23 +56,11 @@ class RBLNColQwen2_5ForRetrieval(RBLNQwen2_5_VLForConditionalGeneration):
     _use_rotary_emb = False
 
     def __post_init__(self, **kwargs):
-        main_input_name = self.main_input_name
-
-        main_input_name = "inputs_embeds"
         artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
         self.embed_tokens = self._create_embedding_layer()
         self.embed_tokens.load_state_dict(artifacts["embed_tokens"])
-
-        self.prefill = RBLNRuntimeModelForColQwen2_5(
-            runtime=self.model[0],
-            main_input_name=main_input_name,
-            embed_tokens=self.embed_tokens,
-            batch_size=1,
-            rbln_config=self.rbln_config,
-            vocab_size=self.config.vocab_size,
-        )
-
         self.visual = self.rbln_submodules[0]
+        self.prefill_runtime = self.model[0]
         self.mrope_section = self.config.rope_scaling["mrope_section"]
         self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config)
         self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
@@ -295,6 +193,72 @@ class RBLNColQwen2_5ForRetrieval(RBLNQwen2_5_VLForConditionalGeneration):
     def get_rope_index(self, *args, **kwargs):
         return Qwen2_5_VLForConditionalGeneration.get_rope_index(self, *args, **kwargs)
 
+    def _preprocess_chunked_prefill(self, inputs_embeds, attention_mask, position_embed):
+        # valid sequence length of inputs_embeds
+        query_length = inputs_embeds.shape[1] if attention_mask is None else torch.sum(attention_mask.view(-1)).item()
+
+        # extract valid inputs
+        inputs_embeds = inputs_embeds[:, attention_mask.bool()] if attention_mask is not None else inputs_embeds
+        position_embed = (
+            position_embed[:, :, :, attention_mask.bool(), :] if attention_mask is not None else position_embed
+        )
+
+        # add padding for chunked prefill
+        padding_size = (
+            self.rbln_config.prefill_chunk_size - (query_length % self.rbln_config.prefill_chunk_size)
+        ) % self.rbln_config.prefill_chunk_size
+        padded_len = query_length + padding_size
+
+        inputs_embeds = torch.nn.functional.pad(inputs_embeds, (0, 0, 0, padding_size))
+        position_embed = torch.nn.functional.pad(position_embed, (0, 0, 0, padding_size))
+        cache_position = torch.arange(padded_len, dtype=torch.int32).unsqueeze(0)
+
+        return inputs_embeds, position_embed, cache_position, query_length
+
+    def _chunked_prefill_forward(
+        self,
+        inputs_embeds: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_embed: Optional[torch.Tensor] = None,
+    ):
+        padded_inputs_embeds, padded_position_embed, cache_position, query_length = self._preprocess_chunked_prefill(
+            inputs_embeds, attention_mask, position_embed
+        )
+
+        # chunked prefill
+        projs = []
+        for step in range(0, query_length, self.rbln_config.prefill_chunk_size):
+            # Extract the current chunk of inputs and cache positions
+            input_chunk = padded_inputs_embeds[:, step : step + self.rbln_config.prefill_chunk_size]
+            cache_pos_chunk = cache_position[:, step : step + self.rbln_config.prefill_chunk_size]
+            position_embed_chunk = padded_position_embed[:, :, :, step : step + self.rbln_config.prefill_chunk_size, :]
+
+            # Forward pass for the current chunk
+            proj = self.prefill_runtime(
+                inputs_embeds=input_chunk,
+                cache_position=cache_pos_chunk,
+                block_tables=self.block_tables,
+                position_emb=position_embed_chunk,
+            )
+            projs.append(proj)
+        projs = torch.concat(projs, dim=-2)[:, :query_length]
+
+        return self._postprocess_chunked_prefill(projs, attention_mask)
+
+    def _postprocess_chunked_prefill(self, projs, attention_mask):
+        # index copy for attention mask
+        if attention_mask is not None:
+            embedding = torch.full(
+                (1, attention_mask.shape[-1], projs.shape[-1]),
+                fill_value=1e-10,
+                dtype=projs.dtype,
+            )
+            mask_indices = torch.nonzero(attention_mask, as_tuple=True)[0]
+            embedding.index_copy_(dim=-2, index=mask_indices, source=projs)
+        else:
+            embedding = projs
+        return embedding
+
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
@@ -304,13 +268,9 @@ class RBLNColQwen2_5ForRetrieval(RBLNQwen2_5_VLForConditionalGeneration):
         pixel_values_videos: Optional[torch.FloatTensor] = None,
         image_grid_thw: Optional[torch.LongTensor] = None,
         video_grid_thw: Optional[torch.LongTensor] = None,
-        cache_position: Optional[torch.LongTensor] = None,
         second_per_grid_ts: Optional[torch.Tensor] = None,
-        generate_idx: Optional[torch.Tensor] = None,
-        return_dict: Optional[bool] = None,
         **kwargs,
     ) -> torch.Tensor:
-        
         # Handle the custom "pixel_values" input obtained with `ColQwen2Processor` through unpadding
         if pixel_values is not None and image_grid_thw is not None:
             offsets = image_grid_thw[:, 1] * image_grid_thw[:, 2]  # (batch_size,)
@@ -319,6 +279,7 @@ class RBLNColQwen2_5ForRetrieval(RBLNQwen2_5_VLForConditionalGeneration):
                 dim=0,
             )
 
+        # Preprocess of Qwen2_5_VLForConditionalGeneration
         inputs_embeds, position_embed, _ = self._preprocess_prefill(
             input_ids,
             attention_mask,
@@ -331,16 +292,11 @@ class RBLNColQwen2_5ForRetrieval(RBLNQwen2_5_VLForConditionalGeneration):
         batch_size = inputs_embeds.shape[0]
 
         projs = []
-
         for b_idx in range(batch_size):
-            cache_position = torch.arange(0, inputs_embeds.shape[1], dtype=torch.int32).unsqueeze(0)
-
-            proj = self.prefill(
-                inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
-                attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
-                cache_position=cache_position,
-                block_tables=self.block_tables,
-                position_embed=position_embed[:, b_idx : b_idx + 1],
+            proj = self._chunked_prefill_forward(
+                inputs_embeds[b_idx : b_idx + 1],
+                attention_mask[b_idx] if attention_mask is not None else None,
+                position_embed[:, b_idx : b_idx + 1],
             )
             projs.append(proj)
 
