@@ -12,5 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .import_utils import check_version_compats, is_cosmos_guardrail_available, is_rbln_available
+from .import_utils import check_version_compats, is_rbln_available
 from .runtime_utils import RBLNPytorchRuntime

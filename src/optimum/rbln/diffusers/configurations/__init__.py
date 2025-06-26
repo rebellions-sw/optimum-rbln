@@ -4,10 +4,8 @@ from .models import (
     RBLNControlNetModelConfig,
     RBLNCosmosTransformer3DModelConfig,
     RBLNPriorTransformerConfig,
-    RBLNRetinaFaceConfig,
     RBLNSD3Transformer2DModelConfig,
     RBLNUNet2DConditionModelConfig,
-    RBLNVideoSafetyModelConfig,
     RBLNVQModelConfig,
 )
 from .pipelines import (

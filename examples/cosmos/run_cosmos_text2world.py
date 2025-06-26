@@ -1,13 +1,9 @@
 import os
-from functools import partial
-from unittest.mock import patch
 
 import fire
-import torch
-from cosmos_guardrail import CosmosSafetyChecker
 from diffusers.utils import export_to_video
 
-from optimum.rbln import RBLNCosmosPipeline, RBLNCosmosSafetyChecker
+from optimum.rbln import RBLNCosmosTextToWorldPipeline
 
 
 def main(
@@ -22,31 +18,9 @@ def main(
         prompt = "A sleek, humanoid robot stands in a vast warehouse filled with neatly stacked cardboard boxes on industrial shelves. The robot's metallic body gleams under the bright, even lighting, highlighting its futuristic design and intricate joints. A glowing blue light emanates from its chest, adding a touch of advanced technology. The background is dominated by rows of boxes, suggesting a highly organized storage system. The floor is lined with wooden pallets, enhancing the industrial setting. The camera remains static, capturing the robot's poised stance amidst the orderly environment, with a shallow depth of field that keeps the focus on the robot while subtly blurring the background for a cinematic effect."
     print(prompt)
 
-    safety_checker_dir = "cosmos_safety_checker"
-    with patch("torch.load", partial(torch.load, weights_only=True, map_location=torch.device("cpu"))):
-        model = CosmosSafetyChecker()
-
     if from_diffusers:
-        checker = RBLNCosmosSafetyChecker.compile_submodules(
-            model=model,
-            model_save_dir=safety_checker_dir,
-            rbln_height=height,
-            rbln_width=width,
-            rbln_config={
-                "text_guardrail": {
-                    "device": [
-                        0,
-                        1,
-                        2,
-                        3,
-                    ]
-                },
-                "video_guardrail": {"device": 3},
-            },
-        )
-        pipe = RBLNCosmosPipeline.from_pretrained(
+        pipe = RBLNCosmosTextToWorldPipeline.from_pretrained(
             model_id,
-            safety_checker=checker,
             export=True,
             rbln_height=height,
             rbln_width=width,
@@ -65,24 +39,8 @@ def main(
         )
         pipe.save_pretrained(os.path.basename(model_id))
     else:
-        checker = RBLNCosmosSafetyChecker.load_submodules(
-            model=model,
-            model_save_dir=safety_checker_dir,
-            rbln_config={
-                "text_guardrail": {
-                    "device": [
-                        0,
-                        1,
-                        2,
-                        3,
-                    ]
-                },
-                "video_guardrail": {"device": 3},
-            },
-        )
-        pipe = RBLNCosmosPipeline.from_pretrained(
+        pipe = RBLNCosmosTextToWorldPipeline.from_pretrained(
             model_id,
-            safety_checker=checker,
             export=False,
             rbln_config={
                 "transformer": {
