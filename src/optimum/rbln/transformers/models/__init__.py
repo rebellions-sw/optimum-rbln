@@ -80,8 +80,8 @@ _import_structure = {
         "RBLNQwen2_5_VLForConditionalGenerationConfig",
     ],
     "colqwen2_5": [
-        "RBLNColQwen2_5ForConditionalGeneration",
-        "RBLNColQwen2_5ForConditionalGenerationConfig",
+        "RBLNColQwen2_5ForRetrieval",
+        "RBLNColQwen2_5ForRetrievalConfig",
     ],
     "decoderonly": [
         "RBLNDecoderOnlyModelForCausalLM",
@@ -198,8 +198,8 @@ if TYPE_CHECKING:
         RBLNCLIPVisionModelWithProjectionConfig,
     )
     from .colqwen2_5 import (
-        RBLNColQwen2_5ForConditionalGeneration,
-        RBLNColQwen2_5ForConditionalGenerationConfig,
+        RBLNColQwen2_5ForRetrieval,
+        RBLNColQwen2_5ForRetrievalConfig,
     )
     from .decoderonly import (
         RBLNDecoderOnlyModelForCausalLM,

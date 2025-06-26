@@ -15,22 +15,26 @@
 from typing import Optional
 
 from ....configuration_utils import RBLNModelConfig
-from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
+from ..qwen2_5_vl.configuration_qwen2_5_vl import RBLNQwen2_5_VLForConditionalGenerationConfig
 
 
-class RBLNColQwen2_5ForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausalLMConfig):
+class RBLNColQwen2_5ForRetrievalConfig(RBLNQwen2_5_VLForConditionalGenerationConfig):
     submodules = ["visual"]
 
     def __init__(
         self,
         visual: Optional[RBLNModelConfig] = None,
+        batch_size: Optional[int] = None,
         use_inputs_embeds: bool = True,
         **kwargs,
     ):
         super().__init__(use_inputs_embeds=use_inputs_embeds, **kwargs)
         if not self.use_inputs_embeds:
             raise ValueError(
-                "RBLNColQwen2_5ForConditionalGenerationConfig does not allow `use_inputs_embeds` to be set to False, "
-                "as RBLNColQwen2_5ForConditionalGeneration accepts only `inputs_embeds` as input."
+                "RBLNColQwen2_5ForRetrievalConfig does not allow `use_inputs_embeds` to be set to False, "
+                "as RBLNColQwen2_5ForRetrieval accepts only `inputs_embeds` as input."
             )
+        if batch_size is not None and batch_size != 1:
+            raise ValueError("batch_size is not supported for RBLNColQwen2_5ForRetrievalConfig")
+
         self.visual = visual

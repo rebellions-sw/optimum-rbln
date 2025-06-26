@@ -29,7 +29,6 @@ from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
 
 from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
-from ....utils.logging import get_logger
 from ..decoderonly.modeling_decoderonly import (
     RBLNRuntimeModel,
     set_default_values,
@@ -37,10 +36,8 @@ from ..decoderonly.modeling_decoderonly import (
 )
 from ..qwen2_5_vl.modeling_qwen2_5_vl import RBLNQwen2_5_VLForConditionalGeneration
 from .colqwen2_5_architecture import ColQwen2_5_LanguageModelWrapper
-from .configuration_colqwen2_5 import RBLNColQwen2_5ForConditionalGenerationConfig
+from .configuration_colqwen2_5 import RBLNColQwen2_5ForRetrievalConfig
 
-
-logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from transformers import (
@@ -56,7 +53,7 @@ class RBLNRuntimeModelForColQwen2_5(RBLNRuntimeModel):
         self,
         runtime: rebel.Runtime,
         batch_size: int,
-        rbln_config: RBLNColQwen2_5ForConditionalGenerationConfig,
+        rbln_config: RBLNColQwen2_5ForRetrievalConfig,
         **kwargs: Any,
     ) -> None:
         super().__init__(
@@ -124,10 +121,23 @@ class RBLNRuntimeModelForColQwen2_5(RBLNRuntimeModel):
             )
             projs.append(proj)
 
-        return torch.concat(projs, dim=-2)
+        projs = torch.concat(projs, dim=-2)[:, :query_length]
+
+        if attention_mask is not None:
+            embedding = torch.full(
+                (1, attention_mask.shape[-1], projs.shape[-1]),
+                fill_value=1e-10,
+                dtype=projs.dtype,
+            )
+            mask_indices = torch.nonzero(attention_mask, as_tuple=True)[0]
+            embedding.index_copy_(dim=-2, index=mask_indices, source=projs)
+        else:
+            embedding = projs
+
+        return embedding
 
 
-class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGeneration):
+class RBLNColQwen2_5ForRetrieval(RBLNQwen2_5_VLForConditionalGeneration):
     auto_model_class = AutoModelForVision2Seq
     _rbln_submodules = [
         {"name": "visual"},
@@ -147,7 +157,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
             runtime=self.model[0],
             main_input_name=main_input_name,
             embed_tokens=self.embed_tokens,
-            batch_size=self.rbln_config.batch_size,
+            batch_size=1,
             rbln_config=self.rbln_config,
             vocab_size=self.config.vocab_size,
         )
@@ -155,14 +165,11 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
         self.visual = self.rbln_submodules[0]
         self.mrope_section = self.config.rope_scaling["mrope_section"]
         self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config)
-        self.rope_deltas = torch.zeros(self.rbln_config.batch_size)
-
-    def can_generate(self):
-        return False
+        self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
 
     @classmethod
     @torch.inference_mode()
-    def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNColQwen2_5ForConditionalGenerationConfig):
+    def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNColQwen2_5ForRetrievalConfig):
         wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
 
         rbln_compile_configs = rbln_config.compile_cfgs
@@ -181,10 +188,8 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
                 static_tensors[name] = tensor
                 context.mark_static_address(tensor)
 
-        def compile_model(wrapped_model, compile_config, example_inputs, compile_context, quantization):
+        def compile_model(wrapped_model, compile_config, example_inputs, compile_context):
             try:
-                if quantization:
-                    quantization.maybe_set_quantization_env()
                 original_linear = torch.nn.functional.linear
                 torch.nn.functional.linear = torch.ops.rbln_custom_ops.linear
                 compiled_model = RBLNModel.compile(
@@ -196,13 +201,9 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
                 return compiled_model
             finally:
                 torch.nn.functional.linear = original_linear
-                if quantization:
-                    quantization.maybe_reset_quantization_env()
 
         wrapped_model.phase = "prefill"
-        compiled_prefill = compile_model(
-            wrapped_model, prefill_compile_config, prefill_example_inputs, context, rbln_config.quantization
-        )
+        compiled_prefill = compile_model(wrapped_model, prefill_compile_config, prefill_example_inputs, context)
 
         compiled_models = {"prefill": compiled_prefill}
         return compiled_models
@@ -212,7 +213,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
         cls,
         batch_size: int,
         query_length: int,
-        rbln_config: RBLNColQwen2_5ForConditionalGenerationConfig,
+        rbln_config: RBLNColQwen2_5ForRetrievalConfig,
         model_config: PretrainedConfig,
     ):
         input_info = super().get_input_info(
@@ -231,8 +232,8 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
         model: Optional["PreTrainedModel"] = None,
         model_config: Optional["PretrainedConfig"] = None,
-        rbln_config: Optional[RBLNColQwen2_5ForConditionalGenerationConfig] = None,
-    ) -> RBLNColQwen2_5ForConditionalGenerationConfig:
+        rbln_config: Optional[RBLNColQwen2_5ForRetrievalConfig] = None,
+    ) -> RBLNColQwen2_5ForRetrievalConfig:
         if rbln_config.max_seq_len is None:
             rbln_config.max_seq_len = getattr(model_config, "max_position_embeddings", None) or getattr(
                 model_config, "n_positions", None
@@ -254,7 +255,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
             max_seq_len=rbln_config.max_seq_len,
         )
 
-        required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
+        required_num_blocks = rbln_config.max_seq_len // rbln_config.kvcache_block_size
         max_num_blocks = required_num_blocks
 
         if rbln_config.kvcache_num_blocks is None:
@@ -276,7 +277,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
     def _create_runtimes(
         cls,
         compiled_models: List[rebel.RBLNCompiledModel],
-        rbln_config: RBLNColQwen2_5ForConditionalGenerationConfig,
+        rbln_config: RBLNColQwen2_5ForRetrievalConfig,
     ) -> List[rebel.Runtime]:
         expected_model_names = ["prefill"]
         if any(model_name not in rbln_config.device_map for model_name in expected_model_names):
@@ -318,7 +319,7 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
                 dim=0,
             )
 
-        inputs_embeds, position_embed, rope_deltas = self._preprocess_prefill(
+        inputs_embeds, position_embed, _ = self._preprocess_prefill(
             input_ids,
             attention_mask,
             pixel_values,
@@ -327,20 +328,9 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
             video_grid_thw,
             second_per_grid_ts,
         )
-
-        self.rope_deltas = rope_deltas
         batch_size = inputs_embeds.shape[0]
 
         projs = []
-        max_size = self.rbln_config.prefill_chunk_size * (
-            inputs_embeds.shape[1] // self.rbln_config.prefill_chunk_size + 1
-        )
-
-        block_tables = torch.arange(
-            0,
-            self.rbln_config.max_seq_len // self.rbln_config.kvcache_block_size,
-            dtype=torch.int16,
-        )
 
         for b_idx in range(batch_size):
             cache_position = torch.arange(0, inputs_embeds.shape[1], dtype=torch.int32).unsqueeze(0)
@@ -349,20 +339,14 @@ class RBLNColQwen2_5ForConditionalGeneration(RBLNQwen2_5_VLForConditionalGenerat
                 inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
                 attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                 cache_position=cache_position,
-                block_tables=block_tables,
+                block_tables=self.block_tables,
                 position_embed=position_embed[:, b_idx : b_idx + 1],
             )
-            pad_size = (0, 0, 0, max_size - proj.shape[1], 0, 0)
-            padded_proj = torch.nn.functional.pad(
-                proj, pad_size, "constant", 1e-8
-            )  # For normaliztion, fill non-zero value
-            projs.append(padded_proj)
+            projs.append(proj)
 
         # post process
         projs = torch.cat(projs, dim=0)
-        projs = projs[:, : inputs_embeds.shape[1]]
         projs = projs / projs.norm(dim=-1, keepdim=True)  # (batch_size, sequence_length, dim)
+        projs = projs * attention_mask.unsqueeze(-1)  # (batch_size, sequence_length, dim)
 
-        fliped_attention_mask_batch = torch.flip(attention_mask, dims=[-1])
-        projs = projs * fliped_attention_mask_batch.unsqueeze(-1)  # (batch_size, sequence_length, dim)
         return projs
