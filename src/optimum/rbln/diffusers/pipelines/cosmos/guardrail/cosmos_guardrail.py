@@ -180,7 +180,10 @@ class RBLNVideoSafetyModel(VideoSafetyModel):
     def load_runtime(self, checkpoint_id: str):
         if is_compiled_dir(checkpoint_id):
             self.compiled_model = rebel.RBLNCompiledModel(
-                pathlib.Path(checkpoint_id) / "safety_checker" / "video_content_safety_filter" / "video_safety_model.rbln"
+                pathlib.Path(checkpoint_id)
+                / "safety_checker"
+                / "video_content_safety_filter"
+                / "video_safety_model.rbln"
             )
         else:
             # Load model from checkpoint
@@ -302,14 +305,13 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker):
                 safety_models=[RBLNVideoContentSafetyFilter(checkpoint_id, rbln_config=rbln_config)],
                 postprocessors=[RBLNRetinaFaceFilter(checkpoint_id, rbln_config=rbln_config)],
             )
-        
+
         self.text_guardrail = GuardrailRunner(
             safety_models=[
                 Blocklist(COSMOS_GUARDRAIL_CHECKPOINT),  # Changed since it cannot be saved
                 RBLNAegis(checkpoint_id, aegis_model_id, aegis_adapter_id, rbln_config=rbln_config),
             ]
         )
-
 
         self.rbln_config = rbln_config
 

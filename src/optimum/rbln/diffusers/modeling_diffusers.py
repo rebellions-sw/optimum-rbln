@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
 
 import torch
 
-from ..configuration_utils import ContextRblnConfig, RBLNModelConfig, get_rbln_config_class, RBLNAutoConfig
+from ..configuration_utils import ContextRblnConfig, RBLNAutoConfig, RBLNModelConfig, get_rbln_config_class
 from ..modeling import RBLNModel
 from ..utils.decorator_utils import remove_compile_time_kwargs
 from ..utils.logging import get_logger
@@ -231,7 +231,7 @@ class RBLNDiffusionMixin:
                 submodule_cls = get_rbln_model_cls(class_name)
                 rbln_config = RBLNAutoConfig.load(pathlib.Path(model_id) / component_name)
                 submodule = submodule_cls.from_pretrained(
-                    model_id, 
+                    model_id,
                     rbln_config=rbln_config,
                 )
                 kwargs[component_name] = submodule
@@ -388,7 +388,7 @@ class RBLNDiffusionMixin:
                     setattr(getattr(model, connected_pipe_name), submodule_name, submodules[prefix + submodule_name])
 
         for component_name in cls._optional_components:
-            # It assumes that the modules in _optional_components is compiled 
+            # It assumes that the modules in _optional_components is compiled
             # and already registered as an attribute of the model.
             update_dict[component_name] = ("optimum.rbln", getattr(model, component_name).__class__.__name__)
 

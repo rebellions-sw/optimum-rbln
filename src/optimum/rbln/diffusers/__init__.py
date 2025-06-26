@@ -19,9 +19,9 @@ from transformers.utils import _LazyModule
 
 
 LOADABLE_CLASSES["optimum.rbln"] = {
-    "RBLNBaseModel": ["save_pretrained", "from_pretrained"], 
-    "RBLNCosmosSafetyChecker": ["save_pretrained", "from_pretrained"]
-                                    }
+    "RBLNBaseModel": ["save_pretrained", "from_pretrained"],
+    "RBLNCosmosSafetyChecker": ["save_pretrained", "from_pretrained"],
+}
 ALL_IMPORTABLE_CLASSES.update(LOADABLE_CLASSES["optimum.rbln"])
 
 
