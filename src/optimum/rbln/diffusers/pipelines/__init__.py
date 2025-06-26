@@ -27,7 +27,6 @@ _import_structure = {
     ],
     "cosmos": [
         "RBLNCosmosTextToWorldPipeline",
-        "RBLNCosmosVideoToWorldPipeline",
         "RBLNCosmosSafetyChecker",
     ],
     "kandinsky2_2": [
@@ -66,7 +65,6 @@ if TYPE_CHECKING:
     from .cosmos import (
         RBLNCosmosSafetyChecker,
         RBLNCosmosTextToWorldPipeline,
-        RBLNCosmosVideoToWorldPipeline,
     )
     from .kandinsky2_2 import (
         RBLNKandinskyV22CombinedPipeline,

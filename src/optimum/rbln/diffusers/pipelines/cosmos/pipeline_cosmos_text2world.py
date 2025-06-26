@@ -76,7 +76,3 @@ class RBLNCosmosTextToWorldPipeline(RBLNDiffusionMixin, CosmosTextToWorldPipelin
             )
             kwargs.pop("max_seq_len")
         return kwargs
-
-
-class RBLNCosmosVideoToWorldPipeline:
-    pass
