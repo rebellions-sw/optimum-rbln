@@ -11,7 +11,7 @@ model = ColQwen2_5.from_pretrained(
     torch_dtype=torch.float32,
     device_map="cpu",
 ).eval()
-processor = ColQwen2_5_Processor.from_pretrained("Metric-AI/colqwen2.5-3b-multilingual")
+processor = ColQwen2_5_Processor.from_pretrained("Metric-AI/colqwen2.5-3b-multilingual", max_num_visual_tokens=192)
 
 
 for m in model.modules():
@@ -23,7 +23,7 @@ model = RBLNColQwen2_5ForConditionalGeneration.from_model(
     export=True,
     rbln_config={
         "visual": {
-            "max_seq_lens": 768,
+            "max_seq_lens": 1024,
             "device": 0,
         },
         "tensor_parallel_size": 4,
@@ -35,12 +35,12 @@ model.save_pretrained("colqwen2.5-3b-multilingual")
 
 # Your inputs
 images = [
-    Image.new("RGB", (32, 32), color="white"),
-    Image.new("RGB", (32, 32), color="black"),
+    Image.open("./img1.jpeg"),
+    Image.open("./img2.jpeg"),
 ]
 queries = [
-    "Is attention really all you need?",
-    "What is the amount of bananas farmed in Salvador?",
+    "How many don't are mentioned  in this infographic image?\nAnswer briefly.",
+    "What are some challenges identified for the PFM reform process?",
 ]
 
 # Process the inputs
