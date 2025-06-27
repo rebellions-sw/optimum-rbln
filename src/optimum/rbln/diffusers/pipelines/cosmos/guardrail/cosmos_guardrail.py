@@ -312,6 +312,10 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker):
 
         self.rbln_config = rbln_config
 
+    @classmethod
+    def update_rbln_config_using_pipe(cls, pipe, rbln_config, submodule_name: str) -> RBLNCosmosSafetyCheckerConfig:
+        return rbln_config
+
     def save_pretrained(self, save_dir: str):
         for text_safety_models in self.text_guardrail.safety_models:
             if isinstance(text_safety_models, RBLNAegis):

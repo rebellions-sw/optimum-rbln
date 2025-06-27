@@ -196,6 +196,7 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
                 tensor_type="pt",
                 device=device_val,
                 activate_profiler=rbln_config.activate_profiler,
+                timeout=120,
             )
             for compiled_model, device_val in zip(compiled_models, device_vals)
         ]
