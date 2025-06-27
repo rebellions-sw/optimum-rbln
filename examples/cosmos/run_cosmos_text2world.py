@@ -36,7 +36,6 @@ def main(
                     "device": 2,
                 },
                 "safety_checker": {
-                    "image_size": (height, width),
                     "aegis": {"device": [0, 1, 2, 3]},
                 },
             },
