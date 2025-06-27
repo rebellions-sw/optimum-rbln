@@ -13,8 +13,9 @@
 # limitations under the License.
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, List, Optional, Union
 
+import rebel
 import torch
 from diffusers import CosmosTransformer3DModel
 from diffusers.models.modeling_outputs import Transformer2DModelOutput
@@ -26,7 +27,7 @@ from diffusers.models.transformers.transformer_cosmos import (
 )
 from torchvision import transforms
 
-from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
+from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...configurations import RBLNCosmosTransformer3DModelConfig
@@ -51,7 +52,6 @@ class CosmosTransformer3DModelWrapper(torch.nn.Module):
     ) -> None:
         super().__init__()
         self.model = model
-        # self.model.transformer_blocks = self.model.transformer_blocks[:1]
         self.num_latent_frames = num_latent_frames
         self.latent_height = latent_height
         self.latent_width = latent_width
@@ -263,6 +263,26 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         compile_config = RBLNCompileConfig(input_info=input_info)
         rbln_config.set_compile_cfgs([compile_config])
         return rbln_config
+
+    @classmethod
+    def _create_runtimes(
+        cls,
+        compiled_models: List[rebel.RBLNCompiledModel],
+        rbln_config: RBLNModelConfig,
+    ) -> List[rebel.Runtime]:
+        if DEFAULT_COMPILED_MODEL_NAME not in rbln_config.device_map:
+            cls._raise_missing_compiled_file_error([DEFAULT_COMPILED_MODEL_NAME])
+
+        return [
+            rebel.Runtime(
+                compiled_model,
+                tensor_type="pt",
+                device=rbln_config.device_map[DEFAULT_COMPILED_MODEL_NAME],
+                activate_profiler=rbln_config.activate_profiler,
+                timeout=120,
+            )
+            for compiled_model in compiled_models
+        ]
 
     def forward(
         self,
