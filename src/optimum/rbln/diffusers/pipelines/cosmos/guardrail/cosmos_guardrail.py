@@ -300,17 +300,17 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker):
 
         if rbln_config is None:
             rbln_config = RBLNCosmosSafetyCheckerConfig()
-        with patch("torch.load", partial(torch.load, weights_only=True, map_location=torch.device("cpu"))):
-            self.video_guardrail = GuardrailRunner(
-                safety_models=[RBLNVideoContentSafetyFilter(checkpoint_id, rbln_config=rbln_config)],
-                postprocessors=[RBLNRetinaFaceFilter(checkpoint_id, rbln_config=rbln_config)],
-            )
 
         self.text_guardrail = GuardrailRunner(
             safety_models=[
                 Blocklist(COSMOS_GUARDRAIL_CHECKPOINT),  # Changed since it cannot be saved
                 RBLNAegis(checkpoint_id, aegis_model_id, aegis_adapter_id, rbln_config=rbln_config),
             ]
+        )
+
+        self.video_guardrail = GuardrailRunner(
+            safety_models=[RBLNVideoContentSafetyFilter(checkpoint_id, rbln_config=rbln_config)],
+            postprocessors=[RBLNRetinaFaceFilter(checkpoint_id, rbln_config=rbln_config)],
         )
 
         self.rbln_config = rbln_config
