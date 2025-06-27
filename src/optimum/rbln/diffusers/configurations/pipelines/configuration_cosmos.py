@@ -17,6 +17,8 @@ from typing import Optional
 from ....configuration_utils import RBLNModelConfig
 from ....transformers import RBLNT5EncoderModelConfig
 from ....utils.logging import get_logger
+from ...pipelines.cosmos.cosmos_guardrail import RBLNCosmosSafetyCheckerConfig
+from ..models import RBLNAutoencoderKLCosmosConfig, RBLNCosmosTransformer3DModelConfig
 
 
 logger = get_logger(__name__)
@@ -60,10 +62,6 @@ class _RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
         """
         super().__init__(**kwargs)
-        
-        # TODO fix
-        from ...pipelines.cosmos.cosmos_guardrail import RBLNCosmosSafetyCheckerConfig
-        from ..models import RBLNAutoencoderKLCosmosConfig, RBLNCosmosTransformer3DModelConfig
 
         self.text_encoder = self.init_submodule_config(
             RBLNT5EncoderModelConfig, text_encoder, batch_size=batch_size, max_seq_len=max_seq_len

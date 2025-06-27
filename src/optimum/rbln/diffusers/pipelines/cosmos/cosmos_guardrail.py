@@ -22,7 +22,6 @@ import rebel
 import torch
 from diffusers.utils import is_cosmos_guardrail_available
 from huggingface_hub import snapshot_download
-from retinaface.data import cfg_re50
 from transformers import AutoTokenizer, SiglipProcessor
 
 from .... import RBLNAutoModelForCausalLM, RBLNSiglipVisionModel
@@ -44,6 +43,7 @@ if is_cosmos_guardrail_available():
         VideoContentSafetyFilter,
         VideoSafetyModel,
     )
+    from retinaface.data import cfg_re50
 
     COSMOS_AVAILABLE = True
 else:
@@ -72,6 +72,8 @@ else:
     class VideoContentSafetyFilter(FailToImportCosmosGuardrail): ...
 
     class VideoSafetyModel(FailToImportCosmosGuardrail): ...
+
+    cfg_re50 = None
 
 
 def is_compiled_dir(dir: str) -> bool:
