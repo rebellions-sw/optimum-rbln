@@ -186,13 +186,15 @@ class RBLNDiffusionMixin:
         if export:
             # keep submodules if user passed any of them.
             passed_submodules = {
-                name: kwargs.pop(name) for name in cls._submodules+cls._optional_submodules if isinstance(kwargs.get(name), RBLNModel)
+                name: kwargs.pop(name)
+                for name in cls._submodules + cls._optional_submodules
+                if isinstance(kwargs.get(name), RBLNModel)
             }
 
         else:
             # raise error if any of submodules are torch module.
             model_index_config = cls.load_config(pretrained_model_name_or_path=model_id)
-            for submodule_name in cls._submodules+cls._optional_submodules:
+            for submodule_name in cls._submodules + cls._optional_submodules:
                 if isinstance(kwargs.get(submodule_name), torch.nn.Module):
                     raise AssertionError(
                         f"{submodule_name} is not compiled torch module. If you want to compile, set `export=True`."
@@ -355,12 +357,12 @@ class RBLNDiffusionMixin:
             # Causing warning messeages.
 
         update_dict = {}
-        for submodule_name in cls._submodules+cls._optional_submodules:
+        for submodule_name in cls._submodules + cls._optional_submodules:
             # replace submodule
             if submodule_name in submodules:
                 setattr(model, submodule_name, submodules[submodule_name])
                 update_dict[submodule_name] = ("optimum.rbln", submodules[submodule_name].__class__.__name__)
-            else :
+            else:
                 # It assumes that the modules in _optional_components is compiled
                 # and already registered as an attribute of the model.
                 update_dict[submodule_name] = ("optimum.rbln", getattr(model, submodule_name).__class__.__name__)

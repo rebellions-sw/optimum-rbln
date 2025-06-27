@@ -17,7 +17,7 @@ from typing import Optional
 from ....configuration_utils import RBLNModelConfig
 from ....transformers import RBLNT5EncoderModelConfig
 from ....utils.logging import get_logger
-from ...pipelines.cosmos.guardrail.cosmos_guardrail import RBLNCosmosSafetyCheckerConfig
+from ...pipelines.cosmos.cosmos_guardrail import RBLNCosmosSafetyCheckerConfig
 from ..models import RBLNAutoencoderKLCosmosConfig, RBLNCosmosTransformer3DModelConfig
 
 
