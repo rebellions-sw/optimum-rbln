@@ -23,3 +23,22 @@ def linear(input: Tensor, weight: Tensor, bias: Optional[Tensor] = None) -> Tens
     output_shape = list(input.shape[:-1])
     output_shape += [weight.shape[0]]
     return torch.empty(size=output_shape, dtype=input.dtype, device=input.device, requires_grad=input.requires_grad)
+
+
+@torch.library.custom_op("rbln_custom_ops::scaled_dot_product_attention", mutates_args=())
+def scaled_dot_product_attention(
+    query: Tensor,
+    key: Tensor,
+    value: Tensor,
+    attn_mask: Optional[Tensor] = None,
+    dropout_p: float = 0.0,
+    is_causal: bool = False,
+    scale: Optional[float] = None,
+    enable_gqa: bool = False,
+) -> Tensor:
+    return torch.empty(
+        size=query.shape[:-1] + value.shape[-1:],
+        dtype=query.dtype,
+        device=query.device,
+        requires_grad=query.requires_grad,
+    )

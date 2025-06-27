@@ -70,16 +70,26 @@ class CosmosTransformer3DModelWrapper(torch.nn.Module):
         return_dict: bool = False,
     ):
         image_rotary_emb = [image_rotary_emb_0, image_rotary_emb_1]
-        for block in self.model.transformer_blocks:
-            hidden_states = block(
-                hidden_states=hidden_states,
-                encoder_hidden_states=encoder_hidden_states,
-                embedded_timestep=embedded_timestep,
-                temb=temb,
-                image_rotary_emb=image_rotary_emb,
-                extra_pos_emb=extra_pos_emb,
-                attention_mask=attention_mask,
-            )
+        try:
+            sdpa_old = torch.nn.functional.scaled_dot_product_attention
+            linear_old = torch.nn.functional.linear
+            torch.nn.functional.scaled_dot_product_attention = torch.ops.rbln_custom_ops.scaled_dot_product_attention
+            torch.nn.functional.linear = torch.ops.rbln_custom_ops.linear
+
+            for block in self.model.transformer_blocks:
+                hidden_states = block(
+                    hidden_states=hidden_states,
+                    encoder_hidden_states=encoder_hidden_states,
+                    embedded_timestep=embedded_timestep,
+                    temb=temb,
+                    image_rotary_emb=image_rotary_emb,
+                    extra_pos_emb=extra_pos_emb,
+                    attention_mask=attention_mask,
+                )
+
+        finally:
+            torch.nn.functional.scaled_dot_product_attention = sdpa_old
+            torch.nn.functional.linear = linear_old
         post_patch_num_frames = self.num_latent_frames // self.p_t
         post_patch_height = self.latent_height // self.p_h
         post_patch_width = self.latent_width // self.p_w

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from .attn import *
+from .dummy_ops import *
 from .flash_attn import *
 from .kv_cache_update import *
-from .linear import linear
 from .sliding_window_attn import *
