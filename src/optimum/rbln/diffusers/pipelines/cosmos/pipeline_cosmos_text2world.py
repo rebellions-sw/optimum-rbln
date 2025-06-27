@@ -13,6 +13,8 @@
 # limitations under the License.
 
 
+from typing import Any, Dict, Optional
+
 from diffusers import CosmosTextToWorldPipeline
 from diffusers.models import AutoencoderKLCosmos, CosmosTransformer3DModel
 from diffusers.schedulers import EDMEulerScheduler
@@ -40,8 +42,7 @@ class RBLNCosmosTextToWorldPipeline(RBLNDiffusionMixin, CosmosTextToWorldPipelin
     """
 
     original_class = CosmosTextToWorldPipeline
-    _submodules = ["text_encoder", "transformer", "vae"]
-    _optional_components = ["safety_checker"]
+    _submodules = ["text_encoder", "transformer", "vae", "safety_checker"]
 
     def __init__(
         self,
@@ -76,6 +77,24 @@ class RBLNCosmosTextToWorldPipeline(RBLNDiffusionMixin, CosmosTextToWorldPipelin
             )
             kwargs.pop("max_seq_len")
         return kwargs
+
+    @classmethod
+    def from_pretrained(
+        cls,
+        model_id: str,
+        *,
+        export: bool = False,
+        safety_checker: Optional[CosmosSafetyChecker] = None,
+        rbln_config: Dict[str, Any] = {},
+        **kwargs: Dict[str, Any],
+    ):
+        rbln_config, kwargs = cls.get_rbln_config_class().initialize_from_kwargs(rbln_config, **kwargs)
+        if safety_checker is None and export:
+            safety_checker = RBLNCosmosSafetyChecker(rbln_config=rbln_config.safety_checker)
+
+        return super().from_pretrained(
+            model_id, export=export, safety_checker=safety_checker, rbln_config=rbln_config, **kwargs
+        )
 
 
 class RBLNCosmosVideoToWorldPipeline:

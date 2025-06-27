@@ -96,7 +96,7 @@ class RBLNSigLIPEncoder(SigLIPEncoder):
         torch.nn.Module.__init__(self)
         if is_compiled_dir(checkpoint_id):
             self.checkpoint_dir = (
-                pathlib.Path(checkpoint_id) / "safety_checker" / "video_content_safety_filter" / "siglip_encoder"
+                pathlib.Path(checkpoint_id) / "video_content_safety_filter" / "siglip_encoder"
             ).as_posix()
             self.processor = SiglipProcessor.from_pretrained(self.checkpoint_dir)
             self.model = RBLNSiglipVisionModel.from_pretrained(
@@ -132,7 +132,7 @@ class RBLNRetinaFaceFilter(RetinaFaceFilter):
         torch.nn.Module.__init__(self)
         if is_compiled_dir(checkpoint_id):
             self.compiled_model = rebel.RBLNCompiledModel(
-                pathlib.Path(checkpoint_id) / "safety_checker" / "face_blur_filter" / "retinaface.rbln"
+                pathlib.Path(checkpoint_id) / "face_blur_filter" / "retinaface.rbln"
             )
             self.cfg = cfg_re50
             self.batch_size = batch_size
@@ -180,10 +180,7 @@ class RBLNVideoSafetyModel(VideoSafetyModel):
     def load_runtime(self, checkpoint_id: str):
         if is_compiled_dir(checkpoint_id):
             self.compiled_model = rebel.RBLNCompiledModel(
-                pathlib.Path(checkpoint_id)
-                / "safety_checker"
-                / "video_content_safety_filter"
-                / "video_safety_model.rbln"
+                pathlib.Path(checkpoint_id) / "video_content_safety_filter" / "video_safety_model.rbln"
             )
         else:
             # Load model from checkpoint
@@ -254,7 +251,7 @@ class RBLNAegis(Aegis):
     ) -> None:
         if is_compiled_dir(checkpoint_id):
             torch.nn.Module.__init__(self)
-            cache_dir = pathlib.Path(checkpoint_id) / "safety_checker" / "aegis"
+            cache_dir = pathlib.Path(checkpoint_id) / "aegis"
             self.tokenizer = AutoTokenizer.from_pretrained(cache_dir)
             self.model = RBLNAutoModelForCausalLM.from_pretrained(cache_dir, rbln_device=rbln_config.aegis.device)
 
@@ -333,10 +330,17 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker):
 
     @classmethod
     def from_pretrained(
-        cls, checkpoint_id: str, rbln_config: Optional[RBLNCosmosSafetyCheckerConfig] = None, **kwargs
+        cls,
+        checkpoint_id: str,
+        rbln_config: Optional[RBLNCosmosSafetyCheckerConfig] = None,
+        subfolder: Optional[str] = None,
+        **kwargs,
     ):
         rbln_config, kwargs = cls.prepare_rbln_config(rbln_config=rbln_config, **kwargs)
-        return cls(checkpoint_id=checkpoint_id, rbln_config=rbln_config)
+        if subfolder is not None:
+            checkpoint_id = os.path.join(checkpoint_id, subfolder)
+
+        return cls(checkpoint_id=checkpoint_id, rbln_config=rbln_config, subfolder=subfolder)
 
     @classmethod
     def prepare_rbln_config(

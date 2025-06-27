@@ -14,13 +14,12 @@
 
 import copy
 import importlib
-import pathlib
 from os import PathLike
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
 
 import torch
 
-from ..configuration_utils import ContextRblnConfig, RBLNAutoConfig, RBLNModelConfig, get_rbln_config_class
+from ..configuration_utils import ContextRblnConfig, RBLNModelConfig, get_rbln_config_class
 from ..modeling import RBLNModel
 from ..utils.decorator_utils import remove_compile_time_kwargs
 from ..utils.logging import get_logger
@@ -68,7 +67,6 @@ class RBLNDiffusionMixin:
 
     _connected_classes = {}
     _submodules = []
-    _optional_components = []
     _prefix = {}
     _rbln_config_class = None
     _hf_class = None
@@ -204,6 +202,7 @@ class RBLNDiffusionMixin:
                         f"Invalid module_name '{module_name}' found in model_index.json for "
                         f"submodule '{submodule_name}'. "
                         "Expected 'optimum.rbln'. Please check the model_index.json configuration."
+                        "If you want to compile, set `export=True`."
                     )
 
                 submodule_cls = get_rbln_model_cls(class_name)
@@ -212,29 +211,6 @@ class RBLNDiffusionMixin:
                     model_id, export=False, subfolder=submodule_name, rbln_config=submodule_config
                 )
                 kwargs[submodule_name] = submodule
-
-            for component_name in cls._optional_components:
-                if isinstance(kwargs.get(component_name), torch.nn.Module):
-                    raise AssertionError(
-                        f"{component_name} is not compiled torch module. If you want to compile, set `export=True`."
-                    )
-
-                module_name, class_name = model_index_config[component_name]
-                if module_name != "optimum.rbln":
-                    raise ValueError(
-                        f"Invalid module_name '{module_name}' found in model_index.json for "
-                        f"submodule '{component_name}'. "
-                        "Expected 'optimum.rbln'. Please check the model_index.json configuration."
-                    )
-
-                # FIXME: handle rbln_config from RBLNpipeline.from_pretrained
-                submodule_cls = get_rbln_model_cls(class_name)
-                rbln_config = RBLNAutoConfig.load(pathlib.Path(model_id) / component_name)
-                submodule = submodule_cls.from_pretrained(
-                    model_id,
-                    rbln_config=rbln_config,
-                )
-                kwargs[component_name] = submodule
 
         with ContextRblnConfig(
             device=rbln_config.device,
@@ -386,11 +362,6 @@ class RBLNDiffusionMixin:
                 prefix = cls._prefix.get(connected_pipe_name, "")
                 for submodule_name in connected_pipe_cls._submodules:
                     setattr(getattr(model, connected_pipe_name), submodule_name, submodules[prefix + submodule_name])
-
-        for component_name in cls._optional_components:
-            # It assumes that the modules in _optional_components is compiled
-            # and already registered as an attribute of the model.
-            update_dict[component_name] = ("optimum.rbln", getattr(model, component_name).__class__.__name__)
 
         # Update config to be able to load from model directory.
         #
