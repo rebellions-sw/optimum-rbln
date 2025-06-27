@@ -69,7 +69,10 @@ class RBLNCosmosTextToWorldPipeline(RBLNDiffusionMixin, CosmosTextToWorldPipelin
                 f"The transformer in this pipeline is compiled with 'num_frames={self.transformer.rbln_config.num_frames}'. 'num_frames' set by the user will be ignored"
             )
             kwargs.pop("num_frames")
-        if "max_sequence_length" in kwargs and kwargs["max_sequence_length"] != self.transformer.rbln_config.max_seq_len:
+        if (
+            "max_sequence_length" in kwargs
+            and kwargs["max_sequence_length"] != self.transformer.rbln_config.max_seq_len
+        ):
             logger.warning(
                 f"The transformer in this pipeline is compiled with 'max_seq_len={self.transformer.rbln_config.max_seq_len}'. 'max_sequence_length' set by the user will be ignored"
             )
