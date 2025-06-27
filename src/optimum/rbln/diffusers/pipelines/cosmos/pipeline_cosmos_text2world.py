@@ -42,8 +42,9 @@ class RBLNCosmosTextToWorldPipeline(RBLNDiffusionMixin, CosmosTextToWorldPipelin
     """
 
     original_class = CosmosTextToWorldPipeline
-    _submodules = ["text_encoder", "transformer", "vae", "safety_checker"]
-
+    _submodules = ["text_encoder", "transformer", "vae"]
+    _optional_submodules = ["safety_checker"]
+    
     def __init__(
         self,
         text_encoder: T5EncoderModel,
