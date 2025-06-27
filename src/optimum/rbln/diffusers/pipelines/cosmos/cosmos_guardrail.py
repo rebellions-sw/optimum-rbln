@@ -257,6 +257,9 @@ class RBLNVideoSafetyModel(VideoSafetyModel):
         cache_path.mkdir(parents=True, exist_ok=True)
         self.compiled_model.save(cache_path / "safety_filter.rbln")
 
+    def parameters(self):
+        yield torch.tensor([1.0], dtype=torch.float32, device=torch.device("cpu"))
+
 
 class RBLNVideoContentSafetyFilter(VideoContentSafetyFilter):
     def __init__(

@@ -16,19 +16,16 @@
 from typing import Any, Dict, Optional
 
 from diffusers import CosmosTextToWorldPipeline
-from diffusers.models import AutoencoderKLCosmos, CosmosTransformer3DModel
 from diffusers.schedulers import EDMEulerScheduler
-from transformers import T5EncoderModel, T5TokenizerFast
+from transformers import T5TokenizerFast
 
+from ....transformers.models.t5.modeling_t5 import RBLNT5EncoderModel
 from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
+from ...models.autoencoders.autoencoder_kl_cosmos import RBLNAutoencoderKLCosmos
+from ...models.transformers.transformer_cosmos import RBLNCosmosTransformer3DModel
 from .cosmos_guardrail import RBLNCosmosSafetyChecker
 
-
-try:
-    from cosmos_guardrail import CosmosSafetyChecker
-except ImportError:
-    from .cosmos_guardrail import CosmosSafetyChecker
 
 logger = get_logger(__name__)
 
@@ -47,12 +44,12 @@ class RBLNCosmosTextToWorldPipeline(RBLNDiffusionMixin, CosmosTextToWorldPipelin
 
     def __init__(
         self,
-        text_encoder: T5EncoderModel,
+        text_encoder: RBLNT5EncoderModel,
         tokenizer: T5TokenizerFast,
-        transformer: CosmosTransformer3DModel,
-        vae: AutoencoderKLCosmos,
+        transformer: RBLNCosmosTransformer3DModel,
+        vae: RBLNAutoencoderKLCosmos,
         scheduler: EDMEulerScheduler,
-        safety_checker: CosmosSafetyChecker = None,
+        safety_checker: RBLNCosmosSafetyChecker = None,
     ):
         if safety_checker is None:
             safety_checker = RBLNCosmosSafetyChecker()
@@ -80,7 +77,7 @@ class RBLNCosmosTextToWorldPipeline(RBLNDiffusionMixin, CosmosTextToWorldPipelin
         model_id: str,
         *,
         export: bool = False,
-        safety_checker: Optional[CosmosSafetyChecker] = None,
+        safety_checker: Optional[RBLNCosmosSafetyChecker] = None,
         rbln_config: Dict[str, Any] = {},
         **kwargs: Dict[str, Any],
     ):
