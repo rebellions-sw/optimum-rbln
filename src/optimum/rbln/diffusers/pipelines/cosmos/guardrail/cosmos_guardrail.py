@@ -161,7 +161,7 @@ class RBLNRetinaFaceFilter(RetinaFaceFilter):
             )
 
         self.rbln_config = rbln_config
-        runtime = rebel.Runtime(self.compiled_model, tensor_type="pt", device=self.rbln_config.device)
+        runtime = rebel.Runtime(self.compiled_model, tensor_type="pt", device=self.rbln_config.face_blur_filter.device)
         self.net = RBLNPytorchRuntime(runtime)
 
     def save_pretrained(self, checkpoint_id: str):
@@ -180,11 +180,11 @@ class RBLNVideoSafetyModel(VideoSafetyModel):
     def load_runtime(self, checkpoint_id: str):
         if is_compiled_dir(checkpoint_id):
             self.compiled_model = rebel.RBLNCompiledModel(
-                pathlib.Path(checkpoint_id) / "video_content_safety_filter" / "video_safety_model.rbln"
+                pathlib.Path(checkpoint_id) / "video_content_safety_filter" / "safety_filter.rbln"
             )
         else:
             # Load model from checkpoint
-            network = SafetyClassifier(input_size=self.config.input_size, num_classes=self.num_classes)
+            network = SafetyClassifier(input_size=self.rbln_config.video_safety_model.input_size, num_classes=self.num_classes)
             network.eval()
 
             checkpoint_dir = snapshot_download(checkpoint_id)
@@ -200,26 +200,26 @@ class RBLNVideoSafetyModel(VideoSafetyModel):
                     (
                         "data",
                         [
-                            self.rbln_config.video_content_safety_filter.batch_size,
-                            self.rbln_config.video_content_safety_filter.input_size,
+                            self.rbln_config.video_safety_model.batch_size,
+                            self.rbln_config.video_safety_model.input_size,
                         ],
                         "float32",
                     )
                 ],
-                npu=self.rbln_config.video_content_safety_filter.npu,
+                npu=self.rbln_config.video_safety_model.npu,
             )
 
         runtime = rebel.Runtime(
             self.compiled_model,
             tensor_type="pt",
-            device=self.rbln_config.video_content_safety_filter.device,
+            device=self.rbln_config.video_safety_model.device,
         )
         self.network = RBLNPytorchRuntime(runtime)
 
     def save_pretrained(self, checkpoint_id: str):
         cache_path = pathlib.Path(checkpoint_id) / "video_content_safety_filter"
         cache_path.mkdir(parents=True, exist_ok=True)
-        self.compiled_model.save(cache_path / "video_safety_model.rbln")
+        self.compiled_model.save(cache_path / "safety_filter.rbln")
 
 
 class RBLNVideoContentSafetyFilter(VideoContentSafetyFilter):
@@ -229,8 +229,8 @@ class RBLNVideoContentSafetyFilter(VideoContentSafetyFilter):
         rbln_config: Optional["RBLNCosmosSafetyCheckerConfig"] = None,
     ):
         torch.nn.Module.__init__(self)
-        self.encoder = RBLNSigLIPEncoder(checkpoint_id=checkpoint_id, rbln_config=rbln_config)
         self.rbln_config = rbln_config
+        self.encoder = RBLNSigLIPEncoder(checkpoint_id=checkpoint_id, rbln_config=rbln_config)
 
         model_config = ModelConfig(input_size=1152, num_classes=7)
         self.model = RBLNVideoSafetyModel(model_config, rbln_config=rbln_config)
@@ -340,7 +340,7 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker):
         if subfolder is not None:
             checkpoint_id = os.path.join(checkpoint_id, subfolder)
 
-        return cls(checkpoint_id=checkpoint_id, rbln_config=rbln_config, subfolder=subfolder)
+        return cls(checkpoint_id=checkpoint_id, rbln_config=rbln_config)
 
     @classmethod
     def prepare_rbln_config(
