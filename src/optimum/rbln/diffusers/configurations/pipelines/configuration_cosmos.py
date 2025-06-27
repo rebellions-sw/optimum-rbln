@@ -17,6 +17,7 @@ from typing import Optional
 from ....configuration_utils import RBLNModelConfig
 from ....transformers import RBLNT5EncoderModelConfig
 from ....utils.logging import get_logger
+from ...pipelines.cosmos.cosmos_guardrail import RBLNCosmosSafetyCheckerConfig
 from ..models import RBLNAutoencoderKLCosmosConfig, RBLNCosmosTransformer3DModelConfig
 
 
@@ -24,8 +25,7 @@ logger = get_logger(__name__)
 
 
 class _RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
-    submodules = ["text_encoder", "transformer", "vae"]
-    _optional_components = ["safety_checker"]
+    submodules = ["text_encoder", "transformer", "vae", "safety_checker"]
     _vae_uses_encoder = False
 
     def __init__(
@@ -33,6 +33,7 @@ class _RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
         text_encoder: Optional[RBLNT5EncoderModelConfig] = None,
         transformer: Optional[RBLNCosmosTransformer3DModelConfig] = None,
         vae: Optional[RBLNAutoencoderKLCosmosConfig] = None,
+        safety_checker: Optional[RBLNCosmosSafetyCheckerConfig] = None,
         *,
         batch_size: Optional[int] = None,
         height: Optional[int] = None,
@@ -50,6 +51,8 @@ class _RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
                 Initialized as RBLNCosmosTransformer3DModelConfig if not provided.
             vae (Optional[RBLNAutoencoderKLCosmosConfig]): Configuration for the VAE model component.
                 Initialized as RBLNAutoencoderKLCosmosConfig if not provided.
+            safety_checker (Optional[RBLNCosmosSafetyCheckerConfig]): Configuration for the safety checker component.
+                Initialized as RBLNCosmosSafetyCheckerConfig if not provided.
             batch_size (Optional[int]): Batch size for inference, applied to all submodules.
             height (Optional[int]): Height of the generated videos.
             width (Optional[int]): Width of the generated videos.
@@ -81,6 +84,13 @@ class _RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
             height=height,
             width=width,
             num_frames=num_frames,
+        )
+        self.safety_checker = self.init_submodule_config(
+            RBLNCosmosSafetyCheckerConfig,
+            safety_checker,
+            batch_size=batch_size,
+            height=height,
+            width=width,
         )
 
     @property

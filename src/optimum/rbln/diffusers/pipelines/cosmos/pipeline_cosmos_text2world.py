@@ -13,6 +13,8 @@
 # limitations under the License.
 
 
+from typing import Any, Dict, Optional
+
 from diffusers import CosmosTextToWorldPipeline
 from diffusers.models import AutoencoderKLCosmos, CosmosTransformer3DModel
 from diffusers.schedulers import EDMEulerScheduler
@@ -20,13 +22,13 @@ from transformers import T5EncoderModel, T5TokenizerFast
 
 from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
-from .guardrail.cosmos_guardrail import RBLNCosmosSafetyChecker
+from .cosmos_guardrail import RBLNCosmosSafetyChecker
 
 
 try:
     from cosmos_guardrail import CosmosSafetyChecker
 except ImportError:
-    from .guardrail.cosmos_guardrail import CosmosSafetyChecker
+    from .cosmos_guardrail import CosmosSafetyChecker
 
 logger = get_logger(__name__)
 
@@ -41,7 +43,7 @@ class RBLNCosmosTextToWorldPipeline(RBLNDiffusionMixin, CosmosTextToWorldPipelin
 
     original_class = CosmosTextToWorldPipeline
     _submodules = ["text_encoder", "transformer", "vae"]
-    _optional_components = ["safety_checker"]
+    _optional_submodules = ["safety_checker"]
 
     def __init__(
         self,
@@ -71,3 +73,25 @@ class RBLNCosmosTextToWorldPipeline(RBLNDiffusionMixin, CosmosTextToWorldPipelin
             )
             kwargs.pop("num_frames")
         return kwargs
+
+    @classmethod
+    def from_pretrained(
+        cls,
+        model_id: str,
+        *,
+        export: bool = False,
+        safety_checker: Optional[CosmosSafetyChecker] = None,
+        rbln_config: Dict[str, Any] = {},
+        **kwargs: Dict[str, Any],
+    ):
+        rbln_config, kwargs = cls.get_rbln_config_class().initialize_from_kwargs(rbln_config, **kwargs)
+        if safety_checker is None and export:
+            safety_checker = RBLNCosmosSafetyChecker(rbln_config=rbln_config.safety_checker)
+
+        return super().from_pretrained(
+            model_id, export=export, safety_checker=safety_checker, rbln_config=rbln_config, **kwargs
+        )
+
+
+class RBLNCosmosVideoToWorldPipeline:
+    pass

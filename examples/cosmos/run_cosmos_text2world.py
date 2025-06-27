@@ -35,12 +35,16 @@ def main(
                 "vae": {
                     "device": 2,
                 },
+                # TODO how can we support?
+                # "safety_checker":{
+                #     "device":[0, 1, 2, 3]
+                # }
             },
         )
         pipe.save_pretrained(os.path.basename(model_id))
     else:
         pipe = RBLNCosmosTextToWorldPipeline.from_pretrained(
-            model_id,
+            os.path.basename(model_id),
             export=False,
             rbln_config={
                 "transformer": {
@@ -53,6 +57,10 @@ def main(
                 "vae": {
                     "device": 2,
                 },
+                # TODO how can we support?
+                # "safety_checker":{
+                #     "device":[0, 1, 2, 3]
+                # }
             },
         )
 
