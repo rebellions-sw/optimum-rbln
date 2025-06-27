@@ -22,13 +22,13 @@ from transformers import T5EncoderModel, T5TokenizerFast
 
 from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
-from .guardrail.cosmos_guardrail import RBLNCosmosSafetyChecker
+from .cosmos_guardrail import RBLNCosmosSafetyChecker
 
 
 try:
     from cosmos_guardrail import CosmosSafetyChecker
 except ImportError:
-    from .guardrail.cosmos_guardrail import CosmosSafetyChecker
+    from .cosmos_guardrail import CosmosSafetyChecker
 
 logger = get_logger(__name__)
 
@@ -44,7 +44,7 @@ class RBLNCosmosTextToWorldPipeline(RBLNDiffusionMixin, CosmosTextToWorldPipelin
     original_class = CosmosTextToWorldPipeline
     _submodules = ["text_encoder", "transformer", "vae"]
     _optional_submodules = ["safety_checker"]
-    
+
     def __init__(
         self,
         text_encoder: T5EncoderModel,
