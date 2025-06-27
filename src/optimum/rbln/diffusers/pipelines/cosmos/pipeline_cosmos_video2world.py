@@ -14,10 +14,19 @@
 
 
 from diffusers import CosmosVideoToWorldPipeline
+from diffusers.models import AutoencoderKLCosmos, CosmosTransformer3DModel
+from diffusers.schedulers import EDMEulerScheduler
+from transformers import T5EncoderModel, T5TokenizerFast
 
 from ....utils.logging import get_logger
 from ...modeling_diffusers import RBLNDiffusionMixin
+from .guardrail.cosmos_guardrail import RBLNCosmosSafetyChecker
 
+
+try:
+    from cosmos_guardrail import CosmosSafetyChecker
+except ImportError:
+    from .guardrail.cosmos_guardrail import CosmosSafetyChecker
 
 logger = get_logger(__name__)
 
@@ -33,6 +42,27 @@ class RBLNCosmosVideoToWorldPipeline(RBLNDiffusionMixin, CosmosVideoToWorldPipel
     original_class = CosmosVideoToWorldPipeline
     _submodules = ["text_encoder", "transformer", "vae"]
     _optional_components = ["safety_checker"]
+
+    def __init__(
+        self,
+        text_encoder: T5EncoderModel,
+        tokenizer: T5TokenizerFast,
+        transformer: CosmosTransformer3DModel,
+        vae: AutoencoderKLCosmos,
+        scheduler: EDMEulerScheduler,
+        safety_checker: CosmosSafetyChecker = None,
+    ):
+        if safety_checker is None:
+            safety_checker = RBLNCosmosSafetyChecker()
+
+        super().__init__(
+            text_encoder=text_encoder,
+            tokenizer=tokenizer,
+            transformer=transformer,
+            vae=vae,
+            scheduler=scheduler,
+            safety_checker=safety_checker,
+        )
 
     def handle_additional_kwargs(self, **kwargs):
         if "num_frames" in kwargs and kwargs["num_frames"] != self.transformer.rbln_config.num_frames:
