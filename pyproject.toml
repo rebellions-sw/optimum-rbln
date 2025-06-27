@@ -35,7 +35,6 @@ dependencies = [
     "transformers==4.51.3",
     "diffusers==0.34.0",
     "packaging>=24.1",
-    "cosmos-guardrail @ git+https://github.com/yiyixuxu/cosmos-guardrail.git@f484986f42f0bbeda89713dbdf54f1cc58b4e8bf ; python_version >= '3.10'",
 ]
 
 [project.urls]
