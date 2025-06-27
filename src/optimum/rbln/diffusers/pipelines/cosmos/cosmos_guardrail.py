@@ -377,7 +377,7 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker):
         **kwargs,
     ):
         rbln_config, kwargs = cls.prepare_rbln_config(rbln_config=rbln_config, **kwargs)
-        
+
         if len(kwargs) > 0:
             raise ValueError(f"Unexpected arguments: {kwargs.keys()}")
 
