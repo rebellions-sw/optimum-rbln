@@ -78,6 +78,9 @@ version-file = "src/optimum/rbln/__version__.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/optimum"]
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.uv]
 environments = [
     "sys_platform == 'linux'"

@@ -43,6 +43,9 @@ class RBLNPytorchRuntime:
     def __repr__(self) -> str:
         return repr(self.runtime)
 
+    def parameters(self):
+        yield torch.tensor([1.0], dtype=torch.float32, device=torch.device("cpu"))
+
 
 class UnavailableRuntime:
     """
