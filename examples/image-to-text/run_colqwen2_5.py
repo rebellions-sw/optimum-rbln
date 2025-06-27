@@ -3,7 +3,7 @@ from colpali_engine.models import ColQwen2_5, ColQwen2_5_Processor
 from peft.tuners.lora.layer import Linear as LoraLinear
 from PIL import Image
 
-from optimum.rbln import RBLNColQwen2_5ForConditionalGeneration
+from optimum.rbln import RBLNColQwen2_5ForRetrieval
 
 
 model = ColQwen2_5.from_pretrained(
@@ -18,7 +18,7 @@ for m in model.modules():
     if isinstance(m, LoraLinear):
         m.merge(safe_merge=False)
 
-model = RBLNColQwen2_5ForConditionalGeneration.from_model(
+model = RBLNColQwen2_5ForRetrieval.from_model(
     model,
     export=True,
     rbln_config={

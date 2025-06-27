@@ -45,7 +45,7 @@ class ColQwen2_5_LanguageModelWrapper(DecoderOnlyWrapper):
             sliding_window_layers=self.sliding_window_layers,
         )
 
-        # custom_text_projection layer from origin_model
+        # custom_text_projection layer from origin model
         self.custom_text_proj = causal_lm.custom_text_proj
         return new_model
 

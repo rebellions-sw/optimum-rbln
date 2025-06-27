@@ -120,7 +120,9 @@ class RBLNColQwen2_5ForRetrieval(RBLNQwen2_5_VLForConditionalGeneration):
             rbln_config=rbln_config,
             model_config=model_config,
         )
-        query_position = input_info.pop(4)  # remove query postion
+
+        # remove query postion from input_info
+        query_position = input_info.pop(4)
         assert query_position[0] == "query_position", print(query_position[0], "is deleted.")
         return input_info
 
