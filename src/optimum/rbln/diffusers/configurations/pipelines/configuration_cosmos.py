@@ -94,3 +94,7 @@ class _RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
 
 class RBLNCosmosTextToWorldPipelineConfig(_RBLNCosmosPipelineBaseConfig):
     _vae_uses_encoder = False
+
+
+class RBLNCosmosVideoToWorldPipelineConfig(_RBLNCosmosPipelineBaseConfig):
+    _vae_uses_encoder = True

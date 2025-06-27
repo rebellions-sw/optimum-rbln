@@ -4,7 +4,7 @@ from .configuration_controlnet import (
     RBLNStableDiffusionXLControlNetImg2ImgPipelineConfig,
     RBLNStableDiffusionXLControlNetPipelineConfig,
 )
-from .configuration_cosmos import RBLNCosmosTextToWorldPipelineConfig
+from .configuration_cosmos import RBLNCosmosTextToWorldPipelineConfig, RBLNCosmosVideoToWorldPipeline
 from .configuration_kandinsky2_2 import (
     RBLNKandinskyV22CombinedPipelineConfig,
     RBLNKandinskyV22Img2ImgCombinedPipelineConfig,

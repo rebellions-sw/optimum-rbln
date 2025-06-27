@@ -28,6 +28,7 @@ _import_structure = {
         "RBLNAutoencoderKLCosmosConfig",
         "RBLNControlNetModelConfig",
         "RBLNCosmosTextToWorldPipelineConfig",
+        "RBLNCosmosVideoToWorldPipelineConfig",
         "RBLNCosmosTransformer3DModelConfig",
         "RBLNKandinskyV22CombinedPipelineConfig",
         "RBLNKandinskyV22Img2ImgCombinedPipelineConfig",
@@ -56,6 +57,7 @@ _import_structure = {
     ],
     "pipelines": [
         "RBLNCosmosTextToWorldPipeline",
+        "RBLNCosmosVideoToWorldPipeline",
         "RBLNCosmosSafetyChecker",
         "RBLNKandinskyV22CombinedPipeline",
         "RBLNKandinskyV22Img2ImgCombinedPipeline",
@@ -101,6 +103,7 @@ if TYPE_CHECKING:
         RBLNControlNetModelConfig,
         RBLNCosmosTextToWorldPipelineConfig,
         RBLNCosmosTransformer3DModelConfig,
+        RBLNCosmosVideoToWorldPipelineConfig,
         RBLNKandinskyV22CombinedPipelineConfig,
         RBLNKandinskyV22Img2ImgCombinedPipelineConfig,
         RBLNKandinskyV22Img2ImgPipelineConfig,
@@ -139,6 +142,7 @@ if TYPE_CHECKING:
     from .pipelines import (
         RBLNCosmosSafetyChecker,
         RBLNCosmosTextToWorldPipeline,
+        RBLNCosmosVideoToWorldPipeline,
         RBLNKandinskyV22CombinedPipeline,
         RBLNKandinskyV22Img2ImgCombinedPipeline,
         RBLNKandinskyV22Img2ImgPipeline,
