@@ -35,10 +35,10 @@ def main(
                 "vae": {
                     "device": 2,
                 },
-                # TODO how can we support?
-                # "safety_checker":{
-                #     "device":[0, 1, 2, 3]
-                # }
+                "safety_checker": {
+                    "image_size": (height, width),
+                    "aegis": {"device": [0, 1, 2, 3]},
+                },
             },
         )
         pipe.save_pretrained(os.path.basename(model_id))
@@ -57,10 +57,9 @@ def main(
                 "vae": {
                     "device": 2,
                 },
-                # TODO how can we support?
-                # "safety_checker":{
-                #     "device":[0, 1, 2, 3]
-                # }
+                "safety_checker": {
+                    "aegis": {"device": [0, 1, 2, 3]},
+                },
             },
         )
 
