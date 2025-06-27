@@ -40,9 +40,4 @@ class RBLNCosmosVideoToWorldPipeline(RBLNDiffusionMixin, CosmosVideoToWorldPipel
                 f"The tranformer in this pipeline is compiled with 'num_frames={self.transformer.rbln_config.num_frames}'. 'num_frames' set by the user will be ignored"
             )
             kwargs.pop("num_frames")
-        if "max_seq_len" in kwargs and kwargs["max_seq_len"] != self.transformer.rbln_config.max_seq_len:
-            logger.warning(
-                f"The tranformer in this pipeline is compiled with 'max_seq_len={self.transformer.rbln_config.max_seq_len}'. 'max_seq_len' set by the user will be ignored"
-            )
-            kwargs.pop("max_seq_len")
         return kwargs
