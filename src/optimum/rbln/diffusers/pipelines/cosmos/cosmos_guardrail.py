@@ -373,9 +373,14 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker):
         checkpoint_id: str,
         rbln_config: Optional[RBLNCosmosSafetyCheckerConfig] = None,
         subfolder: Optional[str] = None,
+        export: Optional[bool] = True,
         **kwargs,
     ):
         rbln_config, kwargs = cls.prepare_rbln_config(rbln_config=rbln_config, **kwargs)
+        
+        if len(kwargs) > 0:
+            raise ValueError(f"Unexpected arguments: {kwargs.keys()}")
+
         if subfolder is not None:
             checkpoint_id = os.path.join(checkpoint_id, subfolder)
 
