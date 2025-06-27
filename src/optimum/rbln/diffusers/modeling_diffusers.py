@@ -195,25 +195,33 @@ class RBLNDiffusionMixin:
             # raise error if any of submodules are torch module.
             model_index_config = cls.load_config(pretrained_model_name_or_path=model_id)
             for submodule_name in cls._submodules + cls._optional_submodules:
-                if isinstance(kwargs.get(submodule_name), torch.nn.Module):
-                    raise AssertionError(
-                        f"{submodule_name} is not compiled torch module. If you want to compile, set `export=True`."
+                passed_submodule = kwargs.get(submodule_name, None)
+
+                if passed_submodule is None:
+                    module_name, class_name = model_index_config[submodule_name]
+                    if module_name != "optimum.rbln":
+                        raise ValueError(
+                            f"Invalid module_name '{module_name}' found in model_index.json for "
+                            f"submodule '{submodule_name}'. "
+                            "Expected 'optimum.rbln'. Please check the model_index.json configuration."
+                            "If you want to compile, set `export=True`."
+                        )
+
+                    submodule_cls = get_rbln_model_cls(class_name)
+                    submodule_config = getattr(rbln_config, submodule_name)
+                    submodule = submodule_cls.from_pretrained(
+                        model_id, export=False, subfolder=submodule_name, rbln_config=submodule_config
                     )
 
-                module_name, class_name = model_index_config[submodule_name]
-                if module_name != "optimum.rbln":
-                    raise ValueError(
-                        f"Invalid module_name '{module_name}' found in model_index.json for "
-                        f"submodule '{submodule_name}'. "
-                        "Expected 'optimum.rbln'. Please check the model_index.json configuration."
-                        "If you want to compile, set `export=True`."
-                    )
+                else:
+                    if passed_submodule.__class__.__name__.startswith("RBLN"):
+                        submodule = passed_submodule
 
-                submodule_cls = get_rbln_model_cls(class_name)
-                submodule_config = getattr(rbln_config, submodule_name)
-                submodule = submodule_cls.from_pretrained(
-                    model_id, export=False, subfolder=submodule_name, rbln_config=submodule_config
-                )
+                    elif isinstance(passed_submodule, torch.nn.Module):
+                        raise AssertionError(
+                            f"{submodule_name} is not compiled torch module. If you want to compile, set `export=True`."
+                        )
+
                 kwargs[submodule_name] = submodule
 
         with ContextRblnConfig(
