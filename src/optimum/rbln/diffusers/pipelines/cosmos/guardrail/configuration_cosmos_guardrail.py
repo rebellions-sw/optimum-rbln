@@ -18,7 +18,7 @@ from .....configuration_utils import RBLNAutoConfig, RBLNModelConfig
 from .....transformers import RBLNSiglipVisionModelConfig
 
 
-class RBLNVideoContentSafetyFilterConfig(RBLNModelConfig):
+class RBLNVideoSafetyModelConfig(RBLNModelConfig):
     """
     Configuration class for RBLN Video Content Safety Filter.
     """
@@ -33,7 +33,6 @@ class RBLNVideoContentSafetyFilterConfig(RBLNModelConfig):
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
         self.input_size = input_size or 1152
-        self.image_size = image_size or (704, 1280)
 
 
 class RBLNRetinaFaceFilterConfig(RBLNModelConfig):
@@ -57,17 +56,16 @@ class RBLNCosmosSafetyCheckerConfig(RBLNModelConfig):
     Configuration class for RBLN Cosmos Safety Checker.
     """
 
-    submodules = ["aegis", "video_content_safety_filter", "face_blur_filter", "siglip_encoder"]
+    submodules = ["aegis", "video_safety_model", "face_blur_filter", "siglip_encoder"]
 
     def __init__(
         self,
         aegis: Optional[RBLNModelConfig] = None,
-        video_content_safety_filter: Optional[RBLNModelConfig] = None,
+        video_safety_model: Optional[RBLNModelConfig] = None,
         face_blur_filter: Optional[RBLNModelConfig] = None,
         siglip_encoder: Optional[RBLNSiglipVisionModelConfig] = None,
         *,
         batch_size: Optional[int] = None,
-        input_size: Optional[int] = None,
         image_size: Optional[Tuple[int, int]] = None,
         height: Optional[int] = None,
         width: Optional[int] = None,
@@ -78,19 +76,6 @@ class RBLNCosmosSafetyCheckerConfig(RBLNModelConfig):
             image_size = (height, width)
 
         self.aegis = self.init_submodule_config(RBLNModelConfig, aegis)
-        self.video_content_safety_filter = self.init_submodule_config(
-            RBLNVideoContentSafetyFilterConfig,
-            video_content_safety_filter,
-            batch_size=batch_size,
-            input_size=input_size,
-            image_size=image_size,
-        )
-        self.face_blur_filter = self.init_submodule_config(
-            RBLNRetinaFaceFilterConfig,
-            face_blur_filter,
-            batch_size=batch_size,
-            image_size=image_size,
-        )
         self.siglip_encoder = self.init_submodule_config(
             RBLNSiglipVisionModelConfig,
             siglip_encoder,
@@ -98,7 +83,19 @@ class RBLNCosmosSafetyCheckerConfig(RBLNModelConfig):
             image_size=(384, 384),
         )
 
+        self.video_safety_model = self.init_submodule_config(
+            RBLNVideoSafetyModelConfig,
+            video_safety_model,
+            batch_size=batch_size,
+            input_size=1152,
+        )
+        self.face_blur_filter = self.init_submodule_config(
+            RBLNRetinaFaceFilterConfig,
+            face_blur_filter,
+            batch_size=batch_size,
+            image_size=image_size,
+        )
 
-RBLNAutoConfig.register(RBLNVideoContentSafetyFilterConfig)
+RBLNAutoConfig.register(RBLNVideoSafetyModelConfig)
 RBLNAutoConfig.register(RBLNRetinaFaceFilterConfig)
 RBLNAutoConfig.register(RBLNCosmosSafetyCheckerConfig)
