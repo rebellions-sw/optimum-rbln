@@ -405,7 +405,7 @@ class RBLNDiffusionMixin:
         return model
 
     def get_compiled_image_size(self):
-        if hasattr(self, "vae") and hasattr(self, "image_size"):
+        if hasattr(self, "vae") and hasattr(self.vae, "image_size"):
             compiled_image_size = self.vae.image_size
         else:
             compiled_image_size = None
