@@ -94,7 +94,11 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
 
         try:
             original_forward = CosmosCausalConv3d.forward
+            sdpa_old = torch.nn.functional.scaled_dot_product_attention
+            linear_old = torch.nn.functional.linear
             CosmosCausalConv3d.forward = replaced_forward
+            torch.nn.functional.scaled_dot_product_attention = torch.ops.rbln_custom_ops.scaled_dot_product_attention
+            torch.nn.functional.linear = torch.ops.rbln_custom_ops.linear
 
             compiled_models = {}
             if rbln_config.uses_encoder:
@@ -108,6 +112,8 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
 
         finally:
             CosmosCausalConv3d.forward = original_forward
+            torch.nn.functional.scaled_dot_product_attention = sdpa_old
+            torch.nn.functional.linear = linear_old
 
         return compiled_models
 
