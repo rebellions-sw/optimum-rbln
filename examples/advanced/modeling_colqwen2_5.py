@@ -19,6 +19,8 @@ import torch
 from configuration_colqwen2_5 import (
     RBLNColQwen2_5ForRetrievalConfig,
 )
+from rebel.compile_context import CompileContext
+
 from optimum.rbln.configuration_utils import RBLNCompileConfig
 from optimum.rbln.modeling import RBLNModel
 from optimum.rbln.transformers.models.decoderonly.decoderonly_architecture import (
@@ -35,15 +37,7 @@ from optimum.rbln.transformers.models.decoderonly.modeling_decoderonly import (
 from optimum.rbln.transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     RBLNQwen2_5_VLForConditionalGeneration,
 )
-from rebel.compile_context import CompileContext
-from transformers import (
-    PretrainedConfig,
-    PreTrainedModel,
-    Qwen2_5_VLForConditionalGeneration,
-)
-from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
-    Qwen2_5_VLRotaryEmbedding,
-)
+
 
 if TYPE_CHECKING:
     from transformers import (
@@ -51,6 +45,11 @@ if TYPE_CHECKING:
         AutoProcessor,
         AutoTokenizer,
         PretrainedConfig,
+        PreTrainedModel,
+        Qwen2_5_VLForConditionalGeneration,
+    )
+    from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
+        Qwen2_5_VLRotaryEmbedding,
     )
 
 
