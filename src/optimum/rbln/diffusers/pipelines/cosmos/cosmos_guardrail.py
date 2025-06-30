@@ -25,7 +25,7 @@ from huggingface_hub import snapshot_download
 from transformers import AutoTokenizer, SiglipProcessor
 
 from .... import RBLNAutoModelForCausalLM, RBLNSiglipVisionModel
-from ....utils.runtime_utils import RBLNPytorchRuntime
+from ....utils.runtime_utils import RBLNPytorchRuntime, UnavailableRuntime
 from .configuration_cosmos_guardrail import RBLNCosmosSafetyCheckerConfig
 
 
@@ -129,6 +129,7 @@ class RBLNSigLIPEncoder(SigLIPEncoder):
             self.model = RBLNSiglipVisionModel.from_pretrained(
                 self.checkpoint_dir,
                 rbln_device=rbln_config.siglip_encoder.device,
+                rbln_create_runtimes=rbln_config.siglip_encoder.create_runtimes,
             )
         else:
             super().__init__(model_name, checkpoint_id)
@@ -139,6 +140,7 @@ class RBLNSigLIPEncoder(SigLIPEncoder):
                 rbln_device=rbln_config.siglip_encoder.device,
                 rbln_image_size=rbln_config.siglip_encoder.image_size,
                 rbln_npu=rbln_config.siglip_encoder.npu,
+                rbln_create_runtimes=rbln_config.siglip_encoder.create_runtimes,
             )
         self.rbln_config = rbln_config
 
@@ -191,7 +193,28 @@ class RBLNRetinaFaceFilter(RetinaFaceFilter):
             )
 
         self.rbln_config = rbln_config
-        runtime = rebel.Runtime(self.compiled_model, tensor_type="pt", device=self.rbln_config.face_blur_filter.device)
+
+        try:
+            runtime = (
+                rebel.Runtime(
+                    self.compiled_model,
+                    tensor_type="pt",
+                    device=self.rbln_config.face_blur_filter.device,
+                )
+                if self.rbln_config.face_blur_filter.create_runtimes
+                else UnavailableRuntime()
+            )
+        except rebel.core.exception.RBLNRuntimeError as e:
+            error_msg = (
+                f"\nFailed to create RBLN runtime: {str(e)}\n\n"
+                f"If you only need to compile the model without loading it to NPU, you can use:\n"
+                f"  from_pretrained(..., rbln_create_runtimes=False) or\n"
+                f"  from_pretrained(..., rbln_config={{..., 'create_runtimes': False}})\n\n"
+                f"To check your NPU status, run the 'rbln-stat' command in your terminal.\n"
+                f"Make sure your NPU is properly installed and operational."
+            )
+            raise rebel.core.exception.RBLNRuntimeError(error_msg) from e
+
         self.net = RBLNPytorchRuntime(runtime)
 
     def save_pretrained(self, checkpoint_id: str):
@@ -245,11 +268,27 @@ class RBLNVideoSafetyModel(VideoSafetyModel):
                 npu=self.rbln_config.video_safety_model.npu,
             )
 
-        runtime = rebel.Runtime(
-            self.compiled_model,
-            tensor_type="pt",
-            device=self.rbln_config.video_safety_model.device,
-        )
+        try:
+            runtime = (
+                rebel.Runtime(
+                    self.compiled_model,
+                    tensor_type="pt",
+                    device=self.rbln_config.video_safety_model.device,
+                )
+                if self.rbln_config.video_safety_model.create_runtimes
+                else UnavailableRuntime()
+            )
+        except rebel.core.exception.RBLNRuntimeError as e:
+            error_msg = (
+                f"\nFailed to create RBLN runtime: {str(e)}\n\n"
+                f"If you only need to compile the model without loading it to NPU, you can use:\n"
+                f"  from_pretrained(..., rbln_create_runtimes=False) or\n"
+                f"  from_pretrained(..., rbln_config={{..., 'create_runtimes': False}})\n\n"
+                f"To check your NPU status, run the 'rbln-stat' command in your terminal.\n"
+                f"Make sure your NPU is properly installed and operational."
+            )
+            raise rebel.core.exception.RBLNRuntimeError(error_msg) from e
+
         self.network = RBLNPytorchRuntime(runtime)
 
     def save_pretrained(self, checkpoint_id: str):
@@ -291,7 +330,11 @@ class RBLNAegis(Aegis):
             torch.nn.Module.__init__(self)
             cache_dir = pathlib.Path(checkpoint_id) / "aegis"
             self.tokenizer = AutoTokenizer.from_pretrained(cache_dir)
-            self.model = RBLNAutoModelForCausalLM.from_pretrained(cache_dir, rbln_device=rbln_config.aegis.device)
+            self.model = RBLNAutoModelForCausalLM.from_pretrained(
+                cache_dir,
+                rbln_device=rbln_config.aegis.device,
+                rbln_create_runtimes=rbln_config.aegis.create_runtimes,
+            )
 
         else:
             super().__init__(checkpoint_id, base_model_id, aegis_adapter)
@@ -302,6 +345,7 @@ class RBLNAegis(Aegis):
                 model,
                 rbln_tensor_parallel_size=4,
                 rbln_device=rbln_config.aegis.device,
+                rbln_create_runtimes=rbln_config.aegis.create_runtimes,
                 rbln_npu=rbln_config.aegis.npu,
             )
 
@@ -343,11 +387,10 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker):
             ]
         )
 
-        with patch("torch.load", partial(torch.load, weights_only=True, map_location=torch.device("cpu"))):
-            self.video_guardrail = GuardrailRunner(
-                safety_models=[RBLNVideoContentSafetyFilter(checkpoint_id, rbln_config=rbln_config)],
-                postprocessors=[RBLNRetinaFaceFilter(checkpoint_id, rbln_config=rbln_config)],
-            )
+        self.video_guardrail = GuardrailRunner(
+            safety_models=[RBLNVideoContentSafetyFilter(checkpoint_id, rbln_config=rbln_config)],
+            postprocessors=[RBLNRetinaFaceFilter(checkpoint_id, rbln_config=rbln_config)],
+        )
 
         self.rbln_config = rbln_config
 
