@@ -65,7 +65,7 @@ def test_mkdocstrings_parsing(file_path: Path, module_name: str = None) -> bool:
             inferred_module = infer_module_name(file_path)
             if inferred_module is None:
                 print(
-                    "❌ No module name provided, and the file is not a configuration or modeling file, skipping mkdocstrings test"
+                    "⚠️ No module name provided, and the file is not a configuration or modeling file, skipping mkdocstrings test"
                 )
                 return True
             print(f"ℹ️  Auto-inferred module name: {inferred_module}")
