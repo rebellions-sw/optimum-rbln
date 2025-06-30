@@ -24,12 +24,36 @@ logger = get_logger(__name__)
 
 
 class RBLNBertModel(RBLNTransformerEncoderForFeatureExtraction):
+    """
+    RBLN optimized BERT model for feature extraction tasks.
+
+    This class provides hardware-accelerated inference for BERT models
+    on RBLN devices, optimized for extracting contextualized embeddings
+    and features from text sequences.
+    """
+
     rbln_model_input_names = ["input_ids", "attention_mask"]
 
 
 class RBLNBertForMaskedLM(RBLNModelForMaskedLM):
+    """
+    RBLN optimized BERT model for masked language modeling tasks.
+
+    This class provides hardware-accelerated inference for BERT models
+    on RBLN devices, supporting masked language modeling tasks such as
+    token prediction and text completion.
+    """
+
     rbln_model_input_names = ["input_ids", "attention_mask", "token_type_ids"]
 
 
 class RBLNBertForQuestionAnswering(RBLNModelForQuestionAnswering):
+    """
+    RBLN optimized BERT model for question answering tasks.
+
+    This class provides hardware-accelerated inference for BERT models
+    on RBLN devices, supporting extractive question answering tasks where
+    the model predicts start and end positions of answers in text.
+    """
+
     rbln_model_input_names = ["input_ids", "attention_mask", "token_type_ids"]

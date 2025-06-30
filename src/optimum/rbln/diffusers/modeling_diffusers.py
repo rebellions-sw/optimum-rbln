@@ -412,24 +412,22 @@ class RBLNDiffusionMixin:
         return compiled_image_size
 
     def handle_additional_kwargs(self, **kwargs):
-        """
-        Function to handle additional compile-time parameters during inference.
+        # Function to handle additional compile-time parameters during inference.
 
-        If the additional variable is determined by another module, this method should be overrided.
+        # If the additional variable is determined by another module, this method should be overrided.
 
-        Example:
-            ```python
-            if hasattr(self, "movq"):
-                compiled_image_size = self.movq.image_size
-                kwargs["height"] = compiled_image_size[0]
-                kwargs["width"] = compiled_image_size[1]
+        # Example:
+        #     ```python
+        #     if hasattr(self, "movq"):
+        #         compiled_image_size = self.movq.image_size
+        #         kwargs["height"] = compiled_image_size[0]
+        #         kwargs["width"] = compiled_image_size[1]
 
-            compiled_num_frames = self.unet.rbln_config.num_frames
-            if compiled_num_frames is not None:
-                kwargs["num_frames"] = compiled_num_frames
-            return kwargs
-            ```
-        """
+        #     compiled_num_frames = self.unet.rbln_config.num_frames
+        #     if compiled_num_frames is not None:
+        #         kwargs["num_frames"] = compiled_num_frames
+        #     return kwargs
+        #     ```
         return kwargs
 
     @remove_compile_time_kwargs

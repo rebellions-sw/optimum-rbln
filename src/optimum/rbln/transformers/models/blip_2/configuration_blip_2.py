@@ -18,10 +18,22 @@ from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNBlip2VisionModelConfig(RBLNModelConfig):
-    pass
+    """
+    Configuration class for RBLNBlip2VisionModel.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized BLIP-2 vision encoder models for multimodal tasks.
+    """
 
 
 class RBLNBlip2QFormerModelConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLNBlip2QFormerModel.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized BLIP-2 Q-Former models that bridge vision and language modalities.
+    """
+
     def __init__(
         self,
         num_query_tokens: Optional[int] = None,

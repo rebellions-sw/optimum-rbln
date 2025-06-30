@@ -1,0 +1,84 @@
+name: Test Docstring Parsing
+
+on:
+  workflow_call:
+    inputs:
+      test_all_files:
+        description: "Test all files in src/ instead of just changed files"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  test-docstrings:
+    runs-on: ubuntu-latest-rbln
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Get full git history for file diff
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        pip install mkdocs mkdocs-material mkdocstrings mkdocstrings-python
+    
+    - name: Get Python files to test
+      id: changed-files
+      run: |
+        if [ "${{ inputs.test_all_files }}" = "true" ]; then
+          # For scheduled test, get all Python files in src/
+          ALL_FILES=$(find src/ -name '*.py' -type f || true)
+          echo "Testing all Python files in src/:"
+          echo "$ALL_FILES"
+          
+          if [ -n "$ALL_FILES" ]; then
+            FILES_JSON=$(echo "$ALL_FILES" | jq -R -s -c 'split("\n")[:-1]')
+            echo "files=$FILES_JSON" >> $GITHUB_OUTPUT
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+        else
+          # For PR, compare with base branch
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep '\.py$' | grep 'src/' || true)
+          else
+            # For push, compare with previous commit
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep '\.py$' | grep 'src/' || true)
+          fi
+          
+          echo "Changed Python files:"
+          echo "$CHANGED_FILES"
+          
+          # Convert to JSON array for matrix
+          if [ -n "$CHANGED_FILES" ]; then
+            FILES_JSON=$(echo "$CHANGED_FILES" | jq -R -s -c 'split("\n")[:-1]')
+            echo "files=$FILES_JSON" >> $GITHUB_OUTPUT
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+        fi
+    
+    - name: Test docstring parsing
+      if: steps.changed-files.outputs.has_changes == 'true'
+      run: |
+        FILES='${{ steps.changed-files.outputs.files }}'
+        echo "$FILES" | jq -r '.[]' | while read -r file; do
+          echo "Testing: $file"
+          python .github/scripts/validate_docstrings.py "$file"
+          
+          if [ $? -ne 0 ]; then
+            echo "❌ Docstring test failed for $file"
+            exit 1
+          fi
+        done
+    
+    - name: No changes detected
+      if: steps.changed-files.outputs.has_changes == 'false'
+      run: echo "No Python files to test" 
