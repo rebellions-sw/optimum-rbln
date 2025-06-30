@@ -16,4 +16,9 @@ from ...configuration_generic import RBLNModelForQuestionAnsweringConfig
 
 
 class RBLNDistilBertForQuestionAnsweringConfig(RBLNModelForQuestionAnsweringConfig):
-    ""
+    """
+    Configuration class for RBLNDistilBertForQuestionAnswering.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized DistilBERT models for question answering tasks.
+    """

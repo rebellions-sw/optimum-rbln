@@ -19,6 +19,14 @@ from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausa
 
 
 class RBLNQwen2_5_VLForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausalLMConfig):
+    """
+    Configuration class for RBLNQwen2_5_VLForConditionalGeneration.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized Qwen2.5-VL models for multimodal conditional generation tasks
+    that combine vision and language processing capabilities.
+    """
+
     submodules = ["visual"]
 
     def __init__(
@@ -37,6 +45,14 @@ class RBLNQwen2_5_VLForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausal
 
 
 class RBLNQwen2_5_VisionTransformerPretrainedModelConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLNQwen2_5_VisionTransformerPretrainedModel.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized Qwen2.5-VL vision transformer models with window-based attention
+    mechanisms for processing images and videos.
+    """
+
     def __init__(self, max_seq_lens: Union[int, List[int]] = None, **kwargs: Dict[str, Any]):
         """
         Args:

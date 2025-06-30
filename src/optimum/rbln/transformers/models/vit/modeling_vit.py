@@ -16,4 +16,10 @@ from ...modeling_generic import RBLNModelForImageClassification
 
 
 class RBLNViTForImageClassification(RBLNModelForImageClassification):
-    ""
+    """
+    RBLN optimized Vision Transformer (ViT) model for image classification tasks.
+
+    This class provides hardware-accelerated inference for Vision Transformer models
+    on RBLN devices, supporting image classification with transformer-based architectures
+    that process images as sequences of patches.
+    """

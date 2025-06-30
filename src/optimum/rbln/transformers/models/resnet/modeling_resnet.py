@@ -18,5 +18,9 @@ from ...modeling_generic import RBLNModelForImageClassification
 
 class RBLNResNetForImageClassification(RBLNModelForImageClassification):
     """
-    ResNet model for image classification tasks on RBLN NPU.
+    RBLN optimized ResNet model for image classification tasks.
+
+    This class provides hardware-accelerated inference for ResNet models
+    on RBLN devices, supporting image classification with convolutional neural networks
+    designed for computer vision tasks.
     """

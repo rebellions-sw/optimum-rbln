@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Dict, Optional, Union
 
 import torch
 from diffusers import ControlNetModel
-from diffusers.models.controlnet import ControlNetOutput
+from diffusers.models.controlnets.controlnet import ControlNetOutput
 from transformers import PretrainedConfig
 
 from ...configuration_utils import RBLNCompileConfig, RBLNModelConfig

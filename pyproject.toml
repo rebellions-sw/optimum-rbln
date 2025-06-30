@@ -28,12 +28,12 @@ classifiers = [
 ]
 keywords = ["transformers", "diffusers", "inference", "rbln", "atom", "rebel"]
 dependencies = [
-    "torch==2.6.0",
-    "torchaudio<=2.6.0",
-    "torchvision<=0.21.0",
+    "torch==2.7.0",
+    "torchaudio<=2.7.0",
+    "torchvision<=0.22.0",
     "accelerate>=1.0.1",
     "transformers==4.51.3",
-    "diffusers<=0.31.0",
+    "diffusers==0.34.0",
     "packaging>=24.1",
 ]
 
@@ -80,6 +80,9 @@ version-file = "src/optimum/rbln/__version__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/optimum"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.uv]
 environments = [

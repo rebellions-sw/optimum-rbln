@@ -45,7 +45,7 @@ class RBLNDiffusionMixin:
     To use this mixin:
 
     1. Create a new pipeline class that inherits from both this mixin and the original StableDiffusionPipeline.
-    2. Define the required _submodules class variable listing the components to be compiled.
+    2. Define the required _submodules and _optional_submodules class variable listing the components to be compiled.
 
     Example:
         ```python
@@ -55,6 +55,7 @@ class RBLNDiffusionMixin:
 
     Class Variables:
         _submodules: List of submodule names that should be compiled (typically ["text_encoder", "unet", "vae"])
+        _optional_submodules: List of submodule names compiled without inheriting RBLNModel (typically ["safety_checker"])
 
     Methods:
         from_pretrained: Creates and optionally compiles a model from a pretrained checkpoint
@@ -67,6 +68,7 @@ class RBLNDiffusionMixin:
 
     _connected_classes = {}
     _submodules = []
+    _optional_submodules = []
     _prefix = {}
     _rbln_config_class = None
     _hf_class = None
@@ -184,31 +186,42 @@ class RBLNDiffusionMixin:
         if export:
             # keep submodules if user passed any of them.
             passed_submodules = {
-                name: kwargs.pop(name) for name in cls._submodules if isinstance(kwargs.get(name), RBLNModel)
+                name: kwargs.pop(name)
+                for name in cls._submodules + cls._optional_submodules
+                if isinstance(kwargs.get(name), RBLNModel)
             }
 
         else:
             # raise error if any of submodules are torch module.
             model_index_config = cls.load_config(pretrained_model_name_or_path=model_id)
-            for submodule_name in cls._submodules:
-                if isinstance(kwargs.get(submodule_name), torch.nn.Module):
-                    raise AssertionError(
-                        f"{submodule_name} is not compiled torch module. If you want to compile, set `export=True`."
+            for submodule_name in cls._submodules + cls._optional_submodules:
+                passed_submodule = kwargs.get(submodule_name, None)
+
+                if passed_submodule is None:
+                    module_name, class_name = model_index_config[submodule_name]
+                    if module_name != "optimum.rbln":
+                        raise ValueError(
+                            f"Invalid module_name '{module_name}' found in model_index.json for "
+                            f"submodule '{submodule_name}'. "
+                            "Expected 'optimum.rbln'. Please check the model_index.json configuration."
+                            "If you want to compile, set `export=True`."
+                        )
+
+                    submodule_cls = get_rbln_model_cls(class_name)
+                    submodule_config = getattr(rbln_config, submodule_name)
+                    submodule = submodule_cls.from_pretrained(
+                        model_id, export=False, subfolder=submodule_name, rbln_config=submodule_config
                     )
 
-                module_name, class_name = model_index_config[submodule_name]
-                if module_name != "optimum.rbln":
-                    raise ValueError(
-                        f"Invalid module_name '{module_name}' found in model_index.json for "
-                        f"submodule '{submodule_name}'. "
-                        "Expected 'optimum.rbln'. Please check the model_index.json configuration."
-                    )
+                else:
+                    if passed_submodule.__class__.__name__.startswith("RBLN"):
+                        submodule = passed_submodule
 
-                submodule_cls = get_rbln_model_cls(class_name)
-                submodule_config = getattr(rbln_config, submodule_name)
-                submodule = submodule_cls.from_pretrained(
-                    model_id, export=False, subfolder=submodule_name, rbln_config=submodule_config
-                )
+                    elif isinstance(passed_submodule, torch.nn.Module):
+                        raise AssertionError(
+                            f"{submodule_name} is not compiled torch module. If you want to compile, set `export=True`."
+                        )
+
                 kwargs[submodule_name] = submodule
 
         with ContextRblnConfig(
@@ -352,10 +365,16 @@ class RBLNDiffusionMixin:
             # Causing warning messeages.
 
         update_dict = {}
-        for submodule_name in cls._submodules:
+        for submodule_name in cls._submodules + cls._optional_submodules:
             # replace submodule
-            setattr(model, submodule_name, submodules[submodule_name])
-            update_dict[submodule_name] = ("optimum.rbln", submodules[submodule_name].__class__.__name__)
+            if submodule_name in submodules:
+                setattr(model, submodule_name, submodules[submodule_name])
+                update_dict[submodule_name] = ("optimum.rbln", submodules[submodule_name].__class__.__name__)
+            else:
+                # It assumes that the modules in _optional_components is compiled
+                # and already registered as an attribute of the model.
+                update_dict[submodule_name] = ("optimum.rbln", getattr(model, submodule_name).__class__.__name__)
+
         if cls._load_connected_pipes:
             for connected_pipe_name, connected_pipe_cls in cls._connected_classes.items():
                 prefix = cls._prefix.get(connected_pipe_name, "")
@@ -386,31 +405,29 @@ class RBLNDiffusionMixin:
         return model
 
     def get_compiled_image_size(self):
-        if hasattr(self, "vae"):
+        if hasattr(self, "vae") and hasattr(self.vae, "image_size"):
             compiled_image_size = self.vae.image_size
         else:
             compiled_image_size = None
         return compiled_image_size
 
     def handle_additional_kwargs(self, **kwargs):
-        """
-        Function to handle additional compile-time parameters during inference.
+        # Function to handle additional compile-time parameters during inference.
 
-        If the additional variable is determined by another module, this method should be overrided.
+        # If the additional variable is determined by another module, this method should be overrided.
 
-        Example:
-            ```python
-            if hasattr(self, "movq"):
-                compiled_image_size = self.movq.image_size
-                kwargs["height"] = compiled_image_size[0]
-                kwargs["width"] = compiled_image_size[1]
+        # Example:
+        #     ```python
+        #     if hasattr(self, "movq"):
+        #         compiled_image_size = self.movq.image_size
+        #         kwargs["height"] = compiled_image_size[0]
+        #         kwargs["width"] = compiled_image_size[1]
 
-            compiled_num_frames = self.unet.rbln_config.num_frames
-            if compiled_num_frames is not None:
-                kwargs["num_frames"] = compiled_num_frames
-            return kwargs
-            ```
-        """
+        #     compiled_num_frames = self.unet.rbln_config.num_frames
+        #     if compiled_num_frames is not None:
+        #         kwargs["num_frames"] = compiled_num_frames
+        #     return kwargs
+        #     ```
         return kwargs
 
     @remove_compile_time_kwargs
