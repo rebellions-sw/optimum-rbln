@@ -41,7 +41,9 @@ def tp_and_devices_are_ok(
         if any(not isinstance(d, int) for d in device):
             return "Device must be a(n) (list of) integer(s)."
         if len(device) != tensor_parallel_size:
-            return f"The number of devices ({len(device)}) does not match tensor parallel size ({tensor_parallel_size})."
+            return (
+                f"The number of devices ({len(device)}) does not match tensor parallel size ({tensor_parallel_size})."
+            )
     else:
         return f"Invalid device: {device}"
 
