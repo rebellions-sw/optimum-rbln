@@ -41,6 +41,8 @@ def tp_and_devices_are_ok(
         return f"Invalid device: {device}"
 
     for device_id in device:
+        if device_id < 0:  # dummy device
+            continue
         if rebel.get_npu_name(device_id) is None:
             return (
                 f"Device {device_id} is not a valid NPU device. Please check your NPU status with 'rbln-stat' command."
@@ -48,6 +50,8 @@ def tp_and_devices_are_ok(
 
     if npu is not None:
         for device_id in device:
+            if device_id < 0:  # dummy device
+                continue
             npu_name = rebel.get_npu_name(device_id)
             if npu_name != npu:
                 return f"Device {device_id} ({npu_name}) is not on the same NPU as {npu}."
