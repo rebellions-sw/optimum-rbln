@@ -141,6 +141,7 @@ class RBLNSigLIPEncoder(SigLIPEncoder):
                 rbln_image_size=rbln_config.siglip_encoder.image_size,
                 rbln_npu=rbln_config.siglip_encoder.npu,
                 rbln_create_runtimes=rbln_config.siglip_encoder.create_runtimes,
+                rbln_activate_profiler=rbln_config.siglip_encoder.activate_profiler,
             )
         self.rbln_config = rbln_config
 
@@ -200,6 +201,7 @@ class RBLNRetinaFaceFilter(RetinaFaceFilter):
                     self.compiled_model,
                     tensor_type="pt",
                     device=self.rbln_config.face_blur_filter.device,
+                    activate_profiler=rbln_config.face_blur_filter.activate_profiler,
                 )
                 if self.rbln_config.face_blur_filter.create_runtimes
                 else UnavailableRuntime()
@@ -274,6 +276,7 @@ class RBLNVideoSafetyModel(VideoSafetyModel):
                     self.compiled_model,
                     tensor_type="pt",
                     device=self.rbln_config.video_safety_model.device,
+                    activate_profiler=rbln_config.video_safety_model.activate_profiler,
                 )
                 if self.rbln_config.video_safety_model.create_runtimes
                 else UnavailableRuntime()
@@ -347,6 +350,7 @@ class RBLNAegis(Aegis):
                 rbln_device=rbln_config.aegis.device,
                 rbln_create_runtimes=rbln_config.aegis.create_runtimes,
                 rbln_npu=rbln_config.aegis.npu,
+                rbln_activate_profiler=rbln_config.aegis.activate_profiler,
             )
 
         self.rbln_config = rbln_config
