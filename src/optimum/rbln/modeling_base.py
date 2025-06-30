@@ -389,7 +389,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
                 npu=rbln_compile_config.npu,
             )
             if runtime_cannot_be_created:
-                raise RuntimeError(runtime_cannot_be_created)
+                raise ValueError(runtime_cannot_be_created)
 
         compiled_model = rebel.compile_from_torch(
             model,

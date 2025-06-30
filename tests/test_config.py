@@ -172,7 +172,7 @@ def test_config_priority(model_id):
 )
 def test_invalid_config_parameters(model_id, invalid_param):
     """Test robust handling of various invalid configuration parameters."""
-    with pytest.raises((ValueError, TypeError, RuntimeError)):
+    with pytest.raises((ValueError, TypeError)):
         _ = RBLNResNetForImageClassification.from_pretrained(model_id, export=True, **invalid_param)
 
 
