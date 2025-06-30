@@ -130,6 +130,7 @@ class RBLNSigLIPEncoder(SigLIPEncoder):
                 self.checkpoint_dir,
                 rbln_device=rbln_config.siglip_encoder.device,
                 rbln_create_runtimes=rbln_config.siglip_encoder.create_runtimes,
+                rbln_activate_profiler=rbln_config.aegis.activate_profiler,
             )
         else:
             super().__init__(model_name, checkpoint_id)
@@ -337,6 +338,7 @@ class RBLNAegis(Aegis):
                 cache_dir,
                 rbln_device=rbln_config.aegis.device,
                 rbln_create_runtimes=rbln_config.aegis.create_runtimes,
+                rbln_activate_profiler=rbln_config.aegis.activate_profiler,
             )
 
         else:
