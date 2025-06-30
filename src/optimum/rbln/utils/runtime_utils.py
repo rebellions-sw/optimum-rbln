@@ -37,12 +37,17 @@ def tp_and_devices_are_ok(
         device = list(range(tensor_parallel_size))
     elif isinstance(device, int):
         device = [device]
+    elif isinstance(device, list):
+        if any(not isinstance(d, int) for d in device):
+            return "Device must be a(n) (list of) integer(s)."
+        if len(device) != tensor_parallel_size:
+            return f"The number of devices ({len(device)}) does not match tensor parallel size ({tensor_parallel_size})."
     else:
         return f"Invalid device: {device}"
 
     for device_id in device:
-        if device_id < 0:  # dummy device
-            continue
+        if device_id < 0:  # if any device is dummy device, skip it
+            return None
         if rebel.get_npu_name(device_id) is None:
             return (
                 f"Device {device_id} is not a valid NPU device. Please check your NPU status with 'rbln-stat' command."
@@ -50,8 +55,6 @@ def tp_and_devices_are_ok(
 
     if npu is not None:
         for device_id in device:
-            if device_id < 0:  # dummy device
-                continue
             npu_name = rebel.get_npu_name(device_id)
             if npu_name != npu:
                 return f"Device {device_id} ({npu_name}) is not on the same NPU as {npu}."
