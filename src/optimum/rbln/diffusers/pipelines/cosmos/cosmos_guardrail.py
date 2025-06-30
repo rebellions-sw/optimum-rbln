@@ -379,6 +379,8 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker):
 
         if rbln_config is None:
             rbln_config = RBLNCosmosSafetyCheckerConfig()
+        elif isinstance(rbln_config, dict):
+            rbln_config = RBLNCosmosSafetyCheckerConfig(**rbln_config)
 
         self.text_guardrail = GuardrailRunner(
             safety_models=[
