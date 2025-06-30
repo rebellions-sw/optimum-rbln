@@ -99,11 +99,21 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
             compiled_models = {}
             if rbln_config.uses_encoder:
                 encoder_model, decoder_model = cls.wrap_model_if_needed(model, rbln_config)
-                enc_compiled_model = cls.compile(encoder_model, rbln_compile_config=rbln_config.compile_cfgs[0])
+                enc_compiled_model = cls.compile(
+                    encoder_model,
+                    rbln_compile_config=rbln_config.compile_cfgs[0],
+                    create_runtimes=rbln_config.create_runtimes,
+                    device=rbln_config.device_map["encoder"],
+                )
                 compiled_models["encoder"] = enc_compiled_model
             else:
                 decoder_model = cls.wrap_model_if_needed(model, rbln_config)
-            dec_compiled_model = cls.compile(decoder_model, rbln_compile_config=rbln_config.compile_cfgs[-1])
+            dec_compiled_model = cls.compile(
+                decoder_model,
+                rbln_compile_config=rbln_config.compile_cfgs[-1],
+                create_runtimes=rbln_config.create_runtimes,
+                device=rbln_config.device_map["decoder"],
+            )
             compiled_models["decoder"] = dec_compiled_model
 
         finally:
