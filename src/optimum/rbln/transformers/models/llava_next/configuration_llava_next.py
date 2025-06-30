@@ -18,6 +18,14 @@ from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNLlavaNextForConditionalGenerationConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLNLlavaNextForConditionalGeneration.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized LLaVA-Next models for multimodal conditional generation tasks
+    that combine vision and language processing capabilities.
+    """
+
     submodules = ["vision_tower", "language_model"]
 
     def __init__(
