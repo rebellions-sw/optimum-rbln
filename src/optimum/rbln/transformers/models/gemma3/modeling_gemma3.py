@@ -326,7 +326,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         attention_mask: torch.Tensor,
         position_ids: torch.Tensor,
         token_type_ids: Optional[torch.Tensor] = None,
-    ):
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, int, torch.Tensor]:
         """
         Pads inputs, attention_mask, and position_ids so image token groups (256 tokens with token_type_ids == 1)
         start at multiples of prefill_chunk_size (256). Returns padded tensors and total padded length.
@@ -338,7 +338,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
             token_type_ids: (1, seq_len) tensor, 0 for text, 1 for image.
 
         Returns:
-            Tuple: (inputs_padded, attention_mask_padded, position_ids_padded, padded_len, token_type_ids_padded).
+            (inputs_padded, attention_mask_padded, position_ids_padded, padded_len, token_type_ids_padded).
         """
 
         if token_type_ids is None:

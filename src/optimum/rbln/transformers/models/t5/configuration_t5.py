@@ -17,8 +17,18 @@ from ..seq2seq import RBLNModelForSeq2SeqLMConfig
 
 
 class RBLNT5EncoderModelConfig(RBLNTransformerEncoderForFeatureExtractionConfig):
-    pass
+    """
+    Configuration class for RBLNT5EncoderModel.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized T5 encoder models for feature extraction tasks.
+    """
 
 
 class RBLNT5ForConditionalGenerationConfig(RBLNModelForSeq2SeqLMConfig):
-    pass
+    """
+    Configuration class for RBLNT5ForConditionalGeneration.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized T5 models for conditional text generation tasks.
+    """

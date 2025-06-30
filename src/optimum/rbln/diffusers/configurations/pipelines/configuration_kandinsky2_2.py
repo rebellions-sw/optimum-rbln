@@ -21,8 +21,6 @@ from ..models.configuration_prior_transformer import RBLNPriorTransformerConfig
 
 
 class RBLNKandinskyV22PipelineBaseConfig(RBLNModelConfig):
-    """Base configuration class for Kandinsky V2.2 decoder pipelines."""
-
     submodules = ["unet", "movq"]
     _movq_uses_encoder = False
 

@@ -16,8 +16,18 @@ from ...configuration_generic import RBLNModelForMaskedLMConfig, RBLNModelForSeq
 
 
 class RBLNRobertaForMaskedLMConfig(RBLNModelForMaskedLMConfig):
-    ""
+    """
+    Configuration class for RBLNRobertaForMaskedLM.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized RoBERTa models for masked language modeling tasks.
+    """
 
 
 class RBLNRobertaForSequenceClassificationConfig(RBLNModelForSequenceClassificationConfig):
-    ""
+    """
+    Configuration class for RBLNRobertaForSequenceClassification.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized RoBERTa models for sequence classification tasks.
+    """

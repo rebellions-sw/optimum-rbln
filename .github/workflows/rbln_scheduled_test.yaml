@@ -10,6 +10,14 @@ env:
   HF_AUTH_TOKEN: ${{ secrets.HF_AUTH_TOKEN }}
 
 jobs:
+  check-code-quality:
+    uses: ./.github/workflows/check_code_quality.yml
+    
+  test-docstrings:
+    uses: ./.github/workflows/test-docstrings.yml
+    with:
+      test_all_files: true
+
   load-version:
     runs-on: rebel-k8s-runner
     outputs:
