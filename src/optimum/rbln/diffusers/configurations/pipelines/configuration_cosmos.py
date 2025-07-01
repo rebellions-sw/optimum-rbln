@@ -108,5 +108,5 @@ class RBLNCosmosTextToWorldPipelineConfig(_RBLNCosmosPipelineBaseConfig):
 
 
 class RBLNCosmosVideoToWorldPipelineConfig(_RBLNCosmosPipelineBaseConfig):
-    """Config for Cosmos Text2Video Pipeline"""
+    """Config for Cosmos Video2World Pipeline"""
     _vae_uses_encoder = True
