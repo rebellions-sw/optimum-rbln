@@ -112,6 +112,7 @@ _import_structure = {
     "midm": ["RBLNMidmLMHeadModel", "RBLNMidmLMHeadModelConfig"],
     "mistral": ["RBLNMistralForCausalLM", "RBLNMistralForCausalLMConfig"],
     "phi": ["RBLNPhiForCausalLM", "RBLNPhiForCausalLMConfig"],
+    "pixtral": ["RBLNPixtralVisionModel", "RBLNPixtralVisionModelConfig"],
     "qwen2": ["RBLNQwen2ForCausalLM", "RBLNQwen2ForCausalLMConfig"],
     "resnet": ["RBLNResNetForImageClassification", "RBLNResNetForImageClassificationConfig"],
     "roberta": [
@@ -234,6 +235,7 @@ if TYPE_CHECKING:
     from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig
     from .opt import RBLNOPTForCausalLM, RBLNOPTForCausalLMConfig
     from .phi import RBLNPhiForCausalLM, RBLNPhiForCausalLMConfig
+    from .pixtral import RBLNPixtralVisionModel, RBLNPixtralVisionModelConfig
     from .qwen2 import RBLNQwen2ForCausalLM, RBLNQwen2ForCausalLMConfig
     from .qwen2_5_vl import (
         RBLNQwen2_5_VisionTransformerPretrainedModel,
