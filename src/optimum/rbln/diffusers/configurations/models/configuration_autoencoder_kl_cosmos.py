@@ -22,6 +22,8 @@ logger = get_logger(__name__)
 
 
 class RBLNAutoencoderKLCosmosConfig(RBLNModelConfig):
+    """Configuration class for RBLN Cosmos Variational Autoencoder (VAE) models."""
+    
     def __init__(
         self,
         batch_size: Optional[int] = None,
