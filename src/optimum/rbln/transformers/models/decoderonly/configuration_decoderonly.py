@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 import rebel
 
@@ -22,6 +22,8 @@ from ...utils.rbln_quantization import RBLNQuantizationConfig
 
 
 logger = get_logger()
+
+CacheImplType = Literal["static", "sliding_window", "hybrid"]
 
 
 class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
@@ -47,7 +49,10 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         prefill_chunk_size: Optional[int] = None,
         kvcache_num_blocks: Optional[int] = None,
         decoder_batch_sizes: Optional[List[int]] = None,
-        **kwargs: Dict[str, Any],
+        cache_impl: Optional[CacheImplType] = None,
+        sliding_window: Optional[int] = None,
+        sliding_window_layers: Optional[List[int]] = None,
+        **kwargs,
     ):
         """
         Args:
@@ -85,7 +90,14 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
                 1) All values must be less than or equal to the main batch size.
                 2) The list will be sorted in descending order (larger batch sizes first).
                 3) If using multiple decoders, at least one batch size should match the main batch size.
-
+            cache_impl (Optional[CacheImplType]): Specifies the KV cache implementation strategy. Defaults to "static".
+                - "static": Uses a fixed-size global KV cache for all layers, suitable for standard attention patterns.
+                - "sliding_window": Implements a sliding window KV cache, where each layer maintains a local cache of recent tokens.
+                - "hybrid": Combines both static and sliding window approaches, allowing different layers to use different cache strategies.
+                The choice affects memory usage and attention patterns. When using "sliding_window" or "hybrid",
+                you must specify the `sliding_window` size and optionally `sliding_window_layers` for hybrid mode.
+            sliding_window (Optional[int]): The size of the sliding window. Defaults to None.
+            sliding_window_layers (Optional[List[int]]): The layers to use for the sliding window used in the hybrid model. Defaults to None.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -201,6 +213,10 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
 
             # Larger batch size should be at the beginning of the list.
             self.decoder_batch_sizes.sort(reverse=True)
+
+        self.cache_impl = cache_impl or "static"
+        self.sliding_window = sliding_window
+        self.sliding_window_layers = sliding_window_layers or []
 
     @property
     def use_multiple_decoder(self):

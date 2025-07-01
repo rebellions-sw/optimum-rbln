@@ -167,6 +167,11 @@ class _BaseAutoModelClass:
         rbln_cls = cls.get_rbln_cls(model_id, *args, **kwargs)
         return rbln_cls.from_pretrained(model_id, *args, **kwargs)
 
+    @classmethod
+    def from_model(cls, model, *args, **kwargs):
+        rbln_cls = get_rbln_model_cls(f"RBLN{model.__class__.__name__}")
+        return rbln_cls.from_model(model, *args, **kwargs)
+
     @staticmethod
     def register(rbln_cls: Type[RBLNBaseModel], exist_ok=False):
         """

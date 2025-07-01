@@ -20,12 +20,27 @@ from ...configuration_generic import (
 
 
 class RBLNBertModelConfig(RBLNTransformerEncoderForFeatureExtractionConfig):
-    pass
+    """
+    Configuration class for RBLNBertModel.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized BERT models for feature extraction tasks.
+    """
 
 
 class RBLNBertForMaskedLMConfig(RBLNModelForMaskedLMConfig):
-    pass
+    """
+    Configuration class for RBLNBertForMaskedLM.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized BERT models for masked language modeling tasks.
+    """
 
 
 class RBLNBertForQuestionAnsweringConfig(RBLNModelForQuestionAnsweringConfig):
-    pass
+    """
+    Configuration class for RBLNBertForQuestionAnswering.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized BERT models for question answering tasks.
+    """

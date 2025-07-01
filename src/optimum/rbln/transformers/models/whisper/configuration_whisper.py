@@ -24,6 +24,13 @@ logger = get_logger()
 
 
 class RBLNWhisperForConditionalGenerationConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLNWhisperForConditionalGeneration.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized Whisper models for speech recognition and transcription tasks.
+    """
+
     def __init__(
         self,
         batch_size: int = None,

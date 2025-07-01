@@ -54,6 +54,14 @@ if TYPE_CHECKING:
 
 
 class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
+    """
+    RBLN optimized Qwen2.5-VL vision transformer model.
+
+    This class provides hardware-accelerated inference for Qwen2.5-VL vision transformers
+    on RBLN devices, supporting image and video encoding for multimodal vision-language tasks
+    with window-based attention mechanisms.
+    """
+
     auto_model_class = None
 
     def __post_init__(self, **kwargs):
@@ -616,7 +624,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 )
                 logits.append(output.logits)
             logits = torch.cat(logits, dim=0)
-        # Decoder
+            # Decoder
         else:
             inputs_embeds, position_embed = self._preprocess_decoder(input_ids, cache_position)
             output = self.decoder(

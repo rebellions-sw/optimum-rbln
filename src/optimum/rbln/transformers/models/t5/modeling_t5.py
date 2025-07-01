@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 import torch
 from transformers import AutoModelForTextEncoding, T5EncoderModel, T5ForConditionalGeneration
+from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
 
 from ...modeling_generic import RBLNTransformerEncoderForFeatureExtraction
 from ...models.seq2seq import RBLNModelForSeq2SeqLM
@@ -64,7 +65,7 @@ class RBLNT5EncoderModel(RBLNTransformerEncoderForFeatureExtraction):
     """
 
     auto_model_class = AutoModelForTextEncoding
-    rbln_model_input_names = ["input_ids", "attention_mask"]
+    output_class = BaseModelOutputWithPastAndCrossAttentions
 
     @classmethod
     def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: RBLNT5EncoderModelConfig):
@@ -74,10 +75,15 @@ class RBLNT5EncoderModel(RBLNTransformerEncoderForFeatureExtraction):
     def update_rbln_config_using_pipe(
         cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
     ) -> "RBLNDiffusionMixinConfig":
-        submodule_config = getattr(rbln_config, submodule_name)
-        submodule_config.max_seq_len = rbln_config.max_seq_len or 256
-        submodule_config.model_input_names = ["input_ids"]
         return rbln_config
+
+    def forward(self, input_ids=None, attention_mask=None, **kwargs):
+        input_dict = {"input_ids": input_ids.long()}
+        if attention_mask is not None:
+            input_dict["attention_mask"] = attention_mask.long()
+
+        output = super().forward(**input_dict, **kwargs)
+        return output
 
 
 class RBLNT5ForConditionalGeneration(RBLNModelForSeq2SeqLM):

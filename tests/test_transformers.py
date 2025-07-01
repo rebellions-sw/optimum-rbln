@@ -12,6 +12,7 @@ from optimum.rbln import (
     RBLNBertForMaskedLM,
     RBLNBertForQuestionAnswering,
     RBLNCLIPTextModel,
+    RBLNColPaliForRetrieval,
     RBLNDPTForDepthEstimation,
     RBLNResNetForImageClassification,
     RBLNT5EncoderModel,
@@ -247,6 +248,7 @@ class TestWhisperModel(BaseTest.TestModel):
                 data,
                 generate_kwargs={
                     "repetition_penalty": 1.3,
+                    "num_beams": 1,
                 },
                 batch_size=2,
             )
@@ -339,6 +341,16 @@ class TestCLIPModel(BaseTest.TestModel):
     GENERATION_KWARGS = {
         "input_ids": RANDOM_INPUT_IDS,
         "attention_mask": RANDOM_ATTN_MASK,
+    }
+
+
+class TestColPaliModel(BaseTest.TestModel):
+    RBLN_CLASS = RBLNColPaliForRetrieval
+    HF_MODEL_ID = "thkim93/colpali-hf-1layer"
+    GENERATION_KWARGS = {
+        "input_ids": torch.full((1, 1024), fill_value=257152, dtype=torch.int32),
+        "attention_mask": torch.ones((1, 1024), dtype=torch.int32),
+        "pixel_values": torch.randn(1, 3, 448, 448, generator=torch.manual_seed(42)),
     }
 
 

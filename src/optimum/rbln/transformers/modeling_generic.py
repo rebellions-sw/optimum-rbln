@@ -139,7 +139,7 @@ class RBLNTransformerEncoder(RBLNModel):
         return rbln_config
 
 
-class _RBLNImageModel(RBLNModel):
+class RBLNImageModel(RBLNModel):
     auto_model_class = AutoModel
     main_input_name = "pixel_values"
     output_class = BaseModelOutput
@@ -233,11 +233,11 @@ class RBLNTransformerEncoderForFeatureExtraction(RBLNTransformerEncoder):
     rbln_model_input_names = ["input_ids", "attention_mask"]
 
 
-class RBLNModelForImageClassification(_RBLNImageModel):
+class RBLNModelForImageClassification(RBLNImageModel):
     auto_model_class = AutoModelForImageClassification
 
 
-class RBLNModelForDepthEstimation(_RBLNImageModel):
+class RBLNModelForDepthEstimation(RBLNImageModel):
     auto_model_class = AutoModelForDepthEstimation
 
 

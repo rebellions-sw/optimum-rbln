@@ -16,4 +16,11 @@ from ...configuration_generic import RBLNModelForMaskedLMConfig
 
 
 class RBLNWav2Vec2ForCTCConfig(RBLNModelForMaskedLMConfig):
+    """
+    Configuration class for RBLNWav2Vec2ForCTC.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized Wav2Vec2 models for Connectionist Temporal Classification (CTC) tasks.
+    """
+
     rbln_model_input_names = ["input_values"]

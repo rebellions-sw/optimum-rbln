@@ -16,8 +16,24 @@ from ...modeling_generic import RBLNModelForMaskedLM, RBLNModelForSequenceClassi
 
 
 class RBLNRobertaForMaskedLM(RBLNModelForMaskedLM):
+    """
+    RBLN optimized RoBERTa model for masked language modeling tasks.
+
+    This class provides hardware-accelerated inference for RoBERTa models
+    on RBLN devices, supporting masked language modeling tasks such as
+    token prediction and text completion.
+    """
+
     rbln_model_input_names = ["input_ids", "attention_mask"]
 
 
 class RBLNRobertaForSequenceClassification(RBLNModelForSequenceClassification):
+    """
+    RBLN optimized RoBERTa model for sequence classification tasks.
+
+    This class provides hardware-accelerated inference for RoBERTa models
+    on RBLN devices, supporting text classification tasks such as sentiment analysis,
+    topic classification, and other sequence-level prediction tasks.
+    """
+
     rbln_model_input_names = ["input_ids", "attention_mask"]

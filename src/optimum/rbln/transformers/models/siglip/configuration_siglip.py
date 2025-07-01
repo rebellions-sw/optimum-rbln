@@ -18,6 +18,13 @@ from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNSiglipVisionModelConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLNSiglipVisionModel.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized SigLIP vision models for image encoding in multimodal tasks.
+    """
+
     def __init__(
         self,
         batch_size: Optional[int] = None,
@@ -34,6 +41,7 @@ class RBLNSiglipVisionModelConfig(RBLNModelConfig):
                 a tuple/list (height, width), or a dictionary with 'height' and 'width' keys.
             interpolate_pos_encoding (Optional[bool]): Whether to interpolate the position encoding.
             output_hidden_states: (Optional[bool]): Whether to return hidden states.
+            output_attentions: (Optional[bool]): Whether to return attentions.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
