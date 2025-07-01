@@ -92,10 +92,8 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
         }
 
     def maybe_set_quantization_env(self):
-        quant_bits = None
         if self.weights == "int4":
-            quant_bits = "4"
-            os.environ[self.RBLN_QUANT_BITS_ENV] = quant_bits
+            os.environ[self.RBLN_QUANT_BITS_ENV] = "4"
 
     def maybe_reset_quantization_env(self):
         if self.RBLN_QUANT_BITS_ENV in os.environ:

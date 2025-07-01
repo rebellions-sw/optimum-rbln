@@ -1240,7 +1240,7 @@ class SlidingWindowAttentionOp(AttentionOp):
         query_state: torch.Tensor,
         key_state: torch.Tensor,
         value_state: torch.Tensor,
-        attn_mask: torch.Tensor,
+        attn_mask: Optional[torch.Tensor],
         past_key_state: torch.Tensor,
         past_value_state: torch.Tensor,
         seq_position: Tuple[torch.Tensor],
@@ -1250,6 +1250,10 @@ class SlidingWindowAttentionOp(AttentionOp):
         k_scale: Optional[torch.Tensor] = None,
         v_scale: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        assert self.quantization is None, "Sliding window attention does not support quantization"
+        assert not self.use_attention_mask, "Sliding window attention does not support use_attention_mask=True"
+        assert k_scale is None and v_scale is None, "Sliding window attention does not support quantization"
+
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
         key_state = key_state.unsqueeze(2)
         value_state = value_state.unsqueeze(2)
@@ -1267,33 +1271,26 @@ class SlidingWindowAttentionOp(AttentionOp):
             self.head_dim,
         )
 
+        op_args = {
+            "q": query_state,
+            "k": key_state,
+            "v": value_state,
+            "kcache": past_key_state.unsqueeze(2),
+            "vcache": past_value_state.unsqueeze(2),
+            "cache_seq_len": seq_position[0],
+            "cache_offset": seq_position[1],
+            "scale": scale,
+            "block_table": block_tables,
+            "block_size": block_size,
+        }
+
+        if self.phase == "prefill" or self.phase == "image_prefill":
+            op_args["is_bidirectional"] = True if self.phase == "image_prefill" else False
+
         if self.phase == "decode":
-            attn_output = torch.ops.rbln_custom_ops.paged_sliding_window_attn_decode(
-                q=query_state,
-                k=key_state,
-                v=value_state,
-                kcache=past_key_state.unsqueeze(2),
-                vcache=past_value_state.unsqueeze(2),
-                cache_seq_len=seq_position[0],
-                cache_offset=seq_position[1],
-                scale=scale,
-                block_table=block_tables,
-                block_size=block_size,
-            )
+            attn_output = torch.ops.rbln_custom_ops.paged_sliding_window_attn_decode(**op_args)
         else:
-            attn_output = torch.ops.rbln_custom_ops.paged_sliding_window_attn_prefill(
-                q=query_state,
-                k=key_state,
-                v=value_state,
-                kcache=past_key_state.unsqueeze(2),
-                vcache=past_value_state.unsqueeze(2),
-                cache_seq_len=seq_position[0],
-                cache_offset=seq_position[1],
-                scale=scale,
-                block_table=block_tables,
-                block_size=block_size,
-                is_bidirectional=True if self.phase == "image_prefill" else False,
-            )
+            attn_output = torch.ops.rbln_custom_ops.paged_sliding_window_attn_prefill(**op_args)
 
         # reshape for removing repeat_kv
         attn_output = attn_output.view(batch_size, self.num_heads, -1, self.head_dim)

@@ -30,7 +30,7 @@ from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
-from ...utils.rbln_quantization import RBLNQuantizationConfig, prepare_model_for_quantization
+from ...utils.rbln_quantization import prepare_model_for_quantization
 from .configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
 from .decoderonly_architecture import (
     DecoderOnlyWrapper,
