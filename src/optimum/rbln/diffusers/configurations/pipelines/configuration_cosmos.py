@@ -47,7 +47,7 @@ class RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
         Args:
             text_encoder (Optional[RBLNT5EncoderModelConfig]): Configuration for the text encoder component.
                 Initialized as RBLNT5EncoderModelConfig if not provided.
-            transformer (Optional[RBLNCosmosTransformer3DModelConfig]): Configuration for the UNet model component.
+            transformer (Optional[RBLNCosmosTransformer3DModelConfig]): Configuration for the Transformer model component.
                 Initialized as RBLNCosmosTransformer3DModelConfig if not provided.
             vae (Optional[RBLNAutoencoderKLCosmosConfig]): Configuration for the VAE model component.
                 Initialized as RBLNAutoencoderKLCosmosConfig if not provided.
