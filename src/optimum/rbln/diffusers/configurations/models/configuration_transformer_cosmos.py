@@ -19,7 +19,7 @@ from ....configuration_utils import RBLNModelConfig
 
 class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
     """Configuration class for RBLN Cosmos Transformer models."""
-    
+
     def __init__(
         self,
         batch_size: Optional[int] = None,
