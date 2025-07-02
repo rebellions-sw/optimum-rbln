@@ -217,6 +217,8 @@ class RBLNColQwen2_5ForRetrieval(RBLNQwen2_5_VLForConditionalGeneration):
                     compile_config,
                     example_inputs=example_inputs,
                     compile_context=compile_context,
+                    create_runtimes=rbln_config.create_runtimes,
+                    device=rbln_config.device,
                 )
                 return compiled_model
             finally:
