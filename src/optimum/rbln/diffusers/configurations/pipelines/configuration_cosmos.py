@@ -24,7 +24,7 @@ from ..models import RBLNAutoencoderKLCosmosConfig, RBLNCosmosTransformer3DModel
 logger = get_logger(__name__)
 
 
-class _RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
+class RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
     submodules = ["text_encoder", "transformer", "vae", "safety_checker"]
     _vae_uses_encoder = False
 
@@ -102,13 +102,13 @@ class _RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
         return self.text_encoder.max_seq_len
 
 
-class RBLNCosmosTextToWorldPipelineConfig(_RBLNCosmosPipelineBaseConfig):
+class RBLNCosmosTextToWorldPipelineConfig(RBLNCosmosPipelineBaseConfig):
     """Config for Cosmos Text2World Pipeline"""
 
     _vae_uses_encoder = False
 
 
-class RBLNCosmosVideoToWorldPipelineConfig(_RBLNCosmosPipelineBaseConfig):
+class RBLNCosmosVideoToWorldPipelineConfig(RBLNCosmosPipelineBaseConfig):
     """Config for Cosmos Video2World Pipeline"""
 
     _vae_uses_encoder = True
