@@ -64,7 +64,12 @@ class RBLNModel(RBLNBaseModel):
     def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
         model = cls.wrap_model_if_needed(model, rbln_config)
         rbln_compile_config = rbln_config.compile_cfgs[0]
-        compiled_model = cls.compile(model, rbln_compile_config=rbln_compile_config)
+        compiled_model = cls.compile(
+            model,
+            rbln_compile_config=rbln_compile_config,
+            create_runtimes=rbln_config.create_runtimes,
+            device=rbln_config.device,
+        )
         return compiled_model
 
     @classmethod

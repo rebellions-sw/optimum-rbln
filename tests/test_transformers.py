@@ -88,8 +88,18 @@ class TestResNetModel(BaseTest.TestModel):
                     preprocessors=preprocessors,  # For image_classification
                 )
 
-    def test_failed_to_create_runtime(self):
+    def _inner_test_save_load(self, tmpdir):
+        super()._inner_test_save_load(tmpdir)
+
         with self.assertRaises(RBLNRuntimeError):
+            _ = self.RBLN_CLASS.from_pretrained(
+                tmpdir,
+                export=False,
+                rbln_device=[0, 1, 2, 3],
+            )
+
+    def test_failed_to_create_runtime(self):
+        with self.assertRaises(ValueError):
             _ = self.RBLN_CLASS.from_pretrained(
                 self.HF_MODEL_ID,
                 export=True,

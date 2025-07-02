@@ -40,7 +40,7 @@ class RBLNCosmosVideoToWorldPipeline(RBLNDiffusionMixin, CosmosVideoToWorldPipel
 
     original_class = CosmosVideoToWorldPipeline
     _submodules = ["text_encoder", "transformer", "vae"]
-    _optional_components = ["safety_checker"]
+    _optional_submodules = ["safety_checker"]
 
     def __init__(
         self,
