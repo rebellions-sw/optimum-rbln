@@ -50,7 +50,7 @@ class RBLNAutoencoderKLCosmosConfig(RBLNModelConfig):
                 Determines how much shorter the latent representations are compared to the original videos.
             vae_scale_factor_spatial (Optional[int]): The scaling factor between pixel space and latent space.
                 Determines how much smaller the latent representations are compared to the original videos.
-            use_slicing (Optional[Bool]): Enable sliced VAE encoding and decoding.
+            use_slicing (Optional[bool]): Enable sliced VAE encoding and decoding.
                 If True, the VAE will split the input tensor in slices to compute encoding or decoding in several steps.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
