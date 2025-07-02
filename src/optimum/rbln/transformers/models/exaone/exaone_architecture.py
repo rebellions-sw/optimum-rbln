@@ -34,6 +34,9 @@ logger = logging.get_logger(__name__)
 class ExaoneForCausalLMWrapper(DecoderOnlyWrapper):
     """A wrapper class for the Exaone model with a language modeling head."""
 
+    def get_decoder_layers(self, causal_lm: "ExaoneForCausalLM"):
+        return causal_lm.transformer.h
+
     def get_attn_layer(self, layer: nn.Module):
         return layer.attn.attention
 
