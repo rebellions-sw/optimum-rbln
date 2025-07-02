@@ -70,7 +70,7 @@ jobs:
         env:
           OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
         run: |
-          uv run --no-sync pytest tests/test_config.py -v --durations 0 
+          uv run --no-sync pytest tests/test_config.py -vv --durations 0 
 
       - name: Run pytest (transformers)
         env:
@@ -78,7 +78,7 @@ jobs:
         run: |
           echo 
           if ${{ !contains( steps.get_commit_message.outputs.message , '[skip-transformers]') }}; then
-            uv run --no-sync pytest tests/test_transformers.py -v --durations 0
+            uv run --no-sync pytest tests/test_transformers.py -vv --durations 0
           else
             echo "Found [skip-transformers] in commit message, skipping CI"
           fi
@@ -88,7 +88,7 @@ jobs:
           OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
         run: |
           if ${{ !contains( steps.get_commit_message.outputs.message , '[skip-diffusers]') }}; then
-            uv run --no-sync pytest tests/test_diffusers.py -v --durations 0
+            uv run --no-sync pytest tests/test_diffusers.py -vv --durations 0
           else
             echo "Found [skip-diffusers] in commit message, skipping CI"
           fi
@@ -98,7 +98,7 @@ jobs:
           OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
         run: |
           if ${{ !contains( steps.get_commit_message.outputs.message , '[skip-llms]') }}; then
-            uv run --no-sync pytest tests/test_llm.py -v --durations 0
+            uv run --no-sync pytest tests/test_llm.py -vv --durations 0
           else
             echo "Found [skip-llms] in commit message, skipping CI"
           fi
