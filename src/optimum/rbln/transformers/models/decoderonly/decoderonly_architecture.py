@@ -149,6 +149,8 @@ class DecoderOnlyWrapper(nn.Module):
             This is only relevant if `attn_impl` is set to "flash_attn`
     """
 
+    _use_learned_pos_emb = False
+
     def __init__(
         self,
         causal_lm: PreTrainedModel,
@@ -159,7 +161,6 @@ class DecoderOnlyWrapper(nn.Module):
         use_inputs_embeds: bool,
         use_attention_mask: bool,
         use_position_ids: bool,
-        use_learned_pos_emb: Optional[bool] = None,
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
         sliding_window: Optional[int] = None,
@@ -182,7 +183,6 @@ class DecoderOnlyWrapper(nn.Module):
         self.use_attention_mask = use_attention_mask
         self.use_position_ids = use_position_ids
         self.use_inputs_embeds = use_inputs_embeds
-        self.use_learned_pos_emb = use_learned_pos_emb
         self.sliding_window_layers = sliding_window_layers
         self.cache_impl = cache_impl
         self.sliding_window = sliding_window
@@ -207,11 +207,32 @@ class DecoderOnlyWrapper(nn.Module):
     def get_rotary_emb(self, max_seq_len):
         return RotaryEmbedding(config=self.config, max_seq_len_cached=max_seq_len)
 
+    def get_decoder_layers(self, causal_lm: PreTrainedModel):
+        return causal_lm.model.layers
+
+    def get_attn_layer(self, layer: nn.Module):
+        return layer.self_attn
+
+    def get_model_layer(self, causal_lm: PreTrainedModel):
+        return causal_lm.model
+
+    def get_rbln_attn_class(self):
+        return DecoderOnlyAttention
+
+    def get_rbln_layer_class(self):
+        return DecoderOnlyLayer
+
+    def get_rbln_model_class(self):
+        return DecoderOnlyModel
+
+    def get_rbln_causal_lm_class(self):
+        return DecoderOnlyForCausalLM
+
     def convert_to_rbln_causal_lm(self, causal_lm: PreTrainedModel, max_seq_len: int):
         new_layers = []
-        for layer_idx, layer in enumerate(causal_lm.model.layers):
-            new_self_attn = DecoderOnlyAttention(
-                layer.self_attn,
+        for layer_idx, layer in enumerate(self.get_decoder_layers(causal_lm)):
+            new_self_attn = self.get_rbln_attn_class()(
+                self.get_attn_layer(layer),
                 self.use_attention_mask,
                 self.use_position_ids,
                 kvcache_block_size=self.sliding_window
@@ -221,19 +242,19 @@ class DecoderOnlyWrapper(nn.Module):
                 attn_impl=self.attn_impl,
                 kvcache_partition_len=self.kvcache_partition_len,
             )
-            new_layer = DecoderOnlyLayer(layer, new_self_attn)
+            new_layer = self.get_rbln_layer_class()(layer, new_self_attn)
             new_layers.append(new_layer)
 
-        new_model = DecoderOnlyModel(
-            causal_lm.model,
+        new_model = self.get_rbln_model_class()(
+            self.get_model_layer(causal_lm),
             new_layers,
             partition_len=self.kvcache_partition_len,
             max_seq_len=max_seq_len,
             kvcache_block_size=self.kvcache_block_size,
-            use_learned_pos_emb=self.use_learned_pos_emb,
+            use_learned_pos_emb=self.__class__._use_learned_pos_emb,
             sliding_window_layers=self.sliding_window_layers,
         )
-        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
+        new_causal_lm = self.get_rbln_causal_lm_class()(causal_lm, new_model)
         return new_causal_lm
 
     @property
@@ -704,9 +725,21 @@ class DecoderOnlyAttention(nn.Module):
             raise NotImplementedError("Sliding window attention is only supported with eager attention.")
 
         self.kvcache_partition_len = kvcache_partition_len
-        self.attention = self.get_attention()
+
+        setattr(self, self.get_attention_name(), self.create_attention_op())
         self.kvcache_block_size = kvcache_block_size
         self.__post_init__()
+
+    def get_attention_name(self):
+        if self.is_sliding:
+            return "sliding_window_attention"
+        elif self.attn_impl == "flash_attn":
+            return "flash_attention"
+        else:
+            return "attention"
+
+    def get_attention_op(self):
+        return getattr(self, self.get_attention_name())
 
     @property
     def phase(self):
@@ -715,9 +748,9 @@ class DecoderOnlyAttention(nn.Module):
     @phase.setter
     def phase(self, phase: str):
         self._phase = phase
-        self.attention.phase = phase
+        getattr(self, self.get_attention_name()).phase = phase
 
-    def get_attention(self):
+    def create_attention_op(self):
         if self.is_sliding:
             return SlidingWindowAttentionOp(
                 self.num_heads,
@@ -735,7 +768,7 @@ class DecoderOnlyAttention(nn.Module):
                 self.use_attention_mask,
                 self.use_position_ids,
             )
-        else:
+        elif self.attn_impl == "eager":
             return AttentionOp(
                 self.num_heads,
                 self.head_dim,
@@ -743,6 +776,8 @@ class DecoderOnlyAttention(nn.Module):
                 self.use_attention_mask,
                 self.use_position_ids,
             )
+        else:
+            raise NotImplementedError(f"Unknown attention implementation: {self.attn_impl}")
 
     def __post_init__(self):
         self.q_proj = self._original_mod.q_proj
@@ -799,7 +834,7 @@ class DecoderOnlyAttention(nn.Module):
         if batch_size > 1 and "prefill" in self.phase:
             raise NotImplementedError(f"batch size should be 1 if prefill phase, but got {batch_size}.")
 
-        attn_output = self.attention(
+        attn_output = self.get_attention_op()(
             query_states,
             key_states,
             value_states,
@@ -814,6 +849,14 @@ class DecoderOnlyAttention(nn.Module):
 
         attn_outputs = self.o_proj(attn_output)
         return attn_outputs
+
+
+class DecoderOnlyFlashAttention(DecoderOnlyAttention):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        logger.warning(
+            "DecoderOnlyFlashAttention is deprecated and may not work as expected. Use DecoderOnlyAttention instead."
+        )
 
 
 class AttentionOp(nn.Module):
