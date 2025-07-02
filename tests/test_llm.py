@@ -261,6 +261,7 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
     PROMPT = "[INST] <image>\nWhat’s shown in this image? [/INST]"
     RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True}}}
     EXPECTED_OUTPUT = "aille kennisSoft /******/ Brunershot childhoodhoodRx̧̧̧̧̧̧̧̧̧̧"
+    HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
 
     @classmethod
     def get_tokenizer(cls):
@@ -306,6 +307,7 @@ class TestBlip2ForConditionalGeneration(LLMTest.TestLLM):
     PROMPT = "Question: Describe this image? Answer:"
     RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True, "max_seq_len": 1024}}}
     EXPECTED_OUTPUT = "::::::::::::::::::::"
+    HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
 
     @classmethod
     def get_tokenizer(cls):
@@ -355,6 +357,7 @@ class TestIdefics3ForConditionalGeneration(LLMTest.TestLLM):
     HF_MODEL_ID = "hf-internal-testing/tiny-random-Idefics3ForConditionalGeneration"
     PROMPT = [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": "Describe this image."}]}]
     RBLN_CLASS_KWARGS = {"rbln_config": {"text_model": {"use_inputs_embeds": True, "attn_impl": "flash_attn"}}}
+    HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
 
     @classmethod
     def get_tokenizer(cls):
@@ -362,7 +365,6 @@ class TestIdefics3ForConditionalGeneration(LLMTest.TestLLM):
             cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
         return cls._tokenizer
 
-    # override
     @classmethod
     def setUpClass(cls):
         config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
