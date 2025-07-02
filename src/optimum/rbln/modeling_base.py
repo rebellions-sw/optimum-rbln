@@ -27,7 +27,7 @@ from transformers import AutoConfig, AutoModel, GenerationConfig, PretrainedConf
 from .configuration_utils import RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig, get_rbln_config_class
 from .utils.hub import PushToHubMixin, pull_compiled_model_from_hub, validate_files
 from .utils.logging import get_logger
-from .utils.runtime_utils import UnavailableRuntime
+from .utils.runtime_utils import UnavailableRuntime, tp_and_devices_are_ok
 from .utils.save_utils import maybe_load_preprocessors
 from .utils.submodule import SubModulesMixin
 
@@ -374,7 +374,23 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         return from_pretrained_method(model_id=model_id, **kwargs, rbln_config=rbln_config)
 
     @classmethod
-    def compile(cls, model, rbln_compile_config: Optional[RBLNCompileConfig] = None, **kwargs):
+    def compile(
+        cls,
+        model,
+        rbln_compile_config: RBLNCompileConfig,
+        create_runtimes: bool,
+        device: Union[int, List[int]],
+        **kwargs,
+    ):
+        if create_runtimes:
+            runtime_cannot_be_created = tp_and_devices_are_ok(
+                tensor_parallel_size=rbln_compile_config.tensor_parallel_size,
+                device=device,
+                npu=rbln_compile_config.npu,
+            )
+            if runtime_cannot_be_created:
+                raise ValueError(runtime_cannot_be_created)
+
         compiled_model = rebel.compile_from_torch(
             model,
             input_info=rbln_compile_config.input_info,

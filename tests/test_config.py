@@ -165,6 +165,9 @@ def test_config_priority(model_id):
         {"rbln_nonexistent_param": "value"},
         {"rbln_image_size": "not_an_integer"},  # Type error
         {"rbln_batch_size": -1},  # Negative value
+        {"rbln_tensor_parallel_size": 32},  # Tensor parallel size is not supported
+        {"rbln_npu": "RBLN-Unknown"},  # NPU is not supported
+        {"rbln_device": 32},  # Device is not supported
     ],
 )
 def test_invalid_config_parameters(model_id, invalid_param):
