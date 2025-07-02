@@ -41,7 +41,7 @@ class PixtralAttention(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        attention_mask: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
         position_embeddings: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
         output_attentions: Optional[bool] = False,
     ):
@@ -61,7 +61,7 @@ class PixtralAttention(nn.Module):
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
 
         attn_weights = torch.matmul(query_states, key_states.transpose(3, 4)) * self.scaling
-        attn_weights = attn_weights + attention_mask
+        # attn_weights = attn_weights + attention_mask
         attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32)
         attn_output = torch.matmul(attn_weights, value_states)
         attn_output = attn_output.transpose(1, 3)

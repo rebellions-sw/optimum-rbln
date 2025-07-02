@@ -24,7 +24,6 @@ from transformers.modeling_utils import no_init_weights
 from transformers.models.pixtral.modeling_pixtral import (
     PixtralRMSNorm,
     PixtralRotaryEmbedding,
-    generate_block_attention_mask,
     position_ids_in_meshgrid,
 )
 
@@ -77,11 +76,7 @@ class RBLNRuntimePixtralVisionModel(RBLNPytorchRuntime):
         position_ids = position_ids_in_meshgrid(patch_embeds_list, max_width=self.image_size // self.patch_size)
         position_embeddings = self.patch_positional_embedding(patch_embeds, position_ids)
 
-        attention_mask = generate_block_attention_mask(
-            [p.shape[-2] * p.shape[-1] for p in patch_embeds_list], patch_embeds
-        )
-
-        return super().forward(patch_embeds, attention_mask, position_embeddings[0], position_embeddings[1])
+        return super().forward(patch_embeds, position_embeddings[0], position_embeddings[1])
 
 
 class _PixtralVisionModel(torch.nn.Module):
@@ -94,13 +89,14 @@ class _PixtralVisionModel(torch.nn.Module):
             layer.attention = PixtralAttention(layer.attention)
         return model.transformer
 
-    def forward(self, patch_embeds, attention_mask, position_embeddings_1, position_embeddings_2):
+    def forward(self, patch_embeds, position_embeddings_1, position_embeddings_2):
         output = self.transformer(
-            patch_embeds,
-            attention_mask,
-            (position_embeddings_1, position_embeddings_2),
-            output_hidden_states=True,
-            # output_hidden_states=False,
+            inputs_embeds=patch_embeds,
+            attention_mask=None,
+            position_embeddings=(position_embeddings_1, position_embeddings_2),
+            # it need for llavanext
+            # output_hidden_states=True,
+            output_hidden_states=False,
             return_dict=False,
         )
         return output
@@ -143,9 +139,6 @@ class RBLNPixtralVisionModel(RBLNModel):
         subfolder: str,
         rbln_config: RBLNModelConfig,
     ):
-        # If you are unavoidably running on a CPU rather than an RBLN device,
-        # store the torch tensor, weight, etc. in this function.
-
         save_dict = {}
         save_dict["patch_conv"] = model.patch_conv.state_dict()
         save_dict["ln_pre"] = model.ln_pre.state_dict()
@@ -190,11 +183,6 @@ class RBLNPixtralVisionModel(RBLNModel):
                 (
                     "patch_embeds",
                     [1, num_total_patches, model_config.hidden_size],
-                    "float32",
-                ),
-                (
-                    "attention_mask",
-                    [1, 1, num_total_patches, num_total_patches],
                     "float32",
                 ),
                 (
