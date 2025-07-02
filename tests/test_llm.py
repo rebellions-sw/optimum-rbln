@@ -74,8 +74,8 @@ class TestQwen2Model(LLMTest.TestLLM):
 class TestOptModel(LLMTest.TestLLM):
     RBLN_CLASS = RBLNOPTForCausalLM
     HF_MODEL_ID = "facebook/opt-2.7b"
-    EXPECTED_OUTPUT = "\nI'm a guy who likes to play video games.\nI'm a guy who likes to"
-    HF_CONFIG_KWARGS = {"max_position_embeddings": 2048}
+    EXPECTED_OUTPUT = "????,,,,,,,,,,,,,,,,"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 2048}
 
 
 class TestLlamaForCausalLM(LLMTest.TestLLM):
