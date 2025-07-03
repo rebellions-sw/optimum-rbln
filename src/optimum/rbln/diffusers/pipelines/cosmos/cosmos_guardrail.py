@@ -131,6 +131,7 @@ class RBLNSigLIPEncoder(SigLIPEncoder):
                 rbln_device=rbln_config.siglip_encoder.device,
                 rbln_create_runtimes=rbln_config.siglip_encoder.create_runtimes,
                 rbln_activate_profiler=rbln_config.siglip_encoder.activate_profiler,
+                rbln_optimize_host_memory=rbln_config.siglip_encoder.optimize_host_memory,
             )
         else:
             super().__init__(model_name, checkpoint_id)
@@ -340,6 +341,7 @@ class RBLNAegis(Aegis):
                 rbln_device=rbln_config.aegis.device,
                 rbln_create_runtimes=rbln_config.aegis.create_runtimes,
                 rbln_activate_profiler=rbln_config.aegis.activate_profiler,
+                rbln_optimize_host_memory=rbln_config.aegis.optimize_host_memory,
             )
 
         else:
