@@ -12,18 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNPixtralVisionModelConfig(RBLNModelConfig):
-    def __init__(self, batch_size: Optional[int] = None, image_size: Optional[int] = None, **kwargs: Dict[str, Any]):
+    def __init__(self, max_image_size: Tuple, batch_size: Optional[int] = None, **kwargs: Dict[str, Any]):
         """
         Args:
+            max_image_size (Tuple): The size of max input images. A tuple (max_height, max_width)
             batch_size (Optional[int]): The batch size for image processing. Defaults to 1.
-            image_size (Optional[int]): The size of input images. Can be an integer for square images,
-                a tuple/list (height, width), or a dictionary with 'height' and 'width' keys.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -34,22 +33,4 @@ class RBLNPixtralVisionModelConfig(RBLNModelConfig):
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
-        self.image_size = image_size
-
-    @property
-    def image_width(self):
-        if isinstance(self.image_size, int):
-            return self.image_size
-        elif isinstance(self.image_size, (list, tuple)):
-            return self.image_size[1]
-        else:
-            return self.image_size["width"]
-
-    @property
-    def image_height(self):
-        if isinstance(self.image_size, int):
-            return self.image_size
-        elif isinstance(self.image_size, (list, tuple)):
-            return self.image_size[0]
-        else:
-            return self.image_size["height"]
+        self.max_image_size = max_image_size
