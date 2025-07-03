@@ -119,7 +119,6 @@ class RBLNSigLIPEncoder(SigLIPEncoder):
         rbln_config: Optional[RBLNCosmosSafetyCheckerConfig] = None,
     ):
         torch.nn.Module.__init__(self)
-        # import pdb; pdb.set_trace()
         if is_compiled_dir(checkpoint_id):
             self.checkpoint_dir = (
                 pathlib.Path(checkpoint_id) / "video_content_safety_filter" / "siglip_encoder"
@@ -145,6 +144,7 @@ class RBLNSigLIPEncoder(SigLIPEncoder):
                 rbln_npu=rbln_config.siglip_encoder.npu,
                 rbln_create_runtimes=rbln_config.siglip_encoder.create_runtimes,
                 rbln_activate_profiler=rbln_config.siglip_encoder.activate_profiler,
+                rbln_optimize_host_memory=rbln_config.siglip_encoder.optimize_host_memory,
             )
         self.rbln_config = rbln_config
 
@@ -356,6 +356,7 @@ class RBLNAegis(Aegis):
                 rbln_create_runtimes=rbln_config.aegis.create_runtimes,
                 rbln_npu=rbln_config.aegis.npu,
                 rbln_activate_profiler=rbln_config.aegis.activate_profiler,
+                rbln_optimize_host_memory=rbln_config.aegis.optimize_host_memory,
             )
 
         self.rbln_config = rbln_config
