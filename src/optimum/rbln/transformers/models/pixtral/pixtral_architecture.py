@@ -16,6 +16,7 @@ from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from ..decoderonly.decoderonly_architecture import apply_rotary_pos_emb
 
@@ -51,21 +52,36 @@ class PixtralAttention(nn.Module):
         key_states = self.k_proj(hidden_states)
         value_states = self.v_proj(hidden_states)
 
-        query_states = query_states.view(batch_size, patches, 1, self.num_heads, self.head_dim).transpose(1, 3)
-        key_states = key_states.view(batch_size, patches, 1, self.num_heads, self.head_dim).transpose(1, 3)
-        value_states = value_states.view(batch_size, patches, 1, self.num_heads, self.head_dim).transpose(1, 3)
+        # "eager" attention mode -> if we need to support output_attentions (?)
+        # query_states = query_states.view(batch_size, patches, 1, self.num_heads, self.head_dim).transpose(1, 3)
+        # key_states = key_states.view(batch_size, patches, 1, self.num_heads, self.head_dim).transpose(1, 3)
+        # value_states = value_states.view(batch_size, patches, 1, self.num_heads, self.head_dim).transpose(1, 3)
+
+        # cos, sin = position_embeddings
+        # cos = cos[None, None, None, :, :]
+        # sin = sin[None, None, None, :, :]
+        # query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
+
+        # attn_weights = torch.matmul(query_states, key_states.transpose(3, 4)) * self.scaling
+        # attn_weights = attn_weights + attention_mask
+        # attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32)
+        # attn_output = torch.matmul(attn_weights, value_states)
+        # attn_output = attn_output.transpose(1, 3)
+
+        # support sdpa attention
+        query_states = query_states.view(batch_size, patches, self.num_heads, self.head_dim).transpose(1, 2)
+        key_states = key_states.view(batch_size, patches, self.num_heads, self.head_dim).transpose(1, 2)
+        value_states = value_states.view(batch_size, patches, self.num_heads, self.head_dim).transpose(1, 2)
 
         cos, sin = position_embeddings
-        cos = cos[None, None, None, :, :]
-        sin = sin[None, None, None, :, :]
+        cos = cos[None, None, :, :]
+        sin = sin[None, None, :, :]
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
 
-        attn_weights = torch.matmul(query_states, key_states.transpose(3, 4)) * self.scaling
-        attn_weights = attn_weights + attention_mask
-        attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32)
-        attn_output = torch.matmul(attn_weights, value_states)
-        attn_output = attn_output.transpose(1, 3)
-
+        attn_output = F.scaled_dot_product_attention(
+            query_states, key_states, value_states, attn_mask=attention_mask, is_causal=False
+        )
+        attn_output = attn_output.transpose(1, 2)
         attn_output = attn_output.reshape(batch_size, patches, -1)
         attn_output = self.o_proj(attn_output)
 

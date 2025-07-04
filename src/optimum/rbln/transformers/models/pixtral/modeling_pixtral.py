@@ -24,6 +24,7 @@ from transformers.modeling_utils import no_init_weights
 from transformers.models.pixtral.modeling_pixtral import (
     PixtralRMSNorm,
     PixtralRotaryEmbedding,
+    generate_block_attention_mask,
     position_ids_in_meshgrid,
 )
 
@@ -99,27 +100,23 @@ class RBLNRuntimePixtralVisionModel(RBLNPytorchRuntime):
         position_ids = torch.cat([real_position_ids, padding_position_ids], dim=0)
         position_embeddings = self.patch_positional_embedding(patch_embeds, position_ids)
 
-        # # d_min = torch.finfo(patch_embeds.dtype).min
-        # real_patch_counts = [p.shape[-2] * p.shape[-1] for p in patch_embeds_list]
+        d_min = torch.finfo(patch_embeds.dtype).min
+        real_patch_counts = [p.shape[-2] * p.shape[-1] for p in patch_embeds_list]
 
-        # dummy_tensor_for_mask = torch.empty(
-        #     patch_embeds.shape[0], num_real_patches, 1, dtype=patch_embeds.dtype
-        # )
-        # real_attention_mask = generate_block_attention_mask(real_patch_counts, dummy_tensor_for_mask)
+        dummy_tensor_for_mask = torch.empty(patch_embeds.shape[0], num_real_patches, 1, dtype=patch_embeds.dtype)
+        real_attention_mask = generate_block_attention_mask(real_patch_counts, dummy_tensor_for_mask)
 
-        # attention_mask = torch.full(
-        #     (patch_embeds.shape[0], 1, max_patches, max_patches),
-        #     fill_value=d_min,
-        #     dtype=patch_embeds.dtype,
-        # )
-        # attention_mask[..., :num_real_patches, :num_real_patches] = real_attention_mask
-
-        attention_mask = torch.full((1, 1, 1, patch_embeds.shape[-2]), fill_value=torch.finfo(patch_embeds.dtype).min)
-        attention_mask[:, :, :, :num_real_patches] = 0
+        attention_mask = torch.full(
+            (patch_embeds.shape[0], 1, max_patches, max_patches),
+            fill_value=d_min,
+            dtype=patch_embeds.dtype,
+        )
+        attention_mask[..., :num_real_patches, :num_real_patches] = real_attention_mask
 
         transformer_output = super().forward(
             patch_embeds, attention_mask, position_embeddings[0], position_embeddings[1]
         )
+
         transformer_output = [x[:, :num_real_patches, :] for x in transformer_output]
 
         return transformer_output
@@ -228,7 +225,7 @@ class RBLNPixtralVisionModel(RBLNModel):
                     [1, num_total_patches, model_config.hidden_size],
                     "float32",
                 ),
-                ("attention_mask", [1, 1, 1, num_total_patches], "float32"),
+                ("attention_mask", [1, 1, num_total_patches, num_total_patches], "float32"),
                 (
                     "position_embeddings_1",
                     [
