@@ -19,6 +19,7 @@ import rebel
 from ....configuration_utils import RBLNModelConfig
 from ....utils.logging import get_logger
 from ...utils.rbln_quantization import RBLNQuantizationConfig
+from .configuration_lora import RBLNLoRAConfig
 
 
 logger = get_logger()
@@ -46,6 +47,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
         quantization: Optional[Union[Dict[str, Any], RBLNQuantizationConfig]] = None,
+        lora_config: Optional[Union[Dict[str, Any], RBLNLoRAConfig]] = None,
         prefill_chunk_size: Optional[int] = None,
         kvcache_num_blocks: Optional[int] = None,
         decoder_batch_sizes: Optional[List[int]] = None,
@@ -78,6 +80,10 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
                 section below for details.
             quantization (Optional[Dict[str, Any]]): Configuration dictionary for applying model
                 quantization. Specifies format, etc.
+            lora_config (Optional[Union[Dict[str, Any], RBLNLoRAConfig]]): Configuration for LoRA
+                (Low-Rank Adaptation) settings when using (multi-)LoRA support. Can be provided as
+                a dictionary or an RBLNLoRAConfig instance. When provided, enables LoRA functionality
+                for the model compilation. Defaults to None (no LoRA).
             prefill_chunk_size (Optional[int]): The chunk size used during the prefill phase for
                 processing input sequences. Defaults to 128. Must be a positive integer
                 divisible by 64. Affects prefill performance and memory usage.
@@ -190,6 +196,26 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         if self.quantization and isinstance(self.quantization, dict):
             self.quantization = RBLNQuantizationConfig(**self.quantization)
 
+        self.lora_config = lora_config
+        if self.lora_config and isinstance(self.lora_config, dict):
+            self.lora_config = RBLNLoRAConfig(**self.lora_config)
+
+        # Validate LoRA adapters if LoRA is enabled
+        if self.lora_config is not None:
+            validation_results = self.lora_config.validate_adapter_weights()
+            failed_adapters = [adapter_id for adapter_id, is_valid in validation_results.items() if not is_valid]
+
+            if failed_adapters:
+                raise ValueError(
+                    f"Some LoRA adapters failed validation and may not be accessible at compile time: {failed_adapters}. "
+                    "Please ensure all adapter weights are available and properly formatted."
+                )
+
+            logger.info(
+                f"LoRA configuration initialized with {self.lora_config.num_adapters} adapters: "
+                f"{self.lora_config.adapter_ids}. Max rank: {self.lora_config.max_lora_rank}"
+            )
+
         self.prefill_chunk_size = prefill_chunk_size or 128
         if self.prefill_chunk_size % 64 != 0 or self.prefill_chunk_size <= 0:
             raise ValueError("`prefill_chunk_size` must be a positive integer divisible by 64.")
@@ -221,3 +247,88 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
     @property
     def use_multiple_decoder(self):
         return isinstance(self.decoder_batch_sizes, list) and len(self.decoder_batch_sizes) > 1
+
+    @property
+    def use_lora(self):
+        """Check if LoRA is enabled for this configuration."""
+        return self.lora_config is not None
+
+    @property
+    def num_lora_adapters(self):
+        """Get the number of LoRA adapters configured for compilation."""
+        if self.lora_config is None:
+            return 0
+        return self.lora_config.num_adapters
+
+    @property
+    def max_lora_rank(self):
+        """Get the maximum LoRA rank across all adapters."""
+        if self.lora_config is None:
+            return 0
+        return self.lora_config.max_lora_rank
+
+    @property
+    def lora_adapter_ids(self):
+        """Get the list of LoRA adapter IDs that will be available at runtime."""
+        if self.lora_config is None:
+            return []
+        return self.lora_config.adapter_ids
+
+    @property
+    def lora_adapter_names(self):
+        """Get the list of LoRA adapter names for human-readable identification."""
+        if self.lora_config is None:
+            return []
+        return self.lora_config.adapter_names
+
+    def get_lora_target_modules(self):
+        """Get the global list of target modules for LoRA application."""
+        if self.lora_config is None:
+            return []
+        return self.lora_config.global_target_modules
+
+    def get_lora_config_dict(self):
+        """Get the complete LoRA configuration as a dictionary."""
+        if self.lora_config is None:
+            return {}
+        return self.lora_config.to_dict()
+
+    def get_lora_adapter_by_id(self, adapter_id: str):
+        """Get a specific LoRA adapter configuration by its ID."""
+        if self.lora_config is None:
+            return None
+        return self.lora_config.get_adapter_by_id(adapter_id)
+
+    def get_lora_adapter_by_name(self, adapter_name: str):
+        """Get a specific LoRA adapter configuration by its name."""
+        if self.lora_config is None:
+            return None
+        return self.lora_config.get_adapter_by_name(adapter_name)
+
+    def validate_lora_adapters(self):
+        """Validate that all LoRA adapter weights are accessible for compilation."""
+        if self.lora_config is None:
+            return {}
+        return self.lora_config.validate_adapter_weights()
+
+    def get_lora_compilation_info(self):
+        """Get information needed for LoRA compilation process."""
+        if self.lora_config is None:
+            return None
+
+        return {
+            "num_adapters": self.num_lora_adapters,
+            "max_rank": self.max_lora_rank,
+            "global_dtype": self.lora_config.global_lora_dtype,
+            "target_modules": self.get_lora_target_modules(),
+            "adapter_paths": [adapter.adapter_path for adapter in self.lora_config.adapters],
+            "adapter_configs": [adapter.to_dict() for adapter in self.lora_config.adapters],
+            "validation_results": self.validate_lora_adapters(),
+        }
+
+    # Backward compatibility properties (deprecated)
+    @property
+    def max_loras(self):
+        """Get the number of LoRA adapters (deprecated, use num_lora_adapters instead)."""
+        logger.warning("max_loras is deprecated, use num_lora_adapters instead")
+        return self.num_lora_adapters
