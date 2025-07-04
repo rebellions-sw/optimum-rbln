@@ -67,15 +67,15 @@ class LLMTest:
 class TestQwen2Model(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen2ForCausalLM
     HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
-    EXPECTED_OUTPUT = " I am a 20 year old girl from the United States. I have been studying English for"
-    HF_CONFIG_KWARGS = {"max_position_embeddings": 1024}
+    EXPECTED_OUTPUT = "?:雨成名ylonclaimer淡elsinki一角一角一角一角一角一角一角一角一角一角一角一角一角"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
 
 
 class TestOptModel(LLMTest.TestLLM):
     RBLN_CLASS = RBLNOPTForCausalLM
     HF_MODEL_ID = "facebook/opt-2.7b"
-    EXPECTED_OUTPUT = "\nI'm a guy who likes to play video games.\nI'm a guy who likes to"
-    HF_CONFIG_KWARGS = {"max_position_embeddings": 2048}
+    EXPECTED_OUTPUT = "????,,,,,,,,,,,,,,,,"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 2048}
 
 
 class TestLlamaForCausalLM(LLMTest.TestLLM):
@@ -132,7 +132,6 @@ class TestLlamaForCausalLM_Multibatch(TestLlamaForCausalLM):
 
 class TestGPT2LMHeadModel(LLMTest.TestLLM):
     RBLN_CLASS = RBLNGPT2LMHeadModel
-    # TEST_LEVEL = TestLevel.FULL
     EXPECTED_OUTPUT = (
         " What kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind"
     )
@@ -262,6 +261,7 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
     PROMPT = "[INST] <image>\nWhat’s shown in this image? [/INST]"
     RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True}}}
     EXPECTED_OUTPUT = "aille kennisSoft /******/ Brunershot childhoodhoodRx̧̧̧̧̧̧̧̧̧̧"
+    HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
 
     @classmethod
     def get_tokenizer(cls):
@@ -305,8 +305,9 @@ class TestBlip2ForConditionalGeneration(LLMTest.TestLLM):
     RBLN_CLASS = RBLNBlip2ForConditionalGeneration
     HF_MODEL_ID = "Salesforce/blip2-opt-2.7b"  # No tiny model yet.
     PROMPT = "Question: Describe this image? Answer:"
-    RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True}}}
+    RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True, "max_seq_len": 1024}}}
     EXPECTED_OUTPUT = "::::::::::::::::::::"
+    HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
 
     @classmethod
     def get_tokenizer(cls):
@@ -322,6 +323,11 @@ class TestBlip2ForConditionalGeneration(LLMTest.TestLLM):
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 1
         kwargs = {"text_config": text_config}
+
+        qformer_config = json.loads(config.qformer_config.to_json_string())
+        qformer_config["num_hidden_layers"] = 1
+        kwargs["qformer_config"] = qformer_config
+
         cls.HF_CONFIG_KWARGS.update(kwargs)
         return super().setUpClass()
 
@@ -348,10 +354,10 @@ class TestBlip2ForConditionalGeneration(LLMTest.TestLLM):
 class TestIdefics3ForConditionalGeneration(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
     RBLN_CLASS = RBLNIdefics3ForConditionalGeneration
-    TEST_LEVEL = TestLevel.FULL
     HF_MODEL_ID = "hf-internal-testing/tiny-random-Idefics3ForConditionalGeneration"
     PROMPT = [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": "Describe this image."}]}]
     RBLN_CLASS_KWARGS = {"rbln_config": {"text_model": {"use_inputs_embeds": True, "attn_impl": "flash_attn"}}}
+    HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
 
     @classmethod
     def get_tokenizer(cls):
@@ -359,7 +365,6 @@ class TestIdefics3ForConditionalGeneration(LLMTest.TestLLM):
             cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
         return cls._tokenizer
 
-    # override
     @classmethod
     def setUpClass(cls):
         config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
@@ -383,7 +388,6 @@ class TestIdefics3ForConditionalGeneration(LLMTest.TestLLM):
 class TestQwen2_5_VLForConditionalGeneration(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
     RBLN_CLASS = RBLNQwen2_5_VLForConditionalGeneration
-    TEST_LEVEL = TestLevel.FULL
     HF_MODEL_ID = "Qwen/Qwen2.5-VL-3B-Instruct"  # No tiny model yet.
     PROMPT = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>Describe this image.<|im_end|>\n<|im_start|>assistant\n"
     RBLN_CLASS_KWARGS = {
@@ -398,6 +402,16 @@ class TestQwen2_5_VLForConditionalGeneration(LLMTest.TestLLM):
     HF_CONFIG_KWARGS = {
         "num_hidden_layers": 1,
     }
+
+    @classmethod
+    def setUpClass(cls):
+        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
+        vision_config = json.loads(config.vision_config.to_json_string())
+        vision_config["depth"] = 8
+        vision_config["fullatt_block_indexes"] = [7]
+        kwargs = {"vision_config": vision_config}
+        cls.HF_CONFIG_KWARGS.update(kwargs)
+        return super().setUpClass()
 
     @classmethod
     def get_tokenizer(cls):
