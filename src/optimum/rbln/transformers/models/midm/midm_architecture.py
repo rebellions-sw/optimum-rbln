@@ -20,7 +20,6 @@ import torch.nn as nn
 
 from ..decoderonly.decoderonly_architecture import (
     DecoderOnlyAttention,
-    DecoderOnlyForCausalLM,
     DecoderOnlyLayer,
     DecoderOnlyModel,
     DecoderOnlyWrapper,
@@ -55,27 +54,20 @@ class MidmLMHeadModelWrapper(DecoderOnlyWrapper):
         self.config.partial_rotary_factor = self.config.rotary_percentage
         return super().get_rotary_emb(max_seq_len=max_seq_len)
 
-    def convert_to_rbln_causal_lm(self, causal_lm: "MidmLMHeadModel", max_seq_len: int):
-        if self.attn_impl != "eager":
-            raise NotImplementedError(f"flash attention ({self.attn_impl}) is not implemented for {self.__class__}")
-        new_layers = []
-        for layer in causal_lm.transformer.h:
-            new_self_attn = MidmAttention(
-                layer.attn,
-                self.use_attention_mask,
-                kvcache_block_size=self.kvcache_block_size,
-                use_position_ids=self.use_position_ids,
-            )
-            new_layer = MidmLayer(layer, new_self_attn)
-            new_layers.append(new_layer)
-        new_model = MidmModel(
-            causal_lm.transformer,
-            new_layers,
-            max_seq_len=max_seq_len,
-            sliding_window_layers=self.sliding_window_layers,
-        )
-        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
-        return new_causal_lm
+    def get_rbln_attn_class(self):
+        return MidmAttention
+
+    def get_rbln_layer_class(self):
+        return MidmLayer
+
+    def get_rbln_model_class(self):
+        return MidmModel
+
+    def get_model_layer(self, causal_lm: "MidmLMHeadModel"):
+        return causal_lm.transformer
+
+    def get_decoder_layers(self, causal_lm: "MidmLMHeadModel"):
+        return causal_lm.transformer.h
 
 
 class MidmModel(DecoderOnlyModel):

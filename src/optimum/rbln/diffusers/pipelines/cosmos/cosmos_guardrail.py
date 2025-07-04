@@ -130,7 +130,8 @@ class RBLNSigLIPEncoder(SigLIPEncoder):
                 self.checkpoint_dir,
                 rbln_device=rbln_config.siglip_encoder.device,
                 rbln_create_runtimes=rbln_config.siglip_encoder.create_runtimes,
-                rbln_activate_profiler=rbln_config.aegis.activate_profiler,
+                rbln_activate_profiler=rbln_config.siglip_encoder.activate_profiler,
+                rbln_optimize_host_memory=rbln_config.siglip_encoder.optimize_host_memory,
             )
         else:
             super().__init__(model_name, checkpoint_id)
@@ -143,6 +144,7 @@ class RBLNSigLIPEncoder(SigLIPEncoder):
                 rbln_npu=rbln_config.siglip_encoder.npu,
                 rbln_create_runtimes=rbln_config.siglip_encoder.create_runtimes,
                 rbln_activate_profiler=rbln_config.siglip_encoder.activate_profiler,
+                rbln_optimize_host_memory=rbln_config.siglip_encoder.optimize_host_memory,
             )
         self.rbln_config = rbln_config
 
@@ -339,6 +341,7 @@ class RBLNAegis(Aegis):
                 rbln_device=rbln_config.aegis.device,
                 rbln_create_runtimes=rbln_config.aegis.create_runtimes,
                 rbln_activate_profiler=rbln_config.aegis.activate_profiler,
+                rbln_optimize_host_memory=rbln_config.aegis.optimize_host_memory,
             )
 
         else:
@@ -353,6 +356,7 @@ class RBLNAegis(Aegis):
                 rbln_create_runtimes=rbln_config.aegis.create_runtimes,
                 rbln_npu=rbln_config.aegis.npu,
                 rbln_activate_profiler=rbln_config.aegis.activate_profiler,
+                rbln_optimize_host_memory=rbln_config.aegis.optimize_host_memory,
             )
 
         self.rbln_config = rbln_config
@@ -391,13 +395,18 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker):
         self.text_guardrail = GuardrailRunner(
             safety_models=[
                 Blocklist(COSMOS_GUARDRAIL_CHECKPOINT),  # Changed since it cannot be saved
-                RBLNAegis(checkpoint_id, aegis_model_id, aegis_adapter_id, rbln_config=rbln_config),
+                RBLNAegis(
+                    checkpoint_id=checkpoint_id,
+                    base_model_id=aegis_model_id,
+                    aegis_adapter=aegis_adapter_id,
+                    rbln_config=rbln_config,
+                ),
             ]
         )
 
         self.video_guardrail = GuardrailRunner(
-            safety_models=[RBLNVideoContentSafetyFilter(checkpoint_id, rbln_config=rbln_config)],
-            postprocessors=[RBLNRetinaFaceFilter(checkpoint_id, rbln_config=rbln_config)],
+            safety_models=[RBLNVideoContentSafetyFilter(checkpoint_id=checkpoint_id, rbln_config=rbln_config)],
+            postprocessors=[RBLNRetinaFaceFilter(checkpoint_id=checkpoint_id, rbln_config=rbln_config)],
         )
 
         self.rbln_config = rbln_config

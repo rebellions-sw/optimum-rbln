@@ -13,25 +13,19 @@
 # limitations under the License.
 
 import copy
-from typing import TYPE_CHECKING, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
 import torch
 from transformers.models.gemma3.modeling_gemma3 import Gemma3RMSNorm
 
 from ..decoderonly.decoderonly_architecture import (
     DecoderOnlyAttention,
-    DecoderOnlyFlashAttention,
-    DecoderOnlyForCausalLM,
     DecoderOnlyLayer,
     DecoderOnlyModel,
     DecoderOnlyWrapper,
     RotaryEmbedding,
     slice_and_unsqueeze_cos_sin,
 )
-
-
-if TYPE_CHECKING:
-    from transformers import Gemma3ForCausalLM
 
 
 class Gemma3ForCausalLMWrapper(DecoderOnlyWrapper):
@@ -45,49 +39,14 @@ class Gemma3ForCausalLMWrapper(DecoderOnlyWrapper):
 
         return (rotary_emb_global, rotary_emb_local)
 
-    def convert_to_rbln_causal_lm(self, causal_lm: "Gemma3ForCausalLM", max_seq_len: int):
-        new_layers = []
-        for layer_idx, layer in enumerate(causal_lm.model.layers):
-            if layer_idx in self.sliding_window_layers:
-                new_self_attn = Gemma3Attention(
-                    layer.self_attn,
-                    use_attention_mask=None,  # FIXME: no use in SWA
-                    use_position_ids=self.use_position_ids,
-                    kvcache_block_size=self.config.sliding_window,
-                    is_sliding=True,
-                )
-            else:
-                if self.attn_impl == "eager":
-                    new_self_attn = Gemma3Attention(
-                        layer.self_attn,
-                        use_attention_mask=self.use_attention_mask,
-                        use_position_ids=self.use_position_ids,
-                        kvcache_block_size=self.kvcache_block_size,
-                        is_sliding=False,
-                    )
-                elif self.attn_impl == "flash_attn":
-                    new_self_attn = Gemma3FlashAttention(
-                        layer.self_attn,
-                        kvcache_partition_len=self.kvcache_partition_len,
-                        use_attention_mask=self.use_attention_mask,
-                        kvcache_block_size=self.kvcache_block_size,
-                        use_position_ids=self.use_position_ids,
-                    )
-                else:
-                    raise NotImplementedError(f"Unknwon attn : {self.attn_impl}")
+    def get_rbln_attn_class(self):
+        return Gemma3Attention
 
-            new_layer = Gemma3DecoderLayer(layer, new_self_attn)
-            new_layers.append(new_layer)
+    def get_rbln_layer_class(self):
+        return Gemma3DecoderLayer
 
-        new_model = Gemma3TextModel(
-            causal_lm.model,
-            new_layers,
-            partition_len=self.kvcache_partition_len,
-            max_seq_len=max_seq_len,
-            sliding_window_layers=self.sliding_window_layers,
-        )
-        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
-        return new_causal_lm
+    def get_rbln_model_class(self):
+        return Gemma3TextModel
 
 
 class Gemma3TextModel(DecoderOnlyModel):
@@ -189,19 +148,6 @@ class Gemma3DecoderLayer(DecoderOnlyLayer):
 
 
 class Gemma3Attention(DecoderOnlyAttention):
-    def __post_init__(self):
-        self.q_proj = self._original_mod.q_proj
-        self.k_proj = self._original_mod.k_proj
-        self.v_proj = self._original_mod.v_proj
-        self.o_proj = self._original_mod.o_proj
-        self.q_norm = self._original_mod.q_norm
-        self.k_norm = self._original_mod.k_norm
-
-    def get_attn_scale(self):
-        return self._original_mod.config.query_pre_attn_scalar**-0.5
-
-
-class Gemma3FlashAttention(DecoderOnlyFlashAttention):
     def __post_init__(self):
         self.q_proj = self._original_mod.q_proj
         self.k_proj = self._original_mod.k_proj
