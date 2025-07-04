@@ -231,14 +231,15 @@ class DecoderOnlyWrapper(nn.Module):
     def convert_to_rbln_causal_lm(self, causal_lm: PreTrainedModel, max_seq_len: int):
         new_layers = []
         for layer_idx, layer in enumerate(self.get_decoder_layers(causal_lm)):
+            is_sliding = layer_idx in self.sliding_window_layers
             new_self_attn = self.get_rbln_attn_class()(
                 self.get_attn_layer(layer),
-                self.use_attention_mask,
+                self.use_attention_mask if is_sliding else False,
                 self.use_position_ids,
                 kvcache_block_size=self.sliding_window
                 if layer_idx in self.sliding_window_layers
                 else self.kvcache_block_size,
-                is_sliding=layer_idx in self.sliding_window_layers,
+                is_sliding=is_sliding,
                 attn_impl=self.attn_impl,
                 kvcache_partition_len=self.kvcache_partition_len,
             )
@@ -721,8 +722,8 @@ class DecoderOnlyAttention(nn.Module):
         self.is_sliding = is_sliding
         self.attn_impl = attn_impl
 
-        if self.is_sliding and self.attn_impl != "eager":
-            raise NotImplementedError("Sliding window attention is only supported with eager attention.")
+        if self.is_sliding and self.attn_impl != "flash_attn":
+            raise NotImplementedError("Sliding window attention is only supported with flash attention.")
 
         self.kvcache_partition_len = kvcache_partition_len
 
@@ -1151,8 +1152,8 @@ class FlashAttentionOp(AttentionOp):
 class SlidingWindowAttentionOp(AttentionOp):
     def get_attn_op_name(self):
         phase = "decode" if self.phase == "decode" else "prefill"
-        if self.use_attention_mask:
-            raise NotImplementedError("Attention mask is not supported for sliding window attention.")
+        if not self.use_attention_mask:
+            raise NotImplementedError("Attention mask is needed for sliding window attention.")
 
         attn_op_name = "paged_sliding_window_attn_" + phase
         return attn_op_name
