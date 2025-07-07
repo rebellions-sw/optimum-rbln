@@ -108,6 +108,7 @@ _import_structure = {
     ],
     "llama": ["RBLNLlamaForCausalLM", "RBLNLlamaForCausalLMConfig"],
     "opt": ["RBLNOPTForCausalLM", "RBLNOPTForCausalLMConfig"],
+    "llava": ["RBLNLlavaForConditionalGeneration", "RBLNLlavaForConditionalGenerationConfig"],
     "llava_next": ["RBLNLlavaNextForConditionalGeneration", "RBLNLlavaNextForConditionalGenerationConfig"],
     "midm": ["RBLNMidmLMHeadModel", "RBLNMidmLMHeadModelConfig"],
     "mistral": ["RBLNMistralForCausalLM", "RBLNMistralForCausalLMConfig"],
@@ -230,6 +231,7 @@ if TYPE_CHECKING:
         RBLNIdefics3VisionTransformerConfig,
     )
     from .llama import RBLNLlamaForCausalLM, RBLNLlamaForCausalLMConfig
+    from .llava import RBLNLlavaForConditionalGeneration, RBLNLlavaForConditionalGenerationConfig
     from .llava_next import RBLNLlavaNextForConditionalGeneration, RBLNLlavaNextForConditionalGenerationConfig
     from .midm import RBLNMidmLMHeadModel, RBLNMidmLMHeadModelConfig
     from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig
