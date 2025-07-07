@@ -36,7 +36,6 @@ logger = get_logger(__name__)
 
 class RBLNModel(RBLNBaseModel):
     _output_class = None
-    _runtime_timeout = None
 
     @classmethod
     def update_kwargs(cls, kwargs):
@@ -239,7 +238,6 @@ class RBLNModel(RBLNBaseModel):
                 tensor_type="pt",
                 device=rbln_config.device_map[DEFAULT_COMPILED_MODEL_NAME],
                 activate_profiler=rbln_config.activate_profiler,
-                timeout=cls._runtime_timeout,
             )
             for compiled_model in compiled_models
         ]

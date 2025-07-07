@@ -98,7 +98,6 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
 
     hf_library_name = "diffusers"
     auto_model_class = CosmosTransformer3DModel
-    _runtime_timeout = 120
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
@@ -280,7 +279,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
                 tensor_type="pt",
                 device=rbln_config.device_map[DEFAULT_COMPILED_MODEL_NAME],
                 activate_profiler=rbln_config.activate_profiler,
-                timeout=cls._runtime_timeout,
+                timeout=120,
             )
             for compiled_model in compiled_models
         ]

@@ -884,14 +884,12 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
                 tensor_type="pt",
                 device=rbln_config.device_map["prefill"],
                 activate_profiler=rbln_config.activate_profiler,
-                timeout=cls._runtime_timeout,
             ),
             rebel.Runtime(
                 compiled_models[1],
                 tensor_type="pt",
                 device=rbln_config.device_map["image_prefill"],
                 activate_profiler=rbln_config.activate_profiler,
-                timeout=cls._runtime_timeout,
             ),
             *[
                 rebel.Runtime(
@@ -899,7 +897,6 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
                     tensor_type="pt",
                     device=rbln_config.device_map[f"decoder_batch_{batch_size}"],
                     activate_profiler=rbln_config.activate_profiler,
-                    timeout=cls._runtime_timeout,
                 )
                 for i, batch_size in enumerate(rbln_config.decoder_batch_sizes)
             ],
