@@ -234,7 +234,7 @@ class DecoderOnlyWrapper(nn.Module):
             is_sliding = layer_idx in self.sliding_window_layers
             new_self_attn = self.get_rbln_attn_class()(
                 self.get_attn_layer(layer),
-                self.use_attention_mask,
+                self.use_attention_mask if not is_sliding else True,
                 self.use_position_ids,
                 kvcache_block_size=self.sliding_window
                 if layer_idx in self.sliding_window_layers
