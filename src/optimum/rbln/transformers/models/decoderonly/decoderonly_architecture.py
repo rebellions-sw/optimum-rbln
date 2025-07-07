@@ -721,10 +721,6 @@ class DecoderOnlyAttention(nn.Module):
         self.use_position_ids = use_position_ids
         self.is_sliding = is_sliding
         self.attn_impl = attn_impl
-
-        if self.is_sliding and self.attn_impl != "flash_attn":
-            raise NotImplementedError("Sliding window attention is only supported with flash attention.")
-
         self.kvcache_partition_len = kvcache_partition_len
 
         setattr(self, self.get_attention_name(), self.create_attention_op())
