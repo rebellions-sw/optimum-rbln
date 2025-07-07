@@ -870,7 +870,7 @@ class AttentionOp(nn.Module):
 
     def get_attn_op_name(self):
         phase = "decode" if self.phase == "decode" else "prefill"
-        if self.use_attention_mask:
+        if self.use_attention_mask and not self.use_position_ids:
             attn_op_name = "paged_attn_"
         else:
             attn_op_name = "paged_causal_attn_"
@@ -1071,7 +1071,7 @@ class FlashAttentionOp(AttentionOp):
 
     def get_attn_op_name(self):
         phase = "decode" if self.phase == "decode" else "prefill"
-        if self.use_attention_mask:
+        if self.use_attention_mask and not self.use_position_ids:
             attn_op_name = "paged_flash_attn_"
         else:
             attn_op_name = "paged_flash_causal_attn_"
@@ -1125,7 +1125,7 @@ class FlashAttentionOp(AttentionOp):
             "partition": self.kvcache_partition_size,
         }
 
-        if self.use_attention_mask != self.use_position_ids:
+        if self.use_attention_mask:
             op_args["mask"] = attn_mask
 
         if self.phase == "prefill" or self.phase == "image_prefill":
