@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+from huggingface_hub import snapshot_download
+
 from ....configuration_utils import RBLNSerializableConfigProtocol
 from ....utils.logging import get_logger
 
@@ -19,7 +21,7 @@ class RBLNLoRAAdapterConfig(RBLNSerializableConfigProtocol):
 
     def __init__(
         self,
-        adapter_id: str,
+        adapter_id: int,
         adapter_name: str,
         adapter_path: Union[str, Path],
         r: Optional[int] = None,
@@ -32,7 +34,7 @@ class RBLNLoRAAdapterConfig(RBLNSerializableConfigProtocol):
     ):
         """
         Args:
-            adapter_id (str): Unique identifier for this LoRA adapter (e.g., "0", "1", "adapter_0").
+            adapter_id (int): Unique identifier for this LoRA adapter (e.g., 0, 1, 2).
                 This ID will be used during runtime to select which adapter to use.
             adapter_name (str): Human-readable name for this adapter (e.g., "math_tuned", "code_tuned").
             adapter_path (Union[str, Path]): Path to the LoRA adapter weights directory or file.
@@ -48,13 +50,16 @@ class RBLNLoRAAdapterConfig(RBLNSerializableConfigProtocol):
             **kwargs: Additional adapter-specific arguments.
 
         Raises:
-            ValueError: If adapter_id is empty or None.
+            ValueError: If adapter_id is None.
             ValueError: If adapter_path doesn't exist.
             ValueError: If r is not a positive integer.
             ValueError: If lora_alpha is not positive.
         """
-        if not adapter_id:
-            raise ValueError("adapter_id cannot be empty or None")
+        if adapter_id is None:
+            raise ValueError("adapter_id cannot be None")
+
+        if not isinstance(adapter_id, int):
+            raise ValueError(f"adapter_id must be an integer, got {type(adapter_id)}")
 
         # Set default values
         r = r if r is not None else 8
@@ -75,11 +80,12 @@ class RBLNLoRAAdapterConfig(RBLNSerializableConfigProtocol):
 
         self.adapter_id = adapter_id
         self.adapter_name = adapter_name
+
+        # Keep original adapter_path as provided by user (for serialization)
         self.adapter_path = Path(adapter_path)
 
-        # Validate that the adapter path exists
-        if not self.adapter_path.exists():
-            raise ValueError(f"LoRA adapter path does not exist: {self.adapter_path}")
+        # Resolve to local directory path (for actual weight loading)
+        self.local_adapter_path = self._resolve_adapter_path(adapter_path)
 
         self.r = r
         self.lora_alpha = lora_alpha
@@ -88,6 +94,39 @@ class RBLNLoRAAdapterConfig(RBLNSerializableConfigProtocol):
         self.use_rslora = use_rslora
         self.use_dora = use_dora
         self.scaling_factor = scaling_factor
+
+    def _resolve_adapter_path(self, path: Path) -> Path:
+        """
+        Resolve the adapter path, downloading from HuggingFace Hub if necessary.
+
+        Args:
+            adapter_path: Local path or HuggingFace Hub model ID
+
+        Returns:
+            Path object pointing to local adapter directory
+
+        Raises:
+            ValueError: If the adapter cannot be found locally or downloaded
+        """
+        # If it's a local path and exists, return it
+        if path.exists():
+            return path
+
+        # If it's an absolute path that doesn't exist, raise error
+        if path.is_absolute():
+            raise ValueError(f"LoRA adapter path does not exist: {path.as_posix()}")
+
+        # Try to interpret as HuggingFace Hub model ID and download
+        try:
+            logger.info(f"Downloading LoRA adapter from HuggingFace Hub: {path.as_posix()}")
+            local_dir = snapshot_download(str(path), allow_patterns=["*.safetensors", "*.bin", "*.json"])
+            return Path(local_dir)
+        except Exception as e:
+            raise ValueError(
+                f"Failed to download LoRA adapter '{path.as_posix()}' from HuggingFace Hub. "
+                f"Please check if the model ID is correct or provide a valid local path. "
+                f"Error: {e}"
+            )
 
     def _prepare_for_serialization(self) -> Dict[str, Any]:
         config_dict = {
@@ -236,7 +275,7 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
         return len(self.adapters)
 
     @property
-    def adapter_ids(self) -> List[str]:
+    def adapter_ids(self) -> List[int]:
         """Get list of all adapter IDs."""
         return [adapter.adapter_id for adapter in self.adapters]
 
@@ -245,7 +284,7 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
         """Get list of all adapter names."""
         return [adapter.adapter_name for adapter in self.adapters]
 
-    def get_adapter_by_id(self, adapter_id: str) -> Optional[RBLNLoRAAdapterConfig]:
+    def get_adapter_by_id(self, adapter_id: int) -> Optional[RBLNLoRAAdapterConfig]:
         """Get an adapter configuration by its ID."""
         for adapter in self.adapters:
             if adapter.adapter_id == adapter_id:
@@ -259,13 +298,13 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
                 return adapter
         return None
 
-    def validate_adapter_weights(self) -> Dict[str, bool]:
+    def validate_adapter_weights(self) -> Dict[int, bool]:
         """Validate that all adapter weights are accessible at compile time."""
         validation_results = {}
         for adapter in self.adapters:
             try:
                 # Check if adapter path exists and contains expected files
-                adapter_path = adapter.adapter_path
+                adapter_path = adapter.local_adapter_path
                 if adapter_path.is_file():
                     # Single file adapter (e.g., safetensors)
                     validation_results[adapter.adapter_id] = adapter_path.exists()

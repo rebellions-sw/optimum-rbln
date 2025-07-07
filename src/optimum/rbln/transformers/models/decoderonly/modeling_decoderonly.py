@@ -192,6 +192,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         position_ids: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
+        adapter_id: Optional[torch.Tensor] = None,
     ):
         if input_ids is None and inputs_embeds is None:
             raise ValueError("Either `input_ids` or `inputs_embeds` must be provided.")
@@ -217,6 +218,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 position_embed=position_embed,
                 position_ids=position_ids,
                 local_block_tables=local_block_tables,
+                adapter_id=adapter_id,
             )
         else:
             return self.prefill_forward(
@@ -229,6 +231,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 position_embed=position_embed,
                 token_type_ids=token_type_ids,
                 local_block_tables=local_block_tables,
+                adapter_id=adapter_id,
             )
 
     def decode_forward(
@@ -241,6 +244,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         position_embed: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
+        adapter_id: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         batch_size = inputs.shape[0]
         if batch_size != self.batch_size:
@@ -281,6 +285,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_embed,
             attention_mask if self.rbln_config.use_attention_mask else None,
             position_ids if self.rbln_config.use_position_ids else None,
+            adapter_id if self.rbln_config.use_lora else None,
         )
 
         return RBLNDecoderOnlyOutput(logits=logits)
@@ -378,6 +383,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         position_embed: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
+        adapter_id: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         """
         Performs chunked prefill for efficient KV-cache updates and memory optimization.
@@ -434,6 +440,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 query_position,
                 chunked_attention_mask if self.rbln_config.use_attention_mask else None,
                 position_ids_chunk if self.rbln_config.use_position_ids else None,
+                adapter_id if self.rbln_config.use_lora else None,
                 out=out_buffers,
             )
 
@@ -649,6 +656,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             "cache_impl": rbln_config.cache_impl,
             "sliding_window": rbln_config.sliding_window,
             "sliding_window_layers": rbln_config.sliding_window_layers,
+            "lora_config": rbln_config.lora_config,
         }
         return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
 
@@ -910,6 +918,10 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         if rbln_config.use_position_ids:
             input_info.append(("position_ids", [batch_size, query_length], "int32"))
 
+        # 6. adapter_id (for LoRA)
+        if rbln_config.use_lora:
+            input_info.append(("adapter_id", [batch_size], "int32"))
+
         # 6. past_key_values
         global_kvcache_shape = [
             rbln_config.kvcache_num_blocks,
@@ -1113,6 +1125,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         attention_mask: Optional[torch.LongTensor] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
         padded_cache_lengths: Optional[torch.Tensor] = None,
+        adapter_id: Optional[torch.Tensor] = None,
         **kwargs,
     ):
         model_inputs = {}
@@ -1151,6 +1164,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 "generate_idx": generate_idx,
                 "position_ids": position_ids,
                 "padded_cache_lengths": padded_cache_lengths,
+                "adapter_id": adapter_id,
             }
         )
 
@@ -1178,6 +1192,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         padded_cache_lengths: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
+        adapter_id: Optional[torch.Tensor] = None,
         return_dict: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
@@ -1200,6 +1215,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     cache_position=cache_position,
                     batch_idx=b_idx,
                     token_type_ids=token_type_ids[b_idx : b_idx + 1] if token_type_ids is not None else None,
+                    adapter_id=adapter_id[b_idx : b_idx + 1] if adapter_id is not None else None,
                 )
                 padded_cache_lengths[b_idx] += output.padded_cache_lengths
                 logits.append(output.logits)
@@ -1219,6 +1235,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
                 position_ids=position_ids if self.rbln_config.use_position_ids else None,
+                adapter_id=adapter_id,
             ).logits
 
         if not return_dict:
