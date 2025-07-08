@@ -53,7 +53,7 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
             ValueError: If batch_size is not a positive integer.
         """
         if kwargs["timeout"] is None:
-            kwargs["timeout"] = 120
+            kwargs["timeout"] = 80
 
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
