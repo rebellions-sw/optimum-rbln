@@ -1027,7 +1027,8 @@ class RotaryEmbedding(nn.Module):
             rope_type = "default"
 
         inv_freq, attention_scaling = ROPE_INIT_FUNCTIONS[rope_type](config, max_seq_len_cached)
-        cache_position = torch.arange(0, max_seq_len_cached, dtype=torch.float32)
+        torch_dtype = getattr(config, "torch_dtype", torch.float32)
+        cache_position = torch.arange(0, max_seq_len_cached, dtype=torch_dtype)
         cache_position_expanded = cache_position[:, None]
 
         if rope_type == "dynamic":
@@ -1040,6 +1041,8 @@ class RotaryEmbedding(nn.Module):
 
         cos = emb.cos() * attention_scaling
         sin = emb.sin() * attention_scaling
+        cos = cos.to(torch_dtype)
+        sin = sin.to(torch_dtype)
 
         self.register_buffer("_cos_cached", cos, persistent=False)
         self.register_buffer("_sin_cached", sin, persistent=False)
