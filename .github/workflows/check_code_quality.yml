@@ -35,3 +35,7 @@ jobs:
         run: |
           uv run --no-sync ruff format --check .
           uv run --no-sync ruff check .
+
+      - name: Type check with pyright
+        run: |
+          uv run --no-sync pyright --warnings

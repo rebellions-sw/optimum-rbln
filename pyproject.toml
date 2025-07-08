@@ -60,6 +60,7 @@ quality = [
     "ruff>=0.3.3",
     "isort>=5.13.2",
     "hf-doc-builder>=0.5.0",
+    "pyright>=1.1.350",
 ]
 deploy = [
     "twine>=6.0.1",
@@ -127,3 +128,14 @@ known-third-party = ["optimum"]
 [tool.ruff.lint.per-file-ignores]
 # Ignore import violations in all `__init__.py` files.
 "__init__.py" = ["E402", "F401", "F403", "F811"]
+
+[tool.pyright]
+include = ["src"]
+exclude = ["**/__pycache__", "build", "dist"]
+reportUnusedVariable = "warning"
+reportUnusedFunction = "warning"
+reportUnusedClass = "warning"
+reportDuplicateImport = "warning"
+reportImportCycles = "warning"
+pythonVersion = "3.9"
+pythonPlatform = "Linux"
