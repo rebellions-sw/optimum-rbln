@@ -6,7 +6,11 @@ import safetensors.torch
 import torch
 from torch import nn
 
+from ....utils import logging
 from .configuration_lora import RBLNLoRAConfig
+
+
+logger = logging.get_logger()
 
 
 class LoRALinear(nn.Module):
@@ -104,9 +108,9 @@ class LoRALinear(nn.Module):
 
             adapter_weights = self._load_adapter_weights(adapter.local_adapter_path)
 
-            layer_key = f"model.layers.{self.layer_idx}.self_attn.{self.projection_name}"
-            lora_a_key = f"{layer_key}.lora_A.default.weight"
-            lora_b_key = f"{layer_key}.lora_B.default.weight"
+            layer_key = f"base_model.model.model.layers.{self.layer_idx}.self_attn.{self.projection_name}"
+            lora_a_key = f"{layer_key}.lora_A.weight"
+            lora_b_key = f"{layer_key}.lora_B.weight"
 
             if lora_a_key in adapter_weights and lora_b_key in adapter_weights:
                 lora_a_weights.append(adapter_weights[lora_a_key])
@@ -118,6 +122,7 @@ class LoRALinear(nn.Module):
                     scaling = scaling / math.sqrt(adapter.r)
                 scaling_factors.append(scaling * adapter.scaling_factor)
             else:
+                logger.warning(f"No LoRA weights found for {lora_a_key} or {lora_b_key}")
                 lora_a_weights.append(torch.zeros(adapter.r, self.in_features))
                 lora_b_weights.append(torch.zeros(self.out_features, adapter.r))
                 scaling_factors.append(0.0)
@@ -148,27 +153,27 @@ class LoRALinear(nn.Module):
         self.register_buffer("lora_b_weights", torch.stack(padded_lora_b, dim=self.lora_config.lora_b_stack_dim))
         self.register_buffer("scaling_factors", torch.tensor(scaling_factors, dtype=torch.float32))
 
-    def forward(self, x: torch.Tensor, adapter_id: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, lora_int_id: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Forward pass that combines base linear transformation with LoRA.
 
         Args:
             x: Input tensor [batch_size, seq_len, in_features]
-            adapter_id: Adapter ID tensor [batch_size] indicating which adapter to use
+            lora_int_id: Adapter ID tensor [batch_size] indicating which adapter to use
 
         Returns:
             Output tensor [batch_size, seq_len, out_features]
         """
-        if self._should_apply_lora() and adapter_id is not None:
+        if self._should_apply_lora() and lora_int_id is not None:
             # Use custom op to apply base linear + LoRA in one operation
-            output = torch.ops.rbln_custom_ops.lora_linear_fused(
+            output = torch.ops.rbln_custom_ops.linear_lora(
                 x,
                 self.weight,
                 self.bias,
                 self.lora_a_weights,
                 self.lora_b_weights,
                 self.scaling_factors,
-                adapter_id,
+                lora_int_id,
             )
         else:
             # Standard linear transformation
