@@ -283,7 +283,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_ids if self.rbln_config.use_position_ids else None,
         )
 
-        return RBLNRBLNDecoderOnlyForCausalLMOutput(logits=logits)
+        return RBLNDecoderOnlyForCausalLMOutput(logits=logits)
 
     def _prepare_prefill_inputs(
         self,
@@ -442,7 +442,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             self.dec_attn_mask[batch_idx].fill_(0)
             self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
 
-        return RBLNRBLNDecoderOnlyForCausalLMOutput(logits=logits, padded_cache_lengths=padded_cache_lengths)
+        return RBLNDecoderOnlyForCausalLMOutput(logits=logits, padded_cache_lengths=padded_cache_lengths)
 
 
 @dataclass
@@ -1162,7 +1162,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
     def _update_model_kwargs_for_generation(
         self,
-        outputs: RBLNRBLNDecoderOnlyForCausalLMOutput,
+        outputs: RBLNDecoderOnlyForCausalLMOutput,
         model_kwargs: Dict[str, Any],
         **kwargs,
     ) -> Dict[str, Any]:
@@ -1228,6 +1228,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         if not return_dict:
             return logits, generate_idx, padded_cache_lengths
         else:
-            return RBLNRBLNDecoderOnlyForCausalLMOutput(
+            return RBLNDecoderOnlyForCausalLMOutput(
                 logits=logits, generate_idx=generate_idx, padded_cache_lengths=padded_cache_lengths
             )
