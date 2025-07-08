@@ -1000,7 +1000,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         if rbln_config.max_seq_len is None:
             raise ValueError("`max_seq_len` should be specified.")
 
-        rbln_config.torch_dtype = getattr(model_config, "torch_dtype", "float32")
+        torch_dtype = getattr(model_config, "torch_dtype", torch.float32)
+        rbln_config.torch_dtype = RBLNCompileConfig.normalize_dtype(torch_dtype)
 
         if getattr(model_config, "sliding_window", None) is not None and getattr(
             model_config, "use_sliding_window", True
