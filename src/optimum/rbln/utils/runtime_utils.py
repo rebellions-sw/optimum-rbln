@@ -147,7 +147,13 @@ class ContextRblnConfig:
     _local = threading.local()
 
     def __init__(
-        self, device=None, device_map=None, create_runtimes=None, optimize_host_mem=None, activate_profiler=None, timeout=None,
+        self,
+        device=None,
+        device_map=None,
+        create_runtimes=None,
+        optimize_host_mem=None,
+        activate_profiler=None,
+        timeout=None,
     ):
         self.device = device
         self.device_map = device_map
@@ -181,5 +187,5 @@ class ContextRblnConfig:
             "create_runtimes": getattr(cls._local, "create_runtimes", None),
             "optimize_host_memory": getattr(cls._local, "optimize_host_memory", None),
             "activate_profiler": getattr(cls._local, "activate_profiler", None),
-            "timeout": getattr(cls._local, "timeout", None)
+            "timeout": getattr(cls._local, "timeout", None),
         }
