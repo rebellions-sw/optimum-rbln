@@ -75,8 +75,7 @@ class RBLNCosmosSafetyCheckerConfig(RBLNModelConfig):
         if height is not None and width is not None:
             image_size = (height, width)
 
-        if kwargs["tensor_parallel_size"] is None:
-            tensor_parallel_size = 4
+        tensor_parallel_size = kwargs.get("tensor_parallel_size")
 
         self.aegis = self.init_submodule_config(
             RBLNLlamaForCausalLMConfig,
