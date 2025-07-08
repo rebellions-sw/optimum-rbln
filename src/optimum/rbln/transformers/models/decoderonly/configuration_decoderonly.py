@@ -52,6 +52,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         cache_impl: Optional[CacheImplType] = None,
         sliding_window: Optional[int] = None,
         sliding_window_layers: Optional[List[int]] = None,
+        torch_dtype: Optional[str] = None,
         **kwargs,
     ):
         """
@@ -98,6 +99,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
                 you must specify the `sliding_window` size and optionally `sliding_window_layers` for hybrid mode.
             sliding_window (Optional[int]): The size of the sliding window. Defaults to None.
             sliding_window_layers (Optional[List[int]]): The layers to use for the sliding window used in the hybrid model. Defaults to None.
+            torch_dtype (Optional[str]): The data type to use for the model. Defaults to "float32".
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -217,6 +219,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         self.cache_impl = cache_impl or "static"
         self.sliding_window = sliding_window
         self.sliding_window_layers = sliding_window_layers or []
+        self.torch_dtype = torch_dtype or "float32"
 
     @property
     def use_multiple_decoder(self):

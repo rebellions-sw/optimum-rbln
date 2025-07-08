@@ -312,7 +312,13 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
         # Initialize attention mask for chunked processing
         chunked_attention_mask = (
-            torch.zeros(1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.max_seq_len, dtype=torch.float32)
+            torch.zeros(
+                1,
+                1,
+                self.rbln_config.prefill_chunk_size,
+                self.rbln_config.max_seq_len,
+                dtype=getattr(torch, self.rbln_config.torch_dtype),
+            )
             if self.rbln_config.use_attention_mask
             else None
         )
@@ -321,7 +327,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         out_buffers = [
             torch.empty(
                 size=self.output_size,
-                dtype=torch.float32,
+                dtype=getattr(torch, self.rbln_config.torch_dtype),
                 device="cpu",
             )
         ]
@@ -491,7 +497,11 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
         # Initialize shared resources to be used across Runtime instances (prefill and decode phases)
         dec_attn_mask = torch.zeros(
-            self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=torch.float32
+            self.rbln_config.batch_size,
+            1,
+            1,
+            self.rbln_config.max_seq_len,
+            dtype=getattr(torch, self.rbln_config.torch_dtype),
         )
         block_tables = torch.zeros(
             self.rbln_config.batch_size,
@@ -629,9 +639,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         cls, *args, rbln_config: Optional[RBLNDecoderOnlyModelForCausalLMConfig] = None, **kwargs
     ) -> PreTrainedModel:
         if rbln_config and rbln_config.quantization:
-            model = cls.get_quantized_model(*args, **kwargs)
+            model = cls.get_quantized_model(*args, **kwargs, torch_dtype="auto")
         else:
-            model = super().get_pytorch_model(*args, **kwargs)
+            model = super().get_pytorch_model(*args, **kwargs, torch_dtype="auto")
 
         return model
 
@@ -871,7 +881,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
         # 1. main input
         if rbln_config.use_inputs_embeds:
-            main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
+            main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], rbln_config.torch_dtype)
         else:
             main_input = ("input_ids", [batch_size, query_length], "int64")
 
@@ -902,9 +912,13 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         if rbln_config.use_attention_mask:
             input_info.extend(
                 [
-                    ("attention_mask", [batch_size, rbln_config.max_seq_len], "float32")
+                    ("attention_mask", [batch_size, rbln_config.max_seq_len], rbln_config.torch_dtype)
                     if rbln_config.use_position_ids
-                    else ("attention_mask", [batch_size, 1, query_length, rbln_config.max_seq_len], "float32")
+                    else (
+                        "attention_mask",
+                        [batch_size, 1, query_length, rbln_config.max_seq_len],
+                        rbln_config.torch_dtype,
+                    )
                 ]
             )
         if rbln_config.use_position_ids:
@@ -925,7 +939,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     local_kvcache_shape
                     if rbln_config.sliding_window is not None and ((i // 2) in rbln_config.sliding_window_layers)
                     else global_kvcache_shape,
-                    "float32",
+                    rbln_config.torch_dtype,
                 )
                 for i in range(num_hidden_layers * 2)
             ]
@@ -985,6 +999,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             )
         if rbln_config.max_seq_len is None:
             raise ValueError("`max_seq_len` should be specified.")
+
+        rbln_config.torch_dtype = getattr(model_config, "torch_dtype", "float32")
 
         if getattr(model_config, "sliding_window", None) is not None and getattr(
             model_config, "use_sliding_window", True
