@@ -31,13 +31,9 @@ from transformers.models.gemma3.modeling_gemma3 import Gemma3TextScaledWordEmbed
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
-from ....utils.logging import get_logger
 from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyOutput, RBLNRuntimeModel
 from .configuration_gemma3 import RBLNGemma3ForCausalLMConfig
 from .gemma3_architecture import Gemma3ForCausalLMWrapper
-
-
-logger = get_logger()
 
 
 if TYPE_CHECKING:
@@ -561,9 +557,10 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             rbln_config.image_prefill_chunk_size = model.config.mm_tokens_per_image
 
         if rbln_config.image_prefill_chunk_size != model.config.mm_tokens_per_image:
-            logger.warning(
+            raise ValueError(
                 f"Image prefill chunk size is different from mm_tokens_per_image: {rbln_config.image_prefill_chunk_size} != {model.config.mm_tokens_per_image}"
             )
+
         return rbln_config
 
     @classmethod
@@ -576,6 +573,9 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     ) -> RBLNGemma3ForCausalLMConfig:
         # Update rbln_config with super class
         rbln_config = super()._update_rbln_config(preprocessors, model, model_config, rbln_config)
+
+        if not (rbln_config.use_attention_mask and rbln_config.use_position_ids):
+            raise ValueError("use_attention_mask and use_position_ids must be True for RBLNGemma3ForCausalLM")
 
         # Update image prefill compile config
         img_prefill_input_info = cls.get_input_info(

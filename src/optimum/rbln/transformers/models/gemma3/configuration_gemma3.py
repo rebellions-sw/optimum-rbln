@@ -29,9 +29,9 @@ class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
         **kwargs: Dict[str, Any],
     ):
         # use_attention_mask and use_position_ids are always True for Gemma3
-        use_attention_mask = use_attention_mask or True
-        use_position_ids = use_position_ids or True
-        image_prefill_chunk_size = image_prefill_chunk_size
+        self.use_attention_mask = use_attention_mask or True
+        self.use_position_ids = use_position_ids or True
+        self.image_prefill_chunk_size = image_prefill_chunk_size
 
         super().__init__(
             use_attention_mask=use_attention_mask,
