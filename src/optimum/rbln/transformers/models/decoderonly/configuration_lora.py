@@ -86,6 +86,9 @@ class RBLNLoRAAdapterConfig(RBLNSerializableConfigProtocol):
             target_modules if target_modules is not None else adapter_config.get("target_modules", None)
         )
         self.bias = bias if bias is not None else adapter_config.get("bias", "none")
+        if self.bias not in ["none"]:
+            raise NotImplementedError("bias != 'none' is not supported yet")
+
         self.use_rslora = use_rslora if use_rslora is not None else adapter_config.get("use_rslora", False)
         self.use_dora = use_dora if use_dora is not None else adapter_config.get("use_dora", False)
         self.scaling_factor = scaling_factor if scaling_factor is not None else 1.0
