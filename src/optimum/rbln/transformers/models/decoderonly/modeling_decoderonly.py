@@ -283,7 +283,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_ids if self.rbln_config.use_position_ids else None,
         )
 
-        return RBLNDecoderOnlyOutput(logits=logits)
+        return RBLNRBLNDecoderOnlyForCausalLMOutput(logits=logits)
 
     def _prepare_prefill_inputs(
         self,
@@ -442,15 +442,19 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             self.dec_attn_mask[batch_idx].fill_(0)
             self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
 
-        return RBLNDecoderOnlyOutput(logits=logits, padded_cache_lengths=padded_cache_lengths)
+        return RBLNRBLNDecoderOnlyForCausalLMOutput(logits=logits, padded_cache_lengths=padded_cache_lengths)
 
 
 @dataclass
-class RBLNDecoderOnlyOutput(ModelOutput):
+class RBLNDecoderOnlyForCausalLMOutput(ModelOutput):
     logits: torch.FloatTensor = None
     generate_idx: torch.Tensor = None
     padded_cache_lengths: int = None
 
+
+@dataclass
+class RBLNDecoderOnlyModelOutput(ModelOutput):
+    last_hidden_state: torch.FloatTensor = None
 
 class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
     """
@@ -1158,7 +1162,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
     def _update_model_kwargs_for_generation(
         self,
-        outputs: RBLNDecoderOnlyOutput,
+        outputs: RBLNRBLNDecoderOnlyForCausalLMOutput,
         model_kwargs: Dict[str, Any],
         **kwargs,
     ) -> Dict[str, Any]:
@@ -1224,6 +1228,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         if not return_dict:
             return logits, generate_idx, padded_cache_lengths
         else:
-            return RBLNDecoderOnlyOutput(
+            return RBLNRBLNDecoderOnlyForCausalLMOutput(
                 logits=logits, generate_idx=generate_idx, padded_cache_lengths=padded_cache_lengths
             )
