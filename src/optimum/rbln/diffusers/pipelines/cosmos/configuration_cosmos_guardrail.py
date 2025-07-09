@@ -15,7 +15,7 @@
 from typing import Any, Dict, Optional, Tuple
 
 from ....configuration_utils import RBLNAutoConfig, RBLNModelConfig
-from ....transformers import RBLNSiglipVisionModelConfig
+from ....transformers import RBLNLlamaForCausalLMConfig, RBLNSiglipVisionModelConfig
 
 
 class RBLNVideoSafetyModelConfig(RBLNModelConfig):
@@ -75,7 +75,15 @@ class RBLNCosmosSafetyCheckerConfig(RBLNModelConfig):
         if height is not None and width is not None:
             image_size = (height, width)
 
-        self.aegis = self.init_submodule_config(RBLNModelConfig, aegis)
+        tensor_parallel_size = kwargs.get("tensor_parallel_size")
+
+        self.aegis = self.init_submodule_config(
+            RBLNLlamaForCausalLMConfig,
+            aegis,
+            batch_size=batch_size,
+            tensor_parallel_size=tensor_parallel_size,
+        )
+
         self.siglip_encoder = self.init_submodule_config(
             RBLNSiglipVisionModelConfig,
             siglip_encoder,
