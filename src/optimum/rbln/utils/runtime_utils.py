@@ -12,11 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 import threading
 from typing import Any, Dict, List, Optional, Union
 
 import rebel
 import torch
+
+
+def normalize_npu(npu: str) -> str:
+    """Normalize the NPU string by removing the form factor."""
+    match = re.match(r"(RBLN-CA|RBLN-CR)(\d+)", npu)
+    if match:
+        prefix, num = match.groups()
+        if len(num) == 1:
+            # Convert "RBLN-CAx" → "RBLN-CA0"
+            # (e.g., "RBLN-CA2" -> "RBLN-CA0")
+            npu = f"{prefix}0"
+        elif len(num) == 2:
+            # Strip form factor (e.g., "RBLN-CA15" → "RBLN-CA1")
+            npu = f"{prefix}{num[:-1]}"
+    return npu
 
 
 def tp_and_devices_are_ok(
@@ -58,7 +74,7 @@ def tp_and_devices_are_ok(
     if npu is not None:
         for device_id in device:
             npu_name = rebel.get_npu_name(device_id)
-            if npu_name != npu:
+            if normalize_npu(npu_name) != normalize_npu(npu):
                 return f"Device {device_id} ({npu_name}) is not on the same NPU as {npu}."
 
     return None
