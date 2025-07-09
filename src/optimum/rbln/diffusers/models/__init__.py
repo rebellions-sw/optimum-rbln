@@ -39,8 +39,8 @@ _import_structure = {
 if TYPE_CHECKING:
     from .autoencoders import (
         RBLNAutoencoderKL,
-        RBLNAutoencoderKLTemporalDecoder,
         RBLNAutoencoderKLCosmos,
+        RBLNAutoencoderKLTemporalDecoder,
         RBLNVQModel,
     )
     from .controlnet import RBLNControlNetModel

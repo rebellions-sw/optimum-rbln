@@ -109,8 +109,8 @@ _import_structure = {
 if TYPE_CHECKING:
     from .configurations import (
         RBLNAutoencoderKLConfig,
-        RBLNAutoencoderKLTemporalDecoderConfig,
         RBLNAutoencoderKLCosmosConfig,
+        RBLNAutoencoderKLTemporalDecoderConfig,
         RBLNControlNetModelConfig,
         RBLNCosmosTextToWorldPipelineConfig,
         RBLNCosmosTransformer3DModelConfig,

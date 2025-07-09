@@ -217,10 +217,10 @@ if TYPE_CHECKING:
     from .diffusers import (
         RBLNAutoencoderKL,
         RBLNAutoencoderKLConfig,
-        RBLNAutoencoderKLTemporalDecoder,
-        RBLNAutoencoderKLTemporalDecoderConfig,
         RBLNAutoencoderKLCosmos,
         RBLNAutoencoderKLCosmosConfig,
+        RBLNAutoencoderKLTemporalDecoder,
+        RBLNAutoencoderKLTemporalDecoderConfig,
         RBLNControlNetModel,
         RBLNControlNetModelConfig,
         RBLNCosmosSafetyChecker,
