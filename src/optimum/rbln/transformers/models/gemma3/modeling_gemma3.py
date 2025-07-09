@@ -316,6 +316,16 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         self.prefill = self.runtime if self.phase == "prefill" else None  # FIXME
         self.decode = self.runtime if self.phase == "decode" else None
 
+    def _prepare_prefill_inputs(self, *args, **kwargs):
+        ret_val = super()._prepare_prefill_inputs(*args, **kwargs)
+        ret_val = list(ret_val)
+
+        mask_idx = 2
+        attention_mask = ret_val[mask_idx]
+        ret_val[mask_idx] = torch.zeros(1, attention_mask.shape[-1], dtype=torch.float32)
+
+        return tuple(ret_val)
+
     def prefill_forward(
         self,
         inputs: torch.Tensor,
@@ -349,6 +359,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
 
         step = 0
         while step < query_length:
+            # Check if the prefill chunk is an image prefill
             is_image_prefill = torch.all(
                 token_type_ids[:, step : step + self.rbln_config.image_prefill_chunk_size] == 1
             )
@@ -356,28 +367,39 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                 self.rbln_config.image_prefill_chunk_size if is_image_prefill else self.rbln_config.prefill_chunk_size
             )
 
+            # Check if the prefill chunk is a text prefill which have image_tokens in it.
+            is_text_prefill_with_image_tokens = not is_image_prefill and torch.any(
+                token_type_ids[:, step : step + prefill_chunk_size] == 1
+            )
+
             # Check if the prefill chunk crosses a block boundary, requiring padding to align with block boundaries
             is_cross_block_boundary = (
                 step // self.rbln_config.kvcache_block_size
                 != (step + prefill_chunk_size) // self.rbln_config.kvcache_block_size
             )
+
             if is_cross_block_boundary:
                 padding_size = prefill_chunk_size - (step + prefill_chunk_size) % self.rbln_config.kvcache_block_size
                 padded_cache_lengths += padding_size
 
+            # if text_prefill end with image_tokens, we only treat the text part.
+            num_processed_tokens = prefill_chunk_size
+            if is_text_prefill_with_image_tokens:
+                first_image_token_idx = torch.where(token_type_ids[:, step : step + prefill_chunk_size] == 1)[1][0]
+                num_processed_tokens = first_image_token_idx
+
+            query_position = torch.tensor(
+                (query_length - 1) % prefill_chunk_size
+                if step + prefill_chunk_size >= query_length
+                else num_processed_tokens - 1,
+                dtype=torch.int16,
+            )
             input_chunk = inputs[:, step : step + prefill_chunk_size]
             cache_pos_chunk = cache_position[:, step : step + prefill_chunk_size] + padded_cache_lengths
             position_ids_chunk = position_ids[:, step : step + prefill_chunk_size]
             chunked_attention_mask[
-                :, step + padded_cache_lengths : step + prefill_chunk_size + padded_cache_lengths
+                :, step + padded_cache_lengths : step + num_processed_tokens + padded_cache_lengths
             ] = 1
-
-            query_position = torch.tensor(
-                prefill_chunk_size - 1
-                if step + prefill_chunk_size >= query_length
-                else (query_length - 1) % prefill_chunk_size,
-                dtype=torch.int16,
-            )
 
             if is_image_prefill:
                 logits = self.image_prefill(
@@ -402,7 +424,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                     out=out_buffers,
                 )
 
-            step += prefill_chunk_size
+            step += num_processed_tokens
 
         if not is_external_block_tables:
             self.dec_attn_mask[batch_idx : batch_idx + 1] = chunked_attention_mask
