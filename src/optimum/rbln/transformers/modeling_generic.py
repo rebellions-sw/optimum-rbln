@@ -43,9 +43,9 @@ from ..configuration_utils import RBLNCompileConfig
 from ..modeling import RBLNModel
 from ..utils.logging import get_logger
 from .configuration_generic import (
+    RBLNImageModelConfig,
     RBLNModelForAudioClassificationConfig,
-    _RBLNImageModelConfig,
-    _RBLNTransformerEncoderConfig,
+    RBLNTransformerEncoderConfig,
 )
 
 
@@ -55,7 +55,7 @@ if TYPE_CHECKING:
 logger = get_logger()
 
 
-class _RBLNTransformerEncoder(RBLNModel):
+class RBLNTransformerEncoder(RBLNModel):
     auto_model_class = AutoModel
     rbln_model_input_names = ["input_ids", "attention_mask", "token_type_ids"]
     rbln_dtype = "int64"
@@ -66,8 +66,8 @@ class _RBLNTransformerEncoder(RBLNModel):
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
         model: Optional["PreTrainedModel"] = None,
         model_config: Optional["PretrainedConfig"] = None,
-        rbln_config: Optional[_RBLNTransformerEncoderConfig] = None,
-    ) -> _RBLNTransformerEncoderConfig:
+        rbln_config: Optional[RBLNTransformerEncoderConfig] = None,
+    ) -> RBLNTransformerEncoderConfig:
         return cls.update_rbln_config_for_transformers_encoder(
             preprocessors=preprocessors,
             model=model,
@@ -81,8 +81,8 @@ class _RBLNTransformerEncoder(RBLNModel):
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
         model: Optional["PreTrainedModel"] = None,
         model_config: Optional["PretrainedConfig"] = None,
-        rbln_config: Optional[_RBLNTransformerEncoderConfig] = None,
-    ) -> _RBLNTransformerEncoderConfig:
+        rbln_config: Optional[RBLNTransformerEncoderConfig] = None,
+    ) -> RBLNTransformerEncoderConfig:
         max_position_embeddings = getattr(model_config, "n_positions", None) or getattr(
             model_config, "max_position_embeddings", None
         )
@@ -139,7 +139,7 @@ class _RBLNTransformerEncoder(RBLNModel):
         return rbln_config
 
 
-class _RBLNImageModel(RBLNModel):
+class RBLNImageModel(RBLNModel):
     auto_model_class = AutoModel
     main_input_name = "pixel_values"
     output_class = BaseModelOutput
@@ -150,8 +150,8 @@ class _RBLNImageModel(RBLNModel):
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
         model: Optional["PreTrainedModel"] = None,
         model_config: Optional["PretrainedConfig"] = None,
-        rbln_config: Optional[_RBLNImageModelConfig] = None,
-    ) -> _RBLNImageModelConfig:
+        rbln_config: Optional[RBLNImageModelConfig] = None,
+    ) -> RBLNImageModelConfig:
         return cls.update_rbln_config_for_image_model(
             preprocessors=preprocessors,
             model=model,
@@ -165,8 +165,8 @@ class _RBLNImageModel(RBLNModel):
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
         model: Optional["PreTrainedModel"] = None,
         model_config: Optional["PretrainedConfig"] = None,
-        rbln_config: Optional[_RBLNImageModelConfig] = None,
-    ) -> _RBLNImageModelConfig:
+        rbln_config: Optional[RBLNImageModelConfig] = None,
+    ) -> RBLNImageModelConfig:
         if rbln_config.image_size is None:
             for processor in preprocessors:
                 if hasattr(processor, "size"):
@@ -196,15 +196,14 @@ class _RBLNImageModel(RBLNModel):
         return rbln_config
 
 
-class RBLNModelForQuestionAnswering(_RBLNTransformerEncoder):
+class RBLNModelForQuestionAnswering(RBLNTransformerEncoder):
     auto_model_class = AutoModelForQuestionAnswering
     rbln_model_input_names = ["input_ids", "attention_mask", "token_type_ids"]
     output_class = QuestionAnsweringModelOutput
 
     def _prepare_output(self, output, return_dict):
-        """
-        Prepare QuestionAnswering specific output format.
-        """
+        # Prepare QuestionAnswering specific output format.
+
         start_logits, end_logits = output
 
         if not return_dict:
@@ -213,32 +212,32 @@ class RBLNModelForQuestionAnswering(_RBLNTransformerEncoder):
             return QuestionAnsweringModelOutput(start_logits=start_logits, end_logits=end_logits)
 
 
-class RBLNModelForSequenceClassification(_RBLNTransformerEncoder):
+class RBLNModelForSequenceClassification(RBLNTransformerEncoder):
     auto_model_class = AutoModelForSequenceClassification
     rbln_model_input_names = ["input_ids", "attention_mask"]
 
 
-class RBLNModelForMaskedLM(_RBLNTransformerEncoder):
+class RBLNModelForMaskedLM(RBLNTransformerEncoder):
     auto_model_class = AutoModelForMaskedLM
     rbln_model_input_names = ["input_ids", "attention_mask"]
 
 
-class RBLNModelForTextEncoding(_RBLNTransformerEncoder):
+class RBLNModelForTextEncoding(RBLNTransformerEncoder):
     auto_model_class = AutoModelForTextEncoding
     rbln_model_input_names = ["input_ids", "attention_mask"]
 
 
-class RBLNTransformerEncoderForFeatureExtraction(_RBLNTransformerEncoder):
+class RBLNTransformerEncoderForFeatureExtraction(RBLNTransformerEncoder):
     # TODO: RBLNModel is also for feature extraction.
     auto_model_class = AutoModel
     rbln_model_input_names = ["input_ids", "attention_mask"]
 
 
-class RBLNModelForImageClassification(_RBLNImageModel):
+class RBLNModelForImageClassification(RBLNImageModel):
     auto_model_class = AutoModelForImageClassification
 
 
-class RBLNModelForDepthEstimation(_RBLNImageModel):
+class RBLNModelForDepthEstimation(RBLNImageModel):
     auto_model_class = AutoModelForDepthEstimation
 
 

@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNCLIPTextModelConfig(RBLNModelConfig):
-    def __init__(self, batch_size: Optional[int] = None, **kwargs):
+    def __init__(self, batch_size: Optional[int] = None, **kwargs: Dict[str, Any]):
         """
         Args:
             batch_size (Optional[int]): The batch size for text processing. Defaults to 1.
@@ -34,11 +34,16 @@ class RBLNCLIPTextModelConfig(RBLNModelConfig):
 
 
 class RBLNCLIPTextModelWithProjectionConfig(RBLNCLIPTextModelConfig):
-    pass
+    """
+    Configuration class for RBLNCLIPTextModelWithProjection.
+
+    This configuration inherits from RBLNCLIPTextModelConfig and stores
+    configuration parameters for CLIP text models with projection layers.
+    """
 
 
 class RBLNCLIPVisionModelConfig(RBLNModelConfig):
-    def __init__(self, batch_size: Optional[int] = None, image_size: Optional[int] = None, **kwargs):
+    def __init__(self, batch_size: Optional[int] = None, image_size: Optional[int] = None, **kwargs: Dict[str, Any]):
         """
         Args:
             batch_size (Optional[int]): The batch size for image processing. Defaults to 1.
@@ -76,4 +81,9 @@ class RBLNCLIPVisionModelConfig(RBLNModelConfig):
 
 
 class RBLNCLIPVisionModelWithProjectionConfig(RBLNCLIPVisionModelConfig):
-    pass
+    """
+    Configuration class for RBLNCLIPVisionModelWithProjection.
+
+    This configuration inherits from RBLNCLIPVisionModelConfig and stores
+    configuration parameters for CLIP vision models with projection layers.
+    """

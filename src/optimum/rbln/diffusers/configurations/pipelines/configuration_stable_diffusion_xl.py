@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from ....configuration_utils import RBLNModelConfig
 from ....transformers import RBLNCLIPTextModelConfig, RBLNCLIPTextModelWithProjectionConfig
 from ..models import RBLNAutoencoderKLConfig, RBLNUNet2DConditionModelConfig
 
 
-class _RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
+class RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
     submodules = ["text_encoder", "text_encoder_2", "unet", "vae"]
     _vae_uses_encoder = False
 
@@ -38,7 +38,7 @@ class _RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
         sample_size: Optional[Tuple[int, int]] = None,
         image_size: Optional[Tuple[int, int]] = None,
         guidance_scale: Optional[float] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:
@@ -134,13 +134,19 @@ class _RBLNStableDiffusionXLPipelineBaseConfig(RBLNModelConfig):
         return self.vae.sample_size
 
 
-class RBLNStableDiffusionXLPipelineConfig(_RBLNStableDiffusionXLPipelineBaseConfig):
+class RBLNStableDiffusionXLPipelineConfig(RBLNStableDiffusionXLPipelineBaseConfig):
+    """Config for SDXL Text2Img Pipeline"""
+
     _vae_uses_encoder = False
 
 
-class RBLNStableDiffusionXLImg2ImgPipelineConfig(_RBLNStableDiffusionXLPipelineBaseConfig):
+class RBLNStableDiffusionXLImg2ImgPipelineConfig(RBLNStableDiffusionXLPipelineBaseConfig):
+    """Config for SDXL Img2Img Pipeline"""
+
     _vae_uses_encoder = True
 
 
-class RBLNStableDiffusionXLInpaintPipelineConfig(_RBLNStableDiffusionXLPipelineBaseConfig):
+class RBLNStableDiffusionXLInpaintPipelineConfig(RBLNStableDiffusionXLPipelineBaseConfig):
+    """Config for SDXL Inpainting Pipeline"""
+
     _vae_uses_encoder = True

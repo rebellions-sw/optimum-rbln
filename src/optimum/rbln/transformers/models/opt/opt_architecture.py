@@ -18,7 +18,6 @@ import torch.nn as nn
 
 from ...models.decoderonly.decoderonly_architecture import (
     DecoderOnlyAttention,
-    DecoderOnlyForCausalLM,
     DecoderOnlyLayer,
     DecoderOnlyModel,
     DecoderOnlyWrapper,
@@ -30,24 +29,22 @@ if TYPE_CHECKING:
 
 
 class OPTWrapper(DecoderOnlyWrapper):
-    def convert_to_rbln_causal_lm(self, causal_lm: "OPTForCausalLM", max_seq_len: int):
-        if self.attn_impl != "eager":
-            raise NotImplementedError(f"flash attention ({self.attn_impl}) is not implemented for {self.__class__}")
+    _use_learned_pos_emb = True
 
-        new_layers = []
+    def get_rbln_attn_class(self):
+        return OPTAttention
 
-        for layer in causal_lm.model.decoder.layers:
-            new_self_attn = OPTAttention(
-                layer.self_attn,
-                self.use_attention_mask,
-                kvcache_block_size=self.kvcache_block_size,
-                use_position_ids=self.use_position_ids,
-            )
-            new_layer = OPTDecoderLayer(layer, new_self_attn)
-            new_layers.append(new_layer)
-        new_model = OPTModel(causal_lm.model.decoder, new_layers, max_seq_len=max_seq_len, use_learned_pos_emb=True)
-        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
-        return new_causal_lm
+    def get_rbln_layer_class(self):
+        return OPTDecoderLayer
+
+    def get_rbln_model_class(self):
+        return OPTModel
+
+    def get_model_layer(self, causal_lm: "OPTForCausalLM"):
+        return causal_lm.model.decoder
+
+    def get_decoder_layers(self, causal_lm: "OPTForCausalLM"):
+        return causal_lm.model.decoder.layers
 
 
 class OPTAttention(DecoderOnlyAttention):

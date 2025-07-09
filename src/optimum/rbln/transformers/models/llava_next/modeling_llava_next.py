@@ -109,6 +109,36 @@ class LoopProjector:
 
 
 class RBLNLlavaNextForConditionalGeneration(RBLNModel):
+    """
+    RBLNLlavaNextForConditionalGeneration is a multi-modal model that combines vision and language processing capabilities,
+    optimized for RBLN NPUs. It is designed for conditional generation tasks that involve both image and text inputs.
+
+    This model inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    Important Note:
+        This model includes a Large Language Model (LLM) as a submodule. For optimal performance, it is highly recommended to use
+        tensor parallelism for the language model. This can be achieved by using the `rbln_config` parameter in the
+        `from_pretrained` method. Refer to the `from_pretrained` documentation and the RBLNLlavaNextForConditionalGenerationConfig class for details.
+
+    Examples:
+        ```python
+        from optimum.rbln import RBLNLlavaNextForConditionalGeneration
+
+        model = RBLNLlavaNextForConditionalGeneration.from_pretrained(
+            "llava-hf/llava-v1.6-mistral-7b-hf",
+            export=True,
+            rbln_config={
+                "language_model": {
+                    "tensor_parallel_size": 4,
+                    "use_inputs_embeds": True,  # In Llava-Next, language model must use inputs_embeds as input.
+                },
+            },
+        )
+
+        model.save_pretrained("compiled-llava-next-mistral-7b-hf")
+        ```
+    """
+
     auto_model_class = AutoModelForVision2Seq
     _rbln_submodules = [
         {"name": "vision_tower"},
@@ -136,10 +166,8 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         subfolder: str,
         rbln_config: RBLNModelConfig,
     ):
-        """
-        If you are unavoidably running on a CPU rather than an RBLN device,
-        store the torch tensor, weight, etc. in this function.
-        """
+        # If you are unavoidably running on a CPU rather than an RBLN device,
+        # store the torch tensor, weight, etc. in this function.
         save_dict = {}
         save_dict["image_newline"] = model.image_newline
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")

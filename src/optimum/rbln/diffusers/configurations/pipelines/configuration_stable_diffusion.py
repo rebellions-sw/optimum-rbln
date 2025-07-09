@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from ....configuration_utils import RBLNModelConfig
 from ....transformers import RBLNCLIPTextModelConfig
 from ..models import RBLNAutoencoderKLConfig, RBLNUNet2DConditionModelConfig
 
 
-class _RBLNStableDiffusionPipelineBaseConfig(RBLNModelConfig):
+class RBLNStableDiffusionPipelineBaseConfig(RBLNModelConfig):
     submodules = ["text_encoder", "unet", "vae"]
     _vae_uses_encoder = False
 
@@ -37,7 +37,7 @@ class _RBLNStableDiffusionPipelineBaseConfig(RBLNModelConfig):
         sample_size: Optional[Tuple[int, int]] = None,
         image_size: Optional[Tuple[int, int]] = None,
         guidance_scale: Optional[float] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:
@@ -128,13 +128,25 @@ class _RBLNStableDiffusionPipelineBaseConfig(RBLNModelConfig):
         return self.vae.sample_size
 
 
-class RBLNStableDiffusionPipelineConfig(_RBLNStableDiffusionPipelineBaseConfig):
+class RBLNStableDiffusionPipelineConfig(RBLNStableDiffusionPipelineBaseConfig):
+    """
+    Configuration for Stable Diffusion pipeline.
+    """
+
     _vae_uses_encoder = False
 
 
-class RBLNStableDiffusionImg2ImgPipelineConfig(_RBLNStableDiffusionPipelineBaseConfig):
+class RBLNStableDiffusionImg2ImgPipelineConfig(RBLNStableDiffusionPipelineBaseConfig):
+    """
+    Configuration for Stable Diffusion image-to-image pipeline.
+    """
+
     _vae_uses_encoder = True
 
 
-class RBLNStableDiffusionInpaintPipelineConfig(_RBLNStableDiffusionPipelineBaseConfig):
+class RBLNStableDiffusionInpaintPipelineConfig(RBLNStableDiffusionPipelineBaseConfig):
+    """
+    Configuration for Stable Diffusion inpainting pipeline.
+    """
+
     _vae_uses_encoder = True

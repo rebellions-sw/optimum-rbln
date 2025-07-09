@@ -65,6 +65,13 @@ class LoopProjector:
 
 
 class RBLNBlip2VisionModel(RBLNModel):
+    """
+    RBLN optimized BLIP-2 vision encoder model.
+
+    This class provides hardware-accelerated inference for BLIP-2 vision encoders
+    on RBLN devices, supporting image encoding for multimodal vision-language tasks.
+    """
+
     def get_input_embeddings(self):
         return self.embeddings
 
@@ -136,6 +143,14 @@ class RBLNBlip2VisionModel(RBLNModel):
 
 
 class RBLNBlip2QFormerModel(RBLNModel):
+    """
+    RBLN optimized BLIP-2 Q-Former model.
+
+    This class provides hardware-accelerated inference for BLIP-2 Q-Former models
+    on RBLN devices, which bridge vision and language modalities through cross-attention
+    mechanisms for multimodal understanding tasks.
+    """
+
     def get_input_embeddings(self):
         return self.embeddings.word_embeddings
 
@@ -251,6 +266,38 @@ class RBLNBlip2QFormerModel(RBLNModel):
 
 
 class RBLNBlip2ForConditionalGeneration(RBLNModel):
+    """
+    RBLNBlip2ForConditionalGeneration is a multi-modal model that integrates vision and language processing capabilities,
+    optimized for RBLN NPUs. It is designed for conditional generation tasks that involve both image and text inputs.
+
+    This model inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    Important Note:
+        This model includes a Large Language Model (LLM) as a submodule. For optimal performance, it is highly recommended to use
+        tensor parallelism for the language model.  This can be achieved by using the `rbln_config` parameter in the
+        `from_pretrained` method. Refer to the `from_pretrained` documentation and the RBLNBlip2ForConditionalGeneration class for details.
+
+    Examples:
+        ```python
+        from optimum.rbln import RBLNBlip2ForConditionalGeneration
+
+        model = RBLNBlip2ForConditionalGeneration.from_pretrained(
+            "Salesforce/blip2-opt-2.7b",
+            export=True,
+            rbln_config={
+                "language_model": {
+                    "batch_size": 1,
+                    "max_seq_len": 2048,
+                    "tensor_parallel_size": 1,
+                    "use_inputs_embeds": True,
+                },
+            },
+        )
+
+        model.save_pretrained("compiled-blip2-opt-2.7b")
+        ```
+    """
+
     auto_model_class = AutoModelForVisualQuestionAnswering
     _rbln_submodules = [{"name": "vision_model"}, {"name": "qformer"}, {"name": "language_model"}]
 
@@ -275,10 +322,9 @@ class RBLNBlip2ForConditionalGeneration(RBLNModel):
         subfolder: str,
         rbln_config: RBLNModelConfig,
     ):
-        """
-        If you are unavoidably running on a CPU rather than an RBLN device,
-        store the torch tensor, weight, etc. in this function.
-        """
+        # If you are unavoidably running on a CPU rather than an RBLN device,
+        # store the torch tensor, weight, etc. in this function.
+
         save_dict = {}
         save_dict["query_tokens"] = model.query_tokens
         torch.save(save_dict, save_dir_path / subfolder / "query_tokens.pth")

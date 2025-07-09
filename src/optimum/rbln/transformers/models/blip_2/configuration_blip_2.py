@@ -12,16 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNBlip2VisionModelConfig(RBLNModelConfig):
-    pass
+    """
+    Configuration class for RBLNBlip2VisionModel.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized BLIP-2 vision encoder models for multimodal tasks.
+    """
 
 
 class RBLNBlip2QFormerModelConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLNBlip2QFormerModel.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized BLIP-2 Q-Former models that bridge vision and language modalities.
+    """
+
     def __init__(
         self,
         num_query_tokens: Optional[int] = None,
@@ -50,7 +62,7 @@ class RBLNBlip2ForConditionalGenerationConfig(RBLNModelConfig):
         vision_model: Optional[RBLNModelConfig] = None,
         qformer: Optional[RBLNModelConfig] = None,
         language_model: Optional[RBLNModelConfig] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:

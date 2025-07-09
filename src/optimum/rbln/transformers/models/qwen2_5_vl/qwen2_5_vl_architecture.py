@@ -79,7 +79,7 @@ class Qwen2_5_VLVisionFullAttention(nn.Module):
         super().__init__()
         self._origin_model = model
         self.num_heads = model.num_heads
-        self.head_dim = model.head_dim
+        self.head_dim = getattr(model, "head_dim", model.proj.in_features // model.num_heads)
         self.qkv = model.qkv
         self.proj = model.proj
 
@@ -114,7 +114,7 @@ class Qwen2_5_VLVisionWindowAttention(nn.Module):
         super().__init__()
         self._origin_model = model
         self.num_heads = model.num_heads
-        self.head_dim = model.head_dim
+        self.head_dim = getattr(model, "head_dim", model.proj.in_features // model.num_heads)
         self.qkv = model.qkv
         self.proj = model.proj
         self.window_seq_len = window_seq_len
@@ -162,7 +162,8 @@ class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
         input_ids = None if self.use_inputs_embeds else args.pop(0)
         inputs_embeds = args.pop(0) if self.use_inputs_embeds else None
         cache_position = args.pop(0)
-        block_tables = args.pop(0)
+        global_block_tables = args.pop(0)
+        local_block_tables = None
         position_embeds = args.pop(0)
         query_position = args.pop(0) if self.phase == "prefill" else None
         position_ids = None
@@ -188,7 +189,8 @@ class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
             input_ids,
             inputs_embeds,
             cache_position,
-            block_tables,
+            global_block_tables,
+            local_block_tables,
             query_position,
             attention_mask,
             position_ids,

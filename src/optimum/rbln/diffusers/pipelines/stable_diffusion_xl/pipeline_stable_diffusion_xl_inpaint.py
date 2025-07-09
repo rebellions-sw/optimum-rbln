@@ -19,6 +19,13 @@ from ...modeling_diffusers import RBLNDiffusionMixin
 
 
 class RBLNStableDiffusionXLInpaintPipeline(RBLNDiffusionMixin, StableDiffusionXLInpaintPipeline):
+    """
+    RBLN-accelerated implementation of Stable Diffusion XL pipeline for high-resolution image inpainting.
+
+    This pipeline compiles Stable Diffusion XL models to run efficiently on RBLN NPUs, enabling high-performance
+    inference for filling masked regions with enhanced quality and seamless blending capabilities.
+    """
+
     original_class = StableDiffusionXLInpaintPipeline
     _rbln_config_class = RBLNStableDiffusionXLInpaintPipelineConfig
     _submodules = ["text_encoder", "text_encoder_2", "unet", "vae"]

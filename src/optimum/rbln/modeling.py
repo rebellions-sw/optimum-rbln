@@ -14,7 +14,7 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, Dict, List, Optional, Union, get_args, get_origin, get_type_hints
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, get_args, get_origin, get_type_hints
 
 import rebel
 import torch
@@ -35,27 +35,12 @@ logger = get_logger(__name__)
 
 
 class RBLNModel(RBLNBaseModel):
-    """
-    A class that inherits from RBLNBaseModel for models consisting of a single `torch.nn.Module`.
-
-    This class supports all the functionality of RBLNBaseModel, including loading and saving models using
-    the `from_pretrained` and `save_pretrained` methods, compiling PyTorch models for execution on RBLN NPU
-    devices.
-
-    Example:
-        ```python
-        model = RBLNModel.from_pretrained("model_id", export=True, rbln_npu="npu_name")
-        outputs = model(**inputs)
-        ```
-    """
-
     _output_class = None
 
     @classmethod
     def update_kwargs(cls, kwargs):
-        """
-        Update user-given kwargs to get proper pytorch model.
-        """
+        # Update user-given kwargs to get proper pytorch model.
+
         return kwargs
 
     @classmethod
@@ -66,10 +51,9 @@ class RBLNModel(RBLNBaseModel):
         subfolder: str,
         rbln_config: RBLNModelConfig,
     ):
-        """
-        If you are unavoidably running on a CPU rather than an RBLN device,
-        store the torch tensor, weight, etc. in this function.
-        """
+        # If you are unavoidably running on a CPU rather than an RBLN device,
+        # store the torch tensor, weight, etc. in this function.
+        pass
 
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
@@ -80,7 +64,12 @@ class RBLNModel(RBLNBaseModel):
     def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
         model = cls.wrap_model_if_needed(model, rbln_config)
         rbln_compile_config = rbln_config.compile_cfgs[0]
-        compiled_model = cls.compile(model, rbln_compile_config=rbln_compile_config)
+        compiled_model = cls.compile(
+            model,
+            rbln_compile_config=rbln_compile_config,
+            create_runtimes=rbln_config.create_runtimes,
+            device=rbln_config.device,
+        )
         return compiled_model
 
     @classmethod
@@ -88,11 +77,32 @@ class RBLNModel(RBLNBaseModel):
         cls,
         model: "PreTrainedModel",
         config: Optional[PretrainedConfig] = None,
-        rbln_config: Optional[RBLNModelConfig] = None,
+        rbln_config: Optional[Union[RBLNModelConfig, Dict]] = None,
         model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
         subfolder: str = "",
-        **kwargs,
-    ):
+        **kwargs: Dict[str, Any],
+    ) -> "RBLNModel":
+        """
+        Converts and compiles a pre-trained HuggingFace library model into a RBLN model.
+        This method performs the actual model conversion and compilation process.
+
+        Args:
+            model: The PyTorch model to be compiled. The object must be an instance of the HuggingFace transformers PreTrainedModel class.
+            rbln_config: Configuration for RBLN model compilation and runtime. This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNLlamaForCausalLMConfig` for Llama models).
+                For detailed configuration options, see the specific model's configuration class documentation.
+
+            kwargs: Additional keyword arguments. Arguments with the prefix 'rbln_' are passed to rbln_config, while the remaining arguments are passed to the HuggingFace library.
+
+        The method performs the following steps:
+
+        1. Compiles the PyTorch model into an optimized RBLN graph
+        2. Configures the model for the specified NPU device
+        3. Creates the necessary runtime objects if requested
+        4. Saves the compiled model and configurations
+
+        Returns:
+            A RBLN model instance ready for inference on RBLN NPU devices.
+        """
         preprocessors = kwargs.pop("preprocessors", [])
         rbln_config, kwargs = cls.prepare_rbln_config(rbln_config=rbln_config, **kwargs)
 
@@ -228,11 +238,43 @@ class RBLNModel(RBLNBaseModel):
                 tensor_type="pt",
                 device=rbln_config.device_map[DEFAULT_COMPILED_MODEL_NAME],
                 activate_profiler=rbln_config.activate_profiler,
+                timeout=rbln_config.timeout,
             )
             for compiled_model in compiled_models
         ]
 
-    def forward(self, *args, return_dict: Optional[bool] = None, **kwargs):
+    def forward(self, *args: Any, return_dict: Optional[bool] = None, **kwargs: Dict[str, Any]) -> Any:
+        """
+        Defines the forward pass of the RBLN model, providing a drop-in replacement for HuggingFace PreTrainedModel.
+
+        This method executes the compiled RBLN model on RBLN NPU devices while maintaining full compatibility
+        with HuggingFace transformers and diffusers APIs. The RBLNModel can be used as a direct substitute
+        for any HuggingFace nn.Module/PreTrainedModel, enabling seamless integration into existing workflows.
+
+        Args:
+            *args: Variable length argument list containing model inputs. The format matches the original
+                HuggingFace model's forward method signature (e.g., input_ids, attention_mask for
+                transformers models, or sample, timestep for diffusers models).
+            return_dict:
+                Whether to return outputs as a dictionary-like object or as a tuple. When `None`:
+                - For transformers models: Uses `self.config.use_return_dict` (typically `True`)
+                - For diffusers models: Defaults to `True`
+            **kwargs: Arbitrary keyword arguments containing additional model inputs and parameters,
+                matching the original HuggingFace model's interface.
+
+        Returns:
+            Model outputs in the same format as the original HuggingFace model.
+
+            - If `return_dict=True`: Returns a dictionary-like object (e.g., BaseModelOutput,
+                CausalLMOutput) with named fields such as `logits`, `hidden_states`, etc.
+            - If `return_dict=False`: Returns a tuple containing the raw model outputs.
+
+        Note:
+            - This method maintains the exact same interface as the original HuggingFace model's forward method
+            - The compiled model runs on RBLN NPU hardware for accelerated inference
+            - All HuggingFace model features (generation, attention patterns, etc.) are preserved
+            - Can be used directly in HuggingFace pipelines, transformers.Trainer, and other workflows
+        """
         if self.hf_library_name == "transformers":
             return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         else:
@@ -246,12 +288,7 @@ class RBLNModel(RBLNBaseModel):
 
     @classmethod
     def get_hf_output_class(cls):
-        """
-        Dynamically gets the output class from the corresponding HuggingFace model class.
-
-        Returns:
-            type: The appropriate output class from transformers or diffusers
-        """
+        # Dynamically gets the output class from the corresponding HuggingFace model class.
         if cls._output_class:
             return cls._output_class
 
@@ -278,10 +315,8 @@ class RBLNModel(RBLNBaseModel):
         return BaseModelOutput
 
     def _prepare_output(self, output, return_dict):
-        """
-        Prepare model output based on return_dict flag.
-        This method can be overridden by subclasses to provide task-specific output handling.
-        """
+        # Prepare model output based on return_dict flag.
+        # This method can be overridden by subclasses to provide task-specific output handling.
         tuple_output = (output,) if not isinstance(output, (tuple, list)) else tuple(output)
         if not return_dict:
             return tuple_output

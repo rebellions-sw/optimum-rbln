@@ -120,6 +120,17 @@ class RBLNSeq2SeqTSDecoderOutput(ModelOutput):
 
 
 class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
+    """
+    The Time Series Transformer Model with a distribution head on top for time-series forecasting. e.g., for datasets like M4, NN5, or other time series forecasting benchmarks.
+    This model inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    A class to convert and run pre-trained transformer-based `TimeSeriesTransformerForPrediction` models on RBLN devices.
+    It implements the methods to convert a pre-trained transformers `TimeSeriesTransformerForPrediction` model into a RBLN transformer model by:
+
+    - transferring the checkpoint weights of the original into an optimized RBLN graph,
+    - compiling the resulting graph using the RBLN Compiler.
+    """
+
     auto_model_class = None
     main_input_name = "inputs_embeds"
 
@@ -144,11 +155,6 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         )
 
     def __getattr__(self, __name: str) -> Any:
-        """This is the key method to implement RBLN-TimeSeriesTransformersForPrediction.
-        Returns:
-            Any: TimeSeriesTransformersForPrediction's corresponding method
-        """
-
         def redirect(func):
             return lambda *pargs, **kwargs: func(self, *pargs, **kwargs)
 
@@ -188,15 +194,19 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
             if "key_value_states" in name:
                 context.mark_static_address(tensor)
 
-        compiled_decoder = super().compile(
+        compiled_decoder = cls.compile(
             wrapped_model.decoder,
             dec_compile_config,
+            create_runtimes=rbln_config.create_runtimes,
+            device=rbln_config.device,
             example_inputs=dec_example_inputs,
             compile_context=context,
         )
-        compiled_encoder = super().compile(
+        compiled_encoder = cls.compile(
             wrapped_model.encoder,
             enc_compile_config,
+            create_runtimes=rbln_config.create_runtimes,
+            device=rbln_config.device,
             example_inputs=enc_example_inputs,
             compile_context=context,
         )
@@ -211,10 +221,9 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
         subfolder: str,
         rbln_config: RBLNTimeSeriesTransformerForPredictionConfig,
     ):
-        """
-        If you are unavoidably running on a CPU rather than an RBLN device,
-        store the torch tensor, weight, etc. in this function.
-        """
+        # If you are unavoidably running on a CPU rather than an RBLN device,
+        # store the torch tensor, weight, etc. in this function.
+
         save_dict = {}
         save_dict["embedder"] = model.model.embedder.state_dict()
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
@@ -322,12 +331,14 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
                 tensor_type="pt",
                 device=rbln_config.device_map["encoder"],
                 activate_profiler=rbln_config.activate_profiler,
+                timeout=rbln_config.timeout,
             ),
             rebel.Runtime(
                 compiled_models[1],
                 tensor_type="pt",
                 device=rbln_config.device_map["decoder"],
                 activate_profiler=rbln_config.activate_profiler,
+                timeout=rbln_config.timeout,
             ),
         ]
 

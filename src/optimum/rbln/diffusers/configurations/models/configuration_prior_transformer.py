@@ -12,12 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNPriorTransformerConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLN Prior Transformer models.
+
+    This class inherits from RBLNModelConfig and provides specific configuration options
+    for Prior Transformer models used in diffusion models like Kandinsky V2.2.
+    """
+
     subclass_non_save_attributes = ["_batch_size_is_specified"]
 
     def __init__(
@@ -25,7 +32,7 @@ class RBLNPriorTransformerConfig(RBLNModelConfig):
         batch_size: Optional[int] = None,
         embedding_dim: Optional[int] = None,
         num_embeddings: Optional[int] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:

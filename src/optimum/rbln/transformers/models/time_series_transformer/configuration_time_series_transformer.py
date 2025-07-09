@@ -1,16 +1,23 @@
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNTimeSeriesTransformerForPredictionConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLNTimeSeriesTransformerForPrediction.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized Time Series Transformer models for time series forecasting tasks.
+    """
+
     def __init__(
         self,
         batch_size: Optional[int] = None,
         enc_max_seq_len: Optional[int] = None,
         dec_max_seq_len: Optional[int] = None,
         num_parallel_samples: Optional[int] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:
