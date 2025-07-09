@@ -17,3 +17,7 @@ from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausa
 
 class RBLNQwen3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
     pass
+
+
+class RBLNQwen3ModelConfig(RBLNDecoderOnlyModelForCausalLMConfig):
+    pass
