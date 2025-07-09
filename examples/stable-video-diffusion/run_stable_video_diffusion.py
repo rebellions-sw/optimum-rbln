@@ -11,21 +11,21 @@ from optimum.rbln import RBLNStableVideoDiffusionPipeline
 def main(
     model_id: str = "stabilityai/stable-video-diffusion-img2vid-xt-1-1",
     from_diffusers: bool = False,
-    img_width: int = 1024,
-    img_height: int = 576,
+    width: int = 1024,
+    height: int = 576,
     num_frames: Optional[int] = None,
     decode_chunk_size: Optional[int] = None,
 ):
     url = "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/svd/rocket.png"
     image = load_image(url)
-    image = image.resize((img_width, img_height))
+    image = image.resize((width, height))
 
     if from_diffusers:
         pipe = RBLNStableVideoDiffusionPipeline.from_pretrained(
             model_id,
             export=True,
-            rbln_img_width=img_width,
-            rbln_img_height=img_height,
+            rbln_width=width,
+            rbln_height=height,
             rbln_num_frames=num_frames,
             rbln_decode_chunk_size=decode_chunk_size,
             rbln_config={
@@ -49,8 +49,8 @@ def main(
     generator = torch.manual_seed(42)
     frames = pipe(
         image=image,
-        height=img_height,
-        width=img_width,
+        height=height,
+        width=width,
         num_frames=num_frames,
         generator=generator,
     ).frames[0]

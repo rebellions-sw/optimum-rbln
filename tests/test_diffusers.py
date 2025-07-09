@@ -320,8 +320,8 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
         "width": 32,
     }
     RBLN_CLASS_KWARGS = {
-        "rbln_img_width": 32,
-        "rbln_img_height": 32,
+        "rbln_width": 32,
+        "rbln_height": 32,
         "rbln_num_frames": 2,
         "rbln_decode_chunk_size": 2,
         "rbln_config": {

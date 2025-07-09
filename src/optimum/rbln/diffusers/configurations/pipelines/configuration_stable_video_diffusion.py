@@ -30,8 +30,8 @@ class RBLNStableVideoDiffusionPipelineConfig(RBLNModelConfig):
         vae: Optional[RBLNAutoencoderKLTemporalDecoderConfig] = None,
         *,
         batch_size: Optional[int] = None,
-        img_height: Optional[int] = None,
-        img_width: Optional[int] = None,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
         num_frames: Optional[int] = None,
         decode_chunk_size: Optional[int] = None,
         guidance_scale: Optional[float] = None,
@@ -46,31 +46,31 @@ class RBLNStableVideoDiffusionPipelineConfig(RBLNModelConfig):
             vae (Optional[RBLNAutoencoderKLTemporalDecoderConfig]): Configuration for the VAE model component.
                 Initialized as RBLNAutoencoderKLTemporalDecoderConfig if not provided.
             batch_size (Optional[int]): Batch size for inference, applied to all submodules.
-            img_height (Optional[int]): Height of the generated images.
-            img_width (Optional[int]): Width of the generated images.
+            height (Optional[int]): Height of the generated images.
+            width (Optional[int]): Width of the generated images.
             num_frames (Optional[int]):
             decode_chunk_size (Optional[int]):
             sample_size (Optional[Tuple[int, int]]): Spatial dimensions for the UNet model.
             image_size (Optional[Tuple[int, int]]): Alternative way to specify image dimensions.
-                Cannot be used together with img_height/img_width.
+                Cannot be used together with height/width.
             guidance_scale (Optional[float]): Scale for classifier-free guidance.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
-            ValueError: If both image_size and img_height/img_width are provided.
+            ValueError: If both image_size and height/width are provided.
 
         Note:
             When guidance_scale > 1.0, the UNet batch size is automatically doubled to
             accommodate classifier-free guidance.
         """
         super().__init__(**kwargs)
-        if img_height is not None and img_width is not None:
-            image_size = (img_height, img_width)
+        if height is not None and width is not None:
+            image_size = (height, width)
         else:
             # Get default image size from original class to set UNet, VAE image size
-            img_height = self.get_default_values_for_original_cls("__call__", ["height"])["height"]
-            img_width = self.get_default_values_for_original_cls("__call__", ["width"])["width"]
-            image_size = (img_height, img_width)
+            height = self.get_default_values_for_original_cls("__call__", ["height"])["height"]
+            width = self.get_default_values_for_original_cls("__call__", ["width"])["width"]
+            image_size = (height, width)
 
         self.image_encoder = self.init_submodule_config(
             RBLNCLIPVisionModelWithProjectionConfig, image_encoder, batch_size=batch_size
