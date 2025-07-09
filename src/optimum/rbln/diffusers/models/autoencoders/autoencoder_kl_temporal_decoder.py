@@ -51,25 +51,49 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
 
-        self.encoder = RBLNRuntimeVAEEncoder(runtime=self.model[0], main_input_name="x")
+        if self.rbln_config.uses_encoder:
+            self.encoder = RBLNRuntimeVAEEncoder(runtime=self.model[0], main_input_name="x")
         self.decoder = RBLNRuntimeVAEDecoder(runtime=self.model[1], main_input_name="z")
         self.image_size = self.rbln_config.image_size
+
+    @classmethod
+    def wrap_model_if_needed(
+        cls, model: torch.nn.Module, rbln_config: RBLNAutoencoderKLTemporalDecoderConfig
+    ) -> torch.nn.Module:
+        decoder_model = _VAETemporalDecoder(model)
+        decoder_model.num_frames = rbln_config.decode_chunk_size
+        decoder_model.eval()
+
+        if rbln_config.uses_encoder:
+            encoder_model = _VAEEncoder(model)
+            encoder_model.eval()
+            return encoder_model, decoder_model
+        else:
+            return decoder_model
 
     @classmethod
     def get_compiled_model(
         cls, model, rbln_config: RBLNAutoencoderKLTemporalDecoderConfig
     ) -> Dict[str, rebel.RBLNCompiledModel]:
-        expected_models = ["encoder", "decoder"]
-
         compiled_models = {}
-        for i, model_name in enumerate(expected_models):
-            if model_name == "encoder":
-                wrapped_model = _VAEEncoder(model)
-            else:
-                wrapped_model = _VAETemporalDecoder(model)
-                wrapped_model.num_frames = rbln_config.decode_chunk_size
-            wrapped_model.eval()
-            compiled_models[model_name] = cls.compile(wrapped_model, rbln_compile_config=rbln_config.compile_cfgs[i])
+        if rbln_config.uses_encoder:
+            encoder_model, decoder_model = cls.wrap_model_if_needed(model, rbln_config)
+            enc_compiled_model = cls.compile(
+                encoder_model,
+                rbln_compile_config=rbln_config.compile_cfgs[0],
+                create_runtimes=rbln_config.create_runtimes,
+                device=rbln_config.device_map["encoder"],
+            )
+            compiled_models["encoder"] = enc_compiled_model
+        else:
+            decoder_model = cls.wrap_model_if_needed(model, rbln_config)
+        dec_compiled_model = cls.compile(
+            decoder_model,
+            rbln_compile_config=rbln_config.compile_cfgs[-1],
+            create_runtimes=rbln_config.create_runtimes,
+            device=rbln_config.device_map["decoder"],
+        )
+        compiled_models["decoder"] = dec_compiled_model
 
         return compiled_models
 
@@ -154,19 +178,20 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
                 rbln_config.vae_scale_factor = 8
 
         compile_cfgs = []
-        vae_enc_input_info = [
-            (
-                "x",
-                [
-                    rbln_config.batch_size,
-                    model_config.in_channels,
-                    rbln_config.sample_size[0],
-                    rbln_config.sample_size[1],
-                ],
-                "float32",
-            )
-        ]
-        compile_cfgs.append(RBLNCompileConfig(compiled_model_name="encoder", input_info=vae_enc_input_info))
+        if rbln_config.uses_encoder:
+            vae_enc_input_info = [
+                (
+                    "x",
+                    [
+                        rbln_config.batch_size,
+                        model_config.in_channels,
+                        rbln_config.sample_size[0],
+                        rbln_config.sample_size[1],
+                    ],
+                    "float32",
+                )
+            ]
+            compile_cfgs.append(RBLNCompileConfig(compiled_model_name="encoder", input_info=vae_enc_input_info))
 
         decode_batch_size = rbln_config.batch_size * rbln_config.decode_chunk_size
         vae_dec_input_info = [
