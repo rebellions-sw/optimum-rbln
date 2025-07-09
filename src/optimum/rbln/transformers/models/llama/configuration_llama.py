@@ -41,6 +41,7 @@ class RBLNLlamaForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
     ```
     """
 
+
 class RBLNLlamaModelConfig(RBLNDecoderOnlyModelConfig):
     """
     Configuration class for RBLN Llama models.

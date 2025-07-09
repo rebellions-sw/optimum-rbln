@@ -1274,6 +1274,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
         # TODO: add prefill runtime class.
         self.prefill_decoder = RBLNPytorchRuntime(runtime=self.model[0])
+        self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
 
     @classmethod
     def save_torch_artifacts(
@@ -1616,7 +1617,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             cache_pos_chunk = cache_position[:, step : step + self.rbln_config.prefill_chunk_size]
 
             # Forward pass for the current chunk
-            last_hidden_states_chunk = self.prefill_runtime(
+            last_hidden_states_chunk = self.prefill_decoder(
                 inputs_embeds=input_chunk,
                 cache_position=cache_pos_chunk,
                 block_tables=self.block_tables,
