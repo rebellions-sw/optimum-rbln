@@ -66,14 +66,12 @@ class BaseHubTest:
 
                 self.assertTrue(HF_AUTH_TOKEN)
                 self.assertTrue(HF_USER_ID)
+                TOKEN_KEY = "token"
+                REPO_KEY = "repo_id"
 
                 if self.is_diffuser():
-                    TOKEN_KEY = "token"
-                    REPO_KEY = "repo_id"
                     self.model.text_encoder.config.from_local = remote_hash
                 else:
-                    TOKEN_KEY = "use_auth_token"
-                    REPO_KEY = "repository_id"
                     self.model.config.from_local = remote_hash
 
                 self.model.save_pretrained(
@@ -111,18 +109,13 @@ class BaseHubTest:
             HF_AUTH_TOKEN = os.environ.get("HF_AUTH_TOKEN", None)
             HF_USER_ID = os.environ.get("HF_USER_ID", None)
 
-            if self.is_diffuser():
-                self.skipTest("Skipping test because it is a diffuser.")
-
-            pull_model_dir = self.RBLN_CLASS._load_compiled_model_dir(
+            _ = self.RBLN_CLASS.from_pretrained(
                 f"{HF_USER_ID}/{self.get_hf_remote_dir()}",
-                HF_AUTH_TOKEN,
+                export=False,
+                **self.HF_CONFIG_KWARGS,
+                rbln_device=self.DEVICE,
+                token=HF_AUTH_TOKEN,
             )
-
-            path = Path(self.get_rbln_local_dir())
-            num_files = sum(1 for _ in path.rglob("*") if _.is_file())
-
-            assert len(filecmp.dircmp(pull_model_dir, self.get_rbln_local_dir()).common) == num_files
 
 
 class BaseTest:
