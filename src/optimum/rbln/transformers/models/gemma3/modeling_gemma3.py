@@ -317,14 +317,42 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         self.decode = self.runtime if self.phase == "decode" else None
 
     def _prepare_prefill_inputs(self, *args, **kwargs):
-        ret_val = super()._prepare_prefill_inputs(*args, **kwargs)
-        ret_val = list(ret_val)
+        (
+            inputs,
+            cache_position,
+            chunked_attention_mask,
+            out_buffers,
+            position_ids,
+            position_embed,
+            padded_cache_lengths,
+            query_length,
+            token_type_ids,
+        ) = super()._prepare_prefill_inputs(*args, **kwargs)
 
-        mask_idx = 2
-        attention_mask = ret_val[mask_idx]
-        ret_val[mask_idx] = torch.zeros(1, attention_mask.shape[-1], dtype=torch.float32)
+        # chunked_attention_mask shape
+        chunked_attention_mask = torch.zeros(1, chunked_attention_mask.shape[-1], dtype=torch.float32)
 
-        return tuple(ret_val)
+        # as gemma3 has different prefill chunk size for image and text, we need to pad the inputs to the max of the two.
+        padding_size = max(self.rbln_config.prefill_chunk_size, self.rbln_config.image_prefill_chunk_size)
+        inputs = torch.nn.functional.pad(inputs, (0, 0, 0, padding_size))
+        cache_position = torch.nn.functional.pad(cache_position, (0, padding_size))
+        position_ids = torch.nn.functional.pad(position_ids, (0, padding_size))
+        position_embed = (
+            None if position_embed is None else torch.nn.functional.pad(position_embed, (0, 0, 0, padding_size))
+        )
+        token_type_ids = torch.nn.functional.pad(token_type_ids, (0, padding_size), value=-1)
+
+        return (
+            inputs,
+            cache_position,
+            chunked_attention_mask,
+            out_buffers,
+            position_ids,
+            position_embed,
+            padded_cache_lengths,
+            query_length,
+            token_type_ids,
+        )
 
     def prefill_forward(
         self,
@@ -388,12 +416,13 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                 first_image_token_idx = torch.where(token_type_ids[:, step : step + prefill_chunk_size] == 1)[1][0]
                 num_processed_tokens = first_image_token_idx
 
-            query_position = torch.tensor(
+            query_position = (
                 (query_length - 1) % prefill_chunk_size
                 if step + prefill_chunk_size >= query_length
-                else num_processed_tokens - 1,
-                dtype=torch.int16,
+                else num_processed_tokens - 1
             )
+            query_position = torch.tensor(query_position, dtype=torch.int16)
+
             input_chunk = inputs[:, step : step + prefill_chunk_size]
             cache_pos_chunk = cache_position[:, step : step + prefill_chunk_size] + padded_cache_lengths
             position_ids_chunk = position_ids[:, step : step + prefill_chunk_size]
