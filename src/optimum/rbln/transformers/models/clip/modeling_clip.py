@@ -15,7 +15,13 @@
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import torch
-from transformers import CLIPTextConfig, CLIPTextModel, CLIPVisionConfig, CLIPVisionModel
+from transformers import (
+    CLIPTextConfig,
+    CLIPTextModel,
+    CLIPVisionConfig,
+    CLIPVisionModel,
+    CLIPVisionModelWithProjection,
+)
 from transformers.models.clip.modeling_clip import CLIPTextModelOutput, CLIPVisionModelOutput
 
 from ....configuration_utils import RBLNCompileConfig
@@ -120,6 +126,16 @@ class _VisionEncoder(torch.nn.Module):
         return enc_out
 
 
+class _VisionEncoderWithProjection(torch.nn.Module):
+    def __init__(self, enc: CLIPVisionModelWithProjection):
+        super().__init__()
+        self.enc = enc
+
+    def forward(self, inp):
+        enc_out = self.enc(inp, return_dict=False)
+        return enc_out
+
+
 class RBLNCLIPVisionModel(RBLNModel):
     """
     RBLN optimized CLIP vision encoder model.
@@ -208,6 +224,10 @@ class RBLNCLIPVisionModelWithProjection(RBLNCLIPVisionModel):
     multimodal embedding alignment tasks.
     """
 
+    @classmethod
+    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNCLIPVisionModelConfig) -> torch.nn.Module:
+        return _VisionEncoderWithProjection(model).eval()
+
     def forward(
         self,
         pixel_values: Optional[torch.FloatTensor] = None,
@@ -217,12 +237,8 @@ class RBLNCLIPVisionModelWithProjection(RBLNCLIPVisionModel):
             logger.warning(f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__}.")
 
         output = super().forward(pixel_values)
-        image_embeds = output[0]
-        last_hidden_state = output[1]
-        hidden_states = output[2:]
-
         return CLIPVisionModelOutput(
-            image_embeds=image_embeds,
-            last_hidden_state=last_hidden_state,
-            hidden_states=hidden_states,
+            image_embeds=output[0],
+            last_hidden_state=output[1],
+            hidden_states=output[2:],
         )
