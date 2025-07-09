@@ -507,6 +507,9 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
                 f"Please ensure the model directory exists and you have the necessary permissions to access it."
             )
 
+        if isinstance(self.config, PretrainedConfig):
+            self.config.save_pretrained(real_save_dir)
+
         if save_directory_path == real_save_dir:
             raise FileExistsError(
                 f"Cannot save model to '{save_directory}'. This directory already exists and contains the model files."

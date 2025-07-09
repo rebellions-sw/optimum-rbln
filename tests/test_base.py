@@ -32,7 +32,7 @@ def require_hf_user_id(test_case):
     Decorator marking a test that requires huggingface hub user id.
     """
     user_id = os.environ.get("HF_USER_ID", None)
-    if user_id is None:
+    if not user_id:
         return unittest.skip("test requires hf token as `HF_USER_ID` environment variable")(test_case)
     else:
         return test_case
@@ -43,10 +43,86 @@ def require_hf_token(test_case):
     Decorator marking a test that requires huggingface hub token.
     """
     use_auth_token = os.environ.get("HF_AUTH_TOKEN", None)
-    if use_auth_token is None:
+    if not use_auth_token:
         return unittest.skip("test requires hf token as `HF_AUTH_TOKEN` environment variable")(test_case)
     else:
         return test_case
+
+
+class BaseHubTest:
+    class TestHub(unittest.TestCase):
+        @require_hf_token
+        @require_hf_user_id
+        def test_push_to_hub(self):
+            """
+            "HF_AUTH_TOKEN" should be set to execute this.
+            """
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                # create remote hash to check if file was updated.
+
+                remote_hash = random.getrandbits(128)
+                HF_AUTH_TOKEN = os.environ.get("HF_AUTH_TOKEN", None)
+                HF_USER_ID = os.environ.get("HF_USER_ID", None)
+
+                self.assertTrue(HF_AUTH_TOKEN)
+                self.assertTrue(HF_USER_ID)
+
+                if self.is_diffuser():
+                    TOKEN_KEY = "token"
+                    REPO_KEY = "repo_id"
+                    self.model.text_encoder.config.from_local = remote_hash
+                else:
+                    TOKEN_KEY = "use_auth_token"
+                    REPO_KEY = "repository_id"
+                    self.model.config.from_local = remote_hash
+
+                self.model.save_pretrained(
+                    tmpdirname,
+                    push_to_hub=True,
+                    private=True,
+                    **{
+                        TOKEN_KEY: HF_AUTH_TOKEN,
+                        REPO_KEY: f"{HF_USER_ID}/{self.get_hf_remote_dir()}",
+                    },
+                )
+
+                # If our tests were moved to a public rather than a private repository,
+                # this logic could be as simple as downloading the config file directly
+                # and comparing it.
+                if self.is_diffuser():
+                    cfg = CLIPConfig.from_pretrained(
+                        f"{HF_USER_ID}/{self.get_hf_remote_dir()}",
+                        subfolder="text_encoder",
+                        private=True,
+                        **{TOKEN_KEY: HF_AUTH_TOKEN},
+                    )
+                else:
+                    cfg = AutoConfig.from_pretrained(
+                        f"{HF_USER_ID}/{self.get_hf_remote_dir()}",
+                        private=True,
+                        **{TOKEN_KEY: HF_AUTH_TOKEN},
+                    )
+
+                self.assertEqual(remote_hash, cfg.from_local)
+
+        @require_hf_token
+        @require_hf_user_id
+        def test_pull_compiled_model_from_hub(self):
+            HF_AUTH_TOKEN = os.environ.get("HF_AUTH_TOKEN", None)
+            HF_USER_ID = os.environ.get("HF_USER_ID", None)
+
+            if self.is_diffuser():
+                self.skipTest("Skipping test because it is a diffuser.")
+
+            pull_model_dir = self.RBLN_CLASS._load_compiled_model_dir(
+                f"{HF_USER_ID}/{self.get_hf_remote_dir()}",
+                HF_AUTH_TOKEN,
+            )
+
+            path = Path(self.get_rbln_local_dir())
+            num_files = sum(1 for _ in path.rglob("*") if _.is_file())
+
+            assert len(filecmp.dircmp(pull_model_dir, self.get_rbln_local_dir()).common) == num_files
 
 
 class BaseTest:
@@ -115,60 +191,6 @@ class BaseTest:
 
         def test_model_save_dir(self):
             self.assertTrue(os.path.exists(self.get_rbln_local_dir()), "model_save_dir does not work.")
-
-        @require_hf_token
-        @require_hf_user_id
-        def test_push_to_hub(self):
-            """
-            "HF_AUTH_TOKEN" should be set to execute this.
-            """
-            with tempfile.TemporaryDirectory() as tmpdirname:
-                # create remote hash to check if file was updated.
-
-                remote_hash = random.getrandbits(128)
-                HF_AUTH_TOKEN = os.environ.get("HF_AUTH_TOKEN", None)
-                HF_USER_ID = os.environ.get("HF_USER_ID", None)
-
-                self.assertFalse(HF_AUTH_TOKEN is None)
-                self.assertFalse(HF_USER_ID is None)
-
-                if self.is_diffuser():
-                    TOKEN_KEY = "token"
-                    REPO_KEY = "repo_id"
-                    self.model.text_encoder.config.from_local = remote_hash
-                else:
-                    TOKEN_KEY = "use_auth_token"
-                    REPO_KEY = "repository_id"
-                    self.model.config.from_local = remote_hash
-
-                self.model.save_pretrained(
-                    tmpdirname,
-                    push_to_hub=True,
-                    private=True,
-                    **{
-                        TOKEN_KEY: HF_AUTH_TOKEN,
-                        REPO_KEY: f"{HF_USER_ID}/{self.get_hf_remote_dir()}",
-                    },
-                )
-
-                # If our tests were moved to a public rather than a private repository,
-                # this logic could be as simple as downloading the config file directly
-                # and comparing it.
-                if self.is_diffuser():
-                    cfg = CLIPConfig.from_pretrained(
-                        f"{HF_USER_ID}/{self.get_hf_remote_dir()}",
-                        subfolder="text_encoder",
-                        private=True,
-                        **{TOKEN_KEY: HF_AUTH_TOKEN},
-                    )
-                else:
-                    cfg = AutoConfig.from_pretrained(
-                        f"{HF_USER_ID}/{self.get_hf_remote_dir()}",
-                        private=True,
-                        **{TOKEN_KEY: HF_AUTH_TOKEN},
-                    )
-
-                self.assertEqual(remote_hash, cfg.from_local)
 
         def get_inputs(self):
             return self.GENERATION_KWARGS
@@ -250,22 +272,6 @@ class BaseTest:
             )
 
             assert is_valid_framework, "Model does not inherit from PreTrainedModel."
-
-        @require_hf_token
-        @require_hf_user_id
-        def test_pull_compiled_model_from_hub(self):
-            HF_AUTH_TOKEN = os.environ.get("HF_AUTH_TOKEN", None)
-            HF_USER_ID = os.environ.get("HF_USER_ID", None)
-
-            pull_model_dir = self.RBLN_CLASS._load_compiled_model_dir(
-                f"{HF_USER_ID}/{self.get_hf_remote_dir()}",
-                HF_AUTH_TOKEN,
-            )
-
-            path = Path(self.get_rbln_local_dir())
-            num_files = sum(1 for _ in path.rglob("*") if _.is_file())
-
-            assert len(filecmp.dircmp(pull_model_dir, self.get_rbln_local_dir()).common) == num_files
 
 
 class DisallowedTestBase:
