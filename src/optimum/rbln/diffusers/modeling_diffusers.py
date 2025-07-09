@@ -230,6 +230,7 @@ class RBLNDiffusionMixin:
             create_runtimes=rbln_config.create_runtimes,
             optimize_host_mem=rbln_config.optimize_host_memory,
             activate_profiler=rbln_config.activate_profiler,
+            timeout=rbln_config.timeout,
         ):
             model = super().from_pretrained(pretrained_model_name_or_path=model_id, **kwargs)
 
