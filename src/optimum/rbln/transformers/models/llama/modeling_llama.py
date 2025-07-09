@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from ....utils import logging
-from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM
+from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyModel
 from .llama_architecture import LlamaWrapper
 
 
@@ -81,3 +81,13 @@ class RBLNLlamaForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     """
 
     _decoder_wrapper_cls = LlamaWrapper
+
+
+class RBLNLlamaModel(RBLNDecoderOnlyModel):
+    """
+    The Llama Model transformer with a language modeling head (linear layer) on top.
+    This model inherits from [`RBLNDecoderOnlyModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    A class to convert and run pre-trained transformers based LlamaModel model on RBLN devices.
+    It implements the methods to convert a pre-trained transformers LlamaModel model into a RBLN transformer model by:
+    """

@@ -32,7 +32,11 @@ from transformers.models.gemma3.modeling_gemma3 import Gemma3TextScaledWordEmbed
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyForCausalLMOutput, RBLNRuntimeModel
+from ..decoderonly.modeling_decoderonly import (
+    RBLNDecoderOnlyForCausalLMOutput,
+    RBLNDecoderOnlyModelForCausalLM,
+    RBLNRuntimeModel,
+)
 from .configuration_gemma3 import RBLNGemma3ForCausalLMConfig
 from .gemma3_architecture import Gemma3ForCausalLMWrapper
 

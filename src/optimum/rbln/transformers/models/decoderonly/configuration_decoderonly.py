@@ -45,7 +45,6 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
         attn_impl: Optional[str] = None,
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
-        quantization: Optional[Union[Dict[str, Any], RBLNQuantizationConfig]] = None,
         prefill_chunk_size: Optional[int] = None,
         kvcache_num_blocks: Optional[int] = None,
         cache_impl: Optional[CacheImplType] = None,
@@ -75,8 +74,6 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
             kvcache_block_size (Optional[int]): Sets the size (in number of tokens) of each block
                 in the PagedAttention KV cache. See the "KV Cache Block Size (`kvcache_block_size`)"
                 section below for details.
-            quantization (Optional[Dict[str, Any]]): Configuration dictionary for applying model
-                quantization. Specifies format, etc.
             prefill_chunk_size (Optional[int]): The chunk size used during the prefill phase for
                 processing input sequences. Defaults to 128. Must be a positive integer
                 divisible by 64. Affects prefill performance and memory usage.
@@ -179,10 +176,6 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
         self.attn_impl = attn_impl
         self.kvcache_partition_len = kvcache_partition_len
         self.kvcache_block_size = kvcache_block_size
-        self.quantization = quantization or {}
-        if self.quantization and isinstance(self.quantization, dict):
-            self.quantization = RBLNQuantizationConfig(**self.quantization)
-
         self.prefill_chunk_size = prefill_chunk_size or 128
         if self.prefill_chunk_size % 64 != 0 or self.prefill_chunk_size <= 0:
             raise ValueError("`prefill_chunk_size` must be a positive integer divisible by 64.")
