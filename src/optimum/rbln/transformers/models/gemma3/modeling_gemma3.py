@@ -646,7 +646,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
         image_prefill_compile_config = rbln_compile_configs[1]
         image_prefill_example_inputs = image_prefill_compile_config.get_dummy_inputs(
-            fill=0, meta_tensor_names=meta_tensor_names
+            fill=0, static_tensors=static_tensors
         )
         wrapped_model.phase = "image_prefill"
         compiled_image_prefill = compile_model(
