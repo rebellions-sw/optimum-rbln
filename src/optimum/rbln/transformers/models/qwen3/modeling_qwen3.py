@@ -21,7 +21,6 @@ from rebel.compile_context import CompileContext
 from transformers import PretrainedConfig, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPast
 from transformers.modeling_utils import no_init_weights
-from transformers.models.qwen3.modeling_qwen3 import Qwen3RotaryEmbedding
 
 from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
@@ -68,11 +67,9 @@ class RBLNQwen3Model(RBLNModel):
         artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
         self.embed_tokens = self._create_embedding_layer()
         self.embed_tokens.load_state_dict(artifacts["embed_tokens"])
-        self.rotary_emb = Qwen3RotaryEmbedding(self.config)
         self.block_tables = torch.arange(
             self.rbln_config.max_seq_len / self.rbln_config.kvcache_block_size, dtype=torch.int16
         )
-        self.max_seq_len = self.rbln_config.max_seq_len
         self.causal_mask = 1 - torch.triu(
             torch.ones(1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.prefill_chunk_size), diagonal=1
         )
