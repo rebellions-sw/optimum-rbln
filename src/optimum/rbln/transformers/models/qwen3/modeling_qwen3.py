@@ -62,13 +62,16 @@ class RBLNQwen3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
 class RBLNQwen3Model(RBLNModel):
     _decoder_wrapper_cls = Qwen3ModelWrapper
+    _use_rotary_emb = True
 
     def __post_init__(self, **kwargs):
         artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
         self.embed_tokens = self._create_embedding_layer()
         self.embed_tokens.load_state_dict(artifacts["embed_tokens"])
         self.rotary_emb = Qwen3RotaryEmbedding(self.config)
-        self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks - 1, dtype=torch.int16)
+        self.block_tables = torch.arange(
+            self.rbln_config.max_seq_len / self.rbln_config.kvcache_block_size, dtype=torch.int16
+        )
         self.max_seq_len = self.rbln_config.max_seq_len
         self.causal_mask = 1 - torch.triu(
             torch.ones(1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.prefill_chunk_size), diagonal=1
@@ -105,7 +108,7 @@ class RBLNQwen3Model(RBLNModel):
             "attn_impl": rbln_config.attn_impl,
             "kvcache_partition_len": rbln_config.kvcache_partition_len,
             "kvcache_block_size": rbln_config.kvcache_block_size,
-            "use_rotary_emb": True,
+            "use_rotary_emb": cls._use_rotary_emb,
             "use_attention_mask": rbln_config.use_attention_mask,
             "cache_impl": rbln_config.cache_impl,
             "sliding_window": rbln_config.sliding_window,
@@ -168,8 +171,11 @@ class RBLNQwen3Model(RBLNModel):
             rbln_config=rbln_config,
             model_config=model_config,
         )
-        # if attention_mask is exist
-        input_info.pop(3)
+
+        if rbln_config.sliding_window is None:
+            # remove query position
+            input_info.pop(3)
+
         return input_info
 
     @classmethod
@@ -201,6 +207,7 @@ class RBLNQwen3Model(RBLNModel):
             max_seq_len=rbln_config.max_seq_len,
         )
 
+        # only compile prefill cb -> always batch_size 1
         required_num_blocks = rbln_config.max_seq_len // rbln_config.kvcache_block_size
         max_num_blocks = required_num_blocks
 
@@ -270,11 +277,16 @@ class RBLNQwen3Model(RBLNModel):
                 position_embed[:, :, :, attention_mask.bool(), :] if attention_mask is not None else position_embed
             )
 
-        chunked_attention_mask = (
-            torch.zeros(1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.max_seq_len, dtype=torch.float32)
-            if self.rbln_config.use_attention_mask
-            else None
-        )
+        if self.rbln_config.use_attention_mask:
+            chunked_attention_mask = (
+                torch.zeros(
+                    1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.max_seq_len, dtype=torch.float32
+                )
+                if self.rbln_config.use_attention_mask
+                else None
+            )
+        else:
+            chunked_attention_mask = None
 
         # padding for chunked prefill
         padding_size = (
@@ -306,20 +318,17 @@ class RBLNQwen3Model(RBLNModel):
             # Extract the current chunk of inputs and cache positions
             input_chunk = padded_input[:, step : step + self.rbln_config.prefill_chunk_size]
             cache_pos_chunk = cache_position[:, step : step + self.rbln_config.prefill_chunk_size]
-            # if self.rbln_config.use_attention_mask and not self.rbln_config.use_position_ids:
-            # Update attention mask to ensure proper causal behavior
-            if step >= self.rbln_config.prefill_chunk_size:
-                padded_attention_mask[:, :, :, step - self.rbln_config.prefill_chunk_size : step] = 1
-            padded_attention_mask[:, :, :, step : step + self.rbln_config.prefill_chunk_size] = self.causal_mask
 
-            # Forward pass for the current chunk
+            if self.rbln_config.use_attention_mask:
+                if step >= self.rbln_config.prefill_chunk_size:
+                    padded_attention_mask[:, :, :, step - self.rbln_config.prefill_chunk_size : step] = 1
+                padded_attention_mask[:, :, :, step : step + self.rbln_config.prefill_chunk_size] = self.causal_mask
+
             last_hidden_states_chunk = self.model[0](
-                # inputs_embeds=input_chunk,
                 input_ids=input_chunk,
                 attention_mask=padded_attention_mask,
                 cache_position=cache_pos_chunk,
                 block_tables=self.block_tables,
-                # position_emb=padded_position_embed,
             )
             last_hidden_states.append(last_hidden_states_chunk)
         last_hidden_states = torch.concat(last_hidden_states, dim=-2)[:, :query_length]

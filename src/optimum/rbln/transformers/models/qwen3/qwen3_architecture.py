@@ -43,7 +43,7 @@ class Qwen3ModelWrapper(nn.Module):
     def __init__(
         self,
         model,
-        attn_impl: str,
+        attn_impl=None,
         use_inputs_embeds=None,
         use_attention_mask=None,
         use_rotary_emb=None,
@@ -67,7 +67,6 @@ class Qwen3ModelWrapper(nn.Module):
             self.rotary_emb = None
 
         self._original_mod = model
-        self._phase = "prefill"
         self.use_inputs_embeds = use_inputs_embeds
         self.attn_impl = attn_impl
         self.cache_impl = cache_impl
@@ -77,13 +76,12 @@ class Qwen3ModelWrapper(nn.Module):
         self.max_seq_len = max_seq_len
         self.sliding_window = sliding_window
         self.sliding_window_layers = sliding_window_layers
-        self.model, self.layers = self.convert_to_rbln_model(model)
+        self.model = self.convert_to_rbln_model(model)
 
     def get_rotary_emb(self, max_seq_len):
         return RotaryEmbedding(config=self.config, max_seq_len_cached=max_seq_len)
 
     def convert_to_rbln_model(self, base_model: PreTrainedModel):
-        new_layers = []
         for layer_idx, layer in enumerate(base_model.layers):
             is_sliding = layer_idx in self.sliding_window_layers
             new_self_attn = Qwen3Attention(
@@ -98,9 +96,8 @@ class Qwen3ModelWrapper(nn.Module):
                 kvcache_partition_len=self.kvcache_partition_len,
             )
             base_model.layers[layer_idx] = DecoderOnlyLayer(layer, new_self_attn)
-            new_layers.append(DecoderOnlyLayer(layer, new_self_attn))
 
-        return base_model, new_layers
+        return base_model
 
     @property
     def hidden_multiplier(self):
@@ -145,6 +142,7 @@ class Qwen3ModelWrapper(nn.Module):
         cache_position = args.pop(0)
         global_block_tables = args.pop(0) if self.cache_impl in ["hybrid", "static"] else None
         local_block_tables = args.pop(0) if self.cache_impl in ["hybrid", "sliding_window"] else None
+        query_position = args.pop(0) if self.sliding_window else None
         attention_mask = args.pop(0) if self.use_attention_mask else None
         position_ids = None
         past_key_values = args
@@ -177,6 +175,7 @@ class Qwen3ModelWrapper(nn.Module):
             local_block_tables,
             attention_mask,
             position_ids,
+            query_position,
             past_key_values,
             rotary_emb,
         )
@@ -190,6 +189,7 @@ class Qwen3ModelWrapper(nn.Module):
             local_block_tables,
             attention_mask,
             position_ids,
+            query_position,
             past_key_values,
             rotary_emb,
         ) = self.prepare_forward_args(*args)
@@ -242,7 +242,7 @@ class Qwen3ModelWrapper(nn.Module):
         if len(self.sliding_window_layers) > 0:
             sliding_cache_pos = self.get_local_cache_positions(position_ids, query_position)
 
-        for layer_idx, layer in enumerate(self.layers):
+        for layer_idx, layer in enumerate(self.model.layers):
             is_sliding = True if layer_idx in self.sliding_window_layers else False
             hidden_states = layer(
                 hidden_states=hidden_states,
