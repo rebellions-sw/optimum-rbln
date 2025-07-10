@@ -1,4 +1,3 @@
-import filecmp
 import inspect
 import os
 import random
@@ -6,7 +5,6 @@ import shutil
 import tempfile
 import unittest
 from enum import Enum
-from pathlib import Path
 
 import transformers
 from diffusers import DiffusionPipeline
