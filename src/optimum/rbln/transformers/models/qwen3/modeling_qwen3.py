@@ -308,7 +308,7 @@ class RBLNQwen3Model(RBLNModel):
         attention_mask: Optional[torch.Tensor] = None,
         position_embed: Optional[torch.Tensor] = None,
     ):
-        padded_input, padded_attention_mask, padded_position_embed, cache_position, query_length = (
+        padded_input, chunked_attention_mask, padded_position_embed, cache_position, query_length = (
             self._preprocess_chunked_prefill(inputs_embeds, attention_mask, position_embed)
         )
 
@@ -319,18 +319,21 @@ class RBLNQwen3Model(RBLNModel):
             input_chunk = padded_input[:, step : step + self.rbln_config.prefill_chunk_size]
             cache_pos_chunk = cache_position[:, step : step + self.rbln_config.prefill_chunk_size]
 
-            if self.rbln_config.use_attention_mask:
-                if step >= self.rbln_config.prefill_chunk_size:
-                    padded_attention_mask[:, :, :, step - self.rbln_config.prefill_chunk_size : step] = 1
-                padded_attention_mask[:, :, :, step : step + self.rbln_config.prefill_chunk_size] = self.causal_mask
+            model_args = {
+                "input_ids": input_chunk,
+                "cache_position": cache_pos_chunk,
+                "block_tables": self.block_tables,
+            }
 
-            last_hidden_states_chunk = self.model[0](
-                input_ids=input_chunk,
-                attention_mask=padded_attention_mask,
-                cache_position=cache_pos_chunk,
-                block_tables=self.block_tables,
-            )
+            if chunked_attention_mask is not None:
+                if step >= self.rbln_config.prefill_chunk_size:
+                    chunked_attention_mask[:, :, :, step - self.rbln_config.prefill_chunk_size : step] = 1
+                chunked_attention_mask[:, :, :, step : step + self.rbln_config.prefill_chunk_size] = self.causal_mask
+                model_args["attention_mask"] = chunked_attention_mask
+
+            last_hidden_states_chunk = self.model[0](**model_args)
             last_hidden_states.append(last_hidden_states_chunk)
+
         last_hidden_states = torch.concat(last_hidden_states, dim=-2)[:, :query_length]
 
         return self._postprocess_chunked_prefill(last_hidden_states, attention_mask)
