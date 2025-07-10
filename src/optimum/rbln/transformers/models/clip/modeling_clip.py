@@ -203,12 +203,12 @@ class RBLNCLIPVisionModel(RBLNModel):
     def forward(
         self,
         pixel_values: Optional[torch.FloatTensor] = None,
-        return_dict: bool = None,
+        return_dict: bool = True,
         output_attentions: bool = None,
         output_hidden_states: bool = None,
         interpolate_pos_encoding: bool = False,
         **kwargs,
-    ) -> Union[Tuple, CLIPVisionModelOutput]:
+    ) -> Union[Tuple, BaseModelOutputWithPooling]:
         if len(kwargs) > 0 and any(value is not None for value in kwargs.values()):
             logger.warning(
                 f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__.__name__}."
@@ -243,36 +243,31 @@ class RBLNCLIPVisionModel(RBLNModel):
     def _prepare_output(self, output, return_dict):
         # Prepare model output based on return_dict flag.
         # This method can be overridden by subclasses to provide task-specific output handling.
+        last_hidden_state = output.pop(0)
+        pooler_output = output.pop(0)
+        vision_config = self.config.vision_config if hasattr(self.config, "vision_config") else self.config
+
+        if self.rbln_config.output_hidden_states:
+            hidden_states = ()
+            num_hidden_layers = vision_config.num_hidden_layers
+            for _ in range(num_hidden_layers + 1):
+                hidden_states += (output.pop(0),)
+        else:
+            hidden_states = None
+
+        if self.rbln_config.output_attentions:
+            attentions = ()
+            num_hidden_layers = vision_config.num_hidden_layers
+            for _ in range(num_hidden_layers):
+                attentions += (output.pop(0),)
+        else:
+            attentions = None
 
         if not return_dict:
-            return (output,) if not isinstance(output, (tuple, list)) else output
+            return tuple(
+                item for item in (last_hidden_state, pooler_output, hidden_states, attentions) if item is not None
+            )
         else:
-            # return CLIPVisionModelOutput(
-            #     image_embeds=output[0],
-            #     last_hidden_state=output[1],
-            #     hidden_states=output[2:],
-            # )
-
-            last_hidden_state = output.pop(0) if isinstance(output, (tuple, list)) else output
-            pooler_output = output.pop(0)
-            vision_config = self.config.vision_config if hasattr(self.config, "vision_config") else self.config
-
-            if self.rbln_config.output_hidden_states:
-                hidden_states = ()
-                num_hidden_layers = vision_config.num_hidden_layers
-                for _ in range(num_hidden_layers + 1):
-                    hidden_states += (output.pop(0),)
-            else:
-                hidden_states = None
-
-            if self.rbln_config.output_attentions:
-                attentions = ()
-                num_hidden_layers = vision_config.num_hidden_layers
-                for _ in range(num_hidden_layers):
-                    attentions += (output.pop(0),)
-            else:
-                attentions = None
-
             return BaseModelOutputWithPooling(
                 last_hidden_state=last_hidden_state,
                 pooler_output=pooler_output,
@@ -289,53 +284,37 @@ class RBLNCLIPVisionModelWithProjection(RBLNCLIPVisionModel):
     multimodal embedding alignment tasks.
     """
 
-    # def forward(
-    #     self,
-    #     pixel_values: Optional[torch.FloatTensor] = None,
-    #     **kwargs,
-    # ) -> Union[Tuple, CLIPVisionModelOutput]:
-    #     if len(kwargs) > 0 and any(kwargs.values()):
-    #         logger.warning(f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__}.")
-
-    #     output = super().forward(pixel_values)
-    #     image_embeds = output[0]
-    #     last_hidden_state = output[1]
-    #     hidden_states = output[2:]
-
-    #     return CLIPVisionModelOutput(
-    #         image_embeds=image_embeds,
-    #         last_hidden_state=last_hidden_state,
-    #         hidden_states=hidden_states,
-    #     )
-
     def _prepare_output(self, output, return_dict):
         # Prepare model output based on return_dict flag.
         # This method can be overridden by subclasses to provide task-specific output handling.
 
-        if not return_dict:
-            return (output,) if not isinstance(output, (tuple, list)) else output
+        image_embeds = output.pop(0) if isinstance(output, (tuple, list)) else output
+        last_hidden_state = output.pop(0)
+
+        vision_config = self.config.vision_config if hasattr(self.config, "vision_config") else self.config
+
+        if self.rbln_config.output_hidden_states:
+            hidden_states = ()
+            num_hidden_layers = vision_config.num_hidden_layers
+            for _ in range(num_hidden_layers + 1):
+                hidden_states += (output.pop(0),)
         else:
-            image_embeds = output.pop(0) if isinstance(output, (tuple, list)) else output
-            last_hidden_state = output.pop(0)
+            hidden_states = None
 
-            vision_config = self.config.vision_config if hasattr(self.config, "vision_config") else self.config
+        if self.rbln_config.output_attentions:
+            attentions = ()
+            num_hidden_layers = vision_config.num_hidden_layers
+            for _ in range(num_hidden_layers):
+                attentions += (output.pop(0),)
+        else:
+            attentions = None
 
-            if self.rbln_config.output_hidden_states:
-                hidden_states = ()
-                num_hidden_layers = vision_config.num_hidden_layers
-                for _ in range(num_hidden_layers + 1):
-                    hidden_states += (output.pop(0),)
-            else:
-                hidden_states = None
+        if not return_dict:
+            return tuple(
+                item for item in (image_embeds, last_hidden_state, hidden_states, attentions) if item is not None
+            )
 
-            if self.rbln_config.output_attentions:
-                attentions = ()
-                num_hidden_layers = vision_config.num_hidden_layers
-                for _ in range(num_hidden_layers):
-                    attentions += (output.pop(0),)
-            else:
-                attentions = None
-
+        else:
             return CLIPVisionModelOutput(
                 image_embeds=image_embeds,
                 last_hidden_state=last_hidden_state,
