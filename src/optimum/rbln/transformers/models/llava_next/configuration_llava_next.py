@@ -15,6 +15,11 @@
 from typing import Any, Dict, Optional
 
 from ....configuration_utils import RBLNModelConfig
+from ....utils.logging import get_logger
+from ...models.clip import RBLNCLIPVisionModelConfig
+
+
+logger = get_logger(__name__)
 
 
 class RBLNLlavaNextForConditionalGenerationConfig(RBLNModelConfig):
@@ -49,6 +54,17 @@ class RBLNLlavaNextForConditionalGenerationConfig(RBLNModelConfig):
         self.batch_size = batch_size or 1
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
+
+        self.vision_tower = self.init_submodule_config(
+            RBLNCLIPVisionModelConfig,
+            vision_tower,
+        )
+
+        if not self.vision_tower.output_hidden_states:
+            logger.warning(
+                f'Set "output_hidden_states={self.vision_tower.output_hidden_states}" to "output_hidden_states=True" as required by LlavaNext'
+            )
+            self.vision_tower.output_hidden_states = True
 
         self.vision_tower = vision_tower
         self.language_model = language_model
