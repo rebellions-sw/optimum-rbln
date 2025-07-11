@@ -35,8 +35,6 @@ logger = get_logger(__name__)
 
 
 class RBLNModel(RBLNBaseModel):
-    _output_class = None
-
     @classmethod
     def update_kwargs(cls, kwargs):
         # Update user-given kwargs to get proper pytorch model.
@@ -289,7 +287,7 @@ class RBLNModel(RBLNBaseModel):
     @classmethod
     def get_hf_output_class(cls):
         # Dynamically gets the output class from the corresponding HuggingFace model class.
-        if cls._output_class:
+        if "_output_class" in cls.__dict__ and cls._output_class is not None:
             return cls._output_class
 
         hf_class = cls.get_hf_class()
