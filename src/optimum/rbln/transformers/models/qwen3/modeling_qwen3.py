@@ -58,6 +58,9 @@ class RBLNQwen3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         rbln_config.sliding_window_layers = list(range(model_config.num_hidden_layers))
         return rbln_config
 
+    def forward(self, *args, **kwargs):
+        return super().forward(*args, **kwargs, return_dict=True)
+
 
 class RBLNQwen3Model(RBLNModel):
     _decoder_wrapper_cls = Qwen3ModelWrapper

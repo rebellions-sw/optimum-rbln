@@ -1192,6 +1192,10 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         if cache_position is None:
             logits = []
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
+            if generate_idx is None:
+                generate_idx = attention_mask.sum(dim=-1, keepdim=True).int()
+            if padded_cache_lengths is None:
+                padded_cache_lengths = torch.zeros_like(generate_idx)
             batch_size = inputs.shape[0]
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
