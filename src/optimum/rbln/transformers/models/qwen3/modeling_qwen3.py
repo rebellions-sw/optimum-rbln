@@ -59,7 +59,8 @@ class RBLNQwen3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         return rbln_config
 
     def forward(self, *args, **kwargs):
-        return super().forward(*args, **kwargs, return_dict=True)
+        kwargs["return_dict"] = True
+        return super().forward(*args, **kwargs)
 
 
 class RBLNQwen3Model(RBLNModel):
