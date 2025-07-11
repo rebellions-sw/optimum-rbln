@@ -1094,6 +1094,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 tensor_type="pt",
                 device=rbln_config.device_map["prefill"],
                 activate_profiler=rbln_config.activate_profiler,
+                timeout=rbln_config.timeout,
             ),
             *[
                 rebel.Runtime(
@@ -1101,6 +1102,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     tensor_type="pt",
                     device=rbln_config.device_map[f"decoder_batch_{batch_size}"],
                     activate_profiler=rbln_config.activate_profiler,
+                    timeout=rbln_config.timeout,
                 )
                 for i, batch_size in enumerate(rbln_config.decoder_batch_sizes)
             ],

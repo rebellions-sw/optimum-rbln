@@ -279,7 +279,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
                 tensor_type="pt",
                 device=rbln_config.device_map[DEFAULT_COMPILED_MODEL_NAME],
                 activate_profiler=rbln_config.activate_profiler,
-                timeout=120,
+                timeout=rbln_config.timeout,
             )
             for compiled_model in compiled_models
         ]

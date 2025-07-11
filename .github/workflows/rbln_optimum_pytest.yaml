@@ -29,8 +29,11 @@ env:
 
 jobs:
   pytest:
-    name: Pytest
+    name: Pytest (${{ matrix.test_type }})
     runs-on: vm-ci-0
+    strategy:
+      matrix:
+        test_type: [config, transformers, diffusers, llm]
     steps:
       - name: Checkout the optimum-rbln repository
         uses: actions/checkout@v4
@@ -48,57 +51,75 @@ jobs:
           echo "$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      - name: Check if test should be skipped
+        id: should_skip
+        run: |
+          COMMIT_MESSAGE="${{ steps.get_commit_message.outputs.message }}"
+          SKIP=false
+          
+          case "${{ matrix.test_type }}" in
+            "transformers")
+              if [[ "$COMMIT_MESSAGE" == *"[skip-transformers]"* ]]; then
+                SKIP=true
+              fi
+              ;;
+            "diffusers")
+              if [[ "$COMMIT_MESSAGE" == *"[skip-diffusers]"* ]]; then
+                SKIP=true
+              fi
+              ;;
+            "llm")
+              if [[ "$COMMIT_MESSAGE" == *"[skip-llms]"* ]]; then
+                SKIP=true
+              fi
+              ;;
+          esac
+          
+          echo "skip=$SKIP" >> $GITHUB_OUTPUT
+
       - name: Setup uv
+        if: steps.should_skip.outputs.skip != 'true'
         uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
       - name: Setup Python
+        if: steps.should_skip.outputs.skip != 'true'
         run: uv python install 3.9
 
       - name: Install optimum-rbln with tests group dependencies
+        if: steps.should_skip.outputs.skip != 'true'
         run: |
           uv sync --frozen --group tests --reinstall-package optimum-rbln
 
       - name: Install rebel-compiler
+        if: steps.should_skip.outputs.skip != 'true'
         run: |
           PYPI_URL=$(echo ${{ env.REBEL_PYPI_ENDPOINT }} | sed "s/\/\//\0${{ env.REBEL_PYPI_USERNAME}}:${{ env.REBEL_PYPI_PASSWORD}}@/")
           uv pip install --extra-index-url $PYPI_URL rebel-compiler==${{ inputs.rebel_compiler_version }}
 
-      - name: Run pytest (config)
+      - name: Run pytest
+        if: steps.should_skip.outputs.skip != 'true'
         env:
           OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
         run: |
-          uv run --no-sync pytest tests/test_config.py
+          case "${{ matrix.test_type }}" in
+            "config")
+              uv run --no-sync pytest tests/test_config.py -vv --durations 0
+              ;;
+            "transformers")
+              uv run --no-sync pytest tests/test_transformers.py -vv --durations 0
+              ;;
+            "diffusers")
+              uv run --no-sync pytest tests/test_diffusers.py -vv --durations 0
+              ;;
+            "llm")
+              uv run --no-sync pytest tests/test_llm.py -vv --durations 0
+              ;;
+          esac
 
-      - name: Run pytest (transformers)
-        env:
-          OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
+      - name: Skip message
+        if: steps.should_skip.outputs.skip == 'true'
         run: |
-          echo 
-          if ${{ !contains( steps.get_commit_message.outputs.message , '[skip-transformers]') }}; then
-            uv run --no-sync pytest tests/test_transformers.py
-          else
-            echo "Found [skip-transformers] in commit message, skipping CI"
-          fi
-
-      - name: Run pytest (diffusers)
-        env:
-          OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
-        run: |
-          if ${{ !contains( steps.get_commit_message.outputs.message , '[skip-diffusers]') }}; then
-            uv run --no-sync pytest tests/test_diffusers.py
-          else
-            echo "Found [skip-diffusers] in commit message, skipping CI"
-          fi
-
-      - name: Run pytest (llm)
-        env:
-          OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
-        run: |
-          if ${{ !contains( steps.get_commit_message.outputs.message , '[skip-llms]') }}; then
-            uv run --no-sync pytest tests/test_llm.py
-          else
-            echo "Found [skip-llms] in commit message, skipping CI"
-          fi
+          echo "Found [skip-${{ matrix.test_type }}] in commit message, skipping CI"
