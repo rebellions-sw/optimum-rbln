@@ -433,11 +433,17 @@ def create_fp8linear(layer: Linear, rbln_quantization: RBLNQuantizationConfig) -
             input = static_per_tensor_quantize(x, self.input_scale)
         else:
             input = x
+
+        if self.weight_scale:
+            # broadcast weight_scale to vector
+            weight_scale = self.weight_scale.broadcast_to(self.weight.shape[-1:])
+        else:
+            weight_scale = None
         output = fp8_gemm(
             A=input,
             A_scale=self.input_scale,
             B=self.weight,
-            B_scale=self.weight_scale,
+            B_scale=weight_scale,
             bias=self.bias,
             out_dtype=x.dtype,
         )
