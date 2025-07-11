@@ -262,7 +262,6 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
     RBLN_CLASS_KWARGS = {
         "rbln_config": {
             "language_model": {"use_inputs_embeds": True},
-            "vision_tower": {"output_hidden_states": True},
         }
     }
     EXPECTED_OUTPUT = "aille kennisSoft /******/ Brunershot childhoodhoodRx̧̧̧̧̧̧̧̧̧̧"
