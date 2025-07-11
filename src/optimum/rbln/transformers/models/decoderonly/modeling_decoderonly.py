@@ -1192,6 +1192,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         if cache_position is None:
             logits = []
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
+            # for only use forward
             if generate_idx is None:
                 generate_idx = attention_mask.sum(dim=-1, keepdim=True).int()
             if padded_cache_lengths is None:
