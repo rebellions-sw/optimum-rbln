@@ -337,9 +337,6 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         inputs = torch.nn.functional.pad(inputs, (0, 0, 0, padding_size))
         cache_position = torch.nn.functional.pad(cache_position, (0, padding_size))
         position_ids = torch.nn.functional.pad(position_ids, (0, padding_size))
-        position_embed = (
-            None if position_embed is None else torch.nn.functional.pad(position_embed, (0, 0, 0, padding_size))
-        )
         token_type_ids = torch.nn.functional.pad(token_type_ids, (0, padding_size), value=-1)
 
         return (
@@ -406,6 +403,9 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                 != (step + prefill_chunk_size) // self.rbln_config.kvcache_block_size
             )
 
+            # Check if the prefill chunk is the last chunk
+            is_last_chunk = step + prefill_chunk_size >= query_length
+
             if is_cross_block_boundary:
                 padding_size = prefill_chunk_size - (step + prefill_chunk_size) % self.rbln_config.kvcache_block_size
                 padded_cache_lengths += padding_size
@@ -415,13 +415,8 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
             if is_text_prefill_with_image_tokens:
                 first_image_token_idx = torch.where(token_type_ids[:, step : step + prefill_chunk_size] == 1)[1][0]
                 num_processed_tokens = first_image_token_idx
-
-            query_position = (
-                (query_length - 1) % prefill_chunk_size
-                if step + prefill_chunk_size >= query_length
-                else num_processed_tokens - 1
-            )
-            query_position = torch.tensor(query_position, dtype=torch.int16)
+            if is_last_chunk:
+                num_processed_tokens = query_length - step
 
             input_chunk = inputs[:, step : step + prefill_chunk_size]
             cache_pos_chunk = cache_position[:, step : step + prefill_chunk_size] + padded_cache_lengths
@@ -429,27 +424,28 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
             chunked_attention_mask[
                 :, step + padded_cache_lengths : step + num_processed_tokens + padded_cache_lengths
             ] = 1
+            query_position = torch.tensor(num_processed_tokens - 1, dtype=torch.int16)
 
             if is_image_prefill:
                 logits = self.image_prefill(
                     input_chunk,
-                    cache_pos_chunk,
+                    cache_pos_chunk.clone(),
                     block_tables,
                     local_block_tables,
                     query_position,
                     chunked_attention_mask,
-                    position_ids_chunk,
+                    position_ids_chunk.clone(),
                     out=out_buffers,
                 )
             else:
                 logits = self.prefill(
                     input_chunk,
-                    cache_pos_chunk,
+                    cache_pos_chunk.clone(),
                     block_tables,
                     local_block_tables,
                     query_position,
                     chunked_attention_mask,
-                    position_ids_chunk,
+                    position_ids_chunk.clone(),
                     out=out_buffers,
                 )
 
