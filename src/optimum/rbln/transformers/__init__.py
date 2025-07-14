@@ -184,6 +184,8 @@ if TYPE_CHECKING:
         RBLNCLIPVisionModelConfig,
         RBLNCLIPVisionModelWithProjection,
         RBLNCLIPVisionModelWithProjectionConfig,
+        RBLNColPaliForRetrieval,
+        RBLNColPaliForRetrievalConfig,
         RBLNDecoderOnlyModelForCausalLM,
         RBLNDecoderOnlyModelForCausalLMConfig,
         RBLNDistilBertForQuestionAnswering,
