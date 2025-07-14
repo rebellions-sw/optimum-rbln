@@ -43,13 +43,20 @@ class _TextEncoder(torch.nn.Module):
 
 
 class RBLNCLIPTextModel(RBLNModel):
+    """
+    RBLN optimized CLIP text encoder model.
+
+    This class provides hardware-accelerated inference for CLIP text encoders
+    on RBLN devices, supporting text encoding for multimodal tasks.
+    """
+
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNCLIPTextModelConfig) -> torch.nn.Module:
         return _TextEncoder(model).eval()
 
     @classmethod
     def update_rbln_config_using_pipe(
-        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_config: str
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
     ) -> "RBLNDiffusionMixinConfig":
         return rbln_config
 
@@ -81,10 +88,9 @@ class RBLNCLIPTextModel(RBLNModel):
         return output
 
     def _prepare_output(self, output, return_dict):
-        """
-        Prepare model output based on return_dict flag.
-        This method can be overridden by subclasses to provide task-specific output handling.
-        """
+        # Prepare model output based on return_dict flag.
+        # This method can be overridden by subclasses to provide task-specific output handling.
+
         if not return_dict:
             return (output,) if not isinstance(output, (tuple, list)) else output
         else:
@@ -96,7 +102,12 @@ class RBLNCLIPTextModel(RBLNModel):
 
 
 class RBLNCLIPTextModelWithProjection(RBLNCLIPTextModel):
-    pass
+    """
+    RBLN optimized CLIP text encoder model with projection layer.
+
+    This class extends RBLNCLIPTextModel with a projection layer for
+    multimodal embedding alignment tasks.
+    """
 
 
 class _VisionEncoder(torch.nn.Module):
@@ -110,6 +121,13 @@ class _VisionEncoder(torch.nn.Module):
 
 
 class RBLNCLIPVisionModel(RBLNModel):
+    """
+    RBLN optimized CLIP vision encoder model.
+
+    This class provides hardware-accelerated inference for CLIP vision encoders
+    on RBLN devices, supporting image encoding for multimodal tasks.
+    """
+
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNCLIPVisionModelConfig) -> torch.nn.Module:
         return _VisionEncoder(model).eval()
@@ -161,17 +179,17 @@ class RBLNCLIPVisionModel(RBLNModel):
         return_dict: bool = None,
         **kwargs,
     ) -> Union[Tuple, CLIPVisionModelOutput]:
-        if len(kwargs) > 0 and any(kwargs.values()):
-            logger.warning(f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__}.")
-
+        if len(kwargs) > 0 and any(value is not None for value in kwargs.values()):
+            logger.warning(
+                f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__.__name__}."
+            )
         output = super().forward(pixel_values, return_dict=return_dict)
         return output
 
     def _prepare_output(self, output, return_dict):
-        """
-        Prepare model output based on return_dict flag.
-        This method can be overridden by subclasses to provide task-specific output handling.
-        """
+        # Prepare model output based on return_dict flag.
+        # This method can be overridden by subclasses to provide task-specific output handling.
+
         if not return_dict:
             return (output,) if not isinstance(output, (tuple, list)) else output
         else:
@@ -183,6 +201,13 @@ class RBLNCLIPVisionModel(RBLNModel):
 
 
 class RBLNCLIPVisionModelWithProjection(RBLNCLIPVisionModel):
+    """
+    RBLN optimized CLIP vision encoder model with projection layer.
+
+    This class extends RBLNCLIPVisionModel with a projection layer for
+    multimodal embedding alignment tasks.
+    """
+
     def forward(
         self,
         pixel_values: Optional[torch.FloatTensor] = None,

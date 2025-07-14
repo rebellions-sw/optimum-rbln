@@ -18,6 +18,10 @@ from transformers.utils import _LazyModule
 
 
 _import_structure = {
+    "audio_spectrogram_transformer": [
+        "RBLNASTForAudioClassification",
+        "RBLNASTForAudioClassificationConfig",
+    ],
     "auto": [
         "RBLNAutoModel",
         "RBLNAutoModelForAudioClassification",
@@ -31,6 +35,7 @@ _import_structure = {
         "RBLNAutoModelForSequenceClassification",
         "RBLNAutoModelForSpeechSeq2Seq",
         "RBLNAutoModelForVision2Seq",
+        "RBLNAutoModelForImageTextToText",
     ],
     "bart": [
         "RBLNBartForConditionalGeneration",
@@ -64,6 +69,14 @@ _import_structure = {
         "RBLNCLIPVisionModelWithProjection",
         "RBLNCLIPVisionModelWithProjectionConfig",
     ],
+    "colpali": [
+        "RBLNColPaliForRetrieval",
+        "RBLNColPaliForRetrievalConfig",
+    ],
+    "distilbert": [
+        "RBLNDistilBertForQuestionAnswering",
+        "RBLNDistilBertForQuestionAnsweringConfig",
+    ],
     "qwen2_5_vl": [
         "RBLNQwen2_5_VisionTransformerPretrainedModel",
         "RBLNQwen2_5_VisionTransformerPretrainedModelConfig",
@@ -80,6 +93,12 @@ _import_structure = {
     ],
     "exaone": ["RBLNExaoneForCausalLM", "RBLNExaoneForCausalLMConfig"],
     "gemma": ["RBLNGemmaForCausalLM", "RBLNGemmaForCausalLMConfig"],
+    "gemma3": [
+        "RBLNGemma3ForCausalLM",
+        "RBLNGemma3ForCausalLMConfig",
+        "RBLNGemma3ForConditionalGeneration",
+        "RBLNGemma3ForConditionalGenerationConfig",
+    ],
     "gpt2": ["RBLNGPT2LMHeadModel", "RBLNGPT2LMHeadModelConfig"],
     "idefics3": [
         "RBLNIdefics3VisionTransformer",
@@ -98,11 +117,18 @@ _import_structure = {
     "mistral": ["RBLNMistralForCausalLM", "RBLNMistralForCausalLMConfig"],
     "phi": ["RBLNPhiForCausalLM", "RBLNPhiForCausalLMConfig"],
     "qwen2": ["RBLNQwen2ForCausalLM", "RBLNQwen2ForCausalLMConfig"],
+    "resnet": ["RBLNResNetForImageClassification", "RBLNResNetForImageClassificationConfig"],
+    "roberta": [
+        "RBLNRobertaForMaskedLM",
+        "RBLNRobertaForMaskedLMConfig",
+        "RBLNRobertaForSequenceClassification",
+        "RBLNRobertaForSequenceClassificationConfig",
+    ],
     "siglip": [
         "RBLNSiglipVisionModel",
         "RBLNSiglipVisionModelConfig",
     ],
-    "time_series_transformers": [
+    "time_series_transformer": [
         "RBLNTimeSeriesTransformerForPrediction",
         "RBLNTimeSeriesTransformerForPredictionConfig",
     ],
@@ -112,12 +138,22 @@ _import_structure = {
         "RBLNT5EncoderModelConfig",
         "RBLNT5ForConditionalGenerationConfig",
     ],
+    "vit": ["RBLNViTForImageClassification", "RBLNViTForImageClassificationConfig"],
     "wav2vec2": ["RBLNWav2Vec2ForCTC", "RBLNWav2Vec2ForCTCConfig"],
     "whisper": ["RBLNWhisperForConditionalGeneration", "RBLNWhisperForConditionalGenerationConfig"],
-    "xlm_roberta": ["RBLNXLMRobertaModel", "RBLNXLMRobertaModelConfig"],
+    "xlm_roberta": [
+        "RBLNXLMRobertaModel",
+        "RBLNXLMRobertaModelConfig",
+        "RBLNXLMRobertaForSequenceClassification",
+        "RBLNXLMRobertaForSequenceClassificationConfig",
+    ],
 }
 
 if TYPE_CHECKING:
+    from .audio_spectrogram_transformer import (
+        RBLNASTForAudioClassification,
+        RBLNASTForAudioClassificationConfig,
+    )
     from .auto import (
         RBLNAutoModel,
         RBLNAutoModelForAudioClassification,
@@ -125,6 +161,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForCTC,
         RBLNAutoModelForDepthEstimation,
         RBLNAutoModelForImageClassification,
+        RBLNAutoModelForImageTextToText,
         RBLNAutoModelForMaskedLM,
         RBLNAutoModelForQuestionAnswering,
         RBLNAutoModelForSeq2SeqLM,
@@ -164,9 +201,17 @@ if TYPE_CHECKING:
         RBLNCLIPVisionModelWithProjection,
         RBLNCLIPVisionModelWithProjectionConfig,
     )
+    from .colpali import (
+        RBLNColPaliForRetrieval,
+        RBLNColPaliForRetrievalConfig,
+    )
     from .decoderonly import (
         RBLNDecoderOnlyModelForCausalLM,
         RBLNDecoderOnlyModelForCausalLMConfig,
+    )
+    from .distilbert import (
+        RBLNDistilBertForQuestionAnswering,
+        RBLNDistilBertForQuestionAnsweringConfig,
     )
     from .dpt import (
         RBLNDPTForDepthEstimation,
@@ -174,6 +219,12 @@ if TYPE_CHECKING:
     )
     from .exaone import RBLNExaoneForCausalLM, RBLNExaoneForCausalLMConfig
     from .gemma import RBLNGemmaForCausalLM, RBLNGemmaForCausalLMConfig
+    from .gemma3 import (
+        RBLNGemma3ForCausalLM,
+        RBLNGemma3ForCausalLMConfig,
+        RBLNGemma3ForConditionalGeneration,
+        RBLNGemma3ForConditionalGenerationConfig,
+    )
     from .gpt2 import RBLNGPT2LMHeadModel, RBLNGPT2LMHeadModelConfig
     from .idefics3 import (
         RBLNIdefics3ForConditionalGeneration,
@@ -200,6 +251,13 @@ if TYPE_CHECKING:
         RBLNQwen2_5_VLForConditionalGeneration,
         RBLNQwen2_5_VLForConditionalGenerationConfig,
     )
+    from .resnet import RBLNResNetForImageClassification, RBLNResNetForImageClassificationConfig
+    from .roberta import (
+        RBLNRobertaForMaskedLM,
+        RBLNRobertaForMaskedLMConfig,
+        RBLNRobertaForSequenceClassification,
+        RBLNRobertaForSequenceClassificationConfig,
+    )
     from .siglip import RBLNSiglipVisionModel, RBLNSiglipVisionModelConfig
     from .t5 import (
         RBLNT5EncoderModel,
@@ -207,13 +265,19 @@ if TYPE_CHECKING:
         RBLNT5ForConditionalGeneration,
         RBLNT5ForConditionalGenerationConfig,
     )
-    from .time_series_transformers import (
+    from .time_series_transformer import (
         RBLNTimeSeriesTransformerForPrediction,
         RBLNTimeSeriesTransformerForPredictionConfig,
     )
+    from .vit import RBLNViTForImageClassification, RBLNViTForImageClassificationConfig
     from .wav2vec2 import RBLNWav2Vec2ForCTC, RBLNWav2Vec2ForCTCConfig
     from .whisper import RBLNWhisperForConditionalGeneration, RBLNWhisperForConditionalGenerationConfig
-    from .xlm_roberta import RBLNXLMRobertaModel, RBLNXLMRobertaModelConfig
+    from .xlm_roberta import (
+        RBLNXLMRobertaForSequenceClassification,
+        RBLNXLMRobertaForSequenceClassificationConfig,
+        RBLNXLMRobertaModel,
+        RBLNXLMRobertaModelConfig,
+    )
 
 else:
     import sys

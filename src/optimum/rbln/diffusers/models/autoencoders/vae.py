@@ -15,17 +15,13 @@
 from typing import TYPE_CHECKING, List
 
 import torch
-from diffusers import AutoencoderKL, VQModel
-from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
+from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution, IdentityDistribution
 
-from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
 
 
 if TYPE_CHECKING:
-    import torch
-
-logger = get_logger(__name__)
+    from diffusers import AutoencoderKL, AutoencoderKLCosmos, VQModel
 
 
 class RBLNRuntimeVAEEncoder(RBLNPytorchRuntime):
@@ -38,6 +34,27 @@ class RBLNRuntimeVAEEncoder(RBLNPytorchRuntime):
 class RBLNRuntimeVAEDecoder(RBLNPytorchRuntime):
     def decode(self, z: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
         return self.forward(z)
+
+
+class RBLNRuntimeCosmosVAEEncoder(RBLNPytorchRuntime):
+    def encode(self, x: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
+        if self.use_slicing and x.shape[0] > 1:
+            encoded_slices = [self.forward(x_slice) for x_slice in x.split(1)]
+            h = torch.cat(encoded_slices)
+        else:
+            h = self.forward(x)
+        posterior = IdentityDistribution(h)
+        return posterior
+
+
+class RBLNRuntimeCosmosVAEDecoder(RBLNPytorchRuntime):
+    def decode(self, z: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
+        if self.use_slicing and z.shape[0] > 1:
+            decoded_slices = [self.forward(z_slice) for z_slice in z.split(1)]
+            decoded = torch.cat(decoded_slices)
+        else:
+            decoded = self.forward(z)
+        return decoded
 
 
 class _VAEDecoder(torch.nn.Module):
@@ -73,6 +90,26 @@ class _VAEEncoder(torch.nn.Module):
         return vae_out
 
 
+class _VAECosmosEncoder(torch.nn.Module):
+    def __init__(self, vae: "AutoencoderKLCosmos"):
+        super().__init__()
+        self.vae = vae
+
+    def forward(self, x):
+        vae_out = self.vae._encode(x)
+        return vae_out
+
+
+class _VAECosmosDecoder(torch.nn.Module):
+    def __init__(self, vae: "AutoencoderKLCosmos"):
+        super().__init__()
+        self.vae = vae
+
+    def forward(self, z):
+        vae_out = self.vae._decode(z, return_dict=False)
+        return vae_out
+
+
 class RBLNRuntimeVQEncoder(RBLNPytorchRuntime):
     def encode(self, x: torch.FloatTensor, **kwargs) -> torch.FloatTensor:
         h = self.forward(x.contiguous())
@@ -91,7 +128,7 @@ class RBLNRuntimeVQDecoder(RBLNPytorchRuntime):
 
 
 class _VQEncoder(torch.nn.Module):
-    def __init__(self, vq_model: VQModel):
+    def __init__(self, vq_model: "VQModel"):
         super().__init__()
         self.vq_model = vq_model
 
@@ -106,7 +143,7 @@ class _VQEncoder(torch.nn.Module):
 
 
 class _VQDecoder(torch.nn.Module):
-    def __init__(self, vq_model: VQModel):
+    def __init__(self, vq_model: "VQModel"):
         super().__init__()
         self.vq_model = vq_model
 

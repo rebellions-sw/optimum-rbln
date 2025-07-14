@@ -19,7 +19,6 @@ from transformers import PhiForCausalLM
 
 from ..decoderonly.decoderonly_architecture import (
     DecoderOnlyAttention,
-    DecoderOnlyForCausalLM,
     DecoderOnlyLayer,
     DecoderOnlyModel,
     DecoderOnlyWrapper,
@@ -32,22 +31,20 @@ if TYPE_CHECKING:
 
 
 class PhiWrapper(DecoderOnlyWrapper):
-    def convert_to_rbln_causal_lm(self, causal_lm: "PhiForCausalLM", max_seq_len: int):
-        new_layers = []
-        for layer in causal_lm.model.layers:
-            if self.attn_impl == "eager":
-                new_self_attn = PhiAttention(
-                    layer.self_attn, self.use_attention_mask, kvcache_block_size=self.kvcache_block_size
-                )
-            elif self.attn_impl == "flash_attn":
-                raise NotImplementedError(f"flash attn for {self.__class__} is not implemented yet.")
-            else:
-                raise NotImplementedError(f"Unknwon attn : {self.attn_impl}")
-            new_layer = PhiLayer(layer, new_self_attn)
-            new_layers.append(new_layer)
-        new_model = PhiModel(causal_lm.model, new_layers)
-        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
-        return new_causal_lm
+    def get_rbln_attn_class(self):
+        return PhiAttention
+
+    def get_rbln_layer_class(self):
+        return PhiLayer
+
+    def get_rbln_model_class(self):
+        return PhiModel
+
+    def get_model_layer(self, causal_lm: "PhiForCausalLM"):
+        return causal_lm.model
+
+    def get_decoder_layers(self, causal_lm: "PhiForCausalLM"):
+        return causal_lm.model.layers
 
 
 class PhiAttention(DecoderOnlyAttention):

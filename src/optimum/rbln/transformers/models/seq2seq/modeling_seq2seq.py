@@ -26,7 +26,7 @@ from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
-from .configuration_seq2seq2 import RBLNModelForSeq2SeqLMConfig
+from .configuration_seq2seq import RBLNModelForSeq2SeqLMConfig
 
 
 logger = get_logger(__name__)
@@ -161,16 +161,20 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
             if "key_value_states" in name:
                 context.mark_static_address(tensor)
 
-        compiled_encoder = super().compile(
+        compiled_encoder = cls.compile(
             wrapped_model.encoder,
             enc_compile_config,
+            create_runtimes=rbln_config.create_runtimes,
+            device=rbln_config.device,
             example_inputs=enc_example_inputs,
             compile_context=context,
         )
 
-        compiled_decoder = super().compile(
+        compiled_decoder = cls.compile(
             wrapped_model.decoder,
             dec_compile_config,
+            create_runtimes=rbln_config.create_runtimes,
+            device=rbln_config.device,
             example_inputs=dec_example_inputs,
             compile_context=context,
         )
@@ -323,12 +327,14 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
                 tensor_type="pt",
                 device=rbln_config.device_map["encoder"],
                 activate_profiler=rbln_config.activate_profiler,
+                timeout=rbln_config.timeout,
             ),
             rebel.Runtime(
                 compiled_models[1],
                 tensor_type="pt",
                 device=rbln_config.device_map["decoder"],
                 activate_profiler=rbln_config.activate_profiler,
+                timeout=rbln_config.timeout,
             ),
         ]
 

@@ -15,10 +15,9 @@
 
 import torch
 from transformers import AutoModelForMaskedLM, Wav2Vec2ForCTC
-from transformers.modeling_outputs import CausalLMOutput
 
 from ...modeling_generic import RBLNModelForMaskedLM
-from .configuration_wav2vec import RBLNWav2Vec2ForCTCConfig
+from .configuration_wav2vec2 import RBLNWav2Vec2ForCTCConfig
 
 
 class _Wav2Vec2(torch.nn.Module):
@@ -46,8 +45,6 @@ class RBLNWav2Vec2ForCTC(RBLNModelForMaskedLM):
     main_input_name = "input_values"
     auto_model_class = AutoModelForMaskedLM
     rbln_dtype = "float32"
-    output_class = CausalLMOutput
-    output_key = "logits"
 
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNWav2Vec2ForCTCConfig) -> torch.nn.Module:

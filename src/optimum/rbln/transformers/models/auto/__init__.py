@@ -19,6 +19,7 @@ from .modeling_auto import (
     RBLNAutoModelForCTC,
     RBLNAutoModelForDepthEstimation,
     RBLNAutoModelForImageClassification,
+    RBLNAutoModelForImageTextToText,
     RBLNAutoModelForMaskedLM,
     RBLNAutoModelForQuestionAnswering,
     RBLNAutoModelForSeq2SeqLM,

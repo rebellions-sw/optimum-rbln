@@ -12,6 +12,7 @@ from optimum.rbln import (
     RBLNBertForMaskedLM,
     RBLNBertForQuestionAnswering,
     RBLNCLIPTextModel,
+    RBLNColPaliForRetrieval,
     RBLNDPTForDepthEstimation,
     RBLNResNetForImageClassification,
     RBLNT5EncoderModel,
@@ -87,8 +88,18 @@ class TestResNetModel(BaseTest.TestModel):
                     preprocessors=preprocessors,  # For image_classification
                 )
 
-    def test_failed_to_create_runtime(self):
+    def _inner_test_save_load(self, tmpdir):
+        super()._inner_test_save_load(tmpdir)
+
         with self.assertRaises(RBLNRuntimeError):
+            _ = self.RBLN_CLASS.from_pretrained(
+                tmpdir,
+                export=False,
+                rbln_device=[0, 1, 2, 3],
+            )
+
+    def test_failed_to_create_runtime(self):
+        with self.assertRaises(ValueError):
             _ = self.RBLN_CLASS.from_pretrained(
                 self.HF_MODEL_ID,
                 export=True,
@@ -247,6 +258,7 @@ class TestWhisperModel(BaseTest.TestModel):
                 data,
                 generate_kwargs={
                     "repetition_penalty": 1.3,
+                    "num_beams": 1,
                 },
                 batch_size=2,
             )
@@ -339,6 +351,16 @@ class TestCLIPModel(BaseTest.TestModel):
     GENERATION_KWARGS = {
         "input_ids": RANDOM_INPUT_IDS,
         "attention_mask": RANDOM_ATTN_MASK,
+    }
+
+
+class TestColPaliModel(BaseTest.TestModel):
+    RBLN_CLASS = RBLNColPaliForRetrieval
+    HF_MODEL_ID = "thkim93/colpali-hf-1layer"
+    GENERATION_KWARGS = {
+        "input_ids": torch.full((1, 1024), fill_value=257152, dtype=torch.int32),
+        "attention_mask": torch.ones((1, 1024), dtype=torch.int32),
+        "pixel_values": torch.randn(1, 3, 448, 448, generator=torch.manual_seed(42)),
     }
 
 

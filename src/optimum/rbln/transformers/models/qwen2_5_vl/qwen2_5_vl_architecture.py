@@ -79,7 +79,7 @@ class Qwen2_5_VLVisionFullAttention(nn.Module):
         super().__init__()
         self._origin_model = model
         self.num_heads = model.num_heads
-        self.head_dim = model.head_dim
+        self.head_dim = getattr(model, "head_dim", model.proj.in_features // model.num_heads)
         self.qkv = model.qkv
         self.proj = model.proj
 
@@ -114,7 +114,7 @@ class Qwen2_5_VLVisionWindowAttention(nn.Module):
         super().__init__()
         self._origin_model = model
         self.num_heads = model.num_heads
-        self.head_dim = model.head_dim
+        self.head_dim = getattr(model, "head_dim", model.proj.in_features // model.num_heads)
         self.qkv = model.qkv
         self.proj = model.proj
         self.window_seq_len = window_seq_len
@@ -157,58 +157,43 @@ class Qwen2_5_VLVisionWindowAttention(nn.Module):
 
 
 class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
-    def forward(self, *args):
-        if self.phase == "decode":
-            if self.use_attention_mask:
-                (
-                    input_ids_or_inputs_embeds,
-                    cache_position,
-                    attention_mask,
-                    block_tables,
-                    position_emb,
-                    *past_key_values,
-                ) = args
-            else:
-                (
-                    input_ids_or_inputs_embeds,
-                    cache_position,
-                    block_tables,
-                    position_emb,
-                    *past_key_values,
-                ) = args
-                attention_mask = None
-            query_position = None
-        elif self.phase == "prefill":
-            if self.use_attention_mask:
-                (
-                    input_ids_or_inputs_embeds,
-                    cache_position,
-                    attention_mask,
-                    query_position,
-                    block_tables,
-                    position_emb,
-                    *past_key_values,
-                ) = args
-            else:
-                (
-                    input_ids_or_inputs_embeds,
-                    cache_position,
-                    query_position,
-                    block_tables,
-                    position_emb,
-                    *past_key_values,
-                ) = args
-                attention_mask = None
+    def prepare_forward_args(self, *args):
+        args = list(args)
+        input_ids = None if self.use_inputs_embeds else args.pop(0)
+        inputs_embeds = args.pop(0) if self.use_inputs_embeds else None
+        cache_position = args.pop(0)
+        global_block_tables = args.pop(0)
+        local_block_tables = None
+        position_embeds = args.pop(0)
+        query_position = args.pop(0) if self.phase == "prefill" else None
+        position_ids = None
+        attention_mask = args.pop(0) if self.use_attention_mask else None
+        past_key_values = args
 
-        else:
-            raise ValueError(f"Unknown phase: {self.phase}")
+        if len(past_key_values) != 2 * self.num_hidden_layers:
+            raise ValueError(
+                f"Different past_key_values to model's config. {len(past_key_values)} != {2 * self.num_hidden_layers}"
+            )
 
-        return self.forward_common(
-            input_ids_or_inputs_embeds,
+        # [key, value] * n_layer -> ( (key, value) ) * n_layer
+        # cache shape : batch, n_heads, 1, max_seq_len, head_dim
+        _past_key_values = []
+        for i in range(self.config.num_hidden_layers):
+            key_states = past_key_values[i * 2]
+            value_states = past_key_values[i * 2 + 1]
+            past_key_value = [key_states, value_states]
+            _past_key_values.append(past_key_value)
+        past_key_values = _past_key_values
+
+        return (
+            input_ids,
+            inputs_embeds,
             cache_position,
-            attention_mask,
+            global_block_tables,
+            local_block_tables,
             query_position,
-            block_tables,
-            position_emb,
-            *past_key_values,
+            attention_mask,
+            position_ids,
+            past_key_values,
+            position_embeds,
         )

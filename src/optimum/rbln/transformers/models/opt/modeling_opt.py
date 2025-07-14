@@ -45,8 +45,15 @@ class RBLNOPTForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
     A class to convert and run pre-trained transformers based OPTForCausalLM model on RBLN devices.
     It implements the methods to convert a pre-trained transformers OPTForCausalLM model into a RBLN transformer model by:
+
     - transferring the checkpoint weights of the original into an optimized RBLN graph,
     - compiling the resulting graph using the RBLN compiler.
+
+    **Configuration:**
+    This model uses [`RBLNOPTForCausalLM`] for configuration. When calling methods like `from_pretrained` or `from_model`,
+    the `rbln_config` parameter should be an instance of [`RBLNOPTForCausalLM`] or a dictionary conforming to its structure.
+
+    See the [`RBLNOPTForCausalLM`] class for all available configuration options.
     """
 
     _decoder_wrapper_cls = OPTWrapper
@@ -70,6 +77,11 @@ class RBLNOPTForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             "kvcache_block_size": rbln_config.kvcache_block_size,
             "use_rotary_emb": cls._use_rotary_emb,
             "use_attention_mask": rbln_config.use_attention_mask,
+            "use_position_ids": rbln_config.use_position_ids,
+            "use_inputs_embeds": rbln_config.use_inputs_embeds,
+            "cache_impl": rbln_config.cache_impl,
+            "sliding_window": rbln_config.sliding_window,
+            "sliding_window_layers": rbln_config.sliding_window_layers,
         }
 
         for i in range(len(model.model.decoder.layers)):

@@ -37,6 +37,7 @@ from ....utils.logging import get_logger
 from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyOutput
 from .configuration_qwen2_5_vl import (
     RBLNQwen2_5_VisionTransformerPretrainedModelConfig,
+    RBLNQwen2_5_VLForConditionalGenerationConfig,
 )
 from .qwen2_5_vl_architecture import Qwen2_5_VisionTransformerWrapper, Qwen2_5_VL_LanguageModelWrapper
 
@@ -53,6 +54,14 @@ if TYPE_CHECKING:
 
 
 class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
+    """
+    RBLN optimized Qwen2.5-VL vision transformer model.
+
+    This class provides hardware-accelerated inference for Qwen2.5-VL vision transformers
+    on RBLN devices, supporting image and video encoding for multimodal vision-language tasks
+    with window-based attention mechanisms.
+    """
+
     auto_model_class = None
 
     def __post_init__(self, **kwargs):
@@ -338,6 +347,40 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
 
 
 class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
+    """
+    RBLNQwen2_5_VLForConditionalGeneration is a multi-modal model that integrates vision and language processing capabilities,
+    optimized for RBLN NPUs. It is designed for conditional generation tasks that involve both image and text inputs.
+
+    This model inherits from [`RBLNDecoderOnlyModelForCausalLM`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    Important Note:
+        This model includes a Large Language Model (LLM). For optimal performance, it is highly recommended to use
+        tensor parallelism for the language model. This can be achieved by using the `rbln_config` parameter in the
+        `from_pretrained` method. Refer to the `from_pretrained` documentation and the RBLNQwen2_5_VLForConditionalGenerationConfig class for details.
+
+    Examples:
+        ```python
+        from optimum.rbln import RBLNQwen2_5_VLForConditionalGeneration
+
+        model = RBLNQwen2_5_VLForConditionalGeneration.from_pretrained(
+            "Qwen/Qwen2.5-VL-7B-Instruct",
+            export=True,
+            rbln_config={
+                "visual": {
+                    "max_seq_lens": 6400,
+                    "device": 0,
+                },
+                "tensor_parallel_size": 8,
+                "kvcache_partition_len": 16_384,
+                "max_seq_len": 114_688,
+                "device": [0, 1, 2, 3, 4, 5, 6, 7],
+            },
+        )
+
+        model.save_pretrained("compiled-qwen2.5-vl-7b-instruct")
+        ```
+    """
+
     auto_model_class = AutoModelForVision2Seq
     _rbln_submodules = [
         {"name": "visual"},
@@ -369,32 +412,19 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         cls,
         batch_size: int,
         query_length: int,
-        use_inputs_embeds: bool,
-        use_attention_mask: bool,
-        max_seq_len: int,
-        kvcache_block_size: int,
-        kvcache_num_blocks: int,
-        num_key_value_heads: int,
-        num_hidden_layers: int,
-        hidden_size: int,
-        head_dim: int,
+        rbln_config: RBLNQwen2_5_VLForConditionalGenerationConfig,
+        model_config: PretrainedConfig,
     ):
-        input_info = super().get_input_info(
-            batch_size,
-            query_length,
-            use_inputs_embeds,
-            use_attention_mask,
-            max_seq_len,
-            kvcache_block_size,
-            kvcache_num_blocks,
-            num_key_value_heads,
-            num_hidden_layers,
-            hidden_size,
-            head_dim,
+        input_info = super().get_input_info(batch_size, query_length, rbln_config, model_config)
+        pos_idx = 3
+        input_info.insert(
+            pos_idx,
+            (
+                "position_emb",
+                [2, batch_size, 1, query_length, model_config.hidden_size // model_config.num_attention_heads],
+                "float32",
+            ),
         )
-        pos_idx = 5 if query_length > 1 else 4
-        pos_idx = pos_idx if use_attention_mask else pos_idx - 1
-        input_info.insert(pos_idx, ("position_emb", [2, batch_size, 1, query_length, head_dim], "float32"))
 
         return input_info
 
@@ -562,7 +592,8 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         video_grid_thw: Optional[torch.LongTensor] = None,
         cache_position: Optional[torch.LongTensor] = None,
         second_per_grid_ts: Optional[torch.Tensor] = None,
-        generate_idx: torch.Tensor = None,
+        generate_idx: Optional[torch.Tensor] = None,
+        return_dict: Optional[bool] = None,
         **kwargs,
     ) -> RBLNDecoderOnlyOutput:
         # Prefill
@@ -584,25 +615,29 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
 
-                logit = self.prefill_decoder(
+                output = self.prefill_decoder(
                     inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
                     attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                     cache_position=cache_position,
                     batch_idx=b_idx,
                     position_embed=position_embed[:, b_idx : b_idx + 1],
                 )
-                logits.append(logit)
+                logits.append(output.logits)
             logits = torch.cat(logits, dim=0)
-        # Decoder
+            # Decoder
         else:
             inputs_embeds, position_embed = self._preprocess_decoder(input_ids, cache_position)
-            logits = self.decoder(
+            output = self.decoder(
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
                 position_embed=position_embed,
             )
+            logits = output.logits
 
-        return RBLNDecoderOnlyOutput(
-            logits=logits,
-            generate_idx=generate_idx,
-        )
+        if not return_dict:
+            return logits, generate_idx
+        else:
+            return RBLNDecoderOnlyOutput(
+                logits=logits,
+                generate_idx=generate_idx,
+            )

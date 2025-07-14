@@ -16,4 +16,7 @@ from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausa
 
 
 class RBLNGPT2LMHeadModelConfig(RBLNDecoderOnlyModelForCausalLMConfig):
-    pass
+    """
+    Configuration class for GPT-2 causal language model.
+    Inherits from RBLNDecoderOnlyModelForCausalLMConfig with no additional parameters.
+    """

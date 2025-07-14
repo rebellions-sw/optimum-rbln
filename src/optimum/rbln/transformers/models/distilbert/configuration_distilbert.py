@@ -12,8 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ...configuration_generic import RBLNModelForMaskedLMConfig
+from ...configuration_generic import RBLNModelForQuestionAnsweringConfig
 
 
-class RBLNWav2Vec2ForCTCConfig(RBLNModelForMaskedLMConfig):
-    rbln_model_input_names = ["input_values"]
+class RBLNDistilBertForQuestionAnsweringConfig(RBLNModelForQuestionAnsweringConfig):
+    """
+    Configuration class for RBLNDistilBertForQuestionAnswering.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized DistilBERT models for question answering tasks.
+    """
