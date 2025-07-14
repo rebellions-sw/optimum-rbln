@@ -114,7 +114,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
             rope_scale=self.config.rope_scale,
         )
         self.rope.load_state_dict(artifacts["rope"])
-        if artifacts["learnable_pos_embed"] is None:
+        if artifacts.get("learnable_pos_embed") is None:
             self.learnable_pos_embed = None
         else:
             self.learnable_pos_embed = CosmosLearnablePositionalEmbed(
@@ -160,11 +160,30 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
 
         # 3. Patchify input
         p_t, p_h, p_w = self.config.patch_size
+        post_patch_num_frames = num_frames // p_t
+        post_patch_height = height // p_h
+        post_patch_width = width // p_w
         hidden_states = self.patch_embed(hidden_states)
         hidden_states = hidden_states.flatten(1, 3)  # [B, T, H, W, C] -> [B, THW, C]
 
         # 4. Timestep embeddings
-        temb, embedded_timestep = self.time_embed(hidden_states, timestep)
+        if timestep.ndim == 1:
+            temb, embedded_timestep = self.time_embed(hidden_states, timestep)
+        elif timestep.ndim == 5:
+            assert timestep.shape == (batch_size, 1, num_frames, 1, 1), (
+                f"Expected timestep to have shape [B, 1, T, 1, 1], but got {timestep.shape}"
+            )
+            timestep = timestep.flatten()
+            temb, embedded_timestep = self.time_embed(hidden_states, timestep)
+            # We can do this because num_frames == post_patch_num_frames, as p_t is 1
+            temb, embedded_timestep = (
+                x.view(batch_size, post_patch_num_frames, 1, 1, -1)
+                .expand(-1, -1, post_patch_height, post_patch_width, -1)
+                .flatten(1, 3)
+                for x in (temb, embedded_timestep)
+            )  # [BT, C] -> [B, T, 1, 1, C] -> [B, T, H, W, C] -> [B, THW, C]
+        else:
+            assert False
 
         return (
             hidden_states,
@@ -253,12 +272,34 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
                 ],
                 "float32",
             ),
-            ("embedded_timestep", [rbln_config.batch_size, hidden_size], "float32"),
-            ("temb", [1, hidden_size * 3], "float32"),
-            ("image_rotary_emb_0", [hidden_dim, attention_head_dim], "float32"),
-            ("image_rotary_emb_1", [hidden_dim, attention_head_dim], "float32"),
-            ("extra_pos_emb", [rbln_config.batch_size, hidden_dim, hidden_size], "float32"),
         ]
+
+        if model_config.extra_pos_embed_type is None:
+            input_info.append(
+                ("embedded_timestep", [rbln_config.batch_size, hidden_dim, hidden_size], "float32"),
+            )
+            input_info.append(
+                ("temb", [1, hidden_dim, hidden_size * 3], "float32"),
+            )
+        else:
+            input_info.append(
+                ("embedded_timestep", [rbln_config.batch_size, hidden_size], "float32"),
+            )
+            input_info.append(
+                ("temb", [1, hidden_size * 3], "float32"),
+            )
+
+        input_info.append(
+            ("image_rotary_emb_0", [hidden_dim, attention_head_dim], "float32"),
+        )
+        input_info.append(
+            ("image_rotary_emb_1", [hidden_dim, attention_head_dim], "float32"),
+        )
+
+        if model_config.extra_pos_embed_type is not None:
+            input_info.append(
+                ("extra_pos_emb", [rbln_config.batch_size, hidden_dim, hidden_size], "float32"),
+            )
 
         compile_config = RBLNCompileConfig(input_info=input_info)
         rbln_config.set_compile_cfgs([compile_config])
