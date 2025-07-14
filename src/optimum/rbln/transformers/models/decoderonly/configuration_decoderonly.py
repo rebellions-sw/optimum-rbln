@@ -24,6 +24,7 @@ from ...utils.rbln_quantization import RBLNQuantizationConfig
 logger = get_logger()
 
 CacheImplType = Literal["static", "sliding_window", "hybrid"]
+PhaseType = Literal["prefill", "image_prefill", "decode"]
 
 
 class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
@@ -212,6 +213,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNDecoderOnlyModelConfig):
         cache_impl: Optional[CacheImplType] = None,
         sliding_window: Optional[int] = None,
         sliding_window_layers: Optional[List[int]] = None,
+        phases: Optional[List[PhaseType]] = None,
         **kwargs,
     ):
         """
@@ -258,6 +260,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNDecoderOnlyModelConfig):
                 you must specify the `sliding_window` size and optionally `sliding_window_layers` for hybrid mode.
             sliding_window (Optional[int]): The size of the sliding window. Defaults to None.
             sliding_window_layers (Optional[List[int]]): The layers to use for the sliding window used in the hybrid model. Defaults to None.
+            phases (Optional[List[PhaseType]]): The phases to compile the model for. Defaults to None.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -343,24 +346,27 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNDecoderOnlyModelConfig):
         if self.quantization and isinstance(self.quantization, dict):
             self.quantization = RBLNQuantizationConfig(**self.quantization, model_config=self)
 
-        self.decoder_batch_sizes = decoder_batch_sizes
-        if self.decoder_batch_sizes is None:
-            self.decoder_batch_sizes = [self.batch_size]
+        self.phases = phases or ["prefill", "decode"]
 
-        if self.use_multiple_decoder:
-            if max(self.decoder_batch_sizes) > self.batch_size:
-                raise ValueError(
-                    f"Decoder batch size ({max(self.decoder_batch_sizes)}) must be less than or equal to the runtime batch size ({self.batch_size})."
-                )
-            if max(self.decoder_batch_sizes) < self.batch_size:
-                logger.warning(
-                    f"Maximum decoder batch size ({max(self.decoder_batch_sizes)}) is less than the model's batch size ({self.batch_size}). "
-                    "Appending the model's batch size to the decoder batch size."
-                )
-                self.decoder_batch_sizes.append(self.batch_size)
+        if "decode" not in self.phases:
+            self.decoder_batch_sizes = decoder_batch_sizes
+            if self.decoder_batch_sizes is None:
+                self.decoder_batch_sizes = [self.batch_size]
 
-            # Larger batch size should be at the beginning of the list.
-            self.decoder_batch_sizes.sort(reverse=True)
+            if self.use_multiple_decoder:
+                if max(self.decoder_batch_sizes) > self.batch_size:
+                    raise ValueError(
+                        f"Decoder batch size ({max(self.decoder_batch_sizes)}) must be less than or equal to the runtime batch size ({self.batch_size})."
+                    )
+                if max(self.decoder_batch_sizes) < self.batch_size:
+                    logger.warning(
+                        f"Maximum decoder batch size ({max(self.decoder_batch_sizes)}) is less than the model's batch size ({self.batch_size}). "
+                        "Appending the model's batch size to the decoder batch size."
+                    )
+                    self.decoder_batch_sizes.append(self.batch_size)
+
+                # Larger batch size should be at the beginning of the list.
+                self.decoder_batch_sizes.sort(reverse=True)
 
     @property
     def use_multiple_decoder(self):
