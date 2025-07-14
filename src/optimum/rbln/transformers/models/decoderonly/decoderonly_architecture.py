@@ -20,6 +20,7 @@ from torch import nn
 from transformers import PretrainedConfig, PreTrainedModel
 
 from ....utils import logging
+from ...modeling_attention_utils import DEFAULT_FLASH_ATTN_PARTITION_LENGTH
 from ...modeling_rope_utils import ROPE_INIT_FUNCTIONS
 from .configuration_decoderonly import CacheImplType
 
