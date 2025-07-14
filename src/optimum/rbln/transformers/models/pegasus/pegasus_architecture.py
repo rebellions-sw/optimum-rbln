@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 from torch import nn
@@ -22,6 +22,7 @@ from transformers.modeling_attn_mask_utils import (
 from transformers.utils import logging
 
 from ..seq2seq.seq2seq_architecture import (
+    Seq2SeqCrossAttention,
     Seq2SeqDecoder,
     Seq2SeqDecoderLayer,
     Seq2SeqDecoderWrapper,
@@ -45,7 +46,8 @@ class PegasusDecoderWrapper(Seq2SeqDecoderWrapper):
         new_layers = []
         for layer in model.get_decoder().layers:
             self_attn = PegasusSelfAttention(layer.self_attn, use_attention_mask=self.use_attention_mask)
-            new_layers.append(PegasusDecoderLayer(layer, self_attn))
+            cross_attn = PegasusCrossAttention(layer.encoder_attn)
+            new_layers.append(PegasusDecoderLayer(layer, self_attn, cross_attn))
 
         decoder_model = PegasusDecoder(model.get_decoder(), new_layers)
         new_model = PegasusForConditionalGeneration(model, decoder_model)
@@ -54,7 +56,8 @@ class PegasusDecoderWrapper(Seq2SeqDecoderWrapper):
 
 
 class PegasusForConditionalGeneration(Seq2SeqForConditionalGeneration):
-    has_rescaling = False
+    pass
+    # has_rescaling = False
 
     # def __post_init__(self): # 없어도 되지않나?
     #     self.scaling = self.config.d_model**-0.5
@@ -78,7 +81,7 @@ class PegasusDecoder(Seq2SeqDecoder):
         hidden_all = []
         for i in range(inputs_embeds.shape[0]):
             positions_idx = cache_position[i]
-            position_weight = self.embed_positions.weight[2:]
+            position_weight = self.embed_positions.weight
             position = position_weight[positions_idx]
             batch_hidden = position + inputs_embeds[i]
             hidden_all.append(batch_hidden)
@@ -150,3 +153,42 @@ class PegasusSelfAttention(Seq2SeqSelfAttention):
         key_states = self.k_proj(hidden_states)
         value_states = self.v_proj(hidden_states)
         return query_states, key_states, value_states
+
+class PegasusCrossAttention(Seq2SeqCrossAttention):
+    def __post_init__(self):
+        self.q_proj = self._original_mod.q_proj
+        self.k_proj = self._original_mod.k_proj
+        self.v_proj = self._original_mod.v_proj
+        self.out_proj = self._original_mod.out_proj
+        self.num_heads = self._original_mod.num_heads
+        self.head_dim = self._original_mod.embed_dim // self._original_mod.num_heads
+        self.embed_dim = self._original_mod.embed_dim
+        # self.scaling = self._original_mod.scaling
+        
+    # def forward(
+    #     self,
+    #     hidden_states: torch.Tensor,
+    #     key_value_states: torch.Tensor = None,
+    #     past_key_value: Optional[object] = None,
+    #     attention_mask: Optional[torch.Tensor] = None,
+    # ):
+    #     bsz, tgt_len, _ = hidden_states.size()
+    #     query_states = self.q_proj(hidden_states).view(bsz, -1, self.num_heads, self.head_dim).transpose(1, 2) * self.scaling
+
+    #     is_cross_attention = key_value_states is not None
+    #     if is_cross_attention:
+    #         key_states = past_key_value[0]
+    #         value_states = past_key_value[1]
+
+    #     attn_output = torch.nn.functional.scaled_dot_product_attention(
+    #         query_states,
+    #         key_states,
+    #         value_states,
+    #         attn_mask=attention_mask,
+    #     )
+
+    #     attn_output = attn_output.transpose(1, 2).contiguous()
+    #     attn_output = attn_output.view(bsz, tgt_len, self.embed_dim)
+    #     attn_output = self.out_proj(attn_output)
+
+    #     return attn_output, None, past_key_value
