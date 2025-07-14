@@ -33,6 +33,7 @@ def main(
         rbln_tensor_parallel_size=tensor_parallel_size,
         rbln_lora_config=lora_config,
         rbln_attn_impl="flash_attn",
+        num_hidden_layers=1,
     )
     model.save_pretrained(os.path.basename(model_id))
 

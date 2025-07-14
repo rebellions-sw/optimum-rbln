@@ -205,8 +205,6 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
         fully_sharded_loras: Optional[bool] = None,
         enable_lora_bias: Optional[bool] = None,
         long_lora_scaling_factor: Optional[float] = None,
-        lora_a_stack_dim: Optional[int] = None,
-        lora_b_stack_dim: Optional[int] = None,
     ):
         """
         Args:
@@ -222,8 +220,6 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
             enable_lora_bias (Optional[bool]): Whether to enable bias terms for LoRA layers. Defaults to False.
             long_lora_scaling_factor (Optional[float]): Scaling factor for long sequence LoRA.
                 Defaults to None.
-            lora_a_stack_dim (Optional[int]): Dimension for stacking LoRA A matrices. Defaults to 2.
-            lora_b_stack_dim (Optional[int]): Dimension for stacking LoRA B matrices. Defaults to 1.
             **kwargs: Additional arguments for future extensions.
 
         Raises:
@@ -241,8 +237,6 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
 
         fully_sharded_loras = fully_sharded_loras if fully_sharded_loras is not None else False
         enable_lora_bias = enable_lora_bias if enable_lora_bias is not None else False
-        lora_a_stack_dim = lora_a_stack_dim if lora_a_stack_dim is not None else 2
-        lora_b_stack_dim = lora_b_stack_dim if lora_b_stack_dim is not None else 1
 
         # Convert dict adapters to RBLNLoRAAdapterConfig objects
         self.adapters: List[RBLNLoRAAdapterConfig] = []
@@ -263,8 +257,6 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
         self.fully_sharded_loras = fully_sharded_loras
         self.enable_lora_bias = enable_lora_bias
         self.long_lora_scaling_factor = long_lora_scaling_factor
-        self.lora_a_stack_dim = lora_a_stack_dim
-        self.lora_b_stack_dim = lora_b_stack_dim
 
         # Calculate max_lora_rank if not provided
         if max_lora_rank is None:
@@ -341,8 +333,6 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
             "fully_sharded_loras": self.fully_sharded_loras,
             "enable_lora_bias": self.enable_lora_bias,
             "long_lora_scaling_factor": self.long_lora_scaling_factor,
-            "lora_a_stack_dim": self.lora_a_stack_dim,
-            "lora_b_stack_dim": self.lora_b_stack_dim,
         }
         return serializable_map
 
