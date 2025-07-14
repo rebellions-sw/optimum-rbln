@@ -153,7 +153,7 @@ class DecoderOnlyWrapper(nn.Module):
 
     def __init__(
         self,
-        causal_lm: PreTrainedModel,
+        model: PreTrainedModel,
         max_seq_len: int,
         use_rotary_emb: bool,
         attn_impl: str,
@@ -161,13 +161,14 @@ class DecoderOnlyWrapper(nn.Module):
         use_inputs_embeds: bool,
         use_attention_mask: bool,
         use_position_ids: bool,
+        is_causal_lm: bool = True,
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
         sliding_window: Optional[int] = None,
         sliding_window_layers: Optional[List[int]] = None,
     ):
         super().__init__()
-        self.config = causal_lm.config
+        self.config = model.config
 
         if use_rotary_emb:
             rotary_embs = self.get_rotary_emb(max_seq_len=max_seq_len)
@@ -186,6 +187,7 @@ class DecoderOnlyWrapper(nn.Module):
         self.sliding_window_layers = sliding_window_layers
         self.cache_impl = cache_impl
         self.sliding_window = sliding_window
+        self.is_causal_lm = is_causal_lm
 
         if self.attn_impl == "flash_attn":
             self.kvcache_partition_len = kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
@@ -200,21 +202,21 @@ class DecoderOnlyWrapper(nn.Module):
                 f" or equal to max_seq_len({max_seq_len})!"
             )
 
-        self.causal_lm = self.convert_to_rbln_causal_lm(causal_lm, max_seq_len)
+        self.model = self.convert_to_rbln_class(model, max_seq_len)
         self.num_hidden_layers = getattr(self.config, "num_hidden_layers", None) or getattr(self.config, "n_layer")
         self._phase = "prefill"
 
     def get_rotary_emb(self, max_seq_len):
         return RotaryEmbedding(config=self.config, max_seq_len_cached=max_seq_len)
 
-    def get_decoder_layers(self, causal_lm: PreTrainedModel):
-        return causal_lm.model.layers
+    def get_decoder_layers(self, model: PreTrainedModel):
+        return model.model.layers if self.is_causal_lm else model.layers
 
     def get_attn_layer(self, layer: nn.Module):
         return layer.self_attn
 
-    def get_model_layer(self, causal_lm: PreTrainedModel):
-        return causal_lm.model
+    def get_model_layer(self, model: PreTrainedModel):
+        return model.model if self.is_causal_lm else model
 
     def get_rbln_attn_class(self):
         return DecoderOnlyAttention
@@ -228,9 +230,9 @@ class DecoderOnlyWrapper(nn.Module):
     def get_rbln_causal_lm_class(self):
         return DecoderOnlyForCausalLM
 
-    def convert_to_rbln_causal_lm(self, causal_lm: PreTrainedModel, max_seq_len: int):
+    def convert_to_rbln_class(self, model: PreTrainedModel, max_seq_len: int):
         new_layers = []
-        for layer_idx, layer in enumerate(self.get_decoder_layers(causal_lm)):
+        for layer_idx, layer in enumerate(self.get_decoder_layers(model)):
             is_sliding = layer_idx in self.sliding_window_layers
             new_self_attn = self.get_rbln_attn_class()(
                 self.get_attn_layer(layer),
@@ -247,7 +249,7 @@ class DecoderOnlyWrapper(nn.Module):
             new_layers.append(new_layer)
 
         new_model = self.get_rbln_model_class()(
-            self.get_model_layer(causal_lm),
+            self.get_model_layer(model),
             new_layers,
             partition_len=self.kvcache_partition_len,
             max_seq_len=max_seq_len,
@@ -255,8 +257,12 @@ class DecoderOnlyWrapper(nn.Module):
             use_learned_pos_emb=self.__class__._use_learned_pos_emb,
             sliding_window_layers=self.sliding_window_layers,
         )
-        new_causal_lm = self.get_rbln_causal_lm_class()(causal_lm, new_model)
-        return new_causal_lm
+
+        if self.is_causal_lm:
+            new_model = self.get_rbln_causal_lm_class()(model, new_model)
+            return new_model
+        else:
+            return new_model
 
     @property
     def phase(self) -> str:
@@ -265,7 +271,7 @@ class DecoderOnlyWrapper(nn.Module):
     @phase.setter
     def phase(self, phase: str):
         self._phase = phase
-        self.causal_lm.phase = phase
+        self.model.phase = phase
 
     def prepare_forward_args(self, *args):
         args = list(args)
@@ -274,7 +280,12 @@ class DecoderOnlyWrapper(nn.Module):
         cache_position = args.pop(0)
         global_block_tables = args.pop(0) if self.cache_impl in ["hybrid", "static"] else None
         local_block_tables = args.pop(0) if self.cache_impl in ["hybrid", "sliding_window"] else None
-        query_position = args.pop(0) if "prefill" in self.phase else None
+        query_position = (
+            args.pop(0)
+            # query_position usage: 1. causal_lm prefill or 2. sliding_window cache_position
+            if ("prefill" in self.phase and self.is_causal_lm) or self.cache_impl in ["hybrid", "sliding_window"]
+            else None
+        )
         attention_mask = args.pop(0) if self.use_attention_mask else None
         position_ids = args.pop(0) if self.use_position_ids else None
         past_key_values = args
@@ -326,7 +337,7 @@ class DecoderOnlyWrapper(nn.Module):
             rotary_emb,
         ) = self.prepare_forward_args(*args)
 
-        logit = self.causal_lm(
+        logit = self.model(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,

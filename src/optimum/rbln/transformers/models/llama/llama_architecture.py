@@ -17,3 +17,7 @@ from ...models.decoderonly.decoderonly_architecture import DecoderOnlyWrapper
 
 class LlamaWrapper(DecoderOnlyWrapper):
     pass
+
+
+class LlamaModelWrapper(DecoderOnlyWrapper):
+    pass

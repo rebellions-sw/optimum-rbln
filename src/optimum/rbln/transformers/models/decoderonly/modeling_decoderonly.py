@@ -1268,7 +1268,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
     main_input_name = "input_ids"
     auto_model_class = AutoModel
-    _decoder_wrapper_cls = DecoderOnlyWrapper  # FIXME
+    _decoder_wrapper_cls = DecoderOnlyWrapper
     _use_rotary_emb = True
 
     def __post_init__(self, **kwargs):
@@ -1331,7 +1331,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             "sliding_window": rbln_config.sliding_window,
             "sliding_window_layers": rbln_config.sliding_window_layers,
         }
-        return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
+        return cls._decoder_wrapper_cls(model, is_causal_lm=False, **wrapper_cfg).eval()
 
     @classmethod
     def _compile_model(
@@ -1381,16 +1381,23 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         return context
 
     @classmethod
+    def _get_compile_config(cls, rbln_config: RBLNDecoderOnlyModelConfig, phase: str):
+        for compile_cfg in rbln_config.compile_cfgs:
+            if compile_cfg.compiled_model_name == phase:
+                return compile_cfg
+        raise ValueError(f"Compile config for {phase} not found")
+
+    @classmethod
     @torch.inference_mode()
     def get_compiled_model(
         cls,
         model: PreTrainedModel,
-        compile_config: RBLNCompileConfig,
-        rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
+        rbln_config: RBLNDecoderOnlyModelConfig,
         phase: str = "prefill",
         string_pattern: str = "past_key_values",
     ):
         wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
+        compile_config = cls._get_compile_config(rbln_config, phase)
 
         # Here we use meta tensor, for the memory efficiency.
         meta_tensor_names = [name for name, _, _ in compile_config.input_info if string_pattern in name]
@@ -1399,7 +1406,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
         wrapped_model.phase = phase
         compiled_model = cls._compile_model(
-            wrapped_model, compile_config, example_inputs, context, rbln_config.quantization, phase
+            wrapped_model, compile_config, example_inputs, context, rbln_config, phase=phase
         )
         compiled_models = {phase: compiled_model}
 
@@ -1418,7 +1425,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
         hidden_size = getattr(model_config, "n_embd", None) or getattr(model_config, "hidden_size")
         head_dim = getattr(model_config, "head_dim", None) or hidden_size // num_attention_heads
-        local_kvcache_num_blocks = max(rbln_config.decoder_batch_sizes)
+        local_kvcache_num_blocks = 1
 
         # 1. main input
         if rbln_config.use_inputs_embeds:
@@ -1444,7 +1451,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             input_info.extend([("local_block_tables", [1], "int16")])
 
         # 4. query_position for sliding window attention
-        if rbln_config.cache_impl in ["static", "hybrid"]:
+        if rbln_config.cache_impl in ["sliding_window", "hybrid"]:
             input_info.extend([("query_position", [], "int16")])
 
         # 5. attention_mask & position_ids

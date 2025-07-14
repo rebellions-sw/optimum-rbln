@@ -13,8 +13,8 @@
 # limitations under the License.
 
 from ....utils import logging
-from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyModel
-from .llama_architecture import LlamaWrapper
+from ...models.decoderonly import RBLNDecoderOnlyModel, RBLNDecoderOnlyModelForCausalLM
+from .llama_architecture import LlamaModelWrapper, LlamaWrapper
 
 
 logger = logging.get_logger(__name__)
@@ -91,3 +91,5 @@ class RBLNLlamaModel(RBLNDecoderOnlyModel):
     A class to convert and run pre-trained transformers based LlamaModel model on RBLN devices.
     It implements the methods to convert a pre-trained transformers LlamaModel model into a RBLN transformer model by:
     """
+
+    _decoder_wrapper_cls = LlamaModelWrapper
