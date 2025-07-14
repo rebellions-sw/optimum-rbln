@@ -1597,6 +1597,10 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
         # extract valid inputs
         inputs = inputs[:, attention_mask.bool()] if attention_mask is not None else inputs
+
+        if inputs.dim() == 2 and self.rbln_config.use_inputs_embeds:
+            inputs = self.get_input_embeddings()(inputs)
+
         if position_embed is not None:
             position_embed = (
                 position_embed[:, :, :, attention_mask.bool(), :] if attention_mask is not None else position_embed
@@ -1608,7 +1612,11 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         ) % self.rbln_config.prefill_chunk_size
         padded_len = query_length + padding_size
 
-        inputs = torch.nn.functional.pad(inputs, (0, 0, 0, padding_size))
+        inputs = (
+            torch.nn.functional.pad(inputs, (0, padding_size))
+            if not self.rbln_config.use_inputs_embeds
+            else torch.nn.functional.pad(inputs, (0, 0, 0, padding_size))
+        )
         position_embed = (
             None if position_embed is None else torch.nn.functional.pad(position_embed, (0, 0, 0, padding_size))
         )
@@ -1618,12 +1626,12 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
     def _chunked_prefill_forward(
         self,
-        inputs_embeds: torch.Tensor,
+        inputs: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         position_embed: Optional[torch.Tensor] = None,
     ):
         padded_input, padded_position_embed, cache_position, query_length = self._preprocess_chunked_prefill(
-            inputs_embeds, attention_mask, position_embed
+            inputs, attention_mask, position_embed
         )
 
         # chunked prefill
@@ -1635,7 +1643,8 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
             # Forward pass for the current chunk
             last_hidden_states_chunk = self.prefill_decoder(
-                inputs_embeds=input_chunk,
+                input_ids=input_chunk if not self.rbln_config.use_inputs_embeds else None,
+                inputs_embeds=input_chunk if self.rbln_config.use_inputs_embeds else None,
                 cache_position=cache_pos_chunk,
                 block_tables=self.block_tables,
                 position_emb=padded_position_embed,
