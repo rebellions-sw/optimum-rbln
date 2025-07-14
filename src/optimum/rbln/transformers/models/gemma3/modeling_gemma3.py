@@ -419,8 +419,8 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                 num_processed_tokens = query_length - step
 
             input_chunk = inputs[:, step : step + prefill_chunk_size]
-            cache_pos_chunk = cache_position[:, step : step + prefill_chunk_size] + padded_cache_lengths
-            position_ids_chunk = position_ids[:, step : step + prefill_chunk_size]
+            cache_pos_chunk = cache_position[:, step : step + prefill_chunk_size].clone() + padded_cache_lengths
+            position_ids_chunk = position_ids[:, step : step + prefill_chunk_size].clone()
             chunked_attention_mask[
                 :, step + padded_cache_lengths : step + num_processed_tokens + padded_cache_lengths
             ] = 1
@@ -429,23 +429,23 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
             if is_image_prefill:
                 logits = self.image_prefill(
                     input_chunk,
-                    cache_pos_chunk.clone(),
+                    cache_pos_chunk,
                     block_tables,
                     local_block_tables,
                     query_position,
                     chunked_attention_mask,
-                    position_ids_chunk.clone(),
+                    position_ids_chunk,
                     out=out_buffers,
                 )
             else:
                 logits = self.prefill(
                     input_chunk,
-                    cache_pos_chunk.clone(),
+                    cache_pos_chunk,
                     block_tables,
                     local_block_tables,
                     query_position,
                     chunked_attention_mask,
-                    position_ids_chunk.clone(),
+                    position_ids_chunk,
                     out=out_buffers,
                 )
 
