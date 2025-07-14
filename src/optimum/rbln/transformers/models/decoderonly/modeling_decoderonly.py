@@ -1004,20 +1004,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
             # NOTE(eunji): Use a decoder whose batch size matches the model's main batch size for compatibility.
             self.decoder = self.decoders[self.rbln_config.batch_size]
 
-    @classmethod
-    def save_torch_artifacts(
-        cls,
-        model: PreTrainedModel,
-        save_dir_path: Path,
-        subfolder: str,
-        rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
-    ):
-        # If you are unavoidably running on a CPU rather than an RBLN device,
-        # store the torch tensor, weight, etc. in this function.
-        if rbln_config.use_inputs_embeds:
-            save_dict = {}
-            save_dict["embed_tokens"] = model.get_input_embeddings().state_dict()
-            torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
     @classmethod
     def get_quantized_model(
@@ -1204,6 +1190,17 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
             idx = get_idx_from_name("local_block_tables") or get_idx_from_name("block_tables")
             input_info.insert(idx + 1, ("query_position", [], "int16"))
 
+        # local past_key_values shape
+        if rbln_config.cache_impl in ["sliding_window", "hybrid"]:
+            local_kvcache_num_blocks = max(rbln_config.decoder_batch_sizes) if 'decode' in rbln_config.phases else 1
+            num_layers = getattr(model_config, "num_hidden_layers", getattr(model_config, "num_layers"))
+            
+            for i in range(num_layers * 2):
+                if rbln_config.sliding_window is not None and (i // 2) in rbln_config.sliding_window_layers:
+                    idx = i - num_layers * 2
+                    name, shape, dtype = input_info[idx]
+                    input_info[idx] = (name, [local_kvcache_num_blocks] + shape[1:], dtype)
+            
         return input_info
 
     @classmethod
