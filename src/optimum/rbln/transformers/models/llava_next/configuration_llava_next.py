@@ -60,11 +60,12 @@ class RBLNLlavaNextForConditionalGenerationConfig(RBLNModelConfig):
             vision_tower,
         )
 
-        if not self.vision_tower.output_hidden_states:
-            logger.warning(
-                f'Set "output_hidden_states={self.vision_tower.output_hidden_states}" to "output_hidden_states=True" as required by LlavaNext'
+        if self.vision_tower.output_hidden_states is False:
+            raise ValueError(
+                f"LlavaNext requires output_hidden_states to be True, but found output_hidden_states={self.vision_tower.output_hidden_states}. "
+                f"Please compile again with the correct argument."
             )
+        else:
             self.vision_tower.output_hidden_states = True
 
-        self.vision_tower = vision_tower
         self.language_model = language_model
