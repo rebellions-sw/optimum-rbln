@@ -235,15 +235,16 @@ class DecoderOnlyWrapper(nn.Module):
     def convert_to_rbln_causal_lm(self, causal_lm: PreTrainedModel, max_seq_len: int):
         new_layers = []
         for layer_idx, layer in enumerate(self.get_decoder_layers(causal_lm)):
+            is_sliding = layer_idx in self.sliding_window_layers
             new_self_attn = self.get_rbln_attn_class()(
                 self.get_attn_layer(layer),
-                self.use_attention_mask,
+                self.use_attention_mask if not is_sliding else True,
                 self.use_position_ids,
                 kvcache_block_size=self.sliding_window
                 if layer_idx in self.sliding_window_layers
                 else self.kvcache_block_size,
-                is_sliding=layer_idx in self.sliding_window_layers,
-                attn_impl=self.attn_impl,
+                is_sliding=is_sliding,
+                attn_impl=self.attn_impl if not is_sliding else "eager",
                 kvcache_partition_len=self.kvcache_partition_len,
                 lora_config=self.lora_config,
             )
@@ -739,10 +740,6 @@ class DecoderOnlyAttention(nn.Module):
         self.use_position_ids = use_position_ids
         self.is_sliding = is_sliding
         self.attn_impl = attn_impl
-
-        if self.is_sliding and self.attn_impl != "eager":
-            raise NotImplementedError("Sliding window attention is only supported with eager attention.")
-
         self.kvcache_partition_len = kvcache_partition_len
         self.lora_config = lora_config
 
@@ -931,7 +928,8 @@ class AttentionOp(nn.Module):
 
     def get_attn_op_name(self):
         phase = "decode" if self.phase == "decode" else "prefill"
-        if self.use_attention_mask:
+
+        if self.use_attention_mask and not self.use_position_ids:
             attn_op_name = "paged_attn_"
         else:
             attn_op_name = "paged_causal_attn_"
@@ -1132,7 +1130,7 @@ class FlashAttentionOp(AttentionOp):
 
     def get_attn_op_name(self):
         phase = "decode" if self.phase == "decode" else "prefill"
-        if self.use_attention_mask:
+        if self.use_attention_mask and not self.use_position_ids:
             attn_op_name = "paged_flash_attn_"
         else:
             attn_op_name = "paged_flash_causal_attn_"
@@ -1186,7 +1184,7 @@ class FlashAttentionOp(AttentionOp):
             "partition": self.kvcache_partition_size,
         }
 
-        if self.use_attention_mask != self.use_position_ids:
+        if self.use_attention_mask:
             op_args["mask"] = attn_mask
 
         if self.phase == "prefill" or self.phase == "image_prefill":
@@ -1209,8 +1207,8 @@ class FlashAttentionOp(AttentionOp):
 class SlidingWindowAttentionOp(AttentionOp):
     def get_attn_op_name(self):
         phase = "decode" if self.phase == "decode" else "prefill"
-        if self.use_attention_mask:
-            raise NotImplementedError("Attention mask is not supported for sliding window attention.")
+        if not self.use_attention_mask:
+            raise NotImplementedError("Attention mask is needed for sliding window attention.")
 
         attn_op_name = "paged_sliding_window_attn_" + phase
         return attn_op_name

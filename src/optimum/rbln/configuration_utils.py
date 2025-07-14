@@ -150,7 +150,7 @@ class RBLNCompileConfig:
         return asdict(self)
 
 
-RUNTIME_KEYWORDS = ["create_runtimes", "optimize_host_memory", "device", "device_map", "activate_profiler"]
+RUNTIME_KEYWORDS = ["create_runtimes", "optimize_host_memory", "device", "device_map", "activate_profiler", "timeout"]
 CONFIG_MAPPING: Dict[str, Type["RBLNModelConfig"]] = {}
 
 
@@ -484,6 +484,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         "device",
         "device_map",
         "activate_profiler",
+        "timeout",
     ]
     submodules: List[str] = []
     subclass_non_save_attributes = []
@@ -564,6 +565,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         activate_profiler: Optional[bool] = None,
         npu: Optional[str] = None,
         tensor_parallel_size: Optional[int] = None,
+        timeout: Optional[int] = None,
         optimum_rbln_version: Optional[str] = None,
         _compile_cfgs: List[RBLNCompileConfig] = [],
         **kwargs: Dict[str, Any],
@@ -580,6 +582,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
             activate_profiler (Optional[bool]): Whether to activate the profiler for performance analysis.
             npu (Optional[str]): The NPU device name to use for compilation.
             tensor_parallel_size (Optional[int]): Size for tensor parallelism to distribute the model across devices.
+            timeout (Optional[int]): The timeout for the runtime in seconds. If it isn't provided, it will be set to 60 by default.
             optimum_rbln_version (Optional[str]): The optimum-rbln version used for this configuration.
             _compile_cfgs (List[RBLNCompileConfig]): List of compilation configurations for the model.
             **kwargs: Additional keyword arguments.
@@ -602,6 +605,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         self._runtime_options["device"] = device
         self._runtime_options["device_map"] = device_map
         self._runtime_options["activate_profiler"] = activate_profiler
+        self._runtime_options["timeout"] = timeout
 
         # Automatically pass npu, tensor_parallel_size to compile_cfgs
         self.npu = npu
@@ -841,3 +845,14 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
     @activate_profiler.setter
     def activate_profiler(self, activate_profiler: bool):
         self._runtime_options["activate_profiler"] = activate_profiler
+
+    @property
+    def timeout(self):
+        context = ContextRblnConfig.get_current_context()["timeout"]
+        if context is not None:
+            return context
+        return self._runtime_options["timeout"]
+
+    @timeout.setter
+    def timeout(self, timeout: int):
+        self._runtime_options["timeout"] = timeout
