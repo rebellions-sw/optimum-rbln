@@ -26,101 +26,6 @@ from .configuration_decoderonly import CacheImplType
 
 logger = logging.get_logger(__name__)
 
-DEFAULT_FLASH_ATTN_PARTITION_LENGTH = 16_384
-DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH = 32_768
-MIN_FLASH_ATTN_MAX_SEQ_LEN = 8_192
-MIN_FLASH_ATTN_PARTITION_LENGTH = 4_096
-MAX_FLASH_ATTN_PARTITION_LENGTH = 32_768
-MAX_SLIDING_WINDOW_SIZE = 32_768
-
-
-def set_default_values(
-    attn_impl: Optional[str] = None,
-    kvcache_partition_len: Optional[int] = None,
-    kvcache_block_size: Optional[int] = None,
-    max_seq_len: Optional[int] = None,
-) -> Tuple[str, int, int]:
-    if attn_impl is None:
-        attn_impl = "eager"
-
-    if kvcache_partition_len is not None:
-        if attn_impl == "eager":
-            attn_impl = "flash_attn"
-            logger.warning(
-                "A non-null `kvcache_partition_len` was provided, but `attn_impl` was not explicitly set or "
-                "set to 'eager'. Since KV cache partitioning is only supported with flash attention, "
-                "`attn_impl` has been automatically switched to 'flash_attn'."
-            )
-
-    if kvcache_partition_len is None and attn_impl == "flash_attn":
-        kvcache_partition_len = DEFAULT_FLASH_ATTN_PARTITION_LENGTH
-
-    if kvcache_block_size is None:
-        if attn_impl == "eager":
-            kvcache_block_size = max_seq_len
-        else:
-            kvcache_block_size = kvcache_partition_len
-
-    return attn_impl, kvcache_partition_len, kvcache_block_size
-
-
-def validate_attention_method(attn_impl: str, kvcache_partition_len: int, kvcache_block_size: int, max_seq_len: int):
-    if attn_impl not in ["eager", "flash_attn"]:
-        raise ValueError(f"Unknown `attn_impl` : {attn_impl}. (Available : 'eager', 'flash_attn`)")
-
-    ## Checking Constraints...
-    # Constraint of eager attention:
-    # - `max_seq_len` <= 32k
-
-    # Constraints of flash attention:
-    # 1. `max_seq_len` should be multiple of `partition_len`.
-    # 2. 4k <= `partition_len` <= 32k.
-    # 3. `max_seq_len` should be larger then 8k.
-    if attn_impl == "eager" and max_seq_len > DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH:
-        raise ValueError(
-            f"`max_seq_len` is set to {max_seq_len}, "
-            f"which exceeds the limit of {DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH} for 'eager' attention. "
-            f"Please reduce the `max_seq_len` to {DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH} or lower,"
-            " or consider switching `attn_impl` to 'flash_attn' for larger sequence lengths."
-        )
-
-    if attn_impl == "flash_attn":
-        if max_seq_len // kvcache_partition_len < 2 or max_seq_len % kvcache_partition_len != 0:
-            raise ValueError(
-                f"`max_seq_len` ({max_seq_len}) must be a multiple of `kvcache_partition_len` ({kvcache_partition_len}) "
-                f"when using 'flash_attn'. Please adjust either value to meet this requirement."
-            )
-        elif not (MIN_FLASH_ATTN_PARTITION_LENGTH <= kvcache_partition_len <= MAX_FLASH_ATTN_PARTITION_LENGTH):
-            raise ValueError(
-                f"`kvcache_partition_len` ({kvcache_partition_len}) is out of the supported range for 'flash_attn' "
-                f"({MIN_FLASH_ATTN_PARTITION_LENGTH} <= `kvcache_partition_len` <= {MAX_FLASH_ATTN_PARTITION_LENGTH}). "
-                f"Please provide a valid value within this range."
-            )
-        elif max_seq_len < MIN_FLASH_ATTN_MAX_SEQ_LEN:
-            raise ValueError(
-                f"`max_seq_len` ({max_seq_len}) is too small for 'flash_attn'. The minimum "
-                f"supported value is {MIN_FLASH_ATTN_MAX_SEQ_LEN}. Please increase `max_seq_len` to meet "
-                "this requirement, or consider switching `attn_impl` to 'eager' for shorter lengths."
-            )
-
-    if kvcache_block_size is not None:
-        if attn_impl == "flash_attn" and kvcache_partition_len != kvcache_block_size:
-            raise ValueError(
-                f" When using 'flash attention', the `kvcache_block_size` ({kvcache_block_size})  "
-                f"must always be set equal to the `kvcache_partition_len` {kvcache_partition_len}."
-            )
-        elif attn_impl == "eager" and kvcache_block_size != max_seq_len:
-            raise ValueError(
-                f" When using 'eager attention', the `kvcache_block_size` ({kvcache_block_size})  "
-                f"must always be set equal to the `max_seq_len` {max_seq_len}."
-            )
-
-
-def validate_sliding_window_size(sliding_window: int, prefill_chunk_size: int):
-    if sliding_window > MAX_SLIDING_WINDOW_SIZE - prefill_chunk_size:
-        raise ValueError(
-            f"Sliding window size ({sliding_window}) must be less than 32768 - prefill_chunk_size ({32768 - prefill_chunk_size})"
-        )
 
 
 class DecoderOnlyWrapper(nn.Module):
@@ -970,98 +875,6 @@ class AttentionOp(nn.Module):
 
         return attn_output
 
-
-def slice_and_unsqueeze_cos_sin(cos, sin, cache_position, unsqueeze_dim=1):
-    """Slice cos[cache_position], sin[cache_position] vector for the query."""
-    if cache_position.shape[0] > 1:
-        cos_all = []
-        sin_all = []
-        for i in range(cache_position.shape[0]):
-            cos_all.append(cos[cache_position[i : i + 1]].unsqueeze(unsqueeze_dim))
-            sin_all.append(sin[cache_position[i : i + 1]].unsqueeze(unsqueeze_dim))
-        cos = torch.cat(cos_all, dim=0)
-        sin = torch.cat(sin_all, dim=0)
-    else:
-        cos = cos[cache_position].unsqueeze(unsqueeze_dim)
-        sin = sin[cache_position].unsqueeze(unsqueeze_dim)
-
-    return cos, sin
-
-
-def rotate_half(x):
-    """Rotates half the hidden dims of the input."""
-    x1 = x[..., : x.shape[-1] // 2]
-    x2 = x[..., x.shape[-1] // 2 :]
-    return torch.cat((-x2, x1), dim=-1)
-
-
-def apply_rotary_pos_emb(q, k, cos, sin):
-    """Applies Rotary Position Embedding to the query and key tensors."""
-    q_embed = (q * cos) + (rotate_half(q) * sin)
-    k_embed = (k * cos) + (rotate_half(k) * sin)
-    return q_embed, k_embed
-
-
-def apply_rotary_pos_emb_partial(query_states, key_states, cos, sin, ndim) -> Tuple[torch.Tensor, torch.Tensor]:
-    # Partial rotary embedding
-    query_rot, query_pass = (
-        query_states[..., :ndim],
-        query_states[..., ndim:],
-    )
-    key_rot, key_pass = (
-        key_states[..., :ndim],
-        key_states[..., ndim:],
-    )
-
-    # [batch_size, seq_length, num_heads, head_dim // config.partial_rotary_factor]
-    query_rot, key_rot = apply_rotary_pos_emb(query_rot, key_rot, cos, sin)
-
-    # [batch_size, seq_length, num_heads, head_dim]
-    query_states = torch.cat((query_rot, query_pass), dim=-1)
-    key_states = torch.cat((key_rot, key_pass), dim=-1)
-    return query_states, key_states
-
-
-class RotaryEmbedding(nn.Module):
-    """RotaryEmbedding extended with Dynamic NTK scaling. Credits to the Reddit users /u/bloc97 and /u/emozilla"""
-
-    def __init__(
-        self,
-        config: PretrainedConfig,
-        max_seq_len_cached: int,
-    ):
-        super().__init__()
-
-        if hasattr(config, "rope_scaling") and config.rope_scaling is not None:
-            rope_type = config.rope_scaling.get("rope_type", config.rope_scaling.get("type"))
-        else:
-            rope_type = "default"
-
-        inv_freq, attention_scaling = ROPE_INIT_FUNCTIONS[rope_type](config, max_seq_len_cached)
-        cache_position = torch.arange(0, max_seq_len_cached, dtype=torch.float32)
-        cache_position_expanded = cache_position[:, None]
-
-        if rope_type == "dynamic":
-            freqs = cache_position_expanded.float() * inv_freq.float()
-        else:
-            inv_freq_expanded = inv_freq[None, :]
-            freqs = cache_position_expanded.float() @ inv_freq_expanded.float()
-
-        emb = torch.cat((freqs, freqs), dim=-1)
-
-        cos = emb.cos() * attention_scaling
-        sin = emb.sin() * attention_scaling
-
-        self.register_buffer("_cos_cached", cos, persistent=False)
-        self.register_buffer("_sin_cached", sin, persistent=False)
-
-    def forward(self, x, seq_len):
-        return (
-            self._cos_cached[:seq_len].to(dtype=x.dtype),
-            self._sin_cached[:seq_len].to(dtype=x.dtype),
-        )
-
-
 class FlashAttentionOp(AttentionOp):
     def __init__(
         self,
@@ -1224,3 +1037,94 @@ class SlidingWindowAttentionOp(AttentionOp):
         attn_output = attn_output.reshape(batch_size, -1, self.num_heads * self.head_dim)
 
         return attn_output
+
+
+class RotaryEmbedding(nn.Module):
+    """RotaryEmbedding extended with Dynamic NTK scaling. Credits to the Reddit users /u/bloc97 and /u/emozilla"""
+
+    def __init__(
+        self,
+        config: PretrainedConfig,
+        max_seq_len_cached: int,
+    ):
+        super().__init__()
+
+        if hasattr(config, "rope_scaling") and config.rope_scaling is not None:
+            rope_type = config.rope_scaling.get("rope_type", config.rope_scaling.get("type"))
+        else:
+            rope_type = "default"
+
+        inv_freq, attention_scaling = ROPE_INIT_FUNCTIONS[rope_type](config, max_seq_len_cached)
+        cache_position = torch.arange(0, max_seq_len_cached, dtype=torch.float32)
+        cache_position_expanded = cache_position[:, None]
+
+        if rope_type == "dynamic":
+            freqs = cache_position_expanded.float() * inv_freq.float()
+        else:
+            inv_freq_expanded = inv_freq[None, :]
+            freqs = cache_position_expanded.float() @ inv_freq_expanded.float()
+
+        emb = torch.cat((freqs, freqs), dim=-1)
+
+        cos = emb.cos() * attention_scaling
+        sin = emb.sin() * attention_scaling
+
+        self.register_buffer("_cos_cached", cos, persistent=False)
+        self.register_buffer("_sin_cached", sin, persistent=False)
+
+    def forward(self, x, seq_len):
+        return (
+            self._cos_cached[:seq_len].to(dtype=x.dtype),
+            self._sin_cached[:seq_len].to(dtype=x.dtype),
+        )
+
+def slice_and_unsqueeze_cos_sin(cos, sin, cache_position, unsqueeze_dim=1):
+    """Slice cos[cache_position], sin[cache_position] vector for the query."""
+    if cache_position.shape[0] > 1:
+        cos_all = []
+        sin_all = []
+        for i in range(cache_position.shape[0]):
+            cos_all.append(cos[cache_position[i : i + 1]].unsqueeze(unsqueeze_dim))
+            sin_all.append(sin[cache_position[i : i + 1]].unsqueeze(unsqueeze_dim))
+        cos = torch.cat(cos_all, dim=0)
+        sin = torch.cat(sin_all, dim=0)
+    else:
+        cos = cos[cache_position].unsqueeze(unsqueeze_dim)
+        sin = sin[cache_position].unsqueeze(unsqueeze_dim)
+
+    return cos, sin
+
+
+def rotate_half(x):
+    """Rotates half the hidden dims of the input."""
+    x1 = x[..., : x.shape[-1] // 2]
+    x2 = x[..., x.shape[-1] // 2 :]
+    return torch.cat((-x2, x1), dim=-1)
+
+
+def apply_rotary_pos_emb(q, k, cos, sin):
+    """Applies Rotary Position Embedding to the query and key tensors."""
+    q_embed = (q * cos) + (rotate_half(q) * sin)
+    k_embed = (k * cos) + (rotate_half(k) * sin)
+    return q_embed, k_embed
+
+
+def apply_rotary_pos_emb_partial(query_states, key_states, cos, sin, ndim) -> Tuple[torch.Tensor, torch.Tensor]:
+    # Partial rotary embedding
+    query_rot, query_pass = (
+        query_states[..., :ndim],
+        query_states[..., ndim:],
+    )
+    key_rot, key_pass = (
+        key_states[..., :ndim],
+        key_states[..., ndim:],
+    )
+
+    # [batch_size, seq_length, num_heads, head_dim // config.partial_rotary_factor]
+    query_rot, key_rot = apply_rotary_pos_emb(query_rot, key_rot, cos, sin)
+
+    # [batch_size, seq_length, num_heads, head_dim]
+    query_states = torch.cat((query_rot, query_pass), dim=-1)
+    key_states = torch.cat((key_rot, key_pass), dim=-1)
+    return query_states, key_states
+
