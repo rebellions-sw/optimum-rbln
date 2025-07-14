@@ -28,7 +28,6 @@ from .configuration_decoderonly import CacheImplType
 logger = logging.get_logger(__name__)
 
 
-
 class DecoderOnlyWrapper(nn.Module):
     """A wrapper class for decoder-only language models that handles RBLN-specific optimizations and requirements.
 
@@ -876,6 +875,7 @@ class AttentionOp(nn.Module):
 
         return attn_output
 
+
 class FlashAttentionOp(AttentionOp):
     def __init__(
         self,
@@ -1079,6 +1079,7 @@ class RotaryEmbedding(nn.Module):
             self._sin_cached[:seq_len].to(dtype=x.dtype),
         )
 
+
 def slice_and_unsqueeze_cos_sin(cos, sin, cache_position, unsqueeze_dim=1):
     """Slice cos[cache_position], sin[cache_position] vector for the query."""
     if cache_position.shape[0] > 1:
@@ -1128,4 +1129,3 @@ def apply_rotary_pos_emb_partial(query_states, key_states, cos, sin, ndim) -> Tu
     query_states = torch.cat((query_rot, query_pass), dim=-1)
     key_states = torch.cat((key_rot, key_pass), dim=-1)
     return query_states, key_states
-

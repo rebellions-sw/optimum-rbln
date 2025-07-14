@@ -16,7 +16,7 @@ import torch.nn as nn
 from transformers import PreTrainedModel
 
 from ....utils import logging
-from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM
+from ...models.decoderonly import RBLNDecoderOnlyModel, RBLNDecoderOnlyModelForCausalLM
 from ...models.decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
 from .opt_architecture import OPTWrapper
 
@@ -54,6 +54,46 @@ class RBLNOPTForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     the `rbln_config` parameter should be an instance of [`RBLNOPTForCausalLM`] or a dictionary conforming to its structure.
 
     See the [`RBLNOPTForCausalLM`] class for all available configuration options.
+    """
+
+    _decoder_wrapper_cls = OPTWrapper
+    _use_rotary_emb = False
+
+    def modify_opt_decoder_layer(layer):
+        mlp = MLP(layer.fc1, layer.fc2, layer.activation_fn)
+        layer.mlp = mlp
+        del layer.fc1
+        del layer.fc2
+        del layer.activation_fn
+
+        return layer
+
+    @classmethod
+    def wrap_model_if_needed(cls, model: PreTrainedModel, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig):
+        wrapper_cfg = {
+            "max_seq_len": rbln_config.max_seq_len,
+            "attn_impl": rbln_config.attn_impl,
+            "kvcache_partition_len": rbln_config.kvcache_partition_len,
+            "kvcache_block_size": rbln_config.kvcache_block_size,
+            "use_rotary_emb": cls._use_rotary_emb,
+            "use_attention_mask": rbln_config.use_attention_mask,
+            "use_position_ids": rbln_config.use_position_ids,
+            "use_inputs_embeds": rbln_config.use_inputs_embeds,
+            "cache_impl": rbln_config.cache_impl,
+            "sliding_window": rbln_config.sliding_window,
+            "sliding_window_layers": rbln_config.sliding_window_layers,
+        }
+
+        for i in range(len(model.model.decoder.layers)):
+            model.model.decoder.layers[i] = cls.modify_opt_decoder_layer(model.model.decoder.layers[i])
+
+        return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
+
+
+class RBLNOPTModel(RBLNDecoderOnlyModel):
+    """
+    The OPT Model transformer without a language modeling head.
+    This model inherits from [`RBLNDecoderOnlyModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
     """
 
     _decoder_wrapper_cls = OPTWrapper
