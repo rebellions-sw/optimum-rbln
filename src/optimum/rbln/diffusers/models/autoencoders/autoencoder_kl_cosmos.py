@@ -20,7 +20,6 @@ from diffusers.models.autoencoders.autoencoder_kl_cosmos import AutoencoderKLCos
 from diffusers.models.autoencoders.vae import DecoderOutput
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
 from torch.nn import functional as F
-from transformers import PretrainedConfig
 
 from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
@@ -31,7 +30,7 @@ from .vae import RBLNRuntimeCosmosVAEDecoder, RBLNRuntimeCosmosVAEEncoder, _VAEC
 
 if TYPE_CHECKING:
     import torch
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PreTrainedModel
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig, PreTrainedModel
 
     from ...modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 
@@ -125,7 +124,7 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
     def update_rbln_config_using_pipe(
         cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
     ) -> "RBLNDiffusionMixinConfig":
-        rbln_config.vae.num_channels_latents = pipe.transformer.config.out_channels
+        rbln_config.vae.num_channels_latents = pipe.transformer.config.in_channels - int(rbln_config.vae.uses_encoder)
         rbln_config.vae.vae_scale_factor_temporal = pipe.vae_scale_factor_temporal
         rbln_config.vae.vae_scale_factor_spatial = pipe.vae_scale_factor_spatial
         return rbln_config
@@ -213,8 +212,6 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
 
     def decode(self, z: torch.FloatTensor, return_dict: bool = True) -> torch.FloatTensor:
         decoded = self.decoder.decode(z)
-
         if not return_dict:
             return (decoded,)
-
         return DecoderOutput(sample=decoded)
