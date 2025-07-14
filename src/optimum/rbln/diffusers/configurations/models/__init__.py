@@ -1,5 +1,6 @@
 from .configuration_autoencoder_kl import RBLNAutoencoderKLConfig
 from .configuration_autoencoder_kl_cosmos import RBLNAutoencoderKLCosmosConfig
+from .configuration_autoencoder_kl_wan import RBLNAutoencoderKLWanConfig
 from .configuration_controlnet import RBLNControlNetModelConfig
 from .configuration_prior_transformer import RBLNPriorTransformerConfig
 from .configuration_transformer_cosmos import RBLNCosmosTransformer3DModelConfig

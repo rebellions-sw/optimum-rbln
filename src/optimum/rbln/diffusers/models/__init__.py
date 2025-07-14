@@ -21,6 +21,7 @@ _import_structure = {
     "autoencoders": [
         "RBLNAutoencoderKL",
         "RBLNAutoencoderKLCosmos",
+        "RBLNAutoencoderKLWan",
         "RBLNVQModel",
     ],
     "unets": [
@@ -38,6 +39,7 @@ if TYPE_CHECKING:
     from .autoencoders import (
         RBLNAutoencoderKL,
         RBLNAutoencoderKLCosmos,
+        RBLNAutoencoderKLWan,
         RBLNVQModel,
     )
     from .controlnet import RBLNControlNetModel

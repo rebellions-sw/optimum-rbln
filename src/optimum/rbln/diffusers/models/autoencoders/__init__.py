@@ -14,4 +14,5 @@
 
 from .autoencoder_kl import RBLNAutoencoderKL
 from .autoencoder_kl_cosmos import RBLNAutoencoderKLCosmos
+from .autoencoder_kl_wan import RBLNAutoencoderKLWan
 from .vq_model import RBLNVQModel
