@@ -331,7 +331,6 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNDecoderOnlyModelConfig):
             attn_impl,
             kvcache_partition_len,
             kvcache_block_size,
-            quantization,
             prefill_chunk_size,
             kvcache_num_blocks,
             cache_impl,
@@ -339,6 +338,10 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNDecoderOnlyModelConfig):
             sliding_window_layers,
             **kwargs,
         )
+
+        self.quantization = quantization or {}
+        if self.quantization and isinstance(self.quantization, dict):
+            self.quantization = RBLNQuantizationConfig(**self.quantization, model_config=self)
 
         self.decoder_batch_sizes = decoder_batch_sizes
         if self.decoder_batch_sizes is None:

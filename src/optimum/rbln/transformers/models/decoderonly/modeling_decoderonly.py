@@ -23,6 +23,7 @@ import rebel
 import torch
 from rebel.compile_context import CompileContext
 from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, PretrainedConfig, PreTrainedModel
+from transformers.modeling_outputs import BaseModelOutputWithPast
 from transformers.modeling_utils import no_init_weights
 from transformers.utils import ModelOutput
 
@@ -589,7 +590,7 @@ class RBLNDecoderOnlyFlashAttentionMixin:
             )
 
 
-class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
+class RBLNDecoderOnlyModelForCausalLM(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     """
     A base class for decoder-only transformer models optimized for causal language modeling tasks on RBLN devices.
     This class serves as the foundation for various decoder-only architectures like GPT, LLaMA, etc.
@@ -1025,6 +1026,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 "This can cause a failure during model compilation."
             )
         logger.info(f"[KVCache] Compiling with num_blocks: {rbln_config.kvcache_num_blocks}")
+
+        return rbln_config
 
     @classmethod
     def _update_rbln_config(
@@ -1658,7 +1661,6 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             new_last_hidden_states = last_hidden_states
         return new_last_hidden_states
 
-    # TODO:
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
@@ -1678,4 +1680,5 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             )
             all_last_hidden_states.append(last_hidden_states)
 
-        return torch.concat(all_last_hidden_states, dim=0)
+        last_hidden_states = torch.concat(all_last_hidden_states, dim=0)
+        return BaseModelOutputWithPast(last_hidden_state=last_hidden_states)
