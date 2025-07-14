@@ -1,6 +1,7 @@
 from .models import (
     RBLNAutoencoderKLConfig,
     RBLNAutoencoderKLCosmosConfig,
+    RBLNAutoencoderKLWanConfig,
     RBLNControlNetModelConfig,
     RBLNCosmosTransformer3DModelConfig,
     RBLNPriorTransformerConfig,
