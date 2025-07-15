@@ -262,6 +262,7 @@ class TestBartModel(LLMTest.TestLLM):
                     **self.HF_CONFIG_KWARGS,
                 )
 
+
 class TestPegasusModel(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForSeq2SeqLM
     RBLN_CLASS = RBLNPegasusForConditionalGeneration
