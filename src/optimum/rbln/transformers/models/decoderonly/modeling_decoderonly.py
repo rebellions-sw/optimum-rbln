@@ -34,7 +34,7 @@ from ...modeling_attention_utils import (
     RBLNDecoderOnlyFlashAttentionMixin,
     set_default_values,
     validate_attention_method,
-    validate_sliding_window_size,
+    validate_sliding_window,
 )
 from ...utils.rbln_quantization import prepare_model_for_quantization
 from .configuration_decoderonly import RBLNDecoderOnlyModelConfig, RBLNDecoderOnlyModelForCausalLMConfig
@@ -495,8 +495,16 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
         # TODO: add prefill runtime class.
         self.prefill_decoder = RBLNPytorchRuntime(runtime=self.model[0])
-        self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
-        self.local_block_tables = torch.tensor([0], dtype=torch.int16)
+
+        # attributes for prefill
+        if self.rbln_config.cache_impl in ["static", "hybrid"]:
+            self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
+        if self.rbln_config.cache_impl in ["sliding_window", "hybrid"]:
+            self.local_block_tables = torch.tensor([0], dtype=torch.int16)
+        if self.rbln_config.use_attention_mask:
+            self.causal_mask = 1 - torch.triu(
+                torch.ones(1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.prefill_chunk_size), diagonal=1
+            )
 
     @classmethod
     def save_torch_artifacts(
@@ -787,7 +795,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         ):
             rbln_config = cls._update_sliding_window_config(model_config, rbln_config)
             if rbln_config.sliding_window is not None:
-                validate_sliding_window_size(rbln_config.sliding_window, rbln_config.prefill_chunk_size)
+                validate_sliding_window(rbln_config)
 
         rbln_config = cls._update_attention_config(model, model_config, rbln_config)
 
@@ -860,7 +868,13 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         )
         cache_position = torch.arange(padded_len, dtype=torch.int32).unsqueeze(0)
 
-        return inputs, position_embed, cache_position, query_length
+        chunked_attention_mask = (
+            torch.zeros(1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.max_seq_len, dtype=torch.float32)
+            if self.rbln_config.use_attention_mask
+            else None
+        )
+
+        return inputs, position_embed, cache_position, query_length, chunked_attention_mask
 
     def _chunked_prefill_forward(
         self,
@@ -868,8 +882,8 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         attention_mask: Optional[torch.Tensor] = None,
         position_embed: Optional[torch.Tensor] = None,
     ):
-        padded_input, padded_position_embed, cache_position, query_length = self._preprocess_chunked_prefill(
-            inputs, attention_mask, position_embed
+        padded_input, padded_position_embed, cache_position, query_length, chunked_attention_mask = (
+            self._preprocess_chunked_prefill(inputs, attention_mask, position_embed)
         )
 
         # chunked prefill
@@ -879,15 +893,20 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             input_chunk = padded_input[:, step : step + self.rbln_config.prefill_chunk_size]
             cache_pos_chunk = cache_position[:, step : step + self.rbln_config.prefill_chunk_size]
 
+            valid_length = (
+                self.rbln_config.prefill_chunk_size
+                if (step + self.rbln_config.prefill_chunk_size) <= query_length
+                else query_length - step
+            )
             if self.rbln_config.cache_impl in ["sliding_window", "hybrid"]:
-                valid_length = (
-                    self.rbln_config.prefill_chunk_size
-                    if (step + self.rbln_config.prefill_chunk_size) <= query_length
-                    else query_length - step
-                )
                 query_position = torch.tensor(valid_length - 1, dtype=torch.int16)
             else:
                 query_position = None
+
+            if self.rbln_config.use_attention_mask:
+                if step > 0:
+                    chunked_attention_mask[:, :, :, :step] = 1
+                chunked_attention_mask[:, :, :, step : step + self.rbln_config.prefill_chunk_size] = self.causal_mask
 
             # Forward pass for the current chunk
             last_hidden_states_chunk = self.prefill_decoder(
@@ -899,6 +918,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
                 if self.rbln_config.cache_impl in ["sliding_window", "hybrid"]
                 else None,
                 query_position=query_position,
+                attention_mask=chunked_attention_mask,
                 position_emb=padded_position_embed,
             )
             last_hidden_states.append(last_hidden_states_chunk)

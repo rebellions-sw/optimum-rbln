@@ -105,11 +105,14 @@ def validate_attention_method(attn_impl: str, kvcache_partition_len: int, kvcach
             )
 
 
-def validate_sliding_window_size(sliding_window: int, prefill_chunk_size: int):
-    if sliding_window > MAX_SLIDING_WINDOW_SIZE - prefill_chunk_size:
+def validate_sliding_window(rbln_config: RBLNDecoderOnlyModelForCausalLMConfig):
+    if rbln_config.sliding_window > MAX_SLIDING_WINDOW_SIZE - rbln_config.prefill_chunk_size:
         raise ValueError(
-            f"Sliding window size ({sliding_window}) must be less than 32768 - prefill_chunk_size ({32768 - prefill_chunk_size})"
+            f"Sliding window size ({rbln_config.sliding_window}) must be less than 32768 - prefill_chunk_size ({32768 - rbln_config.prefill_chunk_size})"
         )
+
+    if rbln_config.cache_impl == "sliding_window" and rbln_config.use_attention_mask:
+        raise ValueError("`use_attention_mask` must be set to False when `cache_impl` is set to 'sliding_window'.")
 
 
 class RBLNDecoderOnlyFlashAttentionMixin:
