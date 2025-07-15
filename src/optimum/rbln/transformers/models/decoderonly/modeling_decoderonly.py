@@ -353,8 +353,11 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             if position_embed is not None:
                 position_embed = torch.nn.functional.pad(position_embed, (0, 0, 0, padding_size))
 
+            if token_type_ids is not None:
+                token_type_ids = torch.nn.functional.pad(token_type_ids, (0, padding_size), value=-1)
+
         # Overwrite position_ids and padded_cache_lengths
-        position_ids = None
+        position_ids = cache_position.clone()
         padded_cache_lengths = 0
 
         return (
@@ -366,6 +369,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_embed,
             padded_cache_lengths,
             query_length,
+            token_type_ids,
         )
 
     def prefill_forward(
@@ -394,6 +398,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_embed,
             padded_cache_lengths,
             query_length,
+            token_type_ids,
         ) = self._prepare_prefill_inputs(
             inputs, cache_position, attention_mask, position_embed, token_type_ids=token_type_ids
         )
