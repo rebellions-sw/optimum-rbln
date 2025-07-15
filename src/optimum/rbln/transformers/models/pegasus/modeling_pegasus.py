@@ -36,7 +36,7 @@ class RBLNPegasusModel(RBLNTransformerEncoderForFeatureExtraction):
 
 
 class RBLNPegasusForConditionalGeneration(RBLNModelForSeq2SeqLM):
-    support_causal_attn = True # 이걸 나누는 기준이 뭘까? -> T5 에서는 masked softmax를 못쓰고 add softmax를 써야하기 때문
+    support_causal_attn = True
 
     @classmethod
     def wrap_model_if_needed(self, model: "PreTrainedModel", rbln_config: RBLNPegasusForConditionalGenerationConfig):

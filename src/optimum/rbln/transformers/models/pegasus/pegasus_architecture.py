@@ -38,45 +38,7 @@ logger = logging.get_logger(__name__)
 class PegasusWrapper:
     def __init__(self, model: nn.Module, enc_max_seq_len: int, use_attention_mask: bool):
         self.encoder = Seq2SeqEncoderWrapper(model, enc_max_seq_len)
-        # self.encoder = PegasusEncoderWrapper(model, enc_max_seq_len)
         self.decoder = PegasusDecoderWrapper(model, use_attention_mask=use_attention_mask)
-
-class PegasusEncoderWrapper(Seq2SeqEncoderWrapper):
-    def forward(
-        self,
-        input_ids: torch.Tensor,
-        attention_mask: torch.Tensor,
-        b_idx: torch.Tensor,
-        *cross_key_values: Tuple[torch.Tensor],
-    ) -> Tuple[torch.Tensor]:
-        # 1. get encoder last_hidden_states
-        encoder_outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
-        last_hidden_states = encoder_outputs[0]
-
-        # 2. pre-compute cross_attention's past_key_value which used in decoder phase.
-        cross_kv = []
-        for k_proj, v_proj in zip(self.cross_k_projects, self.cross_v_projects):
-            past_k = (
-                k_proj(last_hidden_states).view(1, self.encoder_max_length, self.num_heads, self.d_kv).transpose(1, 2)
-            )
-            past_v = (
-                v_proj(last_hidden_states).view(1, self.encoder_max_length, self.num_heads, self.d_kv).transpose(1, 2)
-            )
-
-            cross_kv.append(past_k)
-            cross_kv.append(past_v)
-
-        # 3. update the cross_attention's past_key_value direct to the device-dram for optimization.
-        batch_axis = torch.tensor(0, dtype=torch.int16)
-        cross_key_values = list(cross_key_values)
-        # import pdb; pdb.set_trace() # last_hidden_states 계산은 문제없음 -> 결국 Decoder 문제?
-        for i in range(self.n_layer * 2):
-            cross_key_values[i] = torch.ops.rbln_custom_ops.rbln_cache_update(
-                cross_key_values[i], cross_kv[i], b_idx[0], batch_axis
-            )
-
-        return last_hidden_states, cross_key_values
-
 
 class PegasusDecoderWrapper(Seq2SeqDecoderWrapper):
     def convert_to_rbln_conditional_generation(self, model: nn.Module):
@@ -93,33 +55,7 @@ class PegasusDecoderWrapper(Seq2SeqDecoderWrapper):
 
 
 class PegasusForConditionalGeneration(Seq2SeqForConditionalGeneration):
-    def forward(
-        self,
-        input_ids,
-        attention_mask,
-        encoder_attention_mask,
-        self_past_key_values,
-        cross_past_key_values,
-        cache_position,
-        block_tables: Optional[torch.Tensor] = None,
-    ):
-        hidden_states = self.decoder(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            encoder_attention_mask=encoder_attention_mask,
-            self_past_key_values=self_past_key_values,
-            cross_past_key_values=cross_past_key_values,
-            cache_position=cache_position,
-            block_tables=block_tables,
-        )
-
-        if self.has_rescaling and self.config.tie_word_embeddings:
-            hidden_states = hidden_states * self.scaling
-
-        lm_logits = self.lm_head(hidden_states[0])
-        output_hidden_states = hidden_states[1:]
-
-        return lm_logits, (output_hidden_states)
+    pass
 
 
 class PegasusDecoder(Seq2SeqDecoder):
@@ -154,54 +90,6 @@ class PegasusDecoder(Seq2SeqDecoder):
             return lambda x: self.embed_tokens(x) * self.embed_scale
         else:
             return self.embed_tokens
-        
-    def forward(
-        self,
-        input_ids: torch.Tensor,
-        attention_mask: torch.Tensor,
-        encoder_attention_mask: torch.Tensor,
-        self_past_key_values: torch.Tensor,
-        cross_past_key_values: torch.Tensor,
-        cache_position: torch.Tensor,
-        block_tables: Optional[torch.Tensor] = None,
-    ):
-        output_hidden_states=True
-        # embedding
-        hidden_states = self.get_embedding()(input_ids)
-        attention_mask, encoder_attention_mask = self.prepare_attn_mask(
-            attention_mask, encoder_attention_mask, cache_position=cache_position
-        )
-
-        if self.has_pos_emb:
-            hidden_states = self.apply_position_embedding(hidden_states, cache_position)
-
-        all_hidden_states = () if output_hidden_states else None
-        
-        # iterate decoder_layer
-        for decoder_layer, self_past_key_value, cross_past_key_value in zip(
-            self.layers, self_past_key_values, cross_past_key_values
-        ):
-            if output_hidden_states:
-                all_hidden_states += (hidden_states,)
-
-            hidden_states = decoder_layer(
-                hidden_states,
-                attention_mask=attention_mask,
-                encoder_attention_mask=encoder_attention_mask,
-                self_past_key_value=self_past_key_value,
-                cross_past_key_value=cross_past_key_value,
-                cache_position=cache_position,
-                block_tables=block_tables,
-            )
-
-        if self.final_layer_norm is not None:
-            hidden_states = self.final_layer_norm(hidden_states)
-        
-        # add hidden states from the last decoder layer
-        if output_hidden_states:
-            all_hidden_states += (hidden_states,)
-
-        return hidden_states, all_hidden_states
 
 
 class PegasusLayerFF(nn.Module):
