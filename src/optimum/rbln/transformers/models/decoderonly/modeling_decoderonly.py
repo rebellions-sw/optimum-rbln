@@ -819,9 +819,6 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             ),
         ]
 
-    def can_generate(self):
-        return False
-
     def _preprocess_chunked_prefill(
         self,
         inputs: torch.Tensor,

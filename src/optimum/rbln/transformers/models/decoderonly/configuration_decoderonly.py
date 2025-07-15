@@ -326,19 +326,19 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNDecoderOnlyModelConfig):
         """
 
         super().__init__(
-            batch_size,
-            max_seq_len,
-            use_inputs_embeds,
-            use_attention_mask,
-            use_position_ids,
-            attn_impl,
-            kvcache_partition_len,
-            kvcache_block_size,
-            prefill_chunk_size,
-            kvcache_num_blocks,
-            cache_impl,
-            sliding_window,
-            sliding_window_layers,
+            batch_size=batch_size,
+            max_seq_len=max_seq_len,
+            use_inputs_embeds=use_inputs_embeds,
+            use_attention_mask=use_attention_mask,
+            use_position_ids=use_position_ids,
+            attn_impl=attn_impl,
+            kvcache_partition_len=kvcache_partition_len,
+            kvcache_block_size=kvcache_block_size,
+            prefill_chunk_size=prefill_chunk_size,
+            kvcache_num_blocks=kvcache_num_blocks,
+            cache_impl=cache_impl,
+            sliding_window=sliding_window,
+            sliding_window_layers=sliding_window_layers,
             **kwargs,
         )
 
