@@ -536,6 +536,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
         # NOTE(eunji): Use a decoder whose batch size matches the model's main batch size for compatibility.
         self.decoder = self.decoders[self.rbln_config.batch_size]
+        self.lora_int_ids = None
 
     @classmethod
     def save_torch_artifacts(
@@ -1184,6 +1185,48 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
         return model_kwargs
 
+    def set_lora_int_ids(self, lora_int_ids: Optional[torch.Tensor]):
+        if isinstance(lora_int_ids, int):
+            lora_int_ids = torch.tensor([lora_int_ids], dtype=torch.int32)
+        elif isinstance(lora_int_ids, list):
+            lora_int_ids = torch.tensor(lora_int_ids, dtype=torch.int32)
+
+        self.lora_int_ids = lora_int_ids
+
+    def set_adapter(self, adapter_name: Union[str, List[str]]) -> None:
+        """
+        Sets the active adapter(s) for the model using adapter name(s).
+
+        Args:
+            adapter_name (Union[str, List[str]]): The name(s) of the adapter(s) to be activated.
+                Can be a single adapter name or a list of adapter names.
+
+        Raises:
+            ValueError: If the model is not configured with LoRA or if the adapter name is not found.
+        """
+        if not hasattr(self.rbln_config, "lora_config") or self.rbln_config.lora_config is None:
+            raise ValueError("Model is not configured with LoRA. Cannot set adapter.")
+
+        # Convert single adapter name to list for uniform processing
+        if isinstance(adapter_name, str):
+            adapter_names = [adapter_name]
+        else:
+            adapter_names = adapter_name
+
+        # Validate that all adapter names exist
+        available_adapters = {
+            adapter.lora_name: adapter.lora_int_id for adapter in self.rbln_config.lora_config.adapters
+        }
+        missing_adapters = [name for name in adapter_names if name not in available_adapters]
+        if missing_adapters:
+            raise ValueError(
+                f"Adapter(s) {missing_adapters} not found. Available adapters: {list(available_adapters.keys())}"
+            )
+
+        # Get the adapter IDs and set them
+        adapter_ids = [available_adapters[name] for name in adapter_names]
+        self.set_lora_int_ids(torch.tensor(adapter_ids, dtype=torch.int32))
+
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
@@ -1202,6 +1245,13 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         # For continuous batching, the prefill stage processes one batch at a time and updates the KV cache using batch_idx.
         # A for-loop ensures synchronization with the HuggingFace generate API.
         # The decoder stage operates as usual, processing inputs in batch mode.
+        if self.rbln_config.use_lora and lora_int_id is None:
+            if self.lora_int_ids is None:
+                raise ValueError(
+                    "lora_int_id is required when using LoRA. "
+                    "You should call set_lora_int_ids() before forward() or pass lora_int_id to forward()."
+                )
+            lora_int_id = self.lora_int_ids
 
         # Prefll
         if cache_position is None:

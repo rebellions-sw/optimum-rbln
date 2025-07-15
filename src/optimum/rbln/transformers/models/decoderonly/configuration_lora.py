@@ -122,7 +122,7 @@ class RBLNLoRAAdapterConfig(RBLNSerializableConfigProtocol):
 
         # If it's an absolute path that doesn't exist, raise error
         if path.is_absolute():
-            raise ValueError(f"LoRA adapter path does not exist: {path.as_pㅂosix()}")
+            raise ValueError(f"LoRA adapter path does not exist: {path.as_posix()}")
 
         # Try to interpret as HuggingFace Hub model ID and download
         try:
