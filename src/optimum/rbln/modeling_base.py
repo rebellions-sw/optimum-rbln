@@ -51,11 +51,8 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     model_type = "rbln_model"
     auto_model_class = AutoModel
     config_class = AutoConfig
-
     config_name = "config.json"
     hf_library_name = "transformers"
-    _hf_class = None
-    _rbln_config_class = None
 
     def __init__(
         self,
@@ -422,7 +419,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
         # Returns:
         #     type: The original HuggingFace model class
-        if cls._hf_class is None:
+        if "_hf_class" not in cls.__dict__ or cls._hf_class is None:
             hf_cls_name = cls.__name__[4:]
             library = importlib.import_module(cls.hf_library_name)
             cls._hf_class = getattr(library, hf_cls_name, None)
@@ -431,7 +428,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     @classmethod
     def get_rbln_config_class(cls) -> Type[RBLNModelConfig]:
         # Lazily loads and caches the corresponding RBLN model config class.
-        if cls._rbln_config_class is None:
+        if "_rbln_config_class" not in cls.__dict__ or cls._rbln_config_class is None:
             rbln_config_class_name = cls.__name__ + "Config"
             cls._rbln_config_class = get_rbln_config_class(rbln_config_class_name)
         return cls._rbln_config_class

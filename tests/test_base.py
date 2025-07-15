@@ -164,10 +164,6 @@ class BaseTest:
             return None
 
         @classmethod
-        def get_hf_class(cls):
-            return getattr(transformers, cls.RBLN_CLASS.__name__[4:])
-
-        @classmethod
         def get_hf_remote_dir(cls):
             return "rbln-" + os.path.basename(cls.HF_MODEL_ID)
 
@@ -263,6 +259,11 @@ class BaseTest:
             )
 
             assert is_valid_framework, "Model does not inherit from PreTrainedModel."
+
+        def test_get_rbln_config_class(self):
+            assert self.RBLN_CLASS.get_rbln_config_class() is not None
+            rbln_config_class_name = self.RBLN_CLASS.get_rbln_config_class().__name__
+            assert self.RBLN_CLASS.__name__ == rbln_config_class_name[:-6]
 
 
 class DisallowedTestBase:
