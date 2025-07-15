@@ -15,10 +15,10 @@ from optimum.rbln import (
     RBLNStableDiffusionXLPipeline,
 )
 
-from .test_base import BaseTest
+from .test_base import BaseHubTest, BaseTest
 
 
-class TestSDModel(BaseTest.TestModel):
+class TestSDModel(BaseTest.TestModel, BaseHubTest.TestHub):
     RBLN_CLASS = RBLNStableDiffusionPipeline
     HF_MODEL_ID = "hf-internal-testing/tiny-sd-pipe"
     GENERATION_KWARGS = {
