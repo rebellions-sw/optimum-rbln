@@ -108,10 +108,12 @@ _import_structure = {
     ],
     "llama": ["RBLNLlamaForCausalLM", "RBLNLlamaForCausalLMConfig"],
     "opt": ["RBLNOPTForCausalLM", "RBLNOPTForCausalLMConfig"],
-    "pegasus": ["RBLNPegasusForConditionalGeneration", 
-                "RBLNPegasusModel",
-                "RBLNPegasusForConditionalGenerationConfig",
-                "RBLNPegasusModelConfig",],
+    "pegasus": [
+        "RBLNPegasusForConditionalGeneration",
+        "RBLNPegasusModel",
+        "RBLNPegasusForConditionalGenerationConfig",
+        "RBLNPegasusModelConfig",
+    ],
     "llava_next": ["RBLNLlavaNextForConditionalGeneration", "RBLNLlavaNextForConditionalGenerationConfig"],
     "midm": ["RBLNMidmLMHeadModel", "RBLNMidmLMHeadModelConfig"],
     "mistral": ["RBLNMistralForCausalLM", "RBLNMistralForCausalLMConfig"],
@@ -238,9 +240,9 @@ if TYPE_CHECKING:
     from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig
     from .opt import RBLNOPTForCausalLM, RBLNOPTForCausalLMConfig
     from .pegasus import (
-        RBLNPegasusForConditionalGeneration, 
-        RBLNPegasusModel,
+        RBLNPegasusForConditionalGeneration,
         RBLNPegasusForConditionalGenerationConfig,
+        RBLNPegasusModel,
         RBLNPegasusModelConfig,
     )
     from .phi import RBLNPhiForCausalLM, RBLNPhiForCausalLMConfig

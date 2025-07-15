@@ -20,8 +20,8 @@ from transformers import PegasusForConditionalGeneration, PreTrainedModel
 from ....utils.logging import get_logger
 from ...modeling_generic import RBLNTransformerEncoderForFeatureExtraction
 from ...models.seq2seq import RBLNModelForSeq2SeqLM
-from .pegasus_architecture import PegasusWrapper
 from .configuration_pegasus import RBLNPegasusForConditionalGenerationConfig
+from .pegasus_architecture import PegasusWrapper
 
 
 logger = get_logger()

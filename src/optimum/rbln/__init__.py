@@ -353,7 +353,7 @@ if TYPE_CHECKING:
         RBLNMistralForCausalLMConfig,
         RBLNOPTForCausalLM,
         RBLNOPTForCausalLMConfig,
-        RBLNPegasusForConditionalGeneration, 
+        RBLNPegasusForConditionalGeneration,
         RBLNPegasusForConditionalGenerationConfig,
         RBLNPegasusModel,
         RBLNPegasusModelConfig,

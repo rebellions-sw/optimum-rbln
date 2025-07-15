@@ -12,6 +12,7 @@ sentences = [
     "scheduled to be affected by the shutoffs which were expected to last through at least midday tomorrow."
 ]
 
+
 def main(
     model_id: str = "google/pegasus-xsum",
     batch_size: int = 1,
@@ -37,7 +38,7 @@ def main(
     target_sentences = sentences * batch_size
     tokenizer = PegasusTokenizer.from_pretrained(model_id)
     inputs = tokenizer(target_sentences, max_length=1024, return_tensors="pt")
-    
+
     # Generate
     output_sequence = model.generate(
         input_ids=inputs["input_ids"],
@@ -49,9 +50,15 @@ def main(
 
     # Decode and print the model's responses
     for i, sentence in enumerate(target_sentences):
-        print("\033[94m" + sentence + " : \033[0m\n" + tokenizer.decode(output_sequence.numpy().tolist()[i], 
-                                                                        skip_special_tokens=True, 
-                                                                        clean_up_tokenization_spaces=False))
-    
+        print(
+            "\033[94m"
+            + sentence
+            + " : \033[0m\n"
+            + tokenizer.decode(
+                output_sequence.numpy().tolist()[i], skip_special_tokens=True, clean_up_tokenization_spaces=False
+            )
+        )
+
+
 if __name__ == "__main__":
     fire.Fire(main)

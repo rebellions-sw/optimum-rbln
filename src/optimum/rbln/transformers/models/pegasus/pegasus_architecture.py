@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Tuple
+from typing import Tuple
 
 import torch
 from torch import nn
@@ -39,6 +39,7 @@ class PegasusWrapper:
     def __init__(self, model: nn.Module, enc_max_seq_len: int, use_attention_mask: bool):
         self.encoder = Seq2SeqEncoderWrapper(model, enc_max_seq_len)
         self.decoder = PegasusDecoderWrapper(model, use_attention_mask=use_attention_mask)
+
 
 class PegasusDecoderWrapper(Seq2SeqDecoderWrapper):
     def convert_to_rbln_conditional_generation(self, model: nn.Module):
@@ -149,6 +150,7 @@ class PegasusSelfAttention(Seq2SeqSelfAttention):
         key_states = self.k_proj(hidden_states)
         value_states = self.v_proj(hidden_states)
         return query_states, key_states, value_states
+
 
 class PegasusCrossAttention(Seq2SeqCrossAttention):
     def __post_init__(self):
