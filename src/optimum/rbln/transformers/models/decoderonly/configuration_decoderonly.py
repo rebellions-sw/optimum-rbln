@@ -348,7 +348,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNDecoderOnlyModelConfig):
 
         self.phases = phases or ["prefill", "decode"]
 
-        if "decode" not in self.phases:
+        if "decode" in self.phases:
             self.decoder_batch_sizes = decoder_batch_sizes
             if self.decoder_batch_sizes is None:
                 self.decoder_batch_sizes = [self.batch_size]

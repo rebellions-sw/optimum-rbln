@@ -188,7 +188,7 @@ class DecoderOnlyWrapper(nn.Module):
         query_position = (
             args.pop(0)
             # query_position usage: 1. causal_lm prefill or 2. sliding_window cache_position
-            if ("prefill" in self.phase and self.is_causal_lm) or self.cache_impl in ["hybrid", "sliding_window"]
+            if ("prefill" in self.phase and (self.is_causal_lm or self.cache_impl in ["hybrid", "sliding_window"]))
             else None
         )
         attention_mask = args.pop(0) if self.use_attention_mask else None
@@ -1023,9 +1023,8 @@ class SlidingWindowAttentionOp(AttentionOp):
             "block_size": block_size,
         }
 
-        if self.phase == "prefill" or self.phase == "image_prefill":
-            if not self.use_attention_mask or self.use_position_ids:
-                op_args["is_bidirectional"] = self.phase == "image_prefill"  # FIXME, Hard-coded for Gemma3.
+        if "prefill" in self.phase:
+            op_args["is_bidirectional"] = True
 
         attn_op_name = self.get_attn_op_name()
         attn_op = getattr(torch.ops.rbln_custom_ops, attn_op_name, None)

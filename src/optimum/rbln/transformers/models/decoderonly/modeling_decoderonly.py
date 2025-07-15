@@ -491,6 +491,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         # TODO: add prefill runtime class.
         self.prefill_decoder = RBLNPytorchRuntime(runtime=self.model[0])
         self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
+        self.local_block_tables = torch.tensor([0], dtype=torch.int16)
 
     @classmethod
     def save_torch_artifacts(
@@ -876,12 +877,26 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             input_chunk = padded_input[:, step : step + self.rbln_config.prefill_chunk_size]
             cache_pos_chunk = cache_position[:, step : step + self.rbln_config.prefill_chunk_size]
 
+            if self.rbln_config.cache_impl in ["sliding_window", "hybrid"]:
+                valid_length = (
+                    self.rbln_config.prefill_chunk_size
+                    if (step + self.rbln_config.prefill_chunk_size) <= query_length
+                    else query_length - step
+                )
+                query_position = torch.tensor(valid_length - 1, dtype=torch.int16)
+            else:
+                query_position = None
+
             # Forward pass for the current chunk
             last_hidden_states_chunk = self.prefill_decoder(
                 input_ids=input_chunk if not self.rbln_config.use_inputs_embeds else None,
                 inputs_embeds=input_chunk if self.rbln_config.use_inputs_embeds else None,
                 cache_position=cache_pos_chunk,
-                block_tables=self.block_tables,
+                block_tables=self.block_tables if self.rbln_config.cache_impl in ["static", "hybrid"] else None,
+                local_block_tables=self.local_block_tables
+                if self.rbln_config.cache_impl in ["sliding_window", "hybrid"]
+                else None,
+                query_position=query_position,
                 position_emb=padded_position_embed,
             )
             last_hidden_states.append(last_hidden_states_chunk)
@@ -1003,7 +1018,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
 
             # NOTE(eunji): Use a decoder whose batch size matches the model's main batch size for compatibility.
             self.decoder = self.decoders[self.rbln_config.batch_size]
-
 
     @classmethod
     def get_quantized_model(
@@ -1186,21 +1200,24 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
             input_info[idx] = ("local_block_tables", [1] if is_prefill else [batch_size, 1], "int16")
 
         # query_position
-        if is_prefill:
+        if is_prefill and get_idx_from_name("query_position") is None:
             idx = get_idx_from_name("local_block_tables") or get_idx_from_name("block_tables")
             input_info.insert(idx + 1, ("query_position", [], "int16"))
+        if not is_prefill and get_idx_from_name("query_position") is not None:
+            idx = get_idx_from_name("query_position")
+            del input_info[idx]
 
         # local past_key_values shape
         if rbln_config.cache_impl in ["sliding_window", "hybrid"]:
-            local_kvcache_num_blocks = max(rbln_config.decoder_batch_sizes) if 'decode' in rbln_config.phases else 1
-            num_layers = getattr(model_config, "num_hidden_layers", getattr(model_config, "num_layers"))
-            
+            local_kvcache_num_blocks = max(rbln_config.decoder_batch_sizes) if "decode" in rbln_config.phases else 1
+            num_layers = getattr(model_config, "num_hidden_layers") or getattr(model_config, "num_layers")
+
             for i in range(num_layers * 2):
                 if rbln_config.sliding_window is not None and (i // 2) in rbln_config.sliding_window_layers:
                     idx = i - num_layers * 2
                     name, shape, dtype = input_info[idx]
                     input_info[idx] = (name, [local_kvcache_num_blocks] + shape[1:], dtype)
-            
+
         return input_info
 
     @classmethod
@@ -1327,7 +1344,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
 
     # FIXME(thkim): handling when "decode" is not in rbln_config.phases
     def can_generate(self):
-        return True
+        return True if "decode" in self.rbln_config.phases else False
 
     def _reorder_cache(self, past_key_values, beam_idx):
         raise NotImplementedError

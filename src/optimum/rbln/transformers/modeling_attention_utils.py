@@ -112,7 +112,7 @@ def validate_sliding_window_size(sliding_window: int, prefill_chunk_size: int):
         )
 
 
-class RBLNPageAttentionMixin:
+class RBLNDecoderOnlyFlashAttentionMixin:
     @classmethod
     def get_maximum_num_blocks(
         cls,
