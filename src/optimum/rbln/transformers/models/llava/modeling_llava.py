@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import inspect
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 
 import torch
 from transformers import (
@@ -22,6 +22,7 @@ from transformers import (
     PretrainedConfig,
     PreTrainedModel,
 )
+from transformers.modeling_outputs import BaseModelOutputWithPooling
 from transformers.models.llava.modeling_llava import LlavaCausalLMOutputWithPast
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
@@ -39,6 +40,73 @@ if TYPE_CHECKING:
         AutoTokenizer,
         PretrainedConfig,
     )
+
+
+class LoopVisionTower:
+    def __init__(self, vision_tower: RBLNModel) -> None:
+        self.vision_tower = vision_tower
+
+    def forward(self, *args, **kwargs):
+        # Loop instead of batch
+        # shape of pixel_values : [batch, num_patches, num_channel, height, width]
+        pixel_values = args[0]
+
+        batch_size = pixel_values.shape[0]
+        outputs = []
+        for i in range(batch_size):
+            outputs.append(self.vision_tower(pixel_values[i : i + 1]))
+
+        last_hidden_states = [output[0] for output in outputs]
+        pooler_output = [output[1] for output in outputs]
+
+        # FIXME:: This can be optimized using out= API of rbln runtime.
+        last_hidden_states = torch.cat(last_hidden_states, dim=0)
+        pooler_output = torch.cat(pooler_output, dim=0)
+        import pdb
+
+        pdb.set_trace()
+        hidden_states = [output[2:] for output in outputs]  # batch x (hidden x 1)
+
+        hidden_states = tuple(
+            torch.cat(tuple((hidden_states[n][i] for n in range(batch_size))), dim=0)
+            for i in range(len(hidden_states[0]))
+        )  # hidden x (batch,)
+
+        return BaseModelOutputWithPooling(
+            last_hidden_state=last_hidden_states,
+            pooler_output=pooler_output,
+            hidden_states=hidden_states,
+        )
+
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        return self.forward(*args, **kwds)
+
+    def __repr__(self) -> str:
+        return repr(self.vision_tower)
+
+
+class LoopProjector:
+    def __init__(self, multi_modal_projector) -> None:
+        self.multi_modal_projector = multi_modal_projector
+
+    def forward(self, *args, **kwargs):
+        # Loop instead of batch
+        image_feature = args[0]
+
+        batch_size = image_feature.shape[0]
+        outputs = []
+        for i in range(batch_size):
+            outputs.append(self.multi_modal_projector(image_feature[i : i + 1]))
+
+        # FIXME:: This can be optimized using out= API of rbln runtime.
+        outputs = torch.cat(outputs, dim=0)
+        return outputs
+
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        return self.forward(*args, **kwds)
+
+    def __repr__(self) -> str:
+        return repr(self.multi_modal_projector)
 
 
 class RBLNLlavaForConditionalGeneration(RBLNModel):
@@ -62,9 +130,9 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
         return True
 
     def __post_init__(self, **kwargs):
-        self.vision_tower = self.rbln_submodules[0]
+        self.vision_tower = LoopVisionTower(self.rbln_submodules[0])
         self.language_model = self.rbln_submodules[1]
-        self.multi_modal_projector = self.model[0]
+        self.multi_modal_projector = LoopProjector(self.model[0])
 
         self.pad_token_id = self.config.pad_token_id if self.config.pad_token_id is not None else -1
         # self._padding_side = "left"  # set it to left by default, user can use setter to change padding_sides
@@ -91,13 +159,25 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
         model_config: Optional["PretrainedConfig"] = None,
         rbln_config: Optional[RBLNModelConfig] = None,
     ) -> RBLNModelConfig:
-        num_total_patches = (
-            rbln_config.batch_size
-            * (rbln_config.vision_tower.max_image_size[0] // model_config.vision_config.patch_size)
-            * (rbln_config.vision_tower.max_image_size[1] // model_config.vision_config.patch_size)
-        )
+        if model_config.vision_feature_select_strategy == "default":
+            num_positions = (model_config.vision_config.image_size // model_config.vision_config.patch_size) ** 2 + 1
+            selected_image_feature_dim = num_positions - 1
+        else:
+            num_positions = (
+                rbln_config.batch_size
+                * (rbln_config.vision_tower.max_image_size[0] // model_config.vision_config.patch_size)
+                * (rbln_config.vision_tower.max_image_size[1] // model_config.vision_config.patch_size)
+            )
+            selected_image_feature_dim = num_positions
 
-        input_info = [("image_features", [1, num_total_patches, model_config.vision_config.hidden_size], "float32")]
+        input_info = [
+            (
+                "image_features",
+                [rbln_config.batch_size, selected_image_feature_dim, model_config.vision_config.hidden_size],
+                "float32",
+            )
+        ]
+
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
         rbln_config.set_compile_cfgs([rbln_compile_config])
         return rbln_config
@@ -107,44 +187,52 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
         input_ids,
         inputs_embeds=None,
         pixel_values=None,
-        image_sizes=None,
         attention_mask=None,
+        cache_position=None,
+        image_sizes=None,
         generate_idx=None,
         **kwargs,
     ):
-        # Prepare HF generation
         is_prefill_phase = generate_idx is None
-        batch_size = input_ids.shape[0]
-
-        model_inputs = self.language_model.prepare_inputs_for_generation(
-            input_ids=input_ids,
-            inputs_embeds=inputs_embeds,
-            generate_idx=generate_idx,  # Not affect
-            attention_mask=attention_mask,
-            **kwargs,
-        )
+        model_inputs = {}
 
         if is_prefill_phase:
-            model_inputs["generate_idx"] = torch.zeros((batch_size, 1), dtype=torch.int32)
-            model_inputs.update(
-                {
-                    "pixel_values": pixel_values,
-                    "image_sizes": image_sizes,
-                }
-            )
+            generate_idx = attention_mask.sum(dim=-1, keepdim=True).int()
+            cache_position = None
+            pixel_values = pixel_values
+            model_inputs.update({"image_sizes": image_sizes})
+        else:
+            if inputs_embeds is not None:
+                raise NotImplementedError("Specifying inputs_embeds in decoder phase is not supported.")
 
-        model_inputs["attention_mask"] = attention_mask
+            pixel_values = None
+            input_ids = input_ids[:, -1:]
+            cache_position = generate_idx
+            generate_idx = generate_idx + 1
+            model_inputs.update({"input_ids": input_ids})
+
+        if inputs_embeds is not None:
+            if self.rbln_config.use_inputs_embeds:
+                model_inputs.update({"inputs_embeds": inputs_embeds})
+            else:
+                raise ValueError(
+                    "The specifying inputs_embeds is only supported when using a compiled RBLN model with 'rbln_use_inputs_embeds' set to True."
+                )
+        else:
+            model_inputs.update({"input_ids": input_ids})
+
+        model_inputs.update(
+            {
+                "attention_mask": attention_mask,
+                "pixel_values": pixel_values,
+                "cache_position": cache_position,
+                "generate_idx": generate_idx,
+            }
+        )
         return model_inputs
 
-    def _update_model_kwargs_for_generation(
-        self,
-        outputs: RBLNDecoderOnlyOutput,
-        model_kwargs: Dict[str, Any],
-        **kwargs,
-    ) -> Dict[str, Any]:
-        # update generate_idx
+    def _update_model_kwargs_for_generation(self, outputs, model_kwargs, is_encoder_decoder, **kwargs):
         model_kwargs["generate_idx"] = outputs.generate_idx
-
         return model_kwargs
 
     def get_image_features(
@@ -158,18 +246,14 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
             raise ValueError(f"Unexpected select feature strategy: {self.config.vision_feature_select_strategy}")
 
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
-        # this is not memory efficient at all (output_hidden_states=True) will save all the hidden states.
-        image_outputs = self.vision_tower(pixel_values, output_hidden_states=True, **kwargs)
+        image_outputs = self.vision_tower(pixel_values, output_hidden_states=True, return_dict=True, **kwargs)
 
-        # If we have one vision feature layer, return the corresponding hidden states,
-        # otherwise, select the hidden states of each feature layer and concatenate them
         if isinstance(vision_feature_layer, int):
             selected_image_feature = image_outputs.hidden_states[vision_feature_layer]
             if vision_feature_select_strategy == "default":
                 selected_image_feature = selected_image_feature[:, 1:]
         else:
             hs_pool = [image_outputs.hidden_states[layer_idx] for layer_idx in vision_feature_layer]
-            # For default; crop CLS from each hidden state in the hidden state pool
             if vision_feature_select_strategy == "default":
                 hs_pool = [hs[:, 1:] for hs in hs_pool]
             selected_image_feature = torch.cat(hs_pool, dim=-1)
@@ -181,26 +265,13 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
         self,
         input_ids: Optional[torch.LongTensor] = None,
         pixel_values: Optional[torch.FloatTensor] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.LongTensor] = None,
-        past_key_values: Optional[List[torch.FloatTensor]] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
         vision_feature_layer: Optional[Union[int, List[int]]] = None,
         vision_feature_select_strategy: Optional[str] = None,
-        labels: Optional[torch.LongTensor] = None,
-        use_cache: Optional[bool] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-        cache_position: Optional[torch.LongTensor] = None,
-        logits_to_keep: Union[int, torch.Tensor] = 0,
         image_sizes: Optional[torch.Tensor] = None,
         **lm_kwargs,
     ):
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
-        )
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         vision_feature_layer = (
             vision_feature_layer if vision_feature_layer is not None else self.config.vision_feature_layer
@@ -239,21 +310,20 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
 
     def forward(
         self,
-        input_ids: torch.LongTensor = None,
+        input_ids: Optional[torch.LongTensor] = None,
+        pixel_values: Optional[torch.FloatTensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
-        pixel_values: Optional[torch.FloatTensor] = None,
-        pixel_attention_mask: Optional[torch.BoolTensor] = None,
-        image_hidden_states: Optional[torch.FloatTensor] = None,
-        cache_position: torch.Tensor = None,
-        generate_idx: Optional[torch.Tensor] = None,
         return_dict: Optional[bool] = None,
+        cache_position: Optional[torch.LongTensor] = None,
+        image_sizes: Optional[torch.Tensor] = None,
+        generate_idx: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Union[Tuple, LlavaCausalLMOutputWithPast]:
         # Prefill
         if cache_position is None:
             inputs_embeds = self._preprocess_prefill(
-                input_ids, inputs_embeds, pixel_values, pixel_attention_mask, image_hidden_states
+                input_ids=input_ids, inputs_embeds=inputs_embeds, pixel_values=pixel_values, image_sizes=image_sizes
             )
             logits = []
             inputs = inputs_embeds if inputs_embeds is not None else input_ids

@@ -137,7 +137,6 @@ class _PixtralVisionModel(torch.nn.Module):
             inputs_embeds=patch_embeds,
             attention_mask=attention_mask,
             position_embeddings=(position_embeddings_1, position_embeddings_2),
-            # it need for llavaforconditionalgeneration -> compile fail with tp
             output_hidden_states=True,
             return_dict=False,
         )
