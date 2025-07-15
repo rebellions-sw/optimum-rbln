@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from ....configuration_utils import RBLNModelConfig
 
@@ -62,7 +62,7 @@ class RBLNBlip2ForConditionalGenerationConfig(RBLNModelConfig):
         vision_model: Optional[RBLNModelConfig] = None,
         qformer: Optional[RBLNModelConfig] = None,
         language_model: Optional[RBLNModelConfig] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:

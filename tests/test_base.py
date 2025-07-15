@@ -97,10 +97,6 @@ class BaseTest:
             return None
 
         @classmethod
-        def get_hf_class(cls):
-            return getattr(transformers, cls.RBLN_CLASS.__name__[4:])
-
-        @classmethod
         def get_hf_remote_dir(cls):
             return "rbln-" + os.path.basename(cls.HF_MODEL_ID)
 
@@ -266,6 +262,11 @@ class BaseTest:
             num_files = sum(1 for _ in path.rglob("*") if _.is_file())
 
             assert len(filecmp.dircmp(pull_model_dir, self.get_rbln_local_dir()).common) == num_files
+
+        def test_get_rbln_config_class(self):
+            assert self.RBLN_CLASS.get_rbln_config_class() is not None
+            rbln_config_class_name = self.RBLN_CLASS.get_rbln_config_class().__name__
+            assert self.RBLN_CLASS.__name__ == rbln_config_class_name[:-6]
 
 
 class DisallowedTestBase:

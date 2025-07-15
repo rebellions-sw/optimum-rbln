@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from ....configuration_utils import RBLNModelConfig
 from ....utils.logging import get_logger
@@ -22,6 +22,8 @@ logger = get_logger(__name__)
 
 
 class RBLNAutoencoderKLCosmosConfig(RBLNModelConfig):
+    """Configuration class for RBLN Cosmos Variational Autoencoder (VAE) models."""
+
     def __init__(
         self,
         batch_size: Optional[int] = None,
@@ -33,7 +35,7 @@ class RBLNAutoencoderKLCosmosConfig(RBLNModelConfig):
         vae_scale_factor_temporal: Optional[int] = None,
         vae_scale_factor_spatial: Optional[int] = None,
         use_slicing: Optional[bool] = None,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ):
         """
         Args:
@@ -48,7 +50,7 @@ class RBLNAutoencoderKLCosmosConfig(RBLNModelConfig):
                 Determines how much shorter the latent representations are compared to the original videos.
             vae_scale_factor_spatial (Optional[int]): The scaling factor between pixel space and latent space.
                 Determines how much smaller the latent representations are compared to the original videos.
-            use_slicing (Optional[Bool]): Enable sliced VAE encoding and decoding.
+            use_slicing (Optional[bool]): Enable sliced VAE encoding and decoding.
                 If True, the VAE will split the input tensor in slices to compute encoding or decoding in several steps.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 

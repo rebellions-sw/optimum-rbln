@@ -35,8 +35,6 @@ logger = get_logger(__name__)
 
 
 class RBLNModel(RBLNBaseModel):
-    _output_class = None
-
     @classmethod
     def update_kwargs(cls, kwargs):
         # Update user-given kwargs to get proper pytorch model.
@@ -64,7 +62,12 @@ class RBLNModel(RBLNBaseModel):
     def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
         model = cls.wrap_model_if_needed(model, rbln_config)
         rbln_compile_config = rbln_config.compile_cfgs[0]
-        compiled_model = cls.compile(model, rbln_compile_config=rbln_compile_config)
+        compiled_model = cls.compile(
+            model,
+            rbln_compile_config=rbln_compile_config,
+            create_runtimes=rbln_config.create_runtimes,
+            device=rbln_config.device,
+        )
         return compiled_model
 
     @classmethod
@@ -233,6 +236,7 @@ class RBLNModel(RBLNBaseModel):
                 tensor_type="pt",
                 device=rbln_config.device_map[DEFAULT_COMPILED_MODEL_NAME],
                 activate_profiler=rbln_config.activate_profiler,
+                timeout=rbln_config.timeout,
             )
             for compiled_model in compiled_models
         ]
@@ -283,7 +287,7 @@ class RBLNModel(RBLNBaseModel):
     @classmethod
     def get_hf_output_class(cls):
         # Dynamically gets the output class from the corresponding HuggingFace model class.
-        if cls._output_class:
+        if "_output_class" in cls.__dict__ and cls._output_class is not None:
             return cls._output_class
 
         hf_class = cls.get_hf_class()

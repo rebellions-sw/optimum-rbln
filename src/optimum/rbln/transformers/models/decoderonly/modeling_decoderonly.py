@@ -352,8 +352,11 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             if position_embed is not None:
                 position_embed = torch.nn.functional.pad(position_embed, (0, 0, 0, padding_size))
 
+            if token_type_ids is not None:
+                token_type_ids = torch.nn.functional.pad(token_type_ids, (0, padding_size), value=-1)
+
         # Overwrite position_ids and padded_cache_lengths
-        position_ids = None
+        position_ids = cache_position.clone()
         padded_cache_lengths = 0
 
         return (
@@ -365,6 +368,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_embed,
             padded_cache_lengths,
             query_length,
+            token_type_ids,
         )
 
     def prefill_forward(
@@ -393,6 +397,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_embed,
             padded_cache_lengths,
             query_length,
+            token_type_ids,
         ) = self._prepare_prefill_inputs(
             inputs, cache_position, attention_mask, position_embed, token_type_ids=token_type_ids
         )
@@ -679,9 +684,11 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     quantization.maybe_set_quantization_env()
                 original_linear = torch.nn.functional.linear
                 torch.nn.functional.linear = torch.ops.rbln_custom_ops.linear
-                compiled_model = RBLNModel.compile(
+                compiled_model = cls.compile(
                     wrapped_model,
                     compile_config,
+                    create_runtimes=rbln_config.create_runtimes,
+                    device=rbln_config.device,
                     example_inputs=example_inputs,
                     compile_context=compile_context,
                 )
@@ -1083,6 +1090,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 tensor_type="pt",
                 device=rbln_config.device_map["prefill"],
                 activate_profiler=rbln_config.activate_profiler,
+                timeout=rbln_config.timeout,
             ),
             *[
                 rebel.Runtime(
@@ -1090,6 +1098,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     tensor_type="pt",
                     device=rbln_config.device_map[f"decoder_batch_{batch_size}"],
                     activate_profiler=rbln_config.activate_profiler,
+                    timeout=rbln_config.timeout,
                 )
                 for i, batch_size in enumerate(rbln_config.decoder_batch_sizes)
             ],
@@ -1188,6 +1197,11 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         if cache_position is None:
             logits = []
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
+            # for only use forward
+            if generate_idx is None:
+                generate_idx = attention_mask.sum(dim=-1, keepdim=True).int()
+            if padded_cache_lengths is None:
+                padded_cache_lengths = torch.zeros_like(generate_idx)
             batch_size = inputs.shape[0]
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)

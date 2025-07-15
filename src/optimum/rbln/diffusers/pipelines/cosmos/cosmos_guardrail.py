@@ -127,23 +127,13 @@ class RBLNSigLIPEncoder(SigLIPEncoder):
 
             # We don't use RBLNSiglipModel, but we need to override get_image_features to return pooler_output
             self.model = RBLNSiglipVisionModel.from_pretrained(
-                self.checkpoint_dir,
-                rbln_device=rbln_config.siglip_encoder.device,
-                rbln_create_runtimes=rbln_config.siglip_encoder.create_runtimes,
-                rbln_activate_profiler=rbln_config.aegis.activate_profiler,
+                self.checkpoint_dir, rbln_config=rbln_config.siglip_encoder
             )
         else:
             super().__init__(model_name, checkpoint_id)
             model = self.model
             del self.model
-            self.model = RBLNSiglipVisionModel.from_model(
-                model,
-                rbln_device=rbln_config.siglip_encoder.device,
-                rbln_image_size=rbln_config.siglip_encoder.image_size,
-                rbln_npu=rbln_config.siglip_encoder.npu,
-                rbln_create_runtimes=rbln_config.siglip_encoder.create_runtimes,
-                rbln_activate_profiler=rbln_config.siglip_encoder.activate_profiler,
-            )
+            self.model = RBLNSiglipVisionModel.from_model(model, rbln_config=rbln_config.siglip_encoder)
         self.rbln_config = rbln_config
 
         # Override get_image_features to return pooler_output
@@ -334,26 +324,14 @@ class RBLNAegis(Aegis):
             torch.nn.Module.__init__(self)
             cache_dir = pathlib.Path(checkpoint_id) / "aegis"
             self.tokenizer = AutoTokenizer.from_pretrained(cache_dir)
-            self.model = RBLNAutoModelForCausalLM.from_pretrained(
-                cache_dir,
-                rbln_device=rbln_config.aegis.device,
-                rbln_create_runtimes=rbln_config.aegis.create_runtimes,
-                rbln_activate_profiler=rbln_config.aegis.activate_profiler,
-            )
+            self.model = RBLNAutoModelForCausalLM.from_pretrained(cache_dir, rbln_config=rbln_config.aegis)
 
         else:
             super().__init__(checkpoint_id, base_model_id, aegis_adapter)
             model = self.model.merge_and_unload()  # peft merge
             del self.model
 
-            self.model = RBLNAutoModelForCausalLM.from_model(
-                model,
-                rbln_tensor_parallel_size=4,
-                rbln_device=rbln_config.aegis.device,
-                rbln_create_runtimes=rbln_config.aegis.create_runtimes,
-                rbln_npu=rbln_config.aegis.npu,
-                rbln_activate_profiler=rbln_config.aegis.activate_profiler,
-            )
+            self.model = RBLNAutoModelForCausalLM.from_model(model, rbln_config=rbln_config.aegis)
 
         self.rbln_config = rbln_config
         self.dtype = torch.bfloat16
@@ -391,13 +369,18 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker):
         self.text_guardrail = GuardrailRunner(
             safety_models=[
                 Blocklist(COSMOS_GUARDRAIL_CHECKPOINT),  # Changed since it cannot be saved
-                RBLNAegis(checkpoint_id, aegis_model_id, aegis_adapter_id, rbln_config=rbln_config),
+                RBLNAegis(
+                    checkpoint_id=checkpoint_id,
+                    base_model_id=aegis_model_id,
+                    aegis_adapter=aegis_adapter_id,
+                    rbln_config=rbln_config,
+                ),
             ]
         )
 
         self.video_guardrail = GuardrailRunner(
-            safety_models=[RBLNVideoContentSafetyFilter(checkpoint_id, rbln_config=rbln_config)],
-            postprocessors=[RBLNRetinaFaceFilter(checkpoint_id, rbln_config=rbln_config)],
+            safety_models=[RBLNVideoContentSafetyFilter(checkpoint_id=checkpoint_id, rbln_config=rbln_config)],
+            postprocessors=[RBLNRetinaFaceFilter(checkpoint_id=checkpoint_id, rbln_config=rbln_config)],
         )
 
         self.rbln_config = rbln_config

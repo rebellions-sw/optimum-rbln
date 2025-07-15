@@ -27,7 +27,7 @@ from transformers import AutoConfig, AutoModel, GenerationConfig, PretrainedConf
 from .configuration_utils import RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig, get_rbln_config_class
 from .utils.hub import PushToHubMixin, pull_compiled_model_from_hub, validate_files
 from .utils.logging import get_logger
-from .utils.runtime_utils import UnavailableRuntime
+from .utils.runtime_utils import UnavailableRuntime, tp_and_devices_are_ok
 from .utils.save_utils import maybe_load_preprocessors
 from .utils.submodule import SubModulesMixin
 
@@ -50,11 +50,8 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     model_type = "rbln_model"
     auto_model_class = AutoModel
     config_class = AutoConfig
-
     config_name = "config.json"
     hf_library_name = "transformers"
-    _hf_class = None
-    _rbln_config_class = None
 
     def __init__(
         self,
@@ -374,7 +371,23 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         return from_pretrained_method(model_id=model_id, **kwargs, rbln_config=rbln_config)
 
     @classmethod
-    def compile(cls, model, rbln_compile_config: Optional[RBLNCompileConfig] = None, **kwargs):
+    def compile(
+        cls,
+        model,
+        rbln_compile_config: RBLNCompileConfig,
+        create_runtimes: bool,
+        device: Union[int, List[int]],
+        **kwargs,
+    ):
+        if create_runtimes:
+            runtime_cannot_be_created = tp_and_devices_are_ok(
+                tensor_parallel_size=rbln_compile_config.tensor_parallel_size,
+                device=device,
+                npu=rbln_compile_config.npu,
+            )
+            if runtime_cannot_be_created:
+                raise ValueError(runtime_cannot_be_created)
+
         compiled_model = rebel.compile_from_torch(
             model,
             input_info=rbln_compile_config.input_info,
@@ -405,7 +418,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
         # Returns:
         #     type: The original HuggingFace model class
-        if cls._hf_class is None:
+        if "_hf_class" not in cls.__dict__ or cls._hf_class is None:
             hf_cls_name = cls.__name__[4:]
             library = importlib.import_module(cls.hf_library_name)
             cls._hf_class = getattr(library, hf_cls_name, None)
@@ -414,7 +427,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     @classmethod
     def get_rbln_config_class(cls) -> Type[RBLNModelConfig]:
         # Lazily loads and caches the corresponding RBLN model config class.
-        if cls._rbln_config_class is None:
+        if "_rbln_config_class" not in cls.__dict__ or cls._rbln_config_class is None:
             rbln_config_class_name = cls.__name__ + "Config"
             cls._rbln_config_class = get_rbln_config_class(rbln_config_class_name)
         return cls._rbln_config_class

@@ -80,7 +80,12 @@ class RBLNAutoencoderKL(RBLNModel):
 
             wrapped_model.eval()
 
-            compiled_models[model_name] = cls.compile(wrapped_model, rbln_compile_config=rbln_config.compile_cfgs[i])
+            compiled_models[model_name] = cls.compile(
+                wrapped_model,
+                rbln_compile_config=rbln_config.compile_cfgs[i],
+                create_runtimes=rbln_config.create_runtimes,
+                device=rbln_config.device_map[model_name],
+            )
 
         return compiled_models
 
@@ -204,6 +209,7 @@ class RBLNAutoencoderKL(RBLNModel):
                 tensor_type="pt",
                 device=device_val,
                 activate_profiler=rbln_config.activate_profiler,
+                timeout=rbln_config.timeout,
             )
             for compiled_model, device_val in zip(compiled_models, device_vals)
         ]

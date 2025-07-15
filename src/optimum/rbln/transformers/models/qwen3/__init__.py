@@ -12,19 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-from ...models.decoderonly.decoderonly_architecture import (
-    DecoderOnlyModel,
-    DecoderOnlyWrapper,
-)
-
-
-class GemmaWrapper(DecoderOnlyWrapper):
-    def get_rbln_model_class(self):
-        return GemmaModel
-
-
-class GemmaModel(DecoderOnlyModel):
-    @property
-    def hidden_multiplier(self):
-        return self._original_mod.config.hidden_size**0.5
+from .configuration_qwen3 import RBLNQwen3ForCausalLMConfig, RBLNQwen3ModelConfig
+from .modeling_qwen3 import RBLNQwen3ForCausalLM, RBLNQwen3Model

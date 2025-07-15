@@ -35,12 +35,12 @@ class RBLNCosmosVideoToWorldPipeline(RBLNDiffusionMixin, CosmosVideoToWorldPipel
     RBLN-accelerated implementation of Cosmos Video to World pipeline for video-to-video generation.
 
     This pipeline compiles Cosmos Video to World models to run efficiently on RBLN NPUs, enabling high-performance
-    inference for generating images with distinctive artistic style and enhanced visual quality.
+    inference for generating videos with distinctive artistic style and enhanced visual quality.
     """
 
     original_class = CosmosVideoToWorldPipeline
     _submodules = ["text_encoder", "transformer", "vae"]
-    _optional_components = ["safety_checker"]
+    _optional_submodules = ["safety_checker"]
 
     def __init__(
         self,

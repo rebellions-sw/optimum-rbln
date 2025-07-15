@@ -12,11 +12,72 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 import threading
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Union
 
 import rebel
 import torch
+
+
+def normalize_npu(npu: str) -> str:
+    """Normalize the NPU string by removing the form factor."""
+    match = re.match(r"(RBLN-CA|RBLN-CR)(\d+)", npu)
+    if match:
+        prefix, num = match.groups()
+        if len(num) == 1:
+            # Convert "RBLN-CAx" → "RBLN-CA0"
+            # (e.g., "RBLN-CA2" -> "RBLN-CA0")
+            npu = f"{prefix}0"
+        elif len(num) == 2:
+            # Strip form factor (e.g., "RBLN-CA15" → "RBLN-CA1")
+            npu = f"{prefix}{num[:-1]}"
+    return npu
+
+
+def tp_and_devices_are_ok(
+    tensor_parallel_size: Optional[int] = None,
+    device: Optional[Union[int, List[int]]] = None,
+    npu: Optional[str] = None,
+) -> Optional[str]:
+    if tensor_parallel_size is None:
+        tensor_parallel_size = 1
+
+    if rebel.device_count() < tensor_parallel_size:
+        return (
+            f"Tensor parallel size {tensor_parallel_size} is greater than "
+            f"the number of available devices {rebel.device_count()}."
+        )
+
+    if device is None:
+        device = list(range(tensor_parallel_size))
+    elif isinstance(device, int):
+        device = [device]
+    elif isinstance(device, list):
+        if any(not isinstance(d, int) for d in device):
+            return "Device must be a(n) (list of) integer(s)."
+        if len(device) != tensor_parallel_size:
+            return (
+                f"The number of devices ({len(device)}) does not match tensor parallel size ({tensor_parallel_size})."
+            )
+    else:
+        return f"Invalid device: {device}"
+
+    for device_id in device:
+        if device_id < 0:  # if any device is dummy device, skip it
+            return None
+        if rebel.get_npu_name(device_id) is None:
+            return (
+                f"Device {device_id} is not a valid NPU device. Please check your NPU status with 'rbln-stat' command."
+            )
+
+    if npu is not None:
+        for device_id in device:
+            npu_name = rebel.get_npu_name(device_id)
+            if normalize_npu(npu_name) != normalize_npu(npu):
+                return f"Device {device_id} ({npu_name}) is not on the same NPU as {npu}."
+
+    return None
 
 
 class RBLNPytorchRuntime:
@@ -102,13 +163,20 @@ class ContextRblnConfig:
     _local = threading.local()
 
     def __init__(
-        self, device=None, device_map=None, create_runtimes=None, optimize_host_mem=None, activate_profiler=None
+        self,
+        device=None,
+        device_map=None,
+        create_runtimes=None,
+        optimize_host_mem=None,
+        activate_profiler=None,
+        timeout=None,
     ):
         self.device = device
         self.device_map = device_map
         self.create_runtimes = create_runtimes
         self.optimize_host_mem = optimize_host_mem
         self.activate_profiler = activate_profiler
+        self.timeout = timeout
 
     def __enter__(self):
         self._local.device = self.device
@@ -116,6 +184,7 @@ class ContextRblnConfig:
         self._local.create_runtimes = self.create_runtimes
         self._local.optimize_host_memory = self.optimize_host_mem
         self._local.activate_profiler = self.activate_profiler
+        self._local.timeout = self.timeout
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -124,6 +193,7 @@ class ContextRblnConfig:
         self._local.create_runtimes = None
         self._local.optimize_host_memory = None
         self._local.activate_profiler = None
+        self._local.timeout = None
 
     @classmethod
     def get_current_context(cls):
@@ -133,4 +203,5 @@ class ContextRblnConfig:
             "create_runtimes": getattr(cls._local, "create_runtimes", None),
             "optimize_host_memory": getattr(cls._local, "optimize_host_memory", None),
             "activate_profiler": getattr(cls._local, "activate_profiler", None),
+            "timeout": getattr(cls._local, "timeout", None),
         }
