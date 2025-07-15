@@ -36,7 +36,7 @@ from optimum.rbln.transformers.models.auto.modeling_auto import (
 from optimum.rbln.utils.runtime_utils import ContextRblnConfig
 from optimum.rbln.utils.save_utils import maybe_load_preprocessors
 
-from .test_base import BaseTest, TestLevel
+from .test_base import BaseHubTest, BaseTest, TestLevel
 
 
 RANDOM_INPUT_IDS = torch.randint(low=0, high=50, size=(1, 512), generator=torch.manual_seed(42), dtype=torch.int64)
@@ -60,7 +60,7 @@ class TestASTModel(BaseTest.TestModel):
     }
 
 
-class TestResNetModel(BaseTest.TestModel):
+class TestResNetModel(BaseTest.TestModel, BaseHubTest.TestHub):
     RBLN_AUTO_CLASS = RBLNAutoModelForImageClassification
     RBLN_CLASS = RBLNResNetForImageClassification
     HF_MODEL_ID = "hf-internal-testing/tiny-random-ResNetForImageClassification"

@@ -24,6 +24,7 @@ from optimum.rbln import (
     RBLNPhiForCausalLM,
     RBLNQwen2_5_VLForConditionalGeneration,
     RBLNQwen2ForCausalLM,
+    RBLNQwen3ForCausalLM,
     RBLNT5ForConditionalGeneration,
 )
 
@@ -68,6 +69,13 @@ class TestQwen2Model(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen2ForCausalLM
     HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
     EXPECTED_OUTPUT = "?:雨成名ylonclaimer淡elsinki一角一角一角一角一角一角一角一角一角一角一角一角一角"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
+
+
+class TestQwen3Model(LLMTest.TestLLM):
+    RBLN_CLASS = RBLNQwen3ForCausalLM
+    HF_MODEL_ID = "trl-internal-testing/tiny-Qwen3ForCausalLM"
+    EXPECTED_OUTPUT = "getter getEmail luaL inhibited经营者适时uating nc_TRAIN适时uating ncActiveSheet(socket getEmailadders totaling propName.setImage Grow"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
 
 
@@ -259,7 +267,11 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
     RBLN_CLASS = RBLNLlavaNextForConditionalGeneration
     HF_MODEL_ID = "llava-hf/llava-v1.6-mistral-7b-hf"  # No tiny model yet.
     PROMPT = "[INST] <image>\nWhat’s shown in this image? [/INST]"
-    RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True}}}
+    RBLN_CLASS_KWARGS = {
+        "rbln_config": {
+            "language_model": {"use_inputs_embeds": True},
+        }
+    }
     EXPECTED_OUTPUT = "aille kennisSoft /******/ Brunershot childhoodhoodRx̧̧̧̧̧̧̧̧̧̧"
     HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
 
