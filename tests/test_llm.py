@@ -86,7 +86,9 @@ class LLMTest:
 class TestMistralForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNMistralForCausalLM
     HF_MODEL_ID = "openaccess-ai-collective/tiny-mistral"
-    EXPECTED_OUTPUT = "Edge wat ComecidBusDonald=-Battle Orts ht[61 chars]ccup"
+    EXPECTED_OUTPUT = (
+        "Edge wat ComecidBusDonald=-Battle Orts html тиційsprintfвата              Orts sect matches terrible occup"
+    )
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "sliding_window": 512}
 
 

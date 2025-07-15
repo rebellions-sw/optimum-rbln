@@ -1192,26 +1192,30 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
         is_prefill = query_length > 1
         # block_tables & local_block_tables
         if rbln_config.cache_impl in ["static", "hybrid"]:
-            max_block_cnt = rbln_config.max_seq_len // rbln_config.kvcache_block_size
             idx = get_idx_from_name("block_tables")
+            max_block_cnt = rbln_config.max_seq_len // rbln_config.kvcache_block_size
             input_info[idx] = ("block_tables", [max_block_cnt] if is_prefill else [batch_size, max_block_cnt], "int16")
         if rbln_config.cache_impl in ["hybrid", "sliding_window"]:
             idx = get_idx_from_name("local_block_tables")
             input_info[idx] = ("local_block_tables", [1] if is_prefill else [batch_size, 1], "int16")
 
         # query_position
-        if is_prefill and get_idx_from_name("query_position") is None:
-            idx = get_idx_from_name("local_block_tables") or get_idx_from_name("block_tables")
-            input_info.insert(idx + 1, ("query_position", [], "int16"))
-        if not is_prefill and get_idx_from_name("query_position") is not None:
+        if is_prefill:
+            # query_position used: 1. prefill lm_head slicing 2. sliding_window_prefill
+            need_to_add_query_position = get_idx_from_name("query_position") is None
+            if need_to_add_query_position:
+                idx = (get_idx_from_name("local_block_tables") or get_idx_from_name("block_tables")) + 1
+                input_info.insert(idx, ("query_position", [], "int16"))
+        else:
+            # No cases to use query_position in decode stage
             idx = get_idx_from_name("query_position")
-            del input_info[idx]
+            if idx is not None:
+                del input_info[idx]
 
         # local past_key_values shape
         if rbln_config.cache_impl in ["sliding_window", "hybrid"]:
             local_kvcache_num_blocks = max(rbln_config.decoder_batch_sizes) if "decode" in rbln_config.phases else 1
             num_layers = getattr(model_config, "num_hidden_layers") or getattr(model_config, "num_layers")
-
             for i in range(num_layers * 2):
                 if rbln_config.sliding_window is not None and (i // 2) in rbln_config.sliding_window_layers:
                     idx = i - num_layers * 2
