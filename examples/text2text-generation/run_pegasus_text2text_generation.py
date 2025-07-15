@@ -50,14 +50,10 @@ def main(
 
     # Decode and print the model's responses
     for i, sentence in enumerate(target_sentences):
-        print(
-            "\033[94m"
-            + sentence
-            + " : \033[0m\n"
-            + tokenizer.decode(
-                output_sequence.numpy().tolist()[i], skip_special_tokens=True, clean_up_tokenization_spaces=False
-            )
+        decoded = tokenizer.decode(
+            output_sequence.numpy().tolist()[i], skip_special_tokens=True, clean_up_tokenization_spaces=False
         )
+        print("\033[94m" + sentence + " : \033[0m\n" + decoded)
 
 
 if __name__ == "__main__":
