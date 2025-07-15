@@ -97,8 +97,10 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
             cache_position,
             block_tables=block_tables,
         )
-
-        return Seq2SeqLMOutput(logits=lm_logits)
+        lm_logits, all_hidden_states = lm_logits[0], lm_logits[1:]
+        # import pdb; pdb.set_trace()
+        # return Seq2SeqLMOutput(logits=lm_logits)
+        return Seq2SeqLMOutput(logits=lm_logits, decoder_hidden_states=all_hidden_states)
 
 
 class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
