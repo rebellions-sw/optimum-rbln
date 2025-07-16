@@ -107,9 +107,16 @@ class RBLNAutoencoderKLWan(RBLNModel):
     def update_rbln_config_using_pipe(
         cls, pipe: RBLNDiffusionMixin, rbln_config: RBLNDiffusionMixinConfig, submodule_name: str
     ) -> RBLNDiffusionMixinConfig:
+        if rbln_config.vae.height is None:
+            rbln_config.vae.height = 704 if rbln_config.vae.uses_encoder else 768
+        if rbln_config.vae.width is None:
+            rbln_config.vae.width = 1280 if rbln_config.vae.uses_encoder else 1360
+
         rbln_config.vae.num_channels_latents = pipe.transformer.config.in_channels - int(rbln_config.vae.uses_encoder)
         rbln_config.vae.vae_scale_factor_temporal = pipe.vae_scale_factor_temporal
         rbln_config.vae.vae_scale_factor_spatial = pipe.vae_scale_factor_spatial
+        if rbln_config.vae.num_frames is None:
+            rbln_config.vae.num_frames = 93 if rbln_config.vae.uses_encoder else 1
         return rbln_config
 
     @classmethod
