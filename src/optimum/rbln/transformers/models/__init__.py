@@ -86,6 +86,8 @@ _import_structure = {
     "decoderonly": [
         "RBLNDecoderOnlyModelForCausalLM",
         "RBLNDecoderOnlyModelForCausalLMConfig",
+        "RBLNLoRAAdapterConfig",
+        "RBLNLoRAConfig",
     ],
     "dpt": [
         "RBLNDPTForDepthEstimation",
@@ -205,6 +207,8 @@ if TYPE_CHECKING:
     from .decoderonly import (
         RBLNDecoderOnlyModelForCausalLM,
         RBLNDecoderOnlyModelForCausalLMConfig,
+        RBLNLoRAAdapterConfig,
+        RBLNLoRAConfig,
     )
     from .distilbert import (
         RBLNDistilBertForQuestionAnswering,
