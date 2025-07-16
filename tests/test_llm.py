@@ -92,18 +92,10 @@ class TestMistralForCausalLM(LLMTest.TestLLM):
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "sliding_window": 512}
 
 
-class TestMistralForCausalLM_UAM(TestMistralForCausalLM):
-    RBLN_CLASS_KWARGS = {"rbln_config": {"use_attention_mask": True}}
-
-
 class TestMistralModel(LLMTest.TestLLMBase):
     RBLN_CLASS = RBLNMistralModel
     HF_MODEL_ID = "openaccess-ai-collective/tiny-mistral"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "sliding_window": 512}
-
-
-class TestMistralModel_UAM(TestMistralModel):
-    RBLN_CLASS_KWARGS = {"rbln_config": {"use_attention_mask": True}}
 
 
 class TestQwen2ForCausalLM(LLMTest.TestLLM):
