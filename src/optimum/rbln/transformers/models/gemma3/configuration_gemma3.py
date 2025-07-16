@@ -40,8 +40,6 @@ class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
         self.image_prefill_chunk_size = image_prefill_chunk_size
 
         npu = self.npu or rebel.get_npu_name()
-        if npu == "RBLN-CA02":
-            raise NotImplementedError("Gemma3 is currently not supported on RBLN-CA02")
 
 
 class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):
