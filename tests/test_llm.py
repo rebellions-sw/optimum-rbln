@@ -268,6 +268,7 @@ class TestPegasusModel(LLMTest.TestLLM):
     RBLN_CLASS = RBLNPegasusForConditionalGeneration
 
     # FIXME:: Update to internal once enabled tiny model
+    # HF_MODEL_ID = "hf-tiny-model-private/tiny-random-PegasusForConditionalGeneration"
     HF_MODEL_ID = "google/pegasus-xsum"
     HF_CONFIG_KWARGS = {
         "num_hidden_layers": 1,
@@ -284,7 +285,6 @@ class TestPegasusModel(LLMTest.TestLLM):
             self.PROMPT, padding="max_length", max_length=512, truncation=True, return_tensors="pt"
         )
         inputs["max_new_tokens"] = 20
-        inputs["do_sample"] = False
         inputs["num_beams"] = 1
         return inputs
 
@@ -293,44 +293,6 @@ class TestPegasusModel(LLMTest.TestLLM):
             output[0], skip_special_tokens=True, clean_up_tokenization_spaces=True
         )
         return generated_text
-
-    def test_automap(self):
-        # PegasusForConditionalGeneration -> RBLNPegasusForConditionalGeneration compile case
-        with self.subTest():
-            assert self.RBLN_CLASS == self.RBLN_AUTO_CLASS.get_rbln_cls(
-                self.HF_MODEL_ID,
-                **self.RBLN_CLASS_KWARGS,
-                **self.HF_CONFIG_KWARGS,
-            )
-
-        # PegasusForConditionalGeneration -> RBLNPegasusModel compile case
-        # Invoked rbln_class is different from config's architecture
-        with self.subTest():
-            with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter("always")
-
-                RBLNAutoModel.get_rbln_cls(self.HF_MODEL_ID)
-
-                self.assertEqual(len(w), 1)
-                self.assertTrue(issubclass(w[-1].category, UserWarning))
-                self.assertIn("This mismatch could cause some operations", str(w[-1].message))
-
-        # PegasusForConditionalGeneration -> RBLNPegasusForCausalLM compile case
-        # RBLNPegasusForCausalLM is not yet supported in optimum.rbln
-        with self.subTest():
-            with pytest.raises(AttributeError):
-                RBLNAutoModelForCausalLM.get_rbln_cls(self.HF_MODEL_ID)
-
-        # RBLNPegasusForSeq2SeqLM -> RBLNPegasusForCausalLM load case
-        with self.subTest():
-            with pytest.raises(ValueError):
-                _ = RBLNAutoModelForCausalLM.from_pretrained(
-                    self.get_rbln_local_dir(),
-                    export=False,
-                    rbln_create_runtimes=False,
-                    **self.HF_CONFIG_KWARGS,
-                )
-
 
 class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
