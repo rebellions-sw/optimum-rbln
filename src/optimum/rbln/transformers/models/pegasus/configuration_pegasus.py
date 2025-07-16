@@ -17,8 +17,18 @@ from ..seq2seq import RBLNModelForSeq2SeqLMConfig
 
 
 class RBLNPegasusModelConfig(RBLNTransformerEncoderForFeatureExtractionConfig):
-    pass
+    """
+    Configuration class for RBLNPegasusModel.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized PEGASUS models for feature extraction tasks.
+    """
 
 
 class RBLNPegasusForConditionalGenerationConfig(RBLNModelForSeq2SeqLMConfig):
-    pass
+    """
+    Configuration class for RBLNPegasusForConditionalGeneration.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized PEGASUS models for conditional text generation tasks.
+    """

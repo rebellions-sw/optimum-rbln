@@ -32,10 +32,23 @@ if TYPE_CHECKING:
 
 
 class RBLNPegasusModel(RBLNTransformerEncoderForFeatureExtraction):
-    pass
+    """
+    RBLN optimized PEGASUS model for feature extraction tasks.
+
+    This class provides hardware-accelerated inference for PEGASUS encoder models
+    on RBLN devices, optimized for feature extraction use cases.
+    """
 
 
 class RBLNPegasusForConditionalGeneration(RBLNModelForSeq2SeqLM):
+    """
+    RBLN optimized PEGASUS model for conditional text generation tasks.
+
+    This class provides hardware-accelerated inference for PEGASUS models
+    on RBLN devices, supporting sequence-to-sequence generation tasks
+    such as summarization, translation, and text generation.
+    """
+
     support_causal_attn = True
 
     @classmethod
