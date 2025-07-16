@@ -35,7 +35,7 @@ from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.runtime_utils import RBLNPytorchRuntime
 from ..decoderonly.modeling_decoderonly import (
-    RBLNDecoderOnlyOutput,
+    RBLNDecoderOnlyForCausalLMOutput,
 )
 
 
@@ -494,7 +494,7 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
         if not return_dict:
             return logits, generate_idx
         else:
-            return RBLNDecoderOnlyOutput(
+            return RBLNDecoderOnlyForCausalLMOutput(
                 logits=logits,
                 generate_idx=generate_idx,
             )

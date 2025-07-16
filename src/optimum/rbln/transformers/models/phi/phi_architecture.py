@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import torch
 from transformers import PhiForCausalLM
@@ -27,7 +27,7 @@ from ..decoderonly.decoderonly_architecture import (
 
 
 if TYPE_CHECKING:
-    from transformers import PhiForCausalLM
+    from transformers import PhiForCausalLM, PhiModel
 
 
 class PhiWrapper(DecoderOnlyWrapper):
@@ -40,11 +40,11 @@ class PhiWrapper(DecoderOnlyWrapper):
     def get_rbln_model_class(self):
         return PhiModel
 
-    def get_model_layer(self, causal_lm: "PhiForCausalLM"):
-        return causal_lm.model
+    def get_model_layer(self, model: Union["PhiForCausalLM", "PhiModel"]):
+        return model.model if self.is_causal_lm else model
 
-    def get_decoder_layers(self, causal_lm: "PhiForCausalLM"):
-        return causal_lm.model.layers
+    def get_decoder_layers(self, model: Union["PhiForCausalLM", "PhiModel"]):
+        return model.model.layers if self.is_causal_lm else model.layers
 
 
 class PhiAttention(DecoderOnlyAttention):

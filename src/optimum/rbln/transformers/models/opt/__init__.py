@@ -12,5 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .configuration_opt import RBLNOPTForCausalLMConfig
-from .modeling_opt import RBLNOPTForCausalLM
+from .configuration_opt import RBLNOPTForCausalLMConfig, RBLNOPTModelConfig
+from .modeling_opt import RBLNOPTForCausalLM, RBLNOPTModel

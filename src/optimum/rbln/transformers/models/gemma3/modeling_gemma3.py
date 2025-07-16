@@ -31,7 +31,11 @@ from transformers.models.gemma3.modeling_gemma3 import Gemma3TextScaledWordEmbed
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
-from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyOutput, RBLNRuntimeModel
+from ..decoderonly.modeling_decoderonly import (
+    RBLNDecoderOnlyForCausalLMOutput,
+    RBLNDecoderOnlyModelForCausalLM,
+    RBLNRuntimeModel,
+)
 from .configuration_gemma3 import RBLNGemma3ForCausalLMConfig
 from .gemma3_architecture import Gemma3ForCausalLMWrapper
 
@@ -41,7 +45,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class RBLNGemma3ForCausalLMOutput(RBLNDecoderOnlyOutput):
+class RBLNGemma3ForCausalLMOutput(RBLNDecoderOnlyForCausalLMOutput):
     attention_mask: Optional[torch.Tensor] = None
 
 
@@ -197,7 +201,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
 
     def _update_model_kwargs_for_generation(
         self,
-        outputs: RBLNDecoderOnlyOutput,
+        outputs: RBLNDecoderOnlyForCausalLMOutput,
         model_kwargs: Dict[str, Any],
         **kwargs,
     ) -> Dict[str, Any]:
@@ -266,7 +270,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         position_ids: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
         **lm_kwargs: Dict[str, Any],
-    ) -> Union[Tuple, RBLNDecoderOnlyOutput]:
+    ) -> Union[Tuple, RBLNDecoderOnlyForCausalLMOutput]:
         # prefill
         if cache_position is None:
             logits = []
@@ -304,7 +308,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
                 position_ids=position_ids if self.rbln_config.language_model.use_position_ids else None,
             ).logits
 
-        return RBLNDecoderOnlyOutput(
+        return RBLNDecoderOnlyForCausalLMOutput(
             logits=logits, generate_idx=generate_idx, padded_cache_lengths=padded_cache_lengths
         )
 
@@ -509,7 +513,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
 
         logits = self.decode(inputs, cache_position, block_tables, local_block_tables, attention_mask, position_ids)
 
-        return RBLNDecoderOnlyOutput(logits=logits)
+        return RBLNDecoderOnlyForCausalLMOutput(logits=logits)
 
 
 class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):

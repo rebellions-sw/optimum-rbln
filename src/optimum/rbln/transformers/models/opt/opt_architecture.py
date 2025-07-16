@@ -40,11 +40,11 @@ class OPTWrapper(DecoderOnlyWrapper):
     def get_rbln_model_class(self):
         return OPTModel
 
-    def get_model_layer(self, causal_lm: "OPTForCausalLM"):
-        return causal_lm.model.decoder
+    def get_model_layer(self, model: "OPTForCausalLM"):
+        return model.model.decoder if self.is_causal_lm else model.decoder
 
-    def get_decoder_layers(self, causal_lm: "OPTForCausalLM"):
-        return causal_lm.model.decoder.layers
+    def get_decoder_layers(self, model: "OPTForCausalLM"):
+        return model.model.decoder.layers if self.is_causal_lm else model.decoder.layers
 
 
 class OPTAttention(DecoderOnlyAttention):

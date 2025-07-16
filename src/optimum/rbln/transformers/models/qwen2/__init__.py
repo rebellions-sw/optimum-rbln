@@ -12,5 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .configuration_qwen2 import RBLNQwen2ForCausalLMConfig
-from .modeling_qwen2 import RBLNQwen2ForCausalLM
+from .configuration_qwen2 import RBLNQwen2ForCausalLMConfig, RBLNQwen2ModelConfig
+from .modeling_qwen2 import RBLNQwen2ForCausalLM, RBLNQwen2Model

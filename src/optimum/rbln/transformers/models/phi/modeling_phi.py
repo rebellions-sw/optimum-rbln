@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from ....utils import logging
-from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM
+from ...models.decoderonly import RBLNDecoderOnlyModel, RBLNDecoderOnlyModelForCausalLM
 from .phi_architecture import PhiWrapper
 
 
@@ -78,6 +78,15 @@ class RBLNPhiForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             rbln_config=config
         )
         ```
+    """
+
+    _decoder_wrapper_cls = PhiWrapper
+
+
+class RBLNPhiModel(RBLNDecoderOnlyModel):
+    """
+    The Phi Model transformer without a language modeling head.
+    This model inherits from [`RBLNDecoderOnlyModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
     """
 
     _decoder_wrapper_cls = PhiWrapper

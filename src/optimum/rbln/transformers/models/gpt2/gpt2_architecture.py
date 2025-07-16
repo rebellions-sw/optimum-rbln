@@ -13,11 +13,10 @@
 # limitations under the License.
 
 import math
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Tuple, Union
 
 import torch
 import torch.nn as nn
-from transformers import PreTrainedModel
 
 from ..decoderonly.decoderonly_architecture import (
     DecoderOnlyAttention,
@@ -28,7 +27,7 @@ from ..decoderonly.decoderonly_architecture import (
 
 
 if TYPE_CHECKING:
-    from transformers import GPT2LMHeadModel
+    from transformers import GPT2LMHeadModel, GPT2Model
 
 
 class GPT2Wrapper(DecoderOnlyWrapper):
@@ -44,11 +43,11 @@ class GPT2Wrapper(DecoderOnlyWrapper):
     def get_attn_layer(self, layer: nn.Module):
         return layer.attn
 
-    def get_model_layer(self, causal_lm: "GPT2LMHeadModel"):
-        return causal_lm.transformer
+    def get_model_layer(self, model: Union["GPT2LMHeadModel", "GPT2Model"]):
+        return model.transformer if self.is_causal_lm else model
 
-    def get_decoder_layers(self, causal_lm: PreTrainedModel):
-        return causal_lm.transformer.h
+    def get_decoder_layers(self, model: Union["GPT2LMHeadModel", "GPT2Model"]):
+        return model.transformer.h if self.is_causal_lm else model.h
 
 
 class GPT2Model(DecoderOnlyModel):
