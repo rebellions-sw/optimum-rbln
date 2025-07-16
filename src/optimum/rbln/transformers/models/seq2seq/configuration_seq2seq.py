@@ -54,7 +54,5 @@ class RBLNModelForSeq2SeqLMConfig(RBLNModelConfig):
         self.dec_max_seq_len = dec_max_seq_len
 
         self.use_attention_mask = use_attention_mask
-        npu = self.npu or rebel.get_npu_name()
-        self.use_attention_mask = self.use_attention_mask or False
 
         self.pad_token_id = pad_token_id

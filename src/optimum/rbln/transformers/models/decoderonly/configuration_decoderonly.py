@@ -172,7 +172,6 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         self.use_position_ids = use_position_ids or False
         self.use_attention_mask = use_attention_mask
 
-        npu = self.npu or rebel.get_npu_name()
         self.use_attention_mask = self.use_attention_mask or False
 
         if self.use_position_ids and not self.use_attention_mask:

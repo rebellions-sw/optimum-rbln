@@ -39,8 +39,6 @@ class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
         )
         self.image_prefill_chunk_size = image_prefill_chunk_size
 
-        npu = self.npu or rebel.get_npu_name()
-
 
 class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):
     submodules = ["vision_tower", "language_model"]
