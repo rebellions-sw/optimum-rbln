@@ -294,6 +294,7 @@ class TestPegasusModel(LLMTest.TestLLM):
         )
         return generated_text
 
+
 class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
     RBLN_CLASS = RBLNLlavaNextForConditionalGeneration
