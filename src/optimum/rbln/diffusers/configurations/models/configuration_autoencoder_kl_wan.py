@@ -63,9 +63,9 @@ class RBLNAutoencoderKLWanConfig(RBLNModelConfig):
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
         self.uses_encoder = uses_encoder
-        self.num_frames = num_frames or 93
-        self.height = height or 704
-        self.width = width or 1280
+        self.num_frames = num_frames
+        self.height = height
+        self.width = width
 
         self.num_channels_latents = num_channels_latents
         self.vae_scale_factor_temporal = vae_scale_factor_temporal

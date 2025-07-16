@@ -39,7 +39,6 @@ class RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
         height: Optional[int] = None,
         width: Optional[int] = None,
         num_frames: Optional[int] = None,
-        fps: Optional[int] = None,
         max_seq_len: Optional[int] = None,
         **kwargs: Any,
     ):
@@ -57,7 +56,6 @@ class RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
             height (Optional[int]): Height of the generated videos.
             width (Optional[int]): Width of the generated videos.
             num_frames (Optional[int]): The number of frames in the generated video.
-            fps (Optional[int]): The frames per second of the generated video.
             max_seq_len (Optional[int]): Maximum sequence length supported by the model.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
         """
@@ -74,7 +72,7 @@ class RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
             height=height,
             width=width,
             num_frames=num_frames,
-            fps=fps,
+            is_v2w=self.__class__._vae_uses_encoder,
         )
         self.vae = self.init_submodule_config(
             RBLNAutoencoderKLCosmosConfig,
