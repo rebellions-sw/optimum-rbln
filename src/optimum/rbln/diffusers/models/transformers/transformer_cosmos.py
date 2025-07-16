@@ -211,6 +211,25 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
     def update_rbln_config_using_pipe(
         cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
     ) -> RBLNCosmosTransformer3DModelConfig:
+        if rbln_config.transformer.num_frames is None:
+            if pipe.transformer.config.extra_pos_embed_type is None:
+                rbln_config.transformer.num_frames = 93  if rbln_config.vae.uses_encoder else 1
+            else:
+                rbln_config.transformer.num_frames = 121
+
+        if rbln_config.transformer.height is None:
+            if pipe.transformer.config.extra_pos_embed_type is None and not rbln_config.vae.uses_encoder:
+                rbln_config.transformer.height = 768
+            else:
+                rbln_config.transformer.height = 704
+
+
+        if rbln_config.transformer.width is None:
+            if pipe.transformer.config.extra_pos_embed_type is None and not rbln_config.vae.uses_encoder:
+                rbln_config.transformer.width = 1360
+            else:
+                rbln_config.transformer.width = 1280
+
         rbln_config.transformer.num_latent_frames = (
             rbln_config.transformer.num_frames - 1
         ) // pipe.vae_scale_factor_temporal + 1
@@ -252,7 +271,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
             * (rbln_config.latent_width // p_w)
         )
         attention_head_dim = model_config.attention_head_dim
-        hidden_size = model.config.num_attention_heads * model.config.attention_head_dim
+        hidden_size = model_config.num_attention_heads * model_config.attention_head_dim
         input_info = [
             (
                 "hidden_states",
@@ -274,7 +293,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
             ),
         ]
 
-        if model_config.extra_pos_embed_type is None:
+        if model_config.extra_pos_embed_type is None and rbln_config.is_v2w:
             input_info.append(
                 ("embedded_timestep", [rbln_config.batch_size, hidden_dim, hidden_size], "float32"),
             )
@@ -346,15 +365,26 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
             attention_mask,
         ) = self.compute_embedding(hidden_states, timestep, attention_mask, fps, condition_mask, padding_mask)
 
-        hidden_states = self.model[0].forward(
-            hidden_states,
-            encoder_hidden_states,
-            embedded_timestep,
-            temb,
-            image_rotary_emb_0,
-            image_rotary_emb_1,
-            extra_pos_emb,
-        )
+        if self.config.extra_pos_embed_type is None:
+            hidden_states = self.model[0].forward(
+                hidden_states,
+                encoder_hidden_states,
+                embedded_timestep,
+                temb,
+                image_rotary_emb_0,
+                image_rotary_emb_1,
+            )
+
+        else:
+            hidden_states = self.model[0].forward(
+                hidden_states,
+                encoder_hidden_states,
+                embedded_timestep,
+                temb,
+                image_rotary_emb_0,
+                image_rotary_emb_1,
+                extra_pos_emb,
+            )
 
         if not return_dict:
             return (hidden_states,)
