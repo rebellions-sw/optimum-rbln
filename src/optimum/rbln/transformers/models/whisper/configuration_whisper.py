@@ -14,8 +14,6 @@
 
 from typing import Any, Dict
 
-import rebel
-
 from ....configuration_utils import RBLNModelConfig
 from ....utils.logging import get_logger
 

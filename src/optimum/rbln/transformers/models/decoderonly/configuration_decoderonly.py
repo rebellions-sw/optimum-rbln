@@ -14,8 +14,6 @@
 
 from typing import Any, Dict, List, Literal, Optional, Union
 
-import rebel
-
 from ....configuration_utils import RBLNModelConfig
 from ....utils.logging import get_logger
 from ...utils.rbln_quantization import RBLNQuantizationConfig

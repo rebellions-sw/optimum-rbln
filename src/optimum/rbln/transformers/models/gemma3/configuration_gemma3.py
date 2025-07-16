@@ -13,8 +13,6 @@
 # limitations under the License.
 from typing import Any, Dict, Optional
 
-import rebel
-
 from ....configuration_utils import RBLNModelConfig
 from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
 from ..siglip.configuration_siglip import RBLNSiglipVisionModelConfig
