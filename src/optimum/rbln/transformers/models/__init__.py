@@ -108,10 +108,12 @@ _import_structure = {
     ],
     "llama": ["RBLNLlamaForCausalLM", "RBLNLlamaForCausalLMConfig"],
     "opt": ["RBLNOPTForCausalLM", "RBLNOPTForCausalLMConfig"],
+    "llava": ["RBLNLlavaForConditionalGeneration", "RBLNLlavaForConditionalGenerationConfig"],
     "llava_next": ["RBLNLlavaNextForConditionalGeneration", "RBLNLlavaNextForConditionalGenerationConfig"],
     "midm": ["RBLNMidmLMHeadModel", "RBLNMidmLMHeadModelConfig"],
     "mistral": ["RBLNMistralForCausalLM", "RBLNMistralForCausalLMConfig"],
     "phi": ["RBLNPhiForCausalLM", "RBLNPhiForCausalLMConfig"],
+    "pixtral": ["RBLNPixtralVisionModel", "RBLNPixtralVisionModelConfig"],
     "qwen2": ["RBLNQwen2ForCausalLM", "RBLNQwen2ForCausalLMConfig"],
     "qwen3": ["RBLNQwen3ForCausalLM", "RBLNQwen3ForCausalLMConfig", "RBLNQwen3Model", "RBLNQwen3ModelConfig"],
     "resnet": ["RBLNResNetForImageClassification", "RBLNResNetForImageClassificationConfig"],
@@ -230,11 +232,13 @@ if TYPE_CHECKING:
         RBLNIdefics3VisionTransformerConfig,
     )
     from .llama import RBLNLlamaForCausalLM, RBLNLlamaForCausalLMConfig
+    from .llava import RBLNLlavaForConditionalGeneration, RBLNLlavaForConditionalGenerationConfig
     from .llava_next import RBLNLlavaNextForConditionalGeneration, RBLNLlavaNextForConditionalGenerationConfig
     from .midm import RBLNMidmLMHeadModel, RBLNMidmLMHeadModelConfig
     from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig
     from .opt import RBLNOPTForCausalLM, RBLNOPTForCausalLMConfig
     from .phi import RBLNPhiForCausalLM, RBLNPhiForCausalLMConfig
+    from .pixtral import RBLNPixtralVisionModel, RBLNPixtralVisionModelConfig
     from .qwen2 import RBLNQwen2ForCausalLM, RBLNQwen2ForCausalLMConfig
     from .qwen2_5_vl import (
         RBLNQwen2_5_VisionTransformerPretrainedModel,
