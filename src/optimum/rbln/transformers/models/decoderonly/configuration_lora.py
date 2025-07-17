@@ -205,6 +205,7 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
         fully_sharded_loras: Optional[bool] = None,
         enable_lora_bias: Optional[bool] = None,
         long_lora_scaling_factor: Optional[float] = None,
+        use_base_model: Optional[bool] = None,
     ):
         """
         Args:
@@ -220,6 +221,13 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
             enable_lora_bias (Optional[bool]): Whether to enable bias terms for LoRA layers. Defaults to False.
             long_lora_scaling_factor (Optional[float]): Scaling factor for long sequence LoRA.
                 Defaults to None.
+            use_base_model (Optional[bool]): Whether to compile the base model without a LoRA adapter.
+                When False, only LoRA-adapted models are compiled and the base model cannot be executed.
+                When True(default), both the base model and LoRA-adapted models are compiled, allowing users to run
+                inference with either the base model or any of the configured LoRA adapters at runtime.
+                This is useful when you want the flexibility to switch between the original model and
+                LoRA-adapted versions. Note that enabling this will increase compilation time and slightly
+                increase memory usage due to the additional base model compilation. Defaults to True.
             **kwargs: Additional arguments for future extensions.
 
         Raises:
@@ -257,6 +265,7 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
         self.fully_sharded_loras = fully_sharded_loras
         self.enable_lora_bias = enable_lora_bias
         self.long_lora_scaling_factor = long_lora_scaling_factor
+        self.use_base_model = use_base_model if use_base_model is not None else True
 
         # Calculate max_lora_rank if not provided
         if max_lora_rank is None:
@@ -333,6 +342,7 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
             "fully_sharded_loras": self.fully_sharded_loras,
             "enable_lora_bias": self.enable_lora_bias,
             "long_lora_scaling_factor": self.long_lora_scaling_factor,
+            "use_base_model": self.use_base_model,
         }
         return serializable_map
 

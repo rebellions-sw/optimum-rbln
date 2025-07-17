@@ -146,6 +146,18 @@ class RBLNCompileConfig:
                 )
         return tuple(dummy)
 
+    def remove_input_info_by_name(self, name: str) -> Tuple[Tuple[str, Tuple[int], str], int]:
+        for idx, info in enumerate(self.input_info):
+            if info[0] == name:
+                input_node = self.input_info[idx]
+                del self.input_info[idx]
+                return input_node, idx
+        raise ValueError(f"Input info with name {name} not found.")
+
+    def insert_input_info(self, name: str, shape: Tuple[int], dtype: str, insert_idx: int):
+        self.input_info.insert(insert_idx, (name, shape, dtype))
+        return self
+
     def asdict(self):
         return asdict(self)
 

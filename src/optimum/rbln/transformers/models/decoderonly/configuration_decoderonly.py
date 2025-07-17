@@ -254,6 +254,11 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         return self.lora_config is not None
 
     @property
+    def use_base_model(self):
+        """Check if the base model should be compiled."""
+        return self.lora_config is None or self.lora_config.use_base_model
+
+    @property
     def num_lora_adapters(self):
         """Get the number of LoRA adapters configured for compilation."""
         if self.lora_config is None:

@@ -92,6 +92,7 @@ def main(
             RBLNLoRAAdapterConfig(0, "nemoguard", lora_ids[0]),
             RBLNLoRAAdapterConfig(1, "abliterated", lora_ids[1]),
         ],
+        use_base_model=True,
     )
 
     if export:
@@ -117,7 +118,7 @@ def main(
     tokenizer.pad_token = tokenizer.eos_token
 
     # Test different LoRA adapters
-    for adapter_id, adapter_name in enumerate(["nemoguard", "abliterated"]):
+    for adapter_id, adapter_name in enumerate(["base_model", "nemoguard", "abliterated"]):
         print(f"\033[33m=== Testing LoRA Adapter: {adapter_name} ===\033[0m")
 
         # Prepare batch inputs for this adapter

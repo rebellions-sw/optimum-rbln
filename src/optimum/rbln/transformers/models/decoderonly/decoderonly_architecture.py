@@ -207,6 +207,7 @@ class DecoderOnlyWrapper(nn.Module):
         self.causal_lm = self.convert_to_rbln_causal_lm(causal_lm, max_seq_len)
         self.num_hidden_layers = getattr(self.config, "num_hidden_layers", None) or getattr(self.config, "n_layer")
         self._phase = "prefill"
+        self._activate_lora = None
 
     def get_rotary_emb(self, max_seq_len):
         return RotaryEmbedding(config=self.config, max_seq_len_cached=max_seq_len)
@@ -272,6 +273,15 @@ class DecoderOnlyWrapper(nn.Module):
         self._phase = phase
         self.causal_lm.phase = phase
 
+    @property
+    def activate_lora(self) -> bool:
+        return self._activate_lora
+
+    @activate_lora.setter
+    def activate_lora(self, activate_lora: bool):
+        self._activate_lora = activate_lora
+        self.causal_lm.activate_lora = activate_lora
+
     def prepare_forward_args(self, *args):
         args = list(args)
         input_ids = None if self.use_inputs_embeds else args.pop(0)
@@ -282,7 +292,7 @@ class DecoderOnlyWrapper(nn.Module):
         query_position = args.pop(0) if "prefill" in self.phase else None
         attention_mask = args.pop(0) if self.use_attention_mask else None
         position_ids = args.pop(0) if self.use_position_ids else None
-        lora_int_id = args.pop(0) if self.lora_config else None
+        lora_int_id = args.pop(0) if self.lora_config and self.activate_lora else None
         past_key_values = args
 
         if len(past_key_values) != 2 * self.num_hidden_layers:
@@ -379,6 +389,7 @@ class DecoderOnlyForCausalLM(nn.Module):
         self._original_mod = causal_lm
         self.model = model
         self._phase = "prefill"
+        self._activate_lora = None
         self.lm_head = self._original_mod.lm_head
 
     @property
@@ -389,6 +400,15 @@ class DecoderOnlyForCausalLM(nn.Module):
     def phase(self, phase: str):
         self._phase = phase
         self.model.phase = phase
+
+    @property
+    def activate_lora(self) -> bool:
+        return self._activate_lora
+
+    @activate_lora.setter
+    def activate_lora(self, activate_lora: bool):
+        self._activate_lora = activate_lora
+        self.model.activate_lora = activate_lora
 
     def forward(
         self,
@@ -460,6 +480,7 @@ class DecoderOnlyModel(nn.Module):
         self._original_mod = model
         self.layers = nn.ModuleList(layers)
         self._phase = "prefill"
+        self._activate_lora = None
         self.partition_len = partition_len
         self.kvcache_block_size = kvcache_block_size
         self.max_seq_len = max_seq_len
@@ -475,6 +496,16 @@ class DecoderOnlyModel(nn.Module):
         self._phase = phase
         for layer in self.layers:
             layer.phase = phase
+
+    @property
+    def activate_lora(self) -> bool:
+        return self._activate_lora
+
+    @activate_lora.setter
+    def activate_lora(self, activate_lora: bool):
+        self._activate_lora = activate_lora
+        for layer in self.layers:
+            layer.activate_lora = activate_lora
 
     @property
     def attn_impl(self) -> str:
@@ -638,6 +669,7 @@ class DecoderOnlyLayer(nn.Module):
         self._original_mod = layer
         self.self_attn = self_attn
         self._phase = "prefill"
+        self._activate_lora = None
 
     @property
     def phase(self):
@@ -647,6 +679,15 @@ class DecoderOnlyLayer(nn.Module):
     def phase(self, phase: str):
         self._phase = phase
         self.self_attn.phase = phase
+
+    @property
+    def activate_lora(self) -> bool:
+        return self._activate_lora
+
+    @activate_lora.setter
+    def activate_lora(self, activate_lora: bool):
+        self._activate_lora = activate_lora
+        self.self_attn.activate_lora = activate_lora
 
     def get_pre_attention_layernorm(self) -> nn.LayerNorm:
         return self._original_mod.input_layernorm
@@ -727,6 +768,7 @@ class DecoderOnlyAttention(nn.Module):
         )
         self.head_dim = self._original_mod.head_dim
         self._phase = "prefill"
+        self.activate_lora = None
         self.scale = torch.tensor(self.get_attn_scale())
 
         if hasattr(self._original_mod, "num_key_value_heads"):
@@ -833,7 +875,7 @@ class DecoderOnlyAttention(nn.Module):
             Tuple of (query_states, key_states, value_states)
         """
         # Check if using LoRALinear (which accepts lora_int_id) or standard linear layers
-        if self.lora_config:
+        if self.lora_config and self.activate_lora:
             # LoRALinear handles both base projection and LoRA in one forward pass
             query_states = self.q_proj(hidden_states, lora_int_id)
             key_states = self.k_proj(hidden_states, lora_int_id)
