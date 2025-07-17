@@ -18,7 +18,7 @@ from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNPixtralVisionModelConfig(RBLNModelConfig):
-    def __init__(self, max_image_size: Tuple, batch_size: Optional[int] = None, **kwargs: Dict[str, Any]):
+    def __init__(self, max_image_size: Tuple = None, batch_size: Optional[int] = None, **kwargs: Dict[str, Any]):
         """
         Args:
             max_image_size (Tuple): The size of max input images. A tuple (max_height, max_width)

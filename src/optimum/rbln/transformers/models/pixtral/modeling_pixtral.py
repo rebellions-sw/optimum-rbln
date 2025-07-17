@@ -24,8 +24,6 @@ from transformers.modeling_utils import no_init_weights
 from transformers.models.pixtral.modeling_pixtral import (
     PixtralRMSNorm,
     PixtralRotaryEmbedding,
-    generate_block_attention_mask,
-    position_ids_in_meshgrid,
 )
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
@@ -65,61 +63,103 @@ class RBLNRuntimePixtralVisionModel(RBLNPytorchRuntime):
         self,
         pixel_values: torch.Tensor,
         image_sizes: torch.Tensor,
+        output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         **kwargs,
     ):
-        max_height, max_width = self.max_image_size
-        max_patches = pixel_values.shape[0] * (max_height // self.patch_size) * (max_width // self.patch_size)
-        patch_embeds_conv = self.patch_conv(pixel_values)
-        patch_embeds_list = [
-            embed[..., : (size[0] // self.patch_size), : (size[1] // self.patch_size)]
-            for embed, size in zip(patch_embeds_conv, image_sizes)
-        ]
+        if pixel_values.shape[2] != self.max_image_size[0] and pixel_values.shape[3] != self.max_image_size[1]:
+            padded_pixel_values = [
+                torch.nn.functional.pad(
+                    image,
+                    pad=(
+                        0,
+                        self.max_image_size[1] - pixel_values.shape[3],
+                        0,
+                        self.max_image_size[0] - pixel_values.shape[2],
+                    ),
+                )
+                for image in pixel_values
+            ]
+            pixel_values = torch.stack(padded_pixel_values)
 
-        real_patch_embeds = torch.cat([p.flatten(1).T for p in patch_embeds_list], dim=0).unsqueeze(0)
-        num_real_patches = real_patch_embeds.shape[1]
+        batch_size, _, H_max, W_max = pixel_values.shape
+        H_max_p = H_max // self.patch_size
+        W_max_p = W_max // self.patch_size
 
-        if num_real_patches > max_patches:
-            raise ValueError(
-                f"The number of real patches ({num_real_patches}) exceeds the "
-                f"configured max_total_patches ({max_patches}). "
-                f"Please increase max_total_patches in the model config."
+        final_hidden_states = None
+
+        last_hidden_state_list = []
+        if output_hidden_states:
+            batch_hidden_states_list = []
+
+        for i in range(batch_size):
+            h_patched_original = image_sizes[i, 0] // self.patch_size
+            w_patched_original = image_sizes[i, 1] // self.patch_size
+
+            single_pixel_values = pixel_values[i : i + 1]
+            patch_embed = self.patch_conv(single_pixel_values)
+            patch_embed_seq = patch_embed[:, :, :h_patched_original, :w_patched_original].flatten(2).transpose(1, 2)
+            patch_embed_seq = self.ln_pre(patch_embed_seq)
+            patch_embed_seq = nn.functional.pad(
+                patch_embed_seq, (0, 0, 0, H_max_p * W_max_p - patch_embed_seq.shape[1]), "constant", value=0
             )
 
-        num_padding_patches = max_patches - num_real_patches
-        padding_embeds = torch.zeros(
-            (1, num_padding_patches, self.hidden_size),
-            dtype=real_patch_embeds.dtype,
+            max_w_from_config = self.image_size // self.patch_size
+            mesh = torch.meshgrid(torch.arange(h_patched_original), torch.arange(w_patched_original), indexing="ij")
+            h_grid, v_grid = torch.stack(mesh, dim=-1).reshape(-1, 2).chunk(2, -1)
+            ids = h_grid * max_w_from_config + v_grid
+            position_ids = ids[:, 0]
+
+            position_embeddings = self.patch_positional_embedding(patch_embed_seq, position_ids)
+            cos = nn.functional.pad(
+                position_embeddings[0],
+                (0, 0, 0, H_max_p * W_max_p - position_embeddings[0].shape[0]),
+                "constant",
+                value=0,
+            )
+            sin = nn.functional.pad(
+                position_embeddings[1],
+                (0, 0, 0, H_max_p * W_max_p - position_embeddings[1].shape[0]),
+                "constant",
+                value=0,
+            )
+
+            attention_mask = torch.full(
+                (1, patch_embed_seq.shape[-2]), fill_value=torch.finfo(patch_embed_seq.dtype).min
+            )
+            attention_mask[:, : h_patched_original * w_patched_original] = 0
+
+            transformer_output = super().forward(patch_embed_seq, attention_mask, cos, sin)
+
+            last_hidden_state_list.append(transformer_output[0][:, : h_patched_original * w_patched_original, :])
+            hidden_states = transformer_output[1:]
+
+            if output_hidden_states:
+                batch_hidden_states_list.append(
+                    [hidden_state[:, : h_patched_original * w_patched_original, :] for hidden_state in hidden_states]
+                )
+
+        final_last_hidden_state = torch.cat(last_hidden_state_list, dim=1)
+
+        if output_hidden_states:
+            hidden_states = [
+                torch.cat(
+                    [batch_hidden_states[layer_idx] for batch_hidden_states in batch_hidden_states_list],
+                    dim=1,
+                )
+                for layer_idx in range(len(batch_hidden_states_list[0]))
+            ]
+
+            final_hidden_states = tuple(hidden_states)
+
+        if not return_dict:
+            return tuple(v for v in (final_last_hidden_state, final_hidden_states) if v is not None)
+
+        # TODO: output_attentions
+        return BaseModelOutput(
+            last_hidden_state=final_last_hidden_state,
+            hidden_states=final_hidden_states,
         )
-        patch_embeds = torch.cat([real_patch_embeds, padding_embeds], dim=1)
-        patch_embeds = self.ln_pre(patch_embeds)
-
-        real_position_ids = position_ids_in_meshgrid(patch_embeds_list, max_width=self.image_size // self.patch_size)
-
-        padding_position_ids = torch.zeros((num_padding_patches,), dtype=real_position_ids.dtype)
-        position_ids = torch.cat([real_position_ids, padding_position_ids], dim=0)
-        position_embeddings = self.patch_positional_embedding(patch_embeds, position_ids)
-
-        d_min = torch.finfo(patch_embeds.dtype).min
-        real_patch_counts = [p.shape[-2] * p.shape[-1] for p in patch_embeds_list]
-
-        dummy_tensor_for_mask = torch.empty(patch_embeds.shape[0], num_real_patches, 1, dtype=patch_embeds.dtype)
-        real_attention_mask = generate_block_attention_mask(real_patch_counts, dummy_tensor_for_mask)
-
-        attention_mask = torch.full(
-            (patch_embeds.shape[0], 1, max_patches, max_patches),
-            fill_value=d_min,
-            dtype=patch_embeds.dtype,
-        )
-        attention_mask[..., :num_real_patches, :num_real_patches] = real_attention_mask
-
-        transformer_output = super().forward(
-            patch_embeds, attention_mask, position_embeddings[0], position_embeddings[1]
-        )
-
-        transformer_output = [x[:, :num_real_patches, :] for x in transformer_output]
-
-        return transformer_output
 
 
 class _PixtralVisionModel(torch.nn.Module):
@@ -207,14 +247,10 @@ class RBLNPixtralVisionModel(RBLNModel):
         rbln_config: Optional[RBLNPixtralVisionModelConfig] = None,
     ) -> RBLNPixtralVisionModelConfig:
         if rbln_config.max_image_size is None:
-            raise ValueError("`rbln_image_size` should be specified!")
+            rbln_config.max_image_size = (model_config.image_size, model_config.image_size)
 
-        batch_size = rbln_config.batch_size
-
-        num_total_patches = (
-            batch_size
-            * (rbln_config.max_image_size[0] // model_config.patch_size)
-            * (rbln_config.max_image_size[1] // model_config.patch_size)
+        num_total_patches = (rbln_config.max_image_size[0] // model_config.patch_size) * (
+            rbln_config.max_image_size[1] // model_config.patch_size
         )
 
         rbln_compile_config = RBLNCompileConfig(
@@ -224,7 +260,7 @@ class RBLNPixtralVisionModel(RBLNModel):
                     [1, num_total_patches, model_config.hidden_size],
                     "float32",
                 ),
-                ("attention_mask", [1, 1, num_total_patches, num_total_patches], "float32"),
+                ("attention_mask", [1, num_total_patches], "float32"),
                 (
                     "position_embeddings_1",
                     [
@@ -251,18 +287,12 @@ class RBLNPixtralVisionModel(RBLNModel):
         self,
         pixel_values: Optional[torch.FloatTensor] = None,
         image_sizes: Optional[torch.FloatTensor] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: bool = None,
+        output_hidden_states: Optional[bool] = True,
+        return_dict: bool = True,
         **kwargs,
     ) -> Union[Tuple, BaseModelOutput]:
         output = self.model(
             pixel_values, image_sizes, output_hidden_states=output_hidden_states, return_dict=return_dict
         )
 
-        if not return_dict:
-            return (output,) if not isinstance(output, (tuple, list)) else output
-        else:
-            return BaseModelOutput(
-                last_hidden_state=output[0],
-                hidden_states=output[1:],
-            )
+        return output

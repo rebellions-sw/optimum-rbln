@@ -47,34 +47,39 @@ class LoopVisionTower:
         self.vision_tower = vision_tower
 
     def forward(self, *args, **kwargs):
-        # Loop instead of batch
-        # shape of pixel_values : [batch, num_patches, num_channel, height, width]
         pixel_values = args[0]
+        image_sizes = kwargs.pop("image_sizes", None)
 
-        batch_size = pixel_values.shape[0]
         outputs = []
-        for i in range(batch_size):
-            outputs.append(self.vision_tower(pixel_values[i : i + 1]))
+        for i in range(pixel_values.shape[0]):
+            outputs.append(
+                self.vision_tower(
+                    pixel_values[i : i + 1], image_sizes[i : i + 1] if image_sizes is not None else None, **kwargs
+                )
+            )
 
-        last_hidden_states = [output[0] for output in outputs]
-        pooler_output = [output[1] for output in outputs]
+        if hasattr(self.vision_tower.rbln_config, "max_image_size"):
+            last_hidden_states = [output.last_hidden_state for output in outputs]
+            last_hidden_states = torch.cat(last_hidden_states, dim=1)
+            hidden_states = tuple(
+                torch.cat(
+                    [output.hidden_states[layer_idx] for output in outputs],
+                    dim=1,
+                )
+                for layer_idx in range(len(outputs[0].hidden_states))
+            )
 
-        # FIXME:: This can be optimized using out= API of rbln runtime.
-        last_hidden_states = torch.cat(last_hidden_states, dim=0)
-        pooler_output = torch.cat(pooler_output, dim=0)
-        import pdb
-
-        pdb.set_trace()
-        hidden_states = [output[2:] for output in outputs]  # batch x (hidden x 1)
-
-        hidden_states = tuple(
-            torch.cat(tuple((hidden_states[n][i] for n in range(batch_size))), dim=0)
-            for i in range(len(hidden_states[0]))
-        )  # hidden x (batch,)
+        else:
+            last_hidden_states = [output.last_hidden_state for output in outputs]
+            last_hidden_states = torch.cat(last_hidden_states, dim=0)
+            hidden_states = [output.hidden_states for output in outputs]
+            hidden_states = tuple(
+                torch.cat(tuple((hidden_states[n][i] for n in range(pixel_values.shape[0]))), dim=0)
+                for i in range(len(hidden_states[0]))
+            )
 
         return BaseModelOutputWithPooling(
             last_hidden_state=last_hidden_states,
-            pooler_output=pooler_output,
             hidden_states=hidden_states,
         )
 
@@ -93,9 +98,8 @@ class LoopProjector:
         # Loop instead of batch
         image_feature = args[0]
 
-        batch_size = image_feature.shape[0]
         outputs = []
-        for i in range(batch_size):
+        for i in range(image_feature.shape[0]):
             outputs.append(self.multi_modal_projector(image_feature[i : i + 1]))
 
         # FIXME:: This can be optimized using out= API of rbln runtime.
@@ -133,9 +137,7 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
         self.vision_tower = LoopVisionTower(self.rbln_submodules[0])
         self.language_model = self.rbln_submodules[1]
         self.multi_modal_projector = LoopProjector(self.model[0])
-
         self.pad_token_id = self.config.pad_token_id if self.config.pad_token_id is not None else -1
-        # self._padding_side = "left"  # set it to left by default, user can use setter to change padding_sides
         return super().__post_init__(**kwargs)
 
     def get_attn_impl(self) -> str:
@@ -159,16 +161,17 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
         model_config: Optional["PretrainedConfig"] = None,
         rbln_config: Optional[RBLNModelConfig] = None,
     ) -> RBLNModelConfig:
-        if model_config.vision_feature_select_strategy == "default":
-            num_positions = (model_config.vision_config.image_size // model_config.vision_config.patch_size) ** 2 + 1
-            selected_image_feature_dim = num_positions - 1
-        else:
+        if hasattr(rbln_config.vision_tower, "max_image_size"):
             num_positions = (
-                rbln_config.batch_size
+                rbln_config.vision_tower.batch_size
                 * (rbln_config.vision_tower.max_image_size[0] // model_config.vision_config.patch_size)
                 * (rbln_config.vision_tower.max_image_size[1] // model_config.vision_config.patch_size)
             )
             selected_image_feature_dim = num_positions
+
+        else:
+            num_positions = (model_config.vision_config.image_size // model_config.vision_config.patch_size) ** 2 + 1
+            selected_image_feature_dim = num_positions - 1
 
         input_info = [
             (
@@ -246,7 +249,7 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
             raise ValueError(f"Unexpected select feature strategy: {self.config.vision_feature_select_strategy}")
 
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
-        image_outputs = self.vision_tower(pixel_values, output_hidden_states=True, return_dict=True, **kwargs)
+        image_outputs = self.vision_tower(pixel_values, output_hidden_states=True, **kwargs)
 
         if isinstance(vision_feature_layer, int):
             selected_image_feature = image_outputs.hidden_states[vision_feature_layer]
@@ -258,7 +261,25 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
                 hs_pool = [hs[:, 1:] for hs in hs_pool]
             selected_image_feature = torch.cat(hs_pool, dim=-1)
 
-        image_features = self.multi_modal_projector(selected_image_feature)
+        if hasattr(self.rbln_config.vision_tower, "max_image_size"):
+            num_real_patches = selected_image_feature.shape[1]
+            max_patches = (
+                (self.rbln_config.vision_tower.max_image_size[0] // self.config.vision_config.patch_size)
+                * (self.rbln_config.vision_tower.max_image_size[1] // self.config.vision_config.patch_size)
+                * pixel_values.shape[0]
+            )
+            num_padding_patches = max_patches - num_real_patches
+
+            padding_tensor = torch.zeros(
+                (selected_image_feature.shape[0], num_padding_patches, selected_image_feature.shape[2]),
+                dtype=selected_image_feature.dtype,
+            )
+            padded_feature = torch.cat([selected_image_feature, padding_tensor], dim=1)
+            padded_projected_feature = self.multi_modal_projector(padded_feature)
+            image_features = padded_projected_feature[:, :num_real_patches, :]
+        else:
+            image_features = self.multi_modal_projector(selected_image_feature)
+
         return image_features
 
     def _preprocess_prefill(
@@ -302,8 +323,7 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
             )
 
             special_image_mask = (input_ids == self.config.image_token_index).unsqueeze(-1)
-            special_image_mask = special_image_mask.expand_as(inputs_embeds).to(inputs_embeds.device)
-            image_features = image_features.to(inputs_embeds.device, inputs_embeds.dtype)
+            special_image_mask = special_image_mask.expand_as(inputs_embeds)
             inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, image_features)
 
         return inputs_embeds
