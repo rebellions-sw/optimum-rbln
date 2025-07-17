@@ -23,9 +23,10 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 import rebel
 import torch
 from transformers import AutoConfig, AutoModel, GenerationConfig, PretrainedConfig
+from transformers.utils.hub import PushToHubMixin
 
 from .configuration_utils import RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig, get_rbln_config_class
-from .utils.hub import PushToHubMixin, pull_compiled_model_from_hub, validate_files
+from .utils.hub import pull_compiled_model_from_hub, validate_files
 from .utils.logging import get_logger
 from .utils.runtime_utils import UnavailableRuntime, tp_and_devices_are_ok
 from .utils.save_utils import maybe_load_preprocessors
@@ -112,7 +113,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     def _load_compiled_model_dir(
         cls,
         model_id: Union[str, Path],
-        use_auth_token: Optional[Union[bool, str]] = None,
+        token: Optional[Union[bool, str]] = None,
         revision: Optional[str] = None,
         force_download: bool = False,
         cache_dir: Optional[str] = None,
@@ -131,7 +132,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             model_path = pull_compiled_model_from_hub(
                 model_id=model_id,
                 subfolder=subfolder,
-                use_auth_token=use_auth_token,
+                token=token,
                 revision=revision,
                 cache_dir=cache_dir,
                 force_download=force_download,
@@ -169,7 +170,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         cls,
         model_id: Union[str, Path],
         config: Optional["PretrainedConfig"] = None,
-        use_auth_token: Optional[Union[bool, str]] = None,
+        token: Optional[Union[bool, str]] = None,
         revision: Optional[str] = None,
         force_download: bool = False,
         cache_dir: Optional[str] = None,
@@ -186,7 +187,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         if rbln_compiled_models is None:
             model_path_subfolder = cls._load_compiled_model_dir(
                 model_id=model_id,
-                use_auth_token=use_auth_token,
+                token=token,
                 revision=revision,
                 force_download=force_download,
                 cache_dir=cache_dir,
@@ -229,7 +230,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
                         cache_dir=cache_dir,
                         force_download=force_download,
                         revision=revision,
-                        token=use_auth_token,
+                        token=token,
                         trust_remote_code=trust_remote_code,
                     )
                 elif cls.hf_library_name == "diffusers":
@@ -247,7 +248,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
                         force_download=force_download,
                         local_files_only=local_files_only,
                         revision=revision,
-                        token=use_auth_token,
+                        token=token,
                         subfolder=subfolder,
                     )
                     config = PretrainedConfig(**config)
@@ -504,6 +505,9 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
                 f"Please ensure the model directory exists and you have the necessary permissions to access it."
             )
 
+        if isinstance(self.config, PretrainedConfig):
+            self.config.save_pretrained(real_save_dir)
+
         if save_directory_path == real_save_dir:
             raise FileExistsError(
                 f"Cannot save model to '{save_directory}'. This directory already exists and contains the model files."
@@ -531,7 +535,10 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             raise e  # Re-raise the exception after cleanup
 
         if push_to_hub:
-            return super().push_to_hub(str(save_directory_path), **kwargs)
+            repo_id = kwargs.pop("repo_id", None)
+            if repo_id is None:
+                raise ValueError("`repo_id` must be provided to push the model to the HuggingFace model hub.")
+            return super().push_to_hub(repo_id=repo_id, **kwargs)
 
     @staticmethod
     def _raise_missing_compiled_file_error(missing_files: List[str]):

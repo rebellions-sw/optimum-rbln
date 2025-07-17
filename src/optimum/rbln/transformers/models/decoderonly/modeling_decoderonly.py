@@ -303,6 +303,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_embed = (
                 position_embed[:, :, :, attention_mask.bool(), :] if attention_mask is not None else position_embed
             )
+        if token_type_ids is not None:
+            token_type_ids = token_type_ids[:, attention_mask.bool()] if attention_mask is not None else token_type_ids
 
         query_length = inputs.shape[1]
         if query_length > self.rbln_config.max_seq_len:
