@@ -26,6 +26,7 @@ def main(
         "https://picsum.photos/id/231/200/300", 
         "https://picsum.photos/id/27/500/500",
         "https://picsum.photos/id/17/150/600",
+        # "https://picsum.photos/id/17/1024/1024",
     ]
     
     PROMPT = "<s>[INST]Describe the images.\n[IMG][IMG][IMG][IMG][/INST]"
@@ -33,38 +34,43 @@ def main(
     # base_model.generate(**inputs, max_new_tokens=100)
     # import pdb; pdb.set_trace()
     
-    # if from_transformers:
-    #     model = RBLNLlavaForConditionalGeneration.from_pretrained(
-    #         model_id=model_id,
-    #         export=True,
-    #         rbln_batch_size=batch_size,
-    #         rbln_config={
-    #             "vision_tower":{
-    #                 "max_image_size": (304, 400),
-    #             },
-    #             "language_model":
-    #                 {
-    #                     "use_inputs_embeds": True,
-    #                     "tensor_parallel_size": 8,
-    #                     "max_seq_len": 131072,
-    #                     "kvcache_partition_len": 16384,
-    #                 }
+    if from_transformers:
+        model = RBLNLlavaForConditionalGeneration.from_pretrained(
+            model_id=model_id,
+            export=True,
+            rbln_config={
+                "vision_tower":{
+                    "batch_size": 4,
+                    "max_image_size": (1024, 1024),
+                },
+                "language_model":
+                    {
+                        "batch_size": 1,
+                        "use_inputs_embeds": True,
+                        "tensor_parallel_size": 4,
+                        "max_seq_len": 32768,
+                        "kvcache_partition_len": 16384,
+                    }
                 
-    #         }
-    #         # rbln_image_size=(304,400),
-    #         # rbln_max_seq_len=max_seq_len,
-    #         # rbln_tensor_parallel_size=tensor_parallel_size,
-    #         # rbln_use_inputs_embeds=True,
-    #     )
-    #     model.save_pretrained(os.path.basename(model_id))
-    # else:
-    #     model = RBLNLlavaForConditionalGeneration.from_pretrained(model_id=os.path.basename(model_id), export=False)
+            }
+            # rbln_image_size=(304,400),
+            # rbln_max_seq_len=max_seq_len,
+            # rbln_tensor_parallel_size=tensor_parallel_size,
+            # rbln_use_inputs_embeds=True,
+        )
+        model.save_pretrained(os.path.basename(model_id))
+    else:
+        model = RBLNLlavaForConditionalGeneration.from_pretrained(model_id=os.path.basename(model_id), export=False)
 
     # inputs = processor(text=PROMPT, images=IMG_URLS, return_tensors="pt")
     # model.generate(**inputs)
-    # generate_ids = model.generate(**inputs, max_new_tokens=100)
-    golden_ids = base_model.generate(**inputs, max_new_tokens=100)
-    import pdb; pdb.set_trace()
+    generate_ids = model.generate(**inputs, max_new_tokens=100, do_sample=False)
+    output = processor.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
+    print(output)
+    
+    golden_ids = base_model.generate(**inputs, max_new_tokens=100, do_sample=False)
+    golden_output = processor.batch_decode(golden_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
+    print(golden_output)
     
 if __name__ == "__main__":
     fire.Fire(main)
