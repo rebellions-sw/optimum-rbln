@@ -22,3 +22,8 @@ def rbln_cache_update(cache: Tensor, state: Tensor, position: Tensor, axis: Tens
     # This operation is designed to perform in-place updates directly on the device without needing to transfer the cache back to the host.
     # The `position` parameter specifies the start index for the update along the specified axis, allowing flexible updates to any part of the cache tensor.
     return torch.empty_like(cache)
+
+
+@rbln_cache_update.register_fake
+def rbln_cache_update_fake(cache: Tensor, state: Tensor, position: Tensor, axis: Tensor) -> Tensor:
+    return torch.empty_like(cache)
