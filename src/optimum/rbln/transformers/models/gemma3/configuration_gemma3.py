@@ -13,8 +13,6 @@
 # limitations under the License.
 from typing import Any, Dict, Optional
 
-import rebel
-
 from ....configuration_utils import RBLNModelConfig
 from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
 from ..siglip.configuration_siglip import RBLNSiglipVisionModelConfig
@@ -38,10 +36,6 @@ class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
             **kwargs,
         )
         self.image_prefill_chunk_size = image_prefill_chunk_size
-
-        npu = self.npu or rebel.get_npu_name()
-        if npu == "RBLN-CA02":
-            raise NotImplementedError("Gemma3 is currently not supported on RBLN-CA02")
 
 
 class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):

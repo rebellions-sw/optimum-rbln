@@ -14,8 +14,6 @@
 
 from typing import Any, Dict
 
-import rebel
-
 from ....configuration_utils import RBLNModelConfig
 from ....utils.logging import get_logger
 
@@ -45,7 +43,6 @@ class RBLNWhisperForConditionalGenerationConfig(RBLNModelConfig):
             batch_size (int, optional): The batch size for inference. Defaults to 1.
             token_timestamps (bool, optional): Whether to output token timestamps during generation. Defaults to False.
             use_attention_mask (bool, optional): Whether to use attention masks during inference. This is automatically
-                set to True for RBLN-CA02 devices.
             enc_max_seq_len (int, optional): Maximum sequence length for the encoder.
             dec_max_seq_len (int, optional): Maximum sequence length for the decoder.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
@@ -64,10 +61,4 @@ class RBLNWhisperForConditionalGenerationConfig(RBLNModelConfig):
         self.dec_max_seq_len = dec_max_seq_len
 
         self.use_attention_mask = use_attention_mask
-        npu = self.npu or rebel.get_npu_name()
-        if npu == "RBLN-CA02":
-            if self.use_attention_mask is False:
-                logger.warning("Attention mask should be used with RBLN-CA02. Setting use_attention_mask to True.")
-            self.use_attention_mask = True
-        else:
-            self.use_attention_mask = self.use_attention_mask or False
+        self.use_attention_mask = self.use_attention_mask or False
