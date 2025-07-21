@@ -353,6 +353,7 @@ if TYPE_CHECKING:
         RBLNIdefics3VisionTransformerConfig,
         RBLNLlamaForCausalLM,
         RBLNLlamaForCausalLMConfig,
+        RBLNLlavaForConditionalGeneration,
         RBLNLlavaForConditionalGenerationConfig,
         RBLNLlavaNextForConditionalGeneration,
         RBLNLlavaNextForConditionalGenerationConfig,

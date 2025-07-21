@@ -27,7 +27,6 @@ class RBLNLlavaForConditionalGenerationConfig(RBLNModelConfig):
     """
 
     submodules = ["vision_tower", "language_model"]
-    # submodules = ["vision_tower"]
 
     def __init__(
         self,
