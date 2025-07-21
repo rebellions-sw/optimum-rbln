@@ -67,7 +67,7 @@ class RBLNRuntimePixtralVisionModel(RBLNPytorchRuntime):
         return_dict: Optional[bool] = None,
         **kwargs,
     ):
-        if pixel_values.shape[2] != self.max_image_size[0] and pixel_values.shape[3] != self.max_image_size[1]:
+        if pixel_values.shape[2] != self.max_image_size[0] or pixel_values.shape[3] != self.max_image_size[1]:
             padded_pixel_values = [
                 torch.nn.functional.pad(
                     image,
