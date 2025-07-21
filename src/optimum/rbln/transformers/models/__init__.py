@@ -108,6 +108,12 @@ _import_structure = {
     ],
     "llama": ["RBLNLlamaForCausalLM", "RBLNLlamaForCausalLMConfig", "RBLNLlamaModel", "RBLNLlamaModelConfig"],
     "opt": ["RBLNOPTForCausalLM", "RBLNOPTForCausalLMConfig", "RBLNOPTModel", "RBLNOPTModelConfig"],
+    "pegasus": [
+        "RBLNPegasusForConditionalGeneration",
+        "RBLNPegasusModel",
+        "RBLNPegasusForConditionalGenerationConfig",
+        "RBLNPegasusModelConfig",
+    ],
     "llava_next": ["RBLNLlavaNextForConditionalGeneration", "RBLNLlavaNextForConditionalGenerationConfig"],
     "midm": ["RBLNMidmLMHeadModel", "RBLNMidmLMHeadModelConfig"],
     "mistral": [
@@ -239,6 +245,12 @@ if TYPE_CHECKING:
     from .midm import RBLNMidmLMHeadModel, RBLNMidmLMHeadModelConfig
     from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig, RBLNMistralModel, RBLNMistralModelConfig
     from .opt import RBLNOPTForCausalLM, RBLNOPTForCausalLMConfig, RBLNOPTModel, RBLNOPTModelConfig
+    from .pegasus import (
+        RBLNPegasusForConditionalGeneration,
+        RBLNPegasusForConditionalGenerationConfig,
+        RBLNPegasusModel,
+        RBLNPegasusModelConfig,
+    )
     from .phi import RBLNPhiForCausalLM, RBLNPhiForCausalLMConfig, RBLNPhiModel, RBLNPhiModelConfig
     from .qwen2 import RBLNQwen2ForCausalLM, RBLNQwen2ForCausalLMConfig, RBLNQwen2Model, RBLNQwen2ModelConfig
     from .qwen2_5_vl import (

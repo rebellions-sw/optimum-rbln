@@ -26,6 +26,7 @@ from optimum.rbln import (
     RBLNMistralModel,
     RBLNOPTForCausalLM,
     RBLNOPTModel,
+    RBLNPegasusForConditionalGeneration,
     RBLNPhiForCausalLM,
     RBLNPhiModel,
     RBLNQwen2_5_VLForConditionalGeneration,
@@ -344,6 +345,38 @@ class TestBartModel(LLMTest.TestLLM):
                     rbln_create_runtimes=False,
                     **self.HF_CONFIG_KWARGS,
                 )
+
+
+class TestPegasusModel(LLMTest.TestLLM):
+    RBLN_AUTO_CLASS = RBLNAutoModelForSeq2SeqLM
+    RBLN_CLASS = RBLNPegasusForConditionalGeneration
+
+    # FIXME:: Update to internal once enabled tiny model
+    # HF_MODEL_ID = "hf-tiny-model-private/tiny-random-PegasusForConditionalGeneration"
+    HF_MODEL_ID = "google/pegasus-xsum"
+    HF_CONFIG_KWARGS = {
+        "num_hidden_layers": 1,
+        "decoder_layers": 1,
+        "encoder_layers": 1,
+    }
+    RBLN_CLASS_KWARGS = {"rbln_config": {"enc_max_seq_len": 512, "dec_max_seq_len": 512}}
+    PROMPT = "summarize: studies have shown that owning a dog is good for you"
+    EXPECTED_OUTPUT = "The The The The The The The The The The The The The The The The The The The"
+    TEST_LEVEL = TestLevel.ESSENTIAL
+
+    def get_inputs(self):
+        inputs = self.get_tokenizer()(
+            self.PROMPT, padding="max_length", max_length=512, truncation=True, return_tensors="pt"
+        )
+        inputs["max_new_tokens"] = 20
+        inputs["num_beams"] = 1
+        return inputs
+
+    def postprocess(self, inputs, output):
+        generated_text = self.get_tokenizer().decode(
+            output[0], skip_special_tokens=True, clean_up_tokenization_spaces=True
+        )
+        return generated_text
 
 
 class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
