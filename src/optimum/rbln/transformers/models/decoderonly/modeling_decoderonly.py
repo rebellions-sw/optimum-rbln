@@ -618,22 +618,19 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         cls,
         model: PreTrainedModel,
         rbln_config: RBLNDecoderOnlyModelConfig,
-        phase: str = "prefill",
-        string_pattern: str = "past_key_values",
     ):
         wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
-        compile_config = cls._get_compile_config(rbln_config, phase)
+        compile_config = cls._get_compile_config(rbln_config, "prefill")
 
         # Here we use meta tensor, for the memory efficiency.
-        meta_tensor_names = [name for name, _, _ in compile_config.input_info if string_pattern in name]
+        meta_tensor_names = [name for name, _, _ in compile_config.input_info if "past_key_values" in name]
         example_inputs = compile_config.get_dummy_inputs(fill=0, meta_tensor_names=meta_tensor_names)
-        context, _ = cls._get_compile_context(compile_config, example_inputs, string_pattern=string_pattern)
+        context, _ = cls._get_compile_context(compile_config, example_inputs, "past_key_values")
 
-        wrapped_model.phase = phase
         compiled_model = cls._compile_model(
-            wrapped_model, compile_config, example_inputs, context, rbln_config, phase=phase
+            wrapped_model, compile_config, example_inputs, context, rbln_config, phase="prefill"
         )
-        compiled_models = {phase: compiled_model}
+        compiled_models = {"prefill": compiled_model}
 
         return compiled_models
 
