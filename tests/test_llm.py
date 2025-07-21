@@ -19,6 +19,7 @@ from optimum.rbln import (
     RBLNGPT2LMHeadModel,
     RBLNIdefics3ForConditionalGeneration,
     RBLNLlamaForCausalLM,
+    RBLNLlavaForConditionalGeneration,
     RBLNLlavaNextForConditionalGeneration,
     RBLNOPTForCausalLM,
     RBLNPhiForCausalLM,
@@ -260,6 +261,48 @@ class TestBartModel(LLMTest.TestLLM):
                     rbln_create_runtimes=False,
                     **self.HF_CONFIG_KWARGS,
                 )
+
+
+class TestLlavaForConditionalGeneration(LLMTest.TestLLM):
+    RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
+    RBLN_CLASS = RBLNLlavaForConditionalGeneration
+    HF_MODEL_ID = "trl-internal-testing/tiny-LlavaForConditionalGeneration"
+    PROMPT = "[INST] <image>\nWhat’s shown in this image? [/INST]"
+    RBLN_CLASS_KWARGS = {
+        "rbln_config": {
+            "vision_tower": {"output_hidden_states": True},
+            "language_model": {"use_inputs_embeds": True},
+        }
+    }
+    EXPECTED_OUTPUT = (
+        '\x05getString Associ sposЧECT CounMethods praktoptFirstNamestr#### Singhignonchartsceuhpp("/ishing'
+    )
+    HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
+
+    @classmethod
+    def get_tokenizer(cls):
+        if cls._tokenizer is None:
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
+        return cls._tokenizer
+
+    def get_inputs(self):
+        tokenizer = self.get_tokenizer()
+        img_path = f"{os.path.dirname(__file__)}/../assets/rbln_logo.png"
+        image = Image.open(img_path)
+        inputs = tokenizer(images=[image], text=[self.PROMPT], return_tensors="pt", padding=True)
+        inputs["max_new_tokens"] = 20
+        inputs["do_sample"] = False
+        return inputs
+
+    def _inner_test_save_load(self, tmpdir):
+        super()._inner_test_save_load(tmpdir)
+        # Test loading from nested config
+        _ = self.RBLN_CLASS.from_pretrained(
+            tmpdir,
+            export=False,
+            rbln_config={"language_model": {"create_runtimes": False}},
+            **self.HF_CONFIG_KWARGS,
+        )
 
 
 class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
