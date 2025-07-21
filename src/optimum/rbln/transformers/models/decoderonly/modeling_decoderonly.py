@@ -192,6 +192,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         position_ids: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
+        lora_int_id: Optional[torch.Tensor] = None,
     ):
         if input_ids is None and inputs_embeds is None:
             raise ValueError("Either `input_ids` or `inputs_embeds` must be provided.")
@@ -217,6 +218,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 position_embed=position_embed,
                 position_ids=position_ids,
                 local_block_tables=local_block_tables,
+                lora_int_id=lora_int_id,
             )
         else:
             return self.prefill_forward(
@@ -229,6 +231,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 position_embed=position_embed,
                 token_type_ids=token_type_ids,
                 local_block_tables=local_block_tables,
+                lora_int_id=lora_int_id,
             )
 
     def decode_forward(
@@ -241,6 +244,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         position_embed: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
+        lora_int_id: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         batch_size = inputs.shape[0]
         if batch_size != self.batch_size:
@@ -281,6 +285,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_embed,
             attention_mask if self.rbln_config.use_attention_mask else None,
             position_ids if self.rbln_config.use_position_ids else None,
+            lora_int_id if self.rbln_config.use_lora else None,
         )
 
         return RBLNDecoderOnlyOutput(logits=logits)
@@ -384,6 +389,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         position_embed: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
+        lora_int_id: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         """
         Performs chunked prefill for efficient KV-cache updates and memory optimization.
@@ -441,6 +447,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 query_position,
                 chunked_attention_mask if self.rbln_config.use_attention_mask else None,
                 position_ids_chunk if self.rbln_config.use_position_ids else None,
+                lora_int_id if self.rbln_config.use_lora else None,
                 out=out_buffers,
             )
 
@@ -536,6 +543,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
         # NOTE(eunji): Use a decoder whose batch size matches the model's main batch size for compatibility.
         self.decoder = self.decoders[self.rbln_config.batch_size]
+        self.lora_int_ids = None
 
     @classmethod
     def save_torch_artifacts(
@@ -656,6 +664,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             "cache_impl": rbln_config.cache_impl,
             "sliding_window": rbln_config.sliding_window,
             "sliding_window_layers": rbln_config.sliding_window_layers,
+            "lora_config": rbln_config.lora_config,
         }
         return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
 
@@ -917,6 +926,10 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         if rbln_config.use_position_ids:
             input_info.append(("position_ids", [batch_size, query_length], "int32"))
 
+        # 6. adapter_id (for LoRA)
+        if rbln_config.use_lora:
+            input_info.append(("adapter_id", [batch_size], "int32"))
+
         # 6. past_key_values
         global_kvcache_shape = [
             rbln_config.kvcache_num_blocks,
@@ -1122,6 +1135,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         attention_mask: Optional[torch.LongTensor] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
         padded_cache_lengths: Optional[torch.Tensor] = None,
+        lora_int_id: Optional[torch.Tensor] = None,
         **kwargs,
     ):
         model_inputs = {}
@@ -1160,6 +1174,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 "generate_idx": generate_idx,
                 "position_ids": position_ids,
                 "padded_cache_lengths": padded_cache_lengths,
+                "lora_int_id": lora_int_id,
             }
         )
 
@@ -1177,6 +1192,48 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
 
         return model_kwargs
 
+    def set_lora_int_ids(self, lora_int_ids: Optional[torch.Tensor]):
+        if isinstance(lora_int_ids, int):
+            lora_int_ids = torch.tensor([lora_int_ids], dtype=torch.int32)
+        elif isinstance(lora_int_ids, list):
+            lora_int_ids = torch.tensor(lora_int_ids, dtype=torch.int32)
+
+        self.lora_int_ids = lora_int_ids
+
+    def set_adapter(self, adapter_name: Union[str, List[str]]) -> None:
+        """
+        Sets the active adapter(s) for the model using adapter name(s).
+
+        Args:
+            adapter_name (Union[str, List[str]]): The name(s) of the adapter(s) to be activated.
+                Can be a single adapter name or a list of adapter names.
+
+        Raises:
+            ValueError: If the model is not configured with LoRA or if the adapter name is not found.
+        """
+        if not hasattr(self.rbln_config, "lora_config") or self.rbln_config.lora_config is None:
+            raise ValueError("Model is not configured with LoRA. Cannot set adapter.")
+
+        # Convert single adapter name to list for uniform processing
+        if isinstance(adapter_name, str):
+            adapter_names = [adapter_name]
+        else:
+            adapter_names = adapter_name
+
+        # Validate that all adapter names exist
+        available_adapters = {
+            adapter.lora_name: adapter.lora_int_id for adapter in self.rbln_config.lora_config.adapters
+        }
+        missing_adapters = [name for name in adapter_names if name not in available_adapters]
+        if missing_adapters:
+            raise ValueError(
+                f"Adapter(s) {missing_adapters} not found. Available adapters: {list(available_adapters.keys())}"
+            )
+
+        # Get the adapter IDs and set them
+        adapter_ids = [available_adapters[name] for name in adapter_names]
+        self.set_lora_int_ids(torch.tensor(adapter_ids, dtype=torch.int32))
+
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
@@ -1187,6 +1244,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         padded_cache_lengths: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
+        lora_int_id: Optional[torch.Tensor] = None,
         return_dict: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
@@ -1194,6 +1252,13 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         # For continuous batching, the prefill stage processes one batch at a time and updates the KV cache using batch_idx.
         # A for-loop ensures synchronization with the HuggingFace generate API.
         # The decoder stage operates as usual, processing inputs in batch mode.
+        if self.rbln_config.use_lora and lora_int_id is None:
+            if self.lora_int_ids is None:
+                raise ValueError(
+                    "lora_int_id is required when using LoRA. "
+                    "You should call set_lora_int_ids() before forward() or pass lora_int_id to forward()."
+                )
+            lora_int_id = self.lora_int_ids
 
         # Prefll
         if cache_position is None:
@@ -1214,6 +1279,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                     cache_position=cache_position,
                     batch_idx=b_idx,
                     token_type_ids=token_type_ids[b_idx : b_idx + 1] if token_type_ids is not None else None,
+                    lora_int_id=lora_int_id[b_idx : b_idx + 1] if lora_int_id is not None else None,
                 )
                 padded_cache_lengths[b_idx] += output.padded_cache_lengths
                 logits.append(output.logits)
@@ -1233,6 +1299,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
                 position_ids=position_ids if self.rbln_config.use_position_ids else None,
+                lora_int_id=lora_int_id,
             ).logits
 
         if not return_dict:
