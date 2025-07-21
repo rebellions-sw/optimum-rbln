@@ -23,6 +23,7 @@ import numpy as np
 import torch
 
 from .__version__ import __version__
+from .utils.depreacate_utils import warn_deprecated_npu
 from .utils.logging import get_logger
 from .utils.runtime_utils import ContextRblnConfig
 
@@ -674,6 +675,9 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         for compile_cfg in self._compile_cfgs:
             compile_cfg.npu = self.npu
             compile_cfg.tensor_parallel_size = self.tensor_parallel_size
+
+        target_npu = self.npu or next((cfg.npu for cfg in self._compile_cfgs if cfg.npu is not None), None)
+        warn_deprecated_npu(target_npu)
 
     def freeze(self):
         if self._frozen:
