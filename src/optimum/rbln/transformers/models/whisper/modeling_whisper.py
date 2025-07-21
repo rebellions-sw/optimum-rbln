@@ -73,6 +73,7 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         decoder_input_ids: torch.Tensor = None,
         decoder_attention_mask: torch.Tensor = None,
         cache_position: torch.Tensor = None,
+        block_tables: torch.Tensor = None,
     ):
         inputs_bsz = decoder_input_ids.shape[0]
         padded_bsz = self.batch_size - inputs_bsz
@@ -89,11 +90,14 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
                     )
                 decoder_attention_mask[b_idx, : decoding_step + 1] = 1
 
+        if block_tables is None:
+            block_tables = self.default_block_tables
+
         outputs = super().forward(
             decoder_input_ids,
             decoder_attention_mask if self.use_attention_mask else None,
             cache_position,
-            block_tables=self.default_block_tables,
+            block_tables=block_tables,
         )
 
         if isinstance(outputs, torch.Tensor):
