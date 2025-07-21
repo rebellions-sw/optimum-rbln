@@ -304,6 +304,8 @@ class TestLlavaForConditionalGeneration(LLMTest.TestLLM):
             rbln_config={"language_model": {"create_runtimes": False}},
             **self.HF_CONFIG_KWARGS,
         )
+
+
 class TestPegasusModel(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForSeq2SeqLM
     RBLN_CLASS = RBLNPegasusForConditionalGeneration
