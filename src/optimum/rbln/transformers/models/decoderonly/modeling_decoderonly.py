@@ -572,7 +572,6 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     ):
         try:
             wrapped_model.phase = phase
-
             if quantization:
                 quantization.maybe_set_quantization_env()
             original_linear = torch.nn.functional.linear
@@ -604,7 +603,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
                 static_tensors[name] = tensor
                 context.mark_static_address(tensor)
 
-        return context
+        return context, static_tensors
 
     @classmethod
     def _get_compile_config(cls, rbln_config: RBLNDecoderOnlyModelConfig, phase: str):
@@ -628,7 +627,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         # Here we use meta tensor, for the memory efficiency.
         meta_tensor_names = [name for name, _, _ in compile_config.input_info if string_pattern in name]
         example_inputs = compile_config.get_dummy_inputs(fill=0, meta_tensor_names=meta_tensor_names)
-        context = cls._get_compile_context(compile_config, example_inputs, string_pattern=string_pattern)
+        context, _ = cls._get_compile_context(compile_config, example_inputs, string_pattern=string_pattern)
 
         wrapped_model.phase = phase
         compiled_model = cls._compile_model(
@@ -1137,55 +1136,26 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
     @torch.inference_mode()
     def get_compiled_model(cls, model: PreTrainedModel, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig):
         wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
-
-        rbln_compile_configs = rbln_config.compile_cfgs
-        prefill_compile_config = rbln_compile_configs[0]
-
-        context = CompileContext(use_weight_sharing=True)
+        prefill_compile_config = cls._get_compile_config(rbln_config, "prefill")
 
         # Here we use meta tensor, for the memory efficiency.
         meta_tensor_names = [name for name, _, _ in prefill_compile_config.input_info if "past_key_values" in name]
         prefill_example_inputs = prefill_compile_config.get_dummy_inputs(fill=0, meta_tensor_names=meta_tensor_names)
-
-        # Mark static tensors (self kv states)
-        static_tensors = {}
-        for (name, _, _), tensor in zip(prefill_compile_config.input_info, prefill_example_inputs):
-            if "past_key_values" in name:
-                static_tensors[name] = tensor
-                context.mark_static_address(tensor)
-
-        def compile_model(wrapped_model, compile_config, example_inputs, compile_context, quantization):
-            try:
-                if quantization:
-                    quantization.maybe_set_quantization_env()
-                original_linear = torch.nn.functional.linear
-                torch.nn.functional.linear = torch.ops.rbln_custom_ops.linear
-                compiled_model = cls.compile(
-                    wrapped_model,
-                    compile_config,
-                    create_runtimes=rbln_config.create_runtimes,
-                    device=rbln_config.device,
-                    example_inputs=example_inputs,
-                    compile_context=compile_context,
-                )
-                return compiled_model
-            finally:
-                torch.nn.functional.linear = original_linear
-                if quantization:
-                    quantization.maybe_reset_quantization_env()
-
-        wrapped_model.phase = "prefill"
-        compiled_prefill = compile_model(
-            wrapped_model, prefill_compile_config, prefill_example_inputs, context, rbln_config.quantization
+        context, static_tensors = cls._get_compile_context(
+            prefill_compile_config, prefill_example_inputs, "past_key_values"
         )
-        compiled_models = {"prefill": compiled_prefill}
+
+        compiled_models = {}
+        compiled_models["prefill"] = cls._compile_model(
+            wrapped_model, prefill_compile_config, prefill_example_inputs, context, rbln_config, phase="prefill"
+        )
 
         if "decode" in rbln_config.phases:
             wrapped_model.phase = "decode"
-            for batch_size, dec_compile_config in zip(rbln_config.decoder_batch_sizes, rbln_compile_configs[1:]):
+            for batch_size, dec_compile_config in zip(rbln_config.decoder_batch_sizes, rbln_config.compile_cfgs[1:]):
                 dec_example_inputs = dec_compile_config.get_dummy_inputs(fill=0, static_tensors=static_tensors)
-                compiled_decoder = compile_model(
-                    wrapped_model, dec_compile_config, dec_example_inputs, context, rbln_config.quantization
+                compiled_decoder = cls._compile_model(
+                    wrapped_model, dec_compile_config, dec_example_inputs, context, rbln_config, phase="decode"
                 )
                 compiled_models[f"decoder_batch_{batch_size}"] = compiled_decoder
 
