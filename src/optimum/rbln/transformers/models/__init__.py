@@ -100,6 +100,7 @@ _import_structure = {
         "RBLNGemma3ForConditionalGenerationConfig",
     ],
     "gpt2": ["RBLNGPT2LMHeadModel", "RBLNGPT2LMHeadModelConfig"],
+    "gptj": ["RBLNGPTJForCausalLM", "RBLNGPTJForCausalLMConfig"],
     "idefics3": [
         "RBLNIdefics3VisionTransformer",
         "RBLNIdefics3ForConditionalGeneration",
@@ -229,6 +230,7 @@ if TYPE_CHECKING:
         RBLNGemma3ForConditionalGenerationConfig,
     )
     from .gpt2 import RBLNGPT2LMHeadModel, RBLNGPT2LMHeadModelConfig
+    from .gptj import RBLNGPTJForCausalLM, RBLNGPTJForCausalLMConfig
     from .idefics3 import (
         RBLNIdefics3ForConditionalGeneration,
         RBLNIdefics3ForConditionalGenerationConfig,
