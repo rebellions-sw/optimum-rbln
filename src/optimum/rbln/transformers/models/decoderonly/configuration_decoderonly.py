@@ -176,6 +176,14 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
         self.sliding_window = sliding_window
         self.sliding_window_layers = sliding_window_layers or []
 
+    @property
+    def use_global_attention(self):
+        return self.cache_impl in ["static", "hybrid"]
+
+    @property
+    def use_local_attention(self):
+        return self.cache_impl in ["sliding_window", "hybrid"]
+
 
 class RBLNDecoderOnlyModelForCausalLMConfig(RBLNDecoderOnlyModelConfig):
     """
