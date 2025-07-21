@@ -268,7 +268,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
             attention_mask = self.dec_attn_mask
 
-        if self.rbln_config.cache_impl in ["hybrid", "static"] and self.batch_size < block_tables.shape[0]:
+        use_global_attention = self.rbln_config.cache_impl in ["static", "hybrid"]
+        if use_global_attention and self.batch_size < block_tables.shape[0]:
             block_tables = block_tables[: self.batch_size]
 
         if attention_mask is not None and self.batch_size < attention_mask.shape[0]:
@@ -497,9 +498,11 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         self.prefill_decoder = RBLNPytorchRuntime(runtime=self.model[0])
 
         # attributes for prefill
-        if self.rbln_config.cache_impl in ["static", "hybrid"]:
+        self.use_global_attention = self.rbln_config.cache_impl in ["static", "hybrid"]
+        self.use_local_attention = self.rbln_config.cache_impl in ["sliding_window", "hybrid"]
+        if self.use_global_attention:
             self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
-        if self.rbln_config.cache_impl in ["sliding_window", "hybrid"]:
+        if self.use_local_attention:
             self.local_block_tables = torch.tensor([0], dtype=torch.int16)
         if self.rbln_config.use_attention_mask:
             self.causal_mask = 1 - torch.triu(
@@ -554,7 +557,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             "sliding_window": rbln_config.sliding_window,
             "sliding_window_layers": rbln_config.sliding_window_layers,
         }
-        return cls._decoder_wrapper_cls(model, is_causal_lm=False, **wrapper_cfg).eval()
+        return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
 
     @classmethod
     def _compile_model(
@@ -648,6 +651,8 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
         hidden_size = getattr(model_config, "n_embd", None) or getattr(model_config, "hidden_size")
         head_dim = getattr(model_config, "head_dim", None) or hidden_size // num_attention_heads
+        use_global_attention = rbln_config.cache_impl in ["static", "hybrid"]
+        use_local_attention = rbln_config.cache_impl in ["sliding_window", "hybrid"]
         local_kvcache_num_blocks = 1
 
         # 1. main input
@@ -667,14 +672,14 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         ]
 
         # 3. block_tables
-        if rbln_config.cache_impl in ["static", "hybrid"]:
+        if use_global_attention:
             max_block_cnt = rbln_config.max_seq_len // rbln_config.kvcache_block_size
             input_info.extend([("block_tables", [max_block_cnt], "int16")])
-        if rbln_config.cache_impl in ["hybrid", "sliding_window"]:
+        if use_local_attention:
             input_info.extend([("local_block_tables", [1], "int16")])
 
         # 4. query_position for sliding window attention
-        if rbln_config.cache_impl in ["sliding_window", "hybrid"]:
+        if use_local_attention:
             input_info.extend([("query_position", [], "int16")])
 
         # 5. attention_mask & position_ids
@@ -898,7 +903,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
                 if (step + self.rbln_config.prefill_chunk_size) <= query_length
                 else query_length - step
             )
-            if self.rbln_config.cache_impl in ["sliding_window", "hybrid"]:
+            if self.use_local_attention:
                 query_position = torch.tensor(valid_length - 1, dtype=torch.int16)
             else:
                 query_position = None
@@ -913,10 +918,8 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
                 input_ids=input_chunk if not self.rbln_config.use_inputs_embeds else None,
                 inputs_embeds=input_chunk if self.rbln_config.use_inputs_embeds else None,
                 cache_position=cache_pos_chunk,
-                block_tables=self.block_tables if self.rbln_config.cache_impl in ["static", "hybrid"] else None,
-                local_block_tables=self.local_block_tables
-                if self.rbln_config.cache_impl in ["sliding_window", "hybrid"]
-                else None,
+                block_tables=self.block_tables if self.use_global_attention else None,
+                local_block_tables=self.local_block_tables if self.use_local_attention else None,
                 query_position=query_position,
                 attention_mask=chunked_attention_mask,
                 position_emb=padded_position_embed,
@@ -1128,7 +1131,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
             "sliding_window": rbln_config.sliding_window,
             "sliding_window_layers": rbln_config.sliding_window_layers,
         }
-        return cls._decoder_wrapper_cls(model, is_causal_lm=True, **wrapper_cfg).eval()
+        return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
 
     @classmethod
     @torch.inference_mode()
@@ -1212,12 +1215,14 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
             return next((i for i, (n, _, _) in enumerate(input_info) if n == name), None)
 
         is_prefill = query_length > 1
+        use_global_attention = rbln_config.cache_impl in ["static", "hybrid"]
+        use_local_attention = rbln_config.cache_impl in ["hybrid", "sliding_window"]
         # block_tables & local_block_tables
-        if rbln_config.cache_impl in ["static", "hybrid"]:
+        if use_global_attention:
             idx = get_idx_from_name("block_tables")
             max_block_cnt = rbln_config.max_seq_len // rbln_config.kvcache_block_size
             input_info[idx] = ("block_tables", [max_block_cnt] if is_prefill else [batch_size, max_block_cnt], "int16")
-        if rbln_config.cache_impl in ["hybrid", "sliding_window"]:
+        if use_local_attention:
             idx = get_idx_from_name("local_block_tables")
             input_info[idx] = ("local_block_tables", [1] if is_prefill else [batch_size, 1], "int16")
 
@@ -1235,7 +1240,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
                 del input_info[idx]
 
         # local past_key_values shape
-        if rbln_config.cache_impl in ["sliding_window", "hybrid"]:
+        if use_local_attention:
             local_kvcache_num_blocks = max(rbln_config.decoder_batch_sizes) if "decode" in rbln_config.phases else 1
             num_layers = getattr(model_config, "num_hidden_layers") or getattr(model_config, "num_layers")
             for i in range(num_layers * 2):

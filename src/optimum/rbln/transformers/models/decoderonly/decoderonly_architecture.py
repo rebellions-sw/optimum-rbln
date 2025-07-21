@@ -66,7 +66,6 @@ class DecoderOnlyWrapper(nn.Module):
         use_inputs_embeds: bool,
         use_attention_mask: bool,
         use_position_ids: bool,
-        is_causal_lm: bool = True,
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
         sliding_window: Optional[int] = None,
@@ -74,6 +73,7 @@ class DecoderOnlyWrapper(nn.Module):
     ):
         super().__init__()
         self.config = model.config
+        self.is_causal_lm = getattr(model, "lm_head", None) is not None
 
         if use_rotary_emb:
             rotary_embs = self.get_rotary_emb(max_seq_len=max_seq_len)
@@ -91,8 +91,9 @@ class DecoderOnlyWrapper(nn.Module):
         self.use_inputs_embeds = use_inputs_embeds
         self.sliding_window_layers = sliding_window_layers
         self.cache_impl = cache_impl
+        self.use_global_attention = cache_impl in ["static", "hybrid"]
+        self.use_local_attention = cache_impl in ["hybrid", "sliding_window"]
         self.sliding_window = sliding_window
-        self.is_causal_lm = is_causal_lm
 
         if self.attn_impl == "flash_attn":
             self.kvcache_partition_len = kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
@@ -183,12 +184,12 @@ class DecoderOnlyWrapper(nn.Module):
         input_ids = None if self.use_inputs_embeds else args.pop(0)
         inputs_embeds = args.pop(0) if self.use_inputs_embeds else None
         cache_position = args.pop(0)
-        global_block_tables = args.pop(0) if self.cache_impl in ["hybrid", "static"] else None
-        local_block_tables = args.pop(0) if self.cache_impl in ["hybrid", "sliding_window"] else None
+        global_block_tables = args.pop(0) if self.use_global_attention else None
+        local_block_tables = args.pop(0) if self.use_local_attention else None
         query_position = (
             args.pop(0)
             # query_position usage: 1. causal_lm prefill or 2. sliding_window cache_position
-            if ("prefill" in self.phase and (self.is_causal_lm or self.cache_impl in ["hybrid", "sliding_window"]))
+            if ("prefill" in self.phase and (self.is_causal_lm or self.use_local_attention))
             else None
         )
         attention_mask = args.pop(0) if self.use_attention_mask else None

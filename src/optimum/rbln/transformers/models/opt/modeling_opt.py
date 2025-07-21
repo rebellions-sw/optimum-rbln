@@ -82,7 +82,6 @@ class RBLNOPTForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             "cache_impl": rbln_config.cache_impl,
             "sliding_window": rbln_config.sliding_window,
             "sliding_window_layers": rbln_config.sliding_window_layers,
-            "is_causal_lm": True,
         }
 
         for i in range(len(model.model.decoder.layers)):
@@ -123,7 +122,6 @@ class RBLNOPTModel(RBLNDecoderOnlyModel):
             "cache_impl": rbln_config.cache_impl,
             "sliding_window": rbln_config.sliding_window,
             "sliding_window_layers": rbln_config.sliding_window_layers,
-            "is_causal_lm": False,
         }
 
         for i in range(len(model.decoder.layers)):
