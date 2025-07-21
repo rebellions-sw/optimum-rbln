@@ -23,6 +23,7 @@ import numpy as np
 import torch
 
 from .__version__ import __version__
+from .utils.depreacate_utils import warn_deprecated_npu
 from .utils.logging import get_logger
 from .utils.runtime_utils import ContextRblnConfig
 
@@ -621,6 +622,9 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
 
         if len(kwargs) > 0:
             raise ValueError(f"Unexpected arguments: {kwargs.keys()}")
+
+        target_npu = self.npu or next((cfg.npu for cfg in self.compile_cfgs if cfg.npu is not None), None)
+        warn_deprecated_npu(target_npu)
 
     @property
     def rbln_model_cls_name(self) -> str:
