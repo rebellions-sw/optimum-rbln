@@ -623,9 +623,6 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         if len(kwargs) > 0:
             raise ValueError(f"Unexpected arguments: {kwargs.keys()}")
 
-        target_npu = self.npu or next((cfg.npu for cfg in self.compile_cfgs if cfg.npu is not None), None)
-        warn_deprecated_npu(target_npu)
-
     @property
     def rbln_model_cls_name(self) -> str:
         return self.__class__.__name__[:-6]
@@ -678,6 +675,9 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         for compile_cfg in self._compile_cfgs:
             compile_cfg.npu = self.npu
             compile_cfg.tensor_parallel_size = self.tensor_parallel_size
+
+        target_npu = self.npu or next((cfg.npu for cfg in self._compile_cfgs if cfg.npu is not None), None)
+        warn_deprecated_npu(target_npu)
 
     def freeze(self):
         if self._frozen:
