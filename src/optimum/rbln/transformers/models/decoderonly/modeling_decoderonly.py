@@ -629,6 +629,10 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         return compiled_models
 
     @classmethod
+    def use_query_position(cls, use_local_attention: bool, is_prefill: bool = True):
+        return use_local_attention
+
+    @classmethod
     def get_input_info(
         cls,
         batch_size: int,
@@ -641,6 +645,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
         hidden_size = getattr(model_config, "n_embd", None) or getattr(model_config, "hidden_size")
         head_dim = getattr(model_config, "head_dim", None) or hidden_size // num_attention_heads
+        is_prefill = query_length > 1
 
         # 1. main input
         if rbln_config.use_inputs_embeds:
@@ -661,12 +666,14 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         # 3. block_tables
         if rbln_config.use_global_attention:
             max_block_cnt = rbln_config.max_seq_len // rbln_config.kvcache_block_size
-            input_info.extend([("block_tables", [max_block_cnt], "int16")])
+            input_info.extend(
+                [("block_tables", [max_block_cnt] if is_prefill else [batch_size, max_block_cnt], "int16")]
+            )
         if rbln_config.use_local_attention:
-            input_info.extend([("local_block_tables", [1], "int16")])
+            input_info.extend([("local_block_tables", [1] if is_prefill else [batch_size, 1], "int16")])
 
         # 4. query_position for sliding window attention
-        if rbln_config.use_local_attention:
+        if cls.use_query_position(rbln_config.use_local_attention, is_prefill):
             input_info.extend([("query_position", [], "int16")])
 
         # 5. attention_mask & position_ids
@@ -1169,43 +1176,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
         return compiled_models
 
     @classmethod
-    def get_input_info(
-        cls,
-        batch_size: int,
-        query_length: int,
-        rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
-        model_config: PretrainedConfig,
-    ):
-        input_info = super().get_input_info(batch_size, query_length, rbln_config, model_config)
-        is_prefill = query_length > 1
-
-        def get_idx_from_name(name: str) -> int:
-            return next((i for i, (n, _, _) in enumerate(input_info) if n == name), None)
-
-        # block_tables & local_block_tables shape is different in decode stage
-        if not is_prefill:
-            if rbln_config.use_global_attention:
-                idx = get_idx_from_name("block_tables")
-                name, shape, dtype = input_info[idx]
-                input_info[idx] = (name, [batch_size] + shape, dtype)
-            if rbln_config.use_local_attention:
-                idx = get_idx_from_name("local_block_tables")
-                name, shape, dtype = input_info[idx]
-                input_info[idx] = (name, [batch_size] + shape, dtype)
-
-        # query_position is used in prefill stage unlike RBLNDecoderOnlyModel.
-        if is_prefill:
-            # query_position already made by super().get_input_info if rbln_config.use_local_attention is True
-            if not rbln_config.use_local_attention:
-                idx = get_idx_from_name("block_tables") + 1
-                input_info.insert(idx, ("query_position", [], "int16"))
-        # no cases to use query_position in decode stage
-        else:
-            idx = get_idx_from_name("query_position")
-            if idx is not None:
-                del input_info[idx]
-
-        return input_info
+    def use_query_position(cls, use_local_attention: bool, is_prefill: bool = True):
+        return is_prefill
 
     @classmethod
     def _update_attention_config(
