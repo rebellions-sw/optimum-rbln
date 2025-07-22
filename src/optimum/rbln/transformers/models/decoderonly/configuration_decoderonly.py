@@ -169,7 +169,7 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
 
         self.quantization = quantization or {}
         if self.quantization and isinstance(self.quantization, dict):
-            self.quantization = RBLNQuantizationConfig(**self.quantization, model_config=self)
+            self.quantization = RBLNQuantizationConfig(**self.quantization)
 
         self.attn_impl = attn_impl
         self.kvcache_partition_len = kvcache_partition_len
