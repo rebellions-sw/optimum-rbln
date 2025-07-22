@@ -15,5 +15,5 @@
 from ..decoderonly.decoderonly_architecture import DecoderOnlyWrapper
 
 
-class MistralForCausalLMWrapper(DecoderOnlyWrapper):
+class MistralWrapper(DecoderOnlyWrapper):
     pass

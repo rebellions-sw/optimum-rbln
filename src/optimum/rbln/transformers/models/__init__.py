@@ -92,22 +92,22 @@ _import_structure = {
         "RBLNDPTForDepthEstimationConfig",
     ],
     "exaone": ["RBLNExaoneForCausalLM", "RBLNExaoneForCausalLMConfig"],
-    "gemma": ["RBLNGemmaForCausalLM", "RBLNGemmaForCausalLMConfig"],
+    "gemma": ["RBLNGemmaForCausalLM", "RBLNGemmaForCausalLMConfig", "RBLNGemmaModel", "RBLNGemmaModelConfig"],
     "gemma3": [
         "RBLNGemma3ForCausalLM",
         "RBLNGemma3ForCausalLMConfig",
         "RBLNGemma3ForConditionalGeneration",
         "RBLNGemma3ForConditionalGenerationConfig",
     ],
-    "gpt2": ["RBLNGPT2LMHeadModel", "RBLNGPT2LMHeadModelConfig"],
+    "gpt2": ["RBLNGPT2LMHeadModel", "RBLNGPT2LMHeadModelConfig", "RBLNGPT2Model", "RBLNGPT2ModelConfig"],
     "idefics3": [
         "RBLNIdefics3VisionTransformer",
         "RBLNIdefics3ForConditionalGeneration",
         "RBLNIdefics3ForConditionalGenerationConfig",
         "RBLNIdefics3VisionTransformerConfig",
     ],
-    "llama": ["RBLNLlamaForCausalLM", "RBLNLlamaForCausalLMConfig"],
-    "opt": ["RBLNOPTForCausalLM", "RBLNOPTForCausalLMConfig"],
+    "llama": ["RBLNLlamaForCausalLM", "RBLNLlamaForCausalLMConfig", "RBLNLlamaModel", "RBLNLlamaModelConfig"],
+    "opt": ["RBLNOPTForCausalLM", "RBLNOPTForCausalLMConfig", "RBLNOPTModel", "RBLNOPTModelConfig"],
     "pegasus": [
         "RBLNPegasusForConditionalGeneration",
         "RBLNPegasusModel",
@@ -116,9 +116,14 @@ _import_structure = {
     ],
     "llava_next": ["RBLNLlavaNextForConditionalGeneration", "RBLNLlavaNextForConditionalGenerationConfig"],
     "midm": ["RBLNMidmLMHeadModel", "RBLNMidmLMHeadModelConfig"],
-    "mistral": ["RBLNMistralForCausalLM", "RBLNMistralForCausalLMConfig"],
-    "phi": ["RBLNPhiForCausalLM", "RBLNPhiForCausalLMConfig"],
-    "qwen2": ["RBLNQwen2ForCausalLM", "RBLNQwen2ForCausalLMConfig"],
+    "mistral": [
+        "RBLNMistralForCausalLM",
+        "RBLNMistralForCausalLMConfig",
+        "RBLNMistralModel",
+        "RBLNMistralModelConfig",
+    ],
+    "phi": ["RBLNPhiForCausalLM", "RBLNPhiForCausalLMConfig", "RBLNPhiModel", "RBLNPhiModelConfig"],
+    "qwen2": ["RBLNQwen2ForCausalLM", "RBLNQwen2ForCausalLMConfig", "RBLNQwen2Model", "RBLNQwen2ModelConfig"],
     "qwen3": ["RBLNQwen3ForCausalLM", "RBLNQwen3ForCausalLMConfig", "RBLNQwen3Model", "RBLNQwen3ModelConfig"],
     "resnet": ["RBLNResNetForImageClassification", "RBLNResNetForImageClassificationConfig"],
     "roberta": [
@@ -221,33 +226,33 @@ if TYPE_CHECKING:
         RBLNDPTForDepthEstimationConfig,
     )
     from .exaone import RBLNExaoneForCausalLM, RBLNExaoneForCausalLMConfig
-    from .gemma import RBLNGemmaForCausalLM, RBLNGemmaForCausalLMConfig
+    from .gemma import RBLNGemmaForCausalLM, RBLNGemmaForCausalLMConfig, RBLNGemmaModel, RBLNGemmaModelConfig
     from .gemma3 import (
         RBLNGemma3ForCausalLM,
         RBLNGemma3ForCausalLMConfig,
         RBLNGemma3ForConditionalGeneration,
         RBLNGemma3ForConditionalGenerationConfig,
     )
-    from .gpt2 import RBLNGPT2LMHeadModel, RBLNGPT2LMHeadModelConfig
+    from .gpt2 import RBLNGPT2LMHeadModel, RBLNGPT2LMHeadModelConfig, RBLNGPT2Model, RBLNGPT2ModelConfig
     from .idefics3 import (
         RBLNIdefics3ForConditionalGeneration,
         RBLNIdefics3ForConditionalGenerationConfig,
         RBLNIdefics3VisionTransformer,
         RBLNIdefics3VisionTransformerConfig,
     )
-    from .llama import RBLNLlamaForCausalLM, RBLNLlamaForCausalLMConfig
+    from .llama import RBLNLlamaForCausalLM, RBLNLlamaForCausalLMConfig, RBLNLlamaModel, RBLNLlamaModelConfig
     from .llava_next import RBLNLlavaNextForConditionalGeneration, RBLNLlavaNextForConditionalGenerationConfig
     from .midm import RBLNMidmLMHeadModel, RBLNMidmLMHeadModelConfig
-    from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig
-    from .opt import RBLNOPTForCausalLM, RBLNOPTForCausalLMConfig
+    from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig, RBLNMistralModel, RBLNMistralModelConfig
+    from .opt import RBLNOPTForCausalLM, RBLNOPTForCausalLMConfig, RBLNOPTModel, RBLNOPTModelConfig
     from .pegasus import (
         RBLNPegasusForConditionalGeneration,
         RBLNPegasusForConditionalGenerationConfig,
         RBLNPegasusModel,
         RBLNPegasusModelConfig,
     )
-    from .phi import RBLNPhiForCausalLM, RBLNPhiForCausalLMConfig
-    from .qwen2 import RBLNQwen2ForCausalLM, RBLNQwen2ForCausalLMConfig
+    from .phi import RBLNPhiForCausalLM, RBLNPhiForCausalLMConfig, RBLNPhiModel, RBLNPhiModelConfig
+    from .qwen2 import RBLNQwen2ForCausalLM, RBLNQwen2ForCausalLMConfig, RBLNQwen2Model, RBLNQwen2ModelConfig
     from .qwen2_5_vl import (
         RBLNQwen2_5_VisionTransformerPretrainedModel,
         RBLNQwen2_5_VisionTransformerPretrainedModelConfig,

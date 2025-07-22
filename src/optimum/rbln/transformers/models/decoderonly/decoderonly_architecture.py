@@ -20,107 +20,12 @@ from torch import nn
 from transformers import PretrainedConfig, PreTrainedModel
 
 from ....utils import logging
+from ...modeling_attention_utils import DEFAULT_FLASH_ATTN_PARTITION_LENGTH
 from ...modeling_rope_utils import ROPE_INIT_FUNCTIONS
 from .configuration_decoderonly import CacheImplType
 
 
 logger = logging.get_logger(__name__)
-
-DEFAULT_FLASH_ATTN_PARTITION_LENGTH = 16_384
-DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH = 32_768
-MIN_FLASH_ATTN_MAX_SEQ_LEN = 8_192
-MIN_FLASH_ATTN_PARTITION_LENGTH = 4_096
-MAX_FLASH_ATTN_PARTITION_LENGTH = 32_768
-MAX_SLIDING_WINDOW_SIZE = 32_768
-
-
-def set_default_values(
-    attn_impl: Optional[str] = None,
-    kvcache_partition_len: Optional[int] = None,
-    kvcache_block_size: Optional[int] = None,
-    max_seq_len: Optional[int] = None,
-) -> Tuple[str, int, int]:
-    if attn_impl is None:
-        attn_impl = "eager"
-
-    if kvcache_partition_len is not None:
-        if attn_impl == "eager":
-            attn_impl = "flash_attn"
-            logger.warning(
-                "A non-null `kvcache_partition_len` was provided, but `attn_impl` was not explicitly set or "
-                "set to 'eager'. Since KV cache partitioning is only supported with flash attention, "
-                "`attn_impl` has been automatically switched to 'flash_attn'."
-            )
-
-    if kvcache_partition_len is None and attn_impl == "flash_attn":
-        kvcache_partition_len = DEFAULT_FLASH_ATTN_PARTITION_LENGTH
-
-    if kvcache_block_size is None:
-        if attn_impl == "eager":
-            kvcache_block_size = max_seq_len
-        else:
-            kvcache_block_size = kvcache_partition_len
-
-    return attn_impl, kvcache_partition_len, kvcache_block_size
-
-
-def validate_attention_method(attn_impl: str, kvcache_partition_len: int, kvcache_block_size: int, max_seq_len: int):
-    if attn_impl not in ["eager", "flash_attn"]:
-        raise ValueError(f"Unknown `attn_impl` : {attn_impl}. (Available : 'eager', 'flash_attn`)")
-
-    ## Checking Constraints...
-    # Constraint of eager attention:
-    # - `max_seq_len` <= 32k
-
-    # Constraints of flash attention:
-    # 1. `max_seq_len` should be multiple of `partition_len`.
-    # 2. 4k <= `partition_len` <= 32k.
-    # 3. `max_seq_len` should be larger then 8k.
-    if attn_impl == "eager" and max_seq_len > DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH:
-        raise ValueError(
-            f"`max_seq_len` is set to {max_seq_len}, "
-            f"which exceeds the limit of {DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH} for 'eager' attention. "
-            f"Please reduce the `max_seq_len` to {DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH} or lower,"
-            " or consider switching `attn_impl` to 'flash_attn' for larger sequence lengths."
-        )
-
-    if attn_impl == "flash_attn":
-        if max_seq_len // kvcache_partition_len < 2 or max_seq_len % kvcache_partition_len != 0:
-            raise ValueError(
-                f"`max_seq_len` ({max_seq_len}) must be a multiple of `kvcache_partition_len` ({kvcache_partition_len}) "
-                f"when using 'flash_attn'. Please adjust either value to meet this requirement."
-            )
-        elif not (MIN_FLASH_ATTN_PARTITION_LENGTH <= kvcache_partition_len <= MAX_FLASH_ATTN_PARTITION_LENGTH):
-            raise ValueError(
-                f"`kvcache_partition_len` ({kvcache_partition_len}) is out of the supported range for 'flash_attn' "
-                f"({MIN_FLASH_ATTN_PARTITION_LENGTH} <= `kvcache_partition_len` <= {MAX_FLASH_ATTN_PARTITION_LENGTH}). "
-                f"Please provide a valid value within this range."
-            )
-        elif max_seq_len < MIN_FLASH_ATTN_MAX_SEQ_LEN:
-            raise ValueError(
-                f"`max_seq_len` ({max_seq_len}) is too small for 'flash_attn'. The minimum "
-                f"supported value is {MIN_FLASH_ATTN_MAX_SEQ_LEN}. Please increase `max_seq_len` to meet "
-                "this requirement, or consider switching `attn_impl` to 'eager' for shorter lengths."
-            )
-
-    if kvcache_block_size is not None:
-        if attn_impl == "flash_attn" and kvcache_partition_len != kvcache_block_size:
-            raise ValueError(
-                f" When using 'flash attention', the `kvcache_block_size` ({kvcache_block_size})  "
-                f"must always be set equal to the `kvcache_partition_len` {kvcache_partition_len}."
-            )
-        elif attn_impl == "eager" and kvcache_block_size != max_seq_len:
-            raise ValueError(
-                f" When using 'eager attention', the `kvcache_block_size` ({kvcache_block_size})  "
-                f"must always be set equal to the `max_seq_len` {max_seq_len}."
-            )
-
-
-def validate_sliding_window_size(sliding_window: int, prefill_chunk_size: int):
-    if sliding_window > MAX_SLIDING_WINDOW_SIZE - prefill_chunk_size:
-        raise ValueError(
-            f"Sliding window size ({sliding_window}) must be less than 32768 - prefill_chunk_size ({32768 - prefill_chunk_size})"
-        )
 
 
 class DecoderOnlyWrapper(nn.Module):
@@ -153,7 +58,7 @@ class DecoderOnlyWrapper(nn.Module):
 
     def __init__(
         self,
-        causal_lm: PreTrainedModel,
+        model: PreTrainedModel,
         max_seq_len: int,
         use_rotary_emb: bool,
         attn_impl: str,
@@ -167,7 +72,8 @@ class DecoderOnlyWrapper(nn.Module):
         sliding_window_layers: Optional[List[int]] = None,
     ):
         super().__init__()
-        self.config = causal_lm.config
+        self.config = model.config
+        self.is_causal_lm = getattr(model, "lm_head", None) is not None
 
         if use_rotary_emb:
             rotary_embs = self.get_rotary_emb(max_seq_len=max_seq_len)
@@ -185,6 +91,8 @@ class DecoderOnlyWrapper(nn.Module):
         self.use_inputs_embeds = use_inputs_embeds
         self.sliding_window_layers = sliding_window_layers
         self.cache_impl = cache_impl
+        self.use_global_attention = cache_impl in ["static", "hybrid"]
+        self.use_local_attention = cache_impl in ["hybrid", "sliding_window"]
         self.sliding_window = sliding_window
 
         if self.attn_impl == "flash_attn":
@@ -200,21 +108,21 @@ class DecoderOnlyWrapper(nn.Module):
                 f" or equal to max_seq_len({max_seq_len})!"
             )
 
-        self.causal_lm = self.convert_to_rbln_causal_lm(causal_lm, max_seq_len)
+        self.model = self.convert_to_rbln_class(model, max_seq_len)
         self.num_hidden_layers = getattr(self.config, "num_hidden_layers", None) or getattr(self.config, "n_layer")
         self._phase = "prefill"
 
     def get_rotary_emb(self, max_seq_len):
         return RotaryEmbedding(config=self.config, max_seq_len_cached=max_seq_len)
 
-    def get_decoder_layers(self, causal_lm: PreTrainedModel):
-        return causal_lm.model.layers
+    def get_decoder_layers(self, model: PreTrainedModel):
+        return model.model.layers if self.is_causal_lm else model.layers
 
     def get_attn_layer(self, layer: nn.Module):
         return layer.self_attn
 
-    def get_model_layer(self, causal_lm: PreTrainedModel):
-        return causal_lm.model
+    def get_model_layer(self, model: PreTrainedModel):
+        return model.model if self.is_causal_lm else model
 
     def get_rbln_attn_class(self):
         return DecoderOnlyAttention
@@ -228,9 +136,9 @@ class DecoderOnlyWrapper(nn.Module):
     def get_rbln_causal_lm_class(self):
         return DecoderOnlyForCausalLM
 
-    def convert_to_rbln_causal_lm(self, causal_lm: PreTrainedModel, max_seq_len: int):
+    def convert_to_rbln_class(self, model: PreTrainedModel, max_seq_len: int):
         new_layers = []
-        for layer_idx, layer in enumerate(self.get_decoder_layers(causal_lm)):
+        for layer_idx, layer in enumerate(self.get_decoder_layers(model)):
             is_sliding = layer_idx in self.sliding_window_layers
             new_self_attn = self.get_rbln_attn_class()(
                 self.get_attn_layer(layer),
@@ -247,7 +155,7 @@ class DecoderOnlyWrapper(nn.Module):
             new_layers.append(new_layer)
 
         new_model = self.get_rbln_model_class()(
-            self.get_model_layer(causal_lm),
+            self.get_model_layer(model),
             new_layers,
             partition_len=self.kvcache_partition_len,
             max_seq_len=max_seq_len,
@@ -255,8 +163,12 @@ class DecoderOnlyWrapper(nn.Module):
             use_learned_pos_emb=self.__class__._use_learned_pos_emb,
             sliding_window_layers=self.sliding_window_layers,
         )
-        new_causal_lm = self.get_rbln_causal_lm_class()(causal_lm, new_model)
-        return new_causal_lm
+
+        if self.is_causal_lm:
+            new_model = self.get_rbln_causal_lm_class()(model, new_model)
+            return new_model
+        else:
+            return new_model
 
     @property
     def phase(self) -> str:
@@ -265,16 +177,21 @@ class DecoderOnlyWrapper(nn.Module):
     @phase.setter
     def phase(self, phase: str):
         self._phase = phase
-        self.causal_lm.phase = phase
+        self.model.phase = phase
 
     def prepare_forward_args(self, *args):
         args = list(args)
         input_ids = None if self.use_inputs_embeds else args.pop(0)
         inputs_embeds = args.pop(0) if self.use_inputs_embeds else None
         cache_position = args.pop(0)
-        global_block_tables = args.pop(0) if self.cache_impl in ["hybrid", "static"] else None
-        local_block_tables = args.pop(0) if self.cache_impl in ["hybrid", "sliding_window"] else None
-        query_position = args.pop(0) if "prefill" in self.phase else None
+        global_block_tables = args.pop(0) if self.use_global_attention else None
+        local_block_tables = args.pop(0) if self.use_local_attention else None
+        query_position = (
+            args.pop(0)
+            # query_position usage: 1. causal_lm prefill or 2. sliding_window cache_position
+            if ("prefill" in self.phase and (self.is_causal_lm or self.use_local_attention))
+            else None
+        )
         attention_mask = args.pop(0) if self.use_attention_mask else None
         position_ids = args.pop(0) if self.use_position_ids else None
         past_key_values = args
@@ -326,7 +243,7 @@ class DecoderOnlyWrapper(nn.Module):
             rotary_emb,
         ) = self.prepare_forward_args(*args)
 
-        logit = self.causal_lm(
+        logit = self.model(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
@@ -960,97 +877,6 @@ class AttentionOp(nn.Module):
         return attn_output
 
 
-def slice_and_unsqueeze_cos_sin(cos, sin, cache_position, unsqueeze_dim=1):
-    """Slice cos[cache_position], sin[cache_position] vector for the query."""
-    if cache_position.shape[0] > 1:
-        cos_all = []
-        sin_all = []
-        for i in range(cache_position.shape[0]):
-            cos_all.append(cos[cache_position[i : i + 1]].unsqueeze(unsqueeze_dim))
-            sin_all.append(sin[cache_position[i : i + 1]].unsqueeze(unsqueeze_dim))
-        cos = torch.cat(cos_all, dim=0)
-        sin = torch.cat(sin_all, dim=0)
-    else:
-        cos = cos[cache_position].unsqueeze(unsqueeze_dim)
-        sin = sin[cache_position].unsqueeze(unsqueeze_dim)
-
-    return cos, sin
-
-
-def rotate_half(x):
-    """Rotates half the hidden dims of the input."""
-    x1 = x[..., : x.shape[-1] // 2]
-    x2 = x[..., x.shape[-1] // 2 :]
-    return torch.cat((-x2, x1), dim=-1)
-
-
-def apply_rotary_pos_emb(q, k, cos, sin):
-    """Applies Rotary Position Embedding to the query and key tensors."""
-    q_embed = (q * cos) + (rotate_half(q) * sin)
-    k_embed = (k * cos) + (rotate_half(k) * sin)
-    return q_embed, k_embed
-
-
-def apply_rotary_pos_emb_partial(query_states, key_states, cos, sin, ndim) -> Tuple[torch.Tensor, torch.Tensor]:
-    # Partial rotary embedding
-    query_rot, query_pass = (
-        query_states[..., :ndim],
-        query_states[..., ndim:],
-    )
-    key_rot, key_pass = (
-        key_states[..., :ndim],
-        key_states[..., ndim:],
-    )
-
-    # [batch_size, seq_length, num_heads, head_dim // config.partial_rotary_factor]
-    query_rot, key_rot = apply_rotary_pos_emb(query_rot, key_rot, cos, sin)
-
-    # [batch_size, seq_length, num_heads, head_dim]
-    query_states = torch.cat((query_rot, query_pass), dim=-1)
-    key_states = torch.cat((key_rot, key_pass), dim=-1)
-    return query_states, key_states
-
-
-class RotaryEmbedding(nn.Module):
-    """RotaryEmbedding extended with Dynamic NTK scaling. Credits to the Reddit users /u/bloc97 and /u/emozilla"""
-
-    def __init__(
-        self,
-        config: PretrainedConfig,
-        max_seq_len_cached: int,
-    ):
-        super().__init__()
-
-        if hasattr(config, "rope_scaling") and config.rope_scaling is not None:
-            rope_type = config.rope_scaling.get("rope_type", config.rope_scaling.get("type"))
-        else:
-            rope_type = "default"
-
-        inv_freq, attention_scaling = ROPE_INIT_FUNCTIONS[rope_type](config, max_seq_len_cached)
-        cache_position = torch.arange(0, max_seq_len_cached, dtype=torch.float32)
-        cache_position_expanded = cache_position[:, None]
-
-        if rope_type == "dynamic":
-            freqs = cache_position_expanded.float() * inv_freq.float()
-        else:
-            inv_freq_expanded = inv_freq[None, :]
-            freqs = cache_position_expanded.float() @ inv_freq_expanded.float()
-
-        emb = torch.cat((freqs, freqs), dim=-1)
-
-        cos = emb.cos() * attention_scaling
-        sin = emb.sin() * attention_scaling
-
-        self.register_buffer("_cos_cached", cos, persistent=False)
-        self.register_buffer("_sin_cached", sin, persistent=False)
-
-    def forward(self, x, seq_len):
-        return (
-            self._cos_cached[:seq_len].to(dtype=x.dtype),
-            self._sin_cached[:seq_len].to(dtype=x.dtype),
-        )
-
-
 class FlashAttentionOp(AttentionOp):
     def __init__(
         self,
@@ -1198,9 +1024,8 @@ class SlidingWindowAttentionOp(AttentionOp):
             "block_size": block_size,
         }
 
-        if self.phase == "prefill" or self.phase == "image_prefill":
-            if not self.use_attention_mask or self.use_position_ids:
-                op_args["is_bidirectional"] = self.phase == "image_prefill"  # FIXME, Hard-coded for Gemma3.
+        if "prefill" in self.phase:
+            op_args["is_bidirectional"] = True
 
         attn_op_name = self.get_attn_op_name()
         attn_op = getattr(torch.ops.rbln_custom_ops, attn_op_name, None)
@@ -1213,3 +1038,94 @@ class SlidingWindowAttentionOp(AttentionOp):
         attn_output = attn_output.reshape(batch_size, -1, self.num_heads * self.head_dim)
 
         return attn_output
+
+
+class RotaryEmbedding(nn.Module):
+    """RotaryEmbedding extended with Dynamic NTK scaling. Credits to the Reddit users /u/bloc97 and /u/emozilla"""
+
+    def __init__(
+        self,
+        config: PretrainedConfig,
+        max_seq_len_cached: int,
+    ):
+        super().__init__()
+
+        if hasattr(config, "rope_scaling") and config.rope_scaling is not None:
+            rope_type = config.rope_scaling.get("rope_type", config.rope_scaling.get("type"))
+        else:
+            rope_type = "default"
+
+        inv_freq, attention_scaling = ROPE_INIT_FUNCTIONS[rope_type](config, max_seq_len_cached)
+        cache_position = torch.arange(0, max_seq_len_cached, dtype=torch.float32)
+        cache_position_expanded = cache_position[:, None]
+
+        if rope_type == "dynamic":
+            freqs = cache_position_expanded.float() * inv_freq.float()
+        else:
+            inv_freq_expanded = inv_freq[None, :]
+            freqs = cache_position_expanded.float() @ inv_freq_expanded.float()
+
+        emb = torch.cat((freqs, freqs), dim=-1)
+
+        cos = emb.cos() * attention_scaling
+        sin = emb.sin() * attention_scaling
+
+        self.register_buffer("_cos_cached", cos, persistent=False)
+        self.register_buffer("_sin_cached", sin, persistent=False)
+
+    def forward(self, x, seq_len):
+        return (
+            self._cos_cached[:seq_len].to(dtype=x.dtype),
+            self._sin_cached[:seq_len].to(dtype=x.dtype),
+        )
+
+
+def slice_and_unsqueeze_cos_sin(cos, sin, cache_position, unsqueeze_dim=1):
+    """Slice cos[cache_position], sin[cache_position] vector for the query."""
+    if cache_position.shape[0] > 1:
+        cos_all = []
+        sin_all = []
+        for i in range(cache_position.shape[0]):
+            cos_all.append(cos[cache_position[i : i + 1]].unsqueeze(unsqueeze_dim))
+            sin_all.append(sin[cache_position[i : i + 1]].unsqueeze(unsqueeze_dim))
+        cos = torch.cat(cos_all, dim=0)
+        sin = torch.cat(sin_all, dim=0)
+    else:
+        cos = cos[cache_position].unsqueeze(unsqueeze_dim)
+        sin = sin[cache_position].unsqueeze(unsqueeze_dim)
+
+    return cos, sin
+
+
+def rotate_half(x):
+    """Rotates half the hidden dims of the input."""
+    x1 = x[..., : x.shape[-1] // 2]
+    x2 = x[..., x.shape[-1] // 2 :]
+    return torch.cat((-x2, x1), dim=-1)
+
+
+def apply_rotary_pos_emb(q, k, cos, sin):
+    """Applies Rotary Position Embedding to the query and key tensors."""
+    q_embed = (q * cos) + (rotate_half(q) * sin)
+    k_embed = (k * cos) + (rotate_half(k) * sin)
+    return q_embed, k_embed
+
+
+def apply_rotary_pos_emb_partial(query_states, key_states, cos, sin, ndim) -> Tuple[torch.Tensor, torch.Tensor]:
+    # Partial rotary embedding
+    query_rot, query_pass = (
+        query_states[..., :ndim],
+        query_states[..., ndim:],
+    )
+    key_rot, key_pass = (
+        key_states[..., :ndim],
+        key_states[..., ndim:],
+    )
+
+    # [batch_size, seq_length, num_heads, head_dim // config.partial_rotary_factor]
+    query_rot, key_rot = apply_rotary_pos_emb(query_rot, key_rot, cos, sin)
+
+    # [batch_size, seq_length, num_heads, head_dim]
+    query_states = torch.cat((query_rot, query_pass), dim=-1)
+    key_states = torch.cat((key_rot, key_pass), dim=-1)
+    return query_states, key_states

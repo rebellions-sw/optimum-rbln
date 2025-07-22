@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
+from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelConfig, RBLNDecoderOnlyModelForCausalLMConfig
 
 
 class RBLNGemmaForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
@@ -39,4 +39,12 @@ class RBLNGemmaForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
         rbln_config=config
     )
     ```
+    """
+
+
+class RBLNGemmaModelConfig(RBLNDecoderOnlyModelConfig):
+    """
+    Configuration class for RBLN Gemma models.
+
+    This class is an alias of RBLNDecoderOnlyModelConfig.
     """

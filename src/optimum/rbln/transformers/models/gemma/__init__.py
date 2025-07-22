@@ -12,5 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .configuration_gemma import RBLNGemmaForCausalLMConfig
-from .modeling_gemma import RBLNGemmaForCausalLM
+from .configuration_gemma import RBLNGemmaForCausalLMConfig, RBLNGemmaModelConfig
+from .modeling_gemma import RBLNGemmaForCausalLM, RBLNGemmaModel

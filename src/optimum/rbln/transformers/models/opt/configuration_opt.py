@@ -12,11 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
+from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelConfig, RBLNDecoderOnlyModelForCausalLMConfig
 
 
 class RBLNOPTForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
     """
     Configuration class for OPT causal language model.
     Inherits from RBLNDecoderOnlyModelForCausalLMConfig with no additional parameters.
+    """
+
+
+class RBLNOPTModelConfig(RBLNDecoderOnlyModelConfig):
+    """
+    Configuration class for OPT model.
+    Inherits from RBLNDecoderOnlyModelConfig with no additional parameters.
     """
