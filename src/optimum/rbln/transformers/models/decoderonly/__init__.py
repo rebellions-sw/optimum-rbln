@@ -22,5 +22,5 @@ from ....ops import (
     paged_flash_causal_attn_decode,
     paged_flash_causal_attn_prefill,
 )
-from .configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
-from .modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM
+from .configuration_decoderonly import RBLNDecoderOnlyModelConfig, RBLNDecoderOnlyModelForCausalLMConfig
+from .modeling_decoderonly import RBLNDecoderOnlyModel, RBLNDecoderOnlyModelForCausalLM

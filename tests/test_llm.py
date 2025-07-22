@@ -17,16 +17,24 @@ from optimum.rbln import (
     RBLNBlip2ForConditionalGeneration,
     RBLNExaoneForCausalLM,
     RBLNGPT2LMHeadModel,
+    RBLNGPT2Model,
     RBLNIdefics3ForConditionalGeneration,
     RBLNLlamaForCausalLM,
+    RBLNLlamaModel,
     RBLNLlavaForConditionalGeneration,
     RBLNLlavaNextForConditionalGeneration,
+    RBLNMistralForCausalLM,
+    RBLNMistralModel,
     RBLNOPTForCausalLM,
+    RBLNOPTModel,
     RBLNPegasusForConditionalGeneration,
     RBLNPhiForCausalLM,
+    RBLNPhiModel,
     RBLNQwen2_5_VLForConditionalGeneration,
     RBLNQwen2ForCausalLM,
+    RBLNQwen2Model,
     RBLNQwen3ForCausalLM,
+    RBLNQwen3Model,
     RBLNT5ForConditionalGeneration,
 )
 
@@ -66,25 +74,76 @@ class LLMTest:
             )
             return generated_text
 
+    class TestLLMBase(TestLLM):
+        RBLN_AUTO_CLASS = RBLNAutoModel
+        PROMPT = ["Who are you?", "What is the capital of France?"]
 
-class TestQwen2Model(LLMTest.TestLLM):
+        def get_inputs(self):
+            tokenizer = self.get_tokenizer()
+            tokenizer.pad_token = tokenizer.eos_token
+            inputs = tokenizer(self.PROMPT, return_tensors="pt", padding=True)
+            return inputs
+
+
+class TestMistralForCausalLM(LLMTest.TestLLM):
+    RBLN_CLASS = RBLNMistralForCausalLM
+    HF_MODEL_ID = "openaccess-ai-collective/tiny-mistral"
+    EXPECTED_OUTPUT = (
+        "Edge wat ComecidBusDonald=-Battle Orts html тиційsprintfвата              Orts sect matches terrible occup"
+    )
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "sliding_window": 512}
+
+
+class TestMistralModel(LLMTest.TestLLMBase):
+    RBLN_CLASS = RBLNMistralModel
+    HF_MODEL_ID = "openaccess-ai-collective/tiny-mistral"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "sliding_window": 512}
+
+
+class TestQwen2ForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen2ForCausalLM
     HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
     EXPECTED_OUTPUT = "?:雨成名ylonclaimer淡elsinki一角一角一角一角一角一角一角一角一角一角一角一角一角"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
 
 
-class TestQwen3Model(LLMTest.TestLLM):
+class TestQwen2Model(LLMTest.TestLLMBase):
+    RBLN_CLASS = RBLNQwen2Model
+    HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
+
+
+class TestQwen3ForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen3ForCausalLM
     HF_MODEL_ID = "trl-internal-testing/tiny-Qwen3ForCausalLM"
     EXPECTED_OUTPUT = "getter getEmail luaL inhibited经营者适时uating nc_TRAIN适时uating ncActiveSheet(socket getEmailadders totaling propName.setImage Grow"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
 
 
-class TestOptModel(LLMTest.TestLLM):
+class TestQwen3ForCausalLM_UAM(TestQwen3ForCausalLM):
+    RBLN_CLASS_KWARGS = {"rbln_config": {"use_attention_mask": True}}
+
+
+class TestQwen3Model(LLMTest.TestLLMBase):
+    RBLN_CLASS = RBLNQwen3Model
+    HF_MODEL_ID = "trl-internal-testing/tiny-Qwen3ForCausalLM"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
+
+
+class TestQwen3Model_UAM(TestQwen3Model):
+    RBLN_CLASS_KWARGS = {"rbln_config": {"use_attention_mask": True}}
+
+
+class TestOPTForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNOPTForCausalLM
     HF_MODEL_ID = "facebook/opt-2.7b"
     EXPECTED_OUTPUT = "????,,,,,,,,,,,,,,,,"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 2048}
+
+
+class TestOPTModel(LLMTest.TestLLMBase):
+    RBLN_CLASS = RBLNOPTModel
+    HF_MODEL_ID = "facebook/opt-2.7b"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 2048}
 
 
@@ -101,6 +160,12 @@ class TestLlamaForCausalLM(LLMTest.TestLLM):
         return inputs
 
 
+class TestLlamaModel(LLMTest.TestLLMBase):
+    RBLN_CLASS = RBLNLlamaModel
+    HF_MODEL_ID = "afmck/testing-llama-tiny"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
+
+
 class TestLlamaForCausalLM_Flash(LLMTest.TestLLM):
     RBLN_CLASS = RBLNLlamaForCausalLM
     HF_MODEL_ID = "afmck/testing-llama-tiny"
@@ -113,6 +178,13 @@ class TestLlamaForCausalLM_Flash(LLMTest.TestLLM):
         self.get_tokenizer().pad_token = self.get_tokenizer().eos_token
         inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt")
         return inputs
+
+
+class TestLlamaModel_Flash(LLMTest.TestLLMBase):
+    RBLN_CLASS = RBLNLlamaModel
+    HF_MODEL_ID = "afmck/testing-llama-tiny"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 8192}
+    RBLN_CLASS_KWARGS = {"rbln_config": {"attn_impl": "flash_attn", "kvcache_partition_len": 4096}}
 
 
 class TestLlamaForCausalLM_Multibatch(TestLlamaForCausalLM):
@@ -149,12 +221,24 @@ class TestGPT2LMHeadModel(LLMTest.TestLLM):
     HF_CONFIG_KWARGS = {"n_layer": 1, "max_position_embeddings": 1024}
 
 
+class TestGPT2Model(LLMTest.TestLLMBase):
+    RBLN_CLASS = RBLNGPT2Model
+    HF_MODEL_ID = "openai-community/gpt2"
+    HF_CONFIG_KWARGS = {"n_layer": 1, "max_position_embeddings": 1024}
+
+
 class TestPhiForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNPhiForCausalLM
 
     # HF_MODEL_ID = "hf-internal-testing/tiny-random-PhiForCausalLM"
     HF_MODEL_ID = "microsoft/phi-2"
     EXPECTED_OUTPUT = "\nAnswer: Theorettebrates']['<<<urlskolegateezzingrill"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "trust_remote_code": True}
+
+
+class TestPhiModel(LLMTest.TestLLMBase):
+    RBLN_CLASS = RBLNPhiModel
+    HF_MODEL_ID = "microsoft/phi-2"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "trust_remote_code": True}
 
 
