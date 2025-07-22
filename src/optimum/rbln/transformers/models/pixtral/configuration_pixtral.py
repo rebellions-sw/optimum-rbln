@@ -18,7 +18,13 @@ from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNPixtralVisionModelConfig(RBLNModelConfig):
-    def __init__(self, max_image_size: Tuple = None, batch_size: Optional[int] = None, **kwargs: Dict[str, Any]):
+    def __init__(
+        self,
+        max_image_size: Tuple = None,
+        batch_size: Optional[int] = None,
+        output_hidden_states: Optional[bool] = None,
+        **kwargs: Dict[str, Any],
+    ):
         """
         Args:
             max_image_size (Tuple): The size of max input images. A tuple (max_height, max_width)
@@ -34,3 +40,4 @@ class RBLNPixtralVisionModelConfig(RBLNModelConfig):
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
         self.max_image_size = max_image_size
+        self.output_hidden_states = output_hidden_states

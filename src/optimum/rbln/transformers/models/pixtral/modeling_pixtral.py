@@ -166,9 +166,10 @@ class RBLNRuntimePixtralVisionModel(RBLNPytorchRuntime):
 
 
 class _PixtralVisionModel(torch.nn.Module):
-    def __init__(self, model: PixtralVisionModel):
+    def __init__(self, model: PixtralVisionModel, output_hidden_states: bool):
         super().__init__()
         self.transformer = self.convert_to_rbln_pixtral_vision_model(model)
+        self.output_hidden_states = output_hidden_states
 
     def convert_to_rbln_pixtral_vision_model(self, model: nn.Module):
         for layer in model.transformer.layers:
@@ -180,7 +181,7 @@ class _PixtralVisionModel(torch.nn.Module):
             inputs_embeds=patch_embeds,
             attention_mask=attention_mask,
             position_embeddings=(position_embeddings_1, position_embeddings_2),
-            output_hidden_states=True,
+            output_hidden_states=self.output_hidden_states,
             return_dict=False,
         )
         return output
@@ -233,7 +234,10 @@ class RBLNPixtralVisionModel(RBLNModel):
     def wrap_model_if_needed(
         cls, model: torch.nn.Module, rbln_config: RBLNPixtralVisionModelConfig
     ) -> torch.nn.Module:
-        return _PixtralVisionModel(model).eval()
+        wrapper_cfg = {
+            "output_hidden_states": rbln_config.output_hidden_states,
+        }
+        return _PixtralVisionModel(model, **wrapper_cfg).eval()
 
     @classmethod
     def update_rbln_config_using_pipe(
@@ -251,6 +255,9 @@ class RBLNPixtralVisionModel(RBLNModel):
     ) -> RBLNPixtralVisionModelConfig:
         if rbln_config.max_image_size is None:
             rbln_config.max_image_size = (model_config.image_size, model_config.image_size)
+
+        if rbln_config.output_hidden_states is None:
+            rbln_config.output_hidden_states = getattr(model_config, "output_hidden_states", False)
 
         num_total_patches = (rbln_config.max_image_size[0] // model_config.patch_size) * (
             rbln_config.max_image_size[1] // model_config.patch_size
@@ -290,10 +297,20 @@ class RBLNPixtralVisionModel(RBLNModel):
         self,
         pixel_values: Optional[torch.FloatTensor] = None,
         image_sizes: Optional[torch.FloatTensor] = None,
-        output_hidden_states: Optional[bool] = True,
+        output_hidden_states: Optional[bool] = None,
         return_dict: bool = True,
         **kwargs,
     ) -> Union[Tuple, BaseModelOutput]:
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.rbln_config.output_hidden_states
+        )
+
+        if output_hidden_states != self.rbln_config.output_hidden_states:
+            raise ValueError(
+                f"Variable output_hidden_states {output_hidden_states} is not equal to rbln_config.output_hidden_states {self.rbln_config.output_hidden_states} "
+                f"Please compile again with the correct argument."
+            )
+
         output = self.model(
             pixel_values, image_sizes, output_hidden_states=output_hidden_states, return_dict=return_dict
         )
