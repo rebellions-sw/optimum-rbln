@@ -1183,7 +1183,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
         rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
         model_config: PretrainedConfig,
     ):
-        is_prefill: bool = query_length > 1
         input_info = super().get_input_info(batch_size, query_length, rbln_config, model_config)
         is_prefill = query_length > 1
 
