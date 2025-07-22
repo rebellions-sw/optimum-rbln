@@ -607,13 +607,6 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         return context, static_tensors
 
     @classmethod
-    def _get_compile_config(cls, rbln_config: RBLNDecoderOnlyModelConfig, phase: str):
-        for compile_cfg in rbln_config.compile_cfgs:
-            if compile_cfg.compiled_model_name == phase:
-                return compile_cfg
-        raise ValueError(f"Compile config for {phase} not found")
-
-    @classmethod
     @torch.inference_mode()
     def get_compiled_model(
         cls,
@@ -621,7 +614,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         rbln_config: RBLNDecoderOnlyModelConfig,
     ):
         wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
-        compile_config = cls._get_compile_config(rbln_config, "prefill")
+        compile_config = rbln_config.compile_cfgs[0]
 
         # Here we use meta tensor, for the memory efficiency.
         meta_tensor_names = [name for name, _, _ in compile_config.input_info if "past_key_values" in name]
@@ -1131,7 +1124,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
     @torch.inference_mode()
     def get_compiled_model(cls, model: PreTrainedModel, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig):
         wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
-        prefill_compile_config = cls._get_compile_config(rbln_config, "prefill")
+        prefill_compile_config = rbln_config.compile_cfgs[0]
 
         # Here we use meta tensor, for the memory efficiency.
         meta_tensor_names = [name for name, _, _ in prefill_compile_config.input_info if "past_key_values" in name]
