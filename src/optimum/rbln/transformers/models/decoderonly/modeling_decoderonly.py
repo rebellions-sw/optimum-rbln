@@ -591,14 +591,16 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
     @classmethod
     def _get_compile_context(
-        cls, compile_config: RBLNCompileConfig, example_inputs: List[torch.Tensor], string_pattern: str
+        cls,
+        compile_config: RBLNCompileConfig,
+        example_inputs: List[torch.Tensor],
     ):
         context = CompileContext(use_weight_sharing=True)
 
         # Mark static tensors (self kv states)
         static_tensors = {}
         for (name, _, _), tensor in zip(compile_config.input_info, example_inputs):
-            if string_pattern in name:
+            if "past_key_values" in name:
                 static_tensors[name] = tensor
                 context.mark_static_address(tensor)
 
@@ -624,7 +626,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         # Here we use meta tensor, for the memory efficiency.
         meta_tensor_names = [name for name, _, _ in compile_config.input_info if "past_key_values" in name]
         example_inputs = compile_config.get_dummy_inputs(fill=0, meta_tensor_names=meta_tensor_names)
-        context, _ = cls._get_compile_context(compile_config, example_inputs, "past_key_values")
+        context, _ = cls._get_compile_context(compile_config, example_inputs)
 
         compiled_model = cls._compile_model(
             wrapped_model, compile_config, example_inputs, context, rbln_config, phase="prefill"
@@ -646,7 +648,6 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
         hidden_size = getattr(model_config, "n_embd", None) or getattr(model_config, "hidden_size")
         head_dim = getattr(model_config, "head_dim", None) or hidden_size // num_attention_heads
-        local_kvcache_num_blocks = 1
 
         # 1. main input
         if rbln_config.use_inputs_embeds:
@@ -694,7 +695,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             rbln_config.kvcache_block_size,
             head_dim,
         ]
-        local_kvcache_shape = [local_kvcache_num_blocks, num_key_value_heads, rbln_config.sliding_window, head_dim]
+        local_kvcache_shape = [rbln_config.batch_size, num_key_value_heads, rbln_config.sliding_window, head_dim]
         input_info.extend(
             [
                 (
@@ -1135,9 +1136,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
         # Here we use meta tensor, for the memory efficiency.
         meta_tensor_names = [name for name, _, _ in prefill_compile_config.input_info if "past_key_values" in name]
         prefill_example_inputs = prefill_compile_config.get_dummy_inputs(fill=0, meta_tensor_names=meta_tensor_names)
-        context, static_tensors = cls._get_compile_context(
-            prefill_compile_config, prefill_example_inputs, "past_key_values"
-        )
+        context, static_tensors = cls._get_compile_context(prefill_compile_config, prefill_example_inputs)
 
         compiled_models = {}
         compiled_models["prefill"] = cls._compile_model(
@@ -1186,42 +1185,33 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
     ):
         is_prefill: bool = query_length > 1
         input_info = super().get_input_info(batch_size, query_length, rbln_config, model_config)
+        is_prefill = query_length > 1
 
         def get_idx_from_name(name: str) -> int:
             return next((i for i, (n, _, _) in enumerate(input_info) if n == name), None)
 
-        is_prefill = query_length > 1
-        # block_tables & local_block_tables
-        if rbln_config.use_global_attention:
-            idx = get_idx_from_name("block_tables")
-            max_block_cnt = rbln_config.max_seq_len // rbln_config.kvcache_block_size
-            input_info[idx] = ("block_tables", [max_block_cnt] if is_prefill else [batch_size, max_block_cnt], "int16")
-        if rbln_config.use_local_attention:
-            idx = get_idx_from_name("local_block_tables")
-            input_info[idx] = ("local_block_tables", [1] if is_prefill else [batch_size, 1], "int16")
+        # block_tables & local_block_tables shape is different in decode stage
+        if not is_prefill:
+            if rbln_config.use_global_attention:
+                idx = get_idx_from_name("block_tables")
+                name, shape, dtype = input_info[idx]
+                input_info[idx] = (name, [batch_size] + shape, dtype)
+            if rbln_config.use_local_attention:
+                idx = get_idx_from_name("local_block_tables")
+                name, shape, dtype = input_info[idx]
+                input_info[idx] = (name, [batch_size] + shape, dtype)
 
-        # query_position
+        # query_position is used in prefill stage unlike RBLNDecoderOnlyModel.
         if is_prefill:
-            # query_position used: 1. prefill lm_head slicing 2. sliding_window_prefill
-            need_to_add_query_position = get_idx_from_name("query_position") is None
-            if need_to_add_query_position:
-                idx = (get_idx_from_name("local_block_tables") or get_idx_from_name("block_tables")) + 1
+            # query_position already made by super().get_input_info if rbln_config.use_local_attention is True
+            if not rbln_config.use_local_attention:
+                idx = get_idx_from_name("block_tables") + 1
                 input_info.insert(idx, ("query_position", [], "int16"))
+        # no cases to use query_position in decode stage
         else:
-            # No cases to use query_position in decode stage
             idx = get_idx_from_name("query_position")
             if idx is not None:
                 del input_info[idx]
-
-        # local past_key_values shape
-        if rbln_config.use_local_attention:
-            local_kvcache_num_blocks = max(rbln_config.decoder_batch_sizes) if "decode" in rbln_config.phases else 1
-            num_layers = getattr(model_config, "num_hidden_layers") or getattr(model_config, "num_layers")
-            for i in range(num_layers * 2):
-                if rbln_config.sliding_window is not None and (i // 2) in rbln_config.sliding_window_layers:
-                    idx = i - num_layers * 2
-                    name, shape, dtype = input_info[idx]
-                    input_info[idx] = (name, [local_kvcache_num_blocks] + shape[1:], dtype)
 
         return input_info
 

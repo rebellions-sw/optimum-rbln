@@ -155,6 +155,8 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
         self.batch_size = batch_size or 1
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
+        if self.batch_size > 1:
+            raise NotImplementedError("Batch size > 1 is not supported for RBLNDecoderOnlyModel.")
 
         self.max_seq_len = max_seq_len
         self.use_inputs_embeds = use_inputs_embeds or False
@@ -324,7 +326,6 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNDecoderOnlyModelConfig):
         """
 
         super().__init__(
-            batch_size=batch_size,
             max_seq_len=max_seq_len,
             use_inputs_embeds=use_inputs_embeds,
             use_attention_mask=use_attention_mask,
@@ -339,6 +340,11 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNDecoderOnlyModelConfig):
             sliding_window_layers=sliding_window_layers,
             **kwargs,
         )
+
+        # override batch_size for causal lm
+        self.batch_size = batch_size or 1
+        if not isinstance(self.batch_size, int) or self.batch_size < 0:
+            raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
         self.quantization = quantization or {}
         if self.quantization and isinstance(self.quantization, dict):
