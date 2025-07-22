@@ -303,6 +303,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_embed = (
                 position_embed[:, :, :, attention_mask.bool(), :] if attention_mask is not None else position_embed
             )
+        if token_type_ids is not None:
+            token_type_ids = token_type_ids[:, attention_mask.bool()] if attention_mask is not None else token_type_ids
 
         query_length = inputs.shape[1]
         if query_length > self.rbln_config.max_seq_len:
@@ -352,8 +354,11 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             if position_embed is not None:
                 position_embed = torch.nn.functional.pad(position_embed, (0, 0, 0, padding_size))
 
+            if token_type_ids is not None:
+                token_type_ids = torch.nn.functional.pad(token_type_ids, (0, padding_size), value=-1)
+
         # Overwrite position_ids and padded_cache_lengths
-        position_ids = None
+        position_ids = cache_position.clone()
         padded_cache_lengths = 0
 
         return (
@@ -365,6 +370,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_embed,
             padded_cache_lengths,
             query_length,
+            token_type_ids,
         )
 
     def prefill_forward(
@@ -393,6 +399,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_embed,
             padded_cache_lengths,
             query_length,
+            token_type_ids,
         ) = self._prepare_prefill_inputs(
             inputs, cache_position, attention_mask, position_embed, token_type_ids=token_type_ids
         )
@@ -1192,6 +1199,11 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         if cache_position is None:
             logits = []
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
+            # for only use forward
+            if generate_idx is None:
+                generate_idx = attention_mask.sum(dim=-1, keepdim=True).int()
+            if padded_cache_lengths is None:
+                padded_cache_lengths = torch.zeros_like(generate_idx)
             batch_size = inputs.shape[0]
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)

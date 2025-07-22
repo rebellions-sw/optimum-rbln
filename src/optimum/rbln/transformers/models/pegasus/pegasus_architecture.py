@@ -35,37 +35,37 @@ from ..seq2seq.seq2seq_architecture import (
 logger = logging.get_logger(__name__)
 
 
-class BartWrapper:
+class PegasusWrapper:
     def __init__(self, model: nn.Module, enc_max_seq_len: int, use_attention_mask: bool):
         self.encoder = Seq2SeqEncoderWrapper(model, enc_max_seq_len)
-        self.decoder = BartDecoderWrapper(model, use_attention_mask=use_attention_mask)
+        self.decoder = PegasusDecoderWrapper(model, use_attention_mask=use_attention_mask)
 
 
-class BartDecoderWrapper(Seq2SeqDecoderWrapper):
+class PegasusDecoderWrapper(Seq2SeqDecoderWrapper):
     def convert_to_rbln_conditional_generation(self, model: nn.Module):
         new_layers = []
         for layer in model.get_decoder().layers:
-            self_attn = BartSelfAttention(layer.self_attn, use_attention_mask=self.use_attention_mask)
-            cross_attn = BartCrossAttention(layer.encoder_attn)
-            new_layers.append(BartDecoderLayer(layer, self_attn, cross_attn))
+            self_attn = PegasusSelfAttention(layer.self_attn, use_attention_mask=self.use_attention_mask)
+            cross_attn = PegasusCrossAttention(layer.encoder_attn)
+            new_layers.append(PegasusDecoderLayer(layer, self_attn, cross_attn))
 
-        decoder_model = BartDecoder(model.get_decoder(), new_layers)
-        new_model = BartForConditionalGeneration(model, decoder_model)
+        decoder_model = PegasusDecoder(model.get_decoder(), new_layers)
+        new_model = PegasusForConditionalGeneration(model, decoder_model)
 
         return new_model
 
 
-class BartForConditionalGeneration(Seq2SeqForConditionalGeneration):
+class PegasusForConditionalGeneration(Seq2SeqForConditionalGeneration):
     pass
 
 
-class BartDecoder(Seq2SeqDecoder):
+class PegasusDecoder(Seq2SeqDecoder):
     has_pos_emb = True
 
     def __post_init__(self):
         self.embed_positions = self._original_mod.embed_positions
-        self.layernorm_embedding = self._original_mod.layernorm_embedding
         self.embed_scale = getattr(self._original_mod, "embed_scale", None)
+        self.final_layer_norm = getattr(self._original_mod, "layer_norm", None)
 
     def prepare_attn_mask(self, attention_mask, encoder_attention_mask, **kwargs):
         if attention_mask is not None:
@@ -78,13 +78,11 @@ class BartDecoder(Seq2SeqDecoder):
         hidden_all = []
         for i in range(inputs_embeds.shape[0]):
             positions_idx = cache_position[i]
-            position_weight = self.embed_positions.weight[2:]
+            position_weight = self.embed_positions.weight
             position = position_weight[positions_idx]
             batch_hidden = position + inputs_embeds[i]
             hidden_all.append(batch_hidden)
         hidden_states = torch.stack(hidden_all, dim=0)
-
-        hidden_states = self.layernorm_embedding(hidden_states)
 
         return hidden_states
 
@@ -95,7 +93,7 @@ class BartDecoder(Seq2SeqDecoder):
             return self.embed_tokens
 
 
-class BartLayerFF(nn.Module):
+class PegasusLayerFF(nn.Module):
     def __init__(self, decoder_layer):
         super().__init__()
         self.fc1 = decoder_layer.fc1
@@ -106,34 +104,34 @@ class BartLayerFF(nn.Module):
     def forward(self, hidden_states):
         # Residual Connection
         residual = hidden_states
+        hidden_states = self.layer_norm(hidden_states)
         hidden_states = self.activation_fn(self.fc1(hidden_states))
         hidden_states = self.fc2(hidden_states)
         hidden_states = residual + hidden_states
-        hidden_states = self.layer_norm(hidden_states)
         return hidden_states
 
 
-class BartDecoderLayer(Seq2SeqDecoderLayer):
+class PegasusDecoderLayer(Seq2SeqDecoderLayer):
     def __post_init__(self):
         self.self_attn_layer_norm = self._original_mod.self_attn_layer_norm
         self.encoder_attn = self._original_mod.encoder_attn
         self.encoder_attn_layer_norm = self._original_mod.encoder_attn_layer_norm
-        self.ff_layer = BartLayerFF(self._original_mod)
+        self.ff_layer = PegasusLayerFF(self._original_mod)
 
     def pre_self_attn_layer_norm(self, hidden_states):
-        return hidden_states
-
-    def post_self_attn_layer_norm(self, hidden_states):
         return self.self_attn_layer_norm(hidden_states)
 
-    def pre_cross_attn_layer_norm(self, hidden_states):
+    def post_self_attn_layer_norm(self, hidden_states):
         return hidden_states
 
-    def post_cross_attn_layer_norm(self, hidden_states):
+    def pre_cross_attn_layer_norm(self, hidden_states):
         return self.encoder_attn_layer_norm(hidden_states)
 
+    def post_cross_attn_layer_norm(self, hidden_states):
+        return hidden_states
 
-class BartSelfAttention(Seq2SeqSelfAttention):
+
+class PegasusSelfAttention(Seq2SeqSelfAttention):
     def __post_init__(self, use_attention_mask: bool = True):
         self.q_proj = self._original_mod.q_proj
         self.k_proj = self._original_mod.k_proj
@@ -154,7 +152,7 @@ class BartSelfAttention(Seq2SeqSelfAttention):
         return query_states, key_states, value_states
 
 
-class BartCrossAttention(Seq2SeqCrossAttention):
+class PegasusCrossAttention(Seq2SeqCrossAttention):
     def __post_init__(self):
         self.q_proj = self._original_mod.q_proj
         self.k_proj = self._original_mod.k_proj

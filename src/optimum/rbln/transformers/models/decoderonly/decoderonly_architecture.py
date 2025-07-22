@@ -940,7 +940,7 @@ class AttentionOp(nn.Module):
             "block_size": block_size,
         }
 
-        if self.use_attention_mask != self.use_position_ids:
+        if self.use_attention_mask:
             op_args["mask"] = attn_mask
 
         if self.phase == "prefill" or self.phase == "image_prefill":

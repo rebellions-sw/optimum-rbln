@@ -108,11 +108,18 @@ _import_structure = {
     ],
     "llama": ["RBLNLlamaForCausalLM", "RBLNLlamaForCausalLMConfig"],
     "opt": ["RBLNOPTForCausalLM", "RBLNOPTForCausalLMConfig"],
+    "pegasus": [
+        "RBLNPegasusForConditionalGeneration",
+        "RBLNPegasusModel",
+        "RBLNPegasusForConditionalGenerationConfig",
+        "RBLNPegasusModelConfig",
+    ],
     "llava_next": ["RBLNLlavaNextForConditionalGeneration", "RBLNLlavaNextForConditionalGenerationConfig"],
     "midm": ["RBLNMidmLMHeadModel", "RBLNMidmLMHeadModelConfig"],
     "mistral": ["RBLNMistralForCausalLM", "RBLNMistralForCausalLMConfig"],
     "phi": ["RBLNPhiForCausalLM", "RBLNPhiForCausalLMConfig"],
     "qwen2": ["RBLNQwen2ForCausalLM", "RBLNQwen2ForCausalLMConfig"],
+    "qwen3": ["RBLNQwen3ForCausalLM", "RBLNQwen3ForCausalLMConfig", "RBLNQwen3Model", "RBLNQwen3ModelConfig"],
     "resnet": ["RBLNResNetForImageClassification", "RBLNResNetForImageClassificationConfig"],
     "roberta": [
         "RBLNRobertaForMaskedLM",
@@ -233,6 +240,12 @@ if TYPE_CHECKING:
     from .midm import RBLNMidmLMHeadModel, RBLNMidmLMHeadModelConfig
     from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig
     from .opt import RBLNOPTForCausalLM, RBLNOPTForCausalLMConfig
+    from .pegasus import (
+        RBLNPegasusForConditionalGeneration,
+        RBLNPegasusForConditionalGenerationConfig,
+        RBLNPegasusModel,
+        RBLNPegasusModelConfig,
+    )
     from .phi import RBLNPhiForCausalLM, RBLNPhiForCausalLMConfig
     from .qwen2 import RBLNQwen2ForCausalLM, RBLNQwen2ForCausalLMConfig
     from .qwen2_5_vl import (
@@ -241,6 +254,7 @@ if TYPE_CHECKING:
         RBLNQwen2_5_VLForConditionalGeneration,
         RBLNQwen2_5_VLForConditionalGenerationConfig,
     )
+    from .qwen3 import RBLNQwen3ForCausalLM, RBLNQwen3ForCausalLMConfig, RBLNQwen3Model, RBLNQwen3ModelConfig
     from .resnet import RBLNResNetForImageClassification, RBLNResNetForImageClassificationConfig
     from .roberta import (
         RBLNRobertaForMaskedLM,
