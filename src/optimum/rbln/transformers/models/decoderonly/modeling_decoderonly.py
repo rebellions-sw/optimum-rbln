@@ -622,11 +622,28 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         context, _ = cls._get_compile_context(compile_config, example_inputs)
 
         compiled_model = cls._compile_model(
-            wrapped_model, compile_config, example_inputs, context, rbln_config, phase="prefill"
+            wrapped_model, compile_config, example_inputs, context, rbln_config, rbln_config.quantization, "prefill"
         )
         compiled_models = {"prefill": compiled_model}
 
         return compiled_models
+
+    @classmethod
+    def get_quantized_model(
+        cls, *args, rbln_config: Optional[RBLNDecoderOnlyModelConfig] = None, **kwargs
+    ) -> PreTrainedModel:
+        raise NotImplementedError
+
+    @classmethod
+    def get_pytorch_model(
+        cls, *args, rbln_config: Optional[RBLNDecoderOnlyModelConfig] = None, **kwargs
+    ) -> PreTrainedModel:
+        if rbln_config and rbln_config.quantization:
+            model = cls.get_quantized_model(*args, **kwargs)
+        else:
+            model = super().get_pytorch_model(*args, **kwargs)
+
+        return model
 
     @classmethod
     def use_query_position(cls, use_local_attention: bool, is_prefill: bool = True):
@@ -1020,7 +1037,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
             vocab_size=self.config.vocab_size,
         )
 
-        if "decode" in self.rbln_config.phases:
+        if self.can_generate():
             self.decoders = {}
             for i, batch_size in enumerate(self.rbln_config.decoder_batch_sizes):
                 self.decoders[batch_size] = RBLNRuntimeModel(
@@ -1100,17 +1117,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
         return val
 
     @classmethod
-    def get_pytorch_model(
-        cls, *args, rbln_config: Optional[RBLNDecoderOnlyModelForCausalLMConfig] = None, **kwargs
-    ) -> PreTrainedModel:
-        if rbln_config and rbln_config.quantization:
-            model = cls.get_quantized_model(*args, **kwargs)
-        else:
-            model = super().get_pytorch_model(*args, **kwargs)
-
-        return model
-
-    @classmethod
     def wrap_model_if_needed(cls, model: PreTrainedModel, rbln_config: "RBLNDecoderOnlyModelForCausalLMConfig"):
         wrapper_cfg = {
             "max_seq_len": rbln_config.max_seq_len,
@@ -1149,7 +1155,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
             phase="prefill",
         )
 
-        if "decode" in rbln_config.phases:
+        if rbln_config.can_generate:
             wrapped_model.phase = "decode"
             for batch_size, dec_compile_config in zip(rbln_config.decoder_batch_sizes, rbln_config.compile_cfgs[1:]):
                 dec_example_inputs = dec_compile_config.get_dummy_inputs(fill=0, static_tensors=static_tensors)
@@ -1205,9 +1211,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
                 config=model_config,
                 tensor_parallel_size=rbln_config.tensor_parallel_size or 1,
                 kvcache_block_size=rbln_config.kvcache_block_size,
-                nbits_per_param=16,  # TODO(jongho): FIX Ad-hoc
+                nbits_per_param=16 if not rbln_config.quantization else 4,  # TODO(jongho): FIX Ad-hoc
                 n_model_params=sum(p.numel() for p in model.parameters()),
-                num_runtimes=1,
+                num_runtimes=1 if rbln_config.can_generate else 1 + len(rbln_config.decoder_batch_sizes),
             )
 
             max_num_blocks = min(max_num_blocks, estimated_max_num_blocks)
@@ -1243,7 +1249,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
         rbln_config: Optional[RBLNDecoderOnlyModelForCausalLMConfig] = None,
     ) -> RBLNDecoderOnlyModelForCausalLMConfig:
         rbln_config = super()._update_rbln_config(preprocessors, model, model_config, rbln_config)
-        if "decode" in rbln_config.phases:
+        if rbln_config.can_generate:
             compile_configs = rbln_config.compile_cfgs
             for batch_size in rbln_config.decoder_batch_sizes:
                 dec_input_info = cls.get_input_info(
@@ -1266,7 +1272,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
         rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
     ) -> List[rebel.Runtime]:
         expected_model_names = ["prefill"]
-        if "decode" in rbln_config.phases:
+        if rbln_config.can_generate:
             expected_model_names.extend(
                 [f"decoder_batch_{batch_size}" for batch_size in rbln_config.decoder_batch_sizes]
             )
@@ -1282,7 +1288,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
                 timeout=rbln_config.timeout,
             )
         ]
-        if "decode" in rbln_config.phases:
+        if rbln_config.can_generate:
             ret_val.extend(
                 [
                     rebel.Runtime(
@@ -1297,13 +1303,13 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
             )
         return ret_val
 
-    # FIXME(thkim): handling when "decode" is not in rbln_config.phases
     def get_decoder(self):
+        if not self.can_generate():
+            raise ValueError("Decode stage is not supported in this model.")
         return self.decoder
 
-    # FIXME(thkim): handling when "decode" is not in rbln_config.phases
     def can_generate(self):
-        return True if "decode" in self.rbln_config.phases else False
+        return self.rbln_config.can_generate
 
     def _reorder_cache(self, past_key_values, beam_idx):
         raise NotImplementedError
@@ -1389,7 +1395,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
         # The decoder stage operates as usual, processing inputs in batch mode.
 
         # for only use forward
-        if "decode" not in self.rbln_config.phases:
+        if not self.can_generate():
             generate_idx = attention_mask.sum(dim=-1, keepdim=True).int()
             padded_cache_lengths = torch.zeros_like(generate_idx)
 

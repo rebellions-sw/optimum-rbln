@@ -44,6 +44,7 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
         attn_impl: Optional[str] = None,
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
+        quantization: Optional[Union[Dict[str, Any], RBLNQuantizationConfig]] = None,
         prefill_chunk_size: Optional[int] = None,
         kvcache_num_blocks: Optional[int] = None,
         cache_impl: Optional[CacheImplType] = None,
@@ -165,6 +166,10 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
 
         if self.use_position_ids and not self.use_attention_mask:
             raise ValueError("Position IDs should be used with attention mask.")
+
+        self.quantization = quantization or {}
+        if self.quantization and isinstance(self.quantization, dict):
+            self.quantization = RBLNQuantizationConfig(**self.quantization, model_config=self)
 
         self.attn_impl = attn_impl
         self.kvcache_partition_len = kvcache_partition_len
@@ -333,6 +338,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNDecoderOnlyModelConfig):
             attn_impl=attn_impl,
             kvcache_partition_len=kvcache_partition_len,
             kvcache_block_size=kvcache_block_size,
+            quantization=quantization,
             prefill_chunk_size=prefill_chunk_size,
             kvcache_num_blocks=kvcache_num_blocks,
             cache_impl=cache_impl,
@@ -345,10 +351,6 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNDecoderOnlyModelConfig):
         self.batch_size = batch_size or 1
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
-
-        self.quantization = quantization or {}
-        if self.quantization and isinstance(self.quantization, dict):
-            self.quantization = RBLNQuantizationConfig(**self.quantization, model_config=self)
 
         self.phases = phases or ["prefill", "decode"]
 
@@ -375,3 +377,7 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNDecoderOnlyModelConfig):
     @property
     def use_multiple_decoder(self):
         return isinstance(self.decoder_batch_sizes, list) and len(self.decoder_batch_sizes) > 1
+
+    @property
+    def can_generate(self):
+        return "decode" in self.phases
