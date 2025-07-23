@@ -1024,8 +1024,9 @@ class SlidingWindowAttentionOp(AttentionOp):
             "block_size": block_size,
         }
 
-        if "prefill" in self.phase:
-            op_args["is_bidirectional"] = True
+        if self.phase == "prefill" or self.phase == "image_prefill":
+            if not self.use_attention_mask or self.use_position_ids:
+                op_args["is_bidirectional"] = self.phase == "image_prefill"  # FIXME, Hard-coded for Gemma3.
 
         attn_op_name = self.get_attn_op_name()
         attn_op = getattr(torch.ops.rbln_custom_ops, attn_op_name, None)
