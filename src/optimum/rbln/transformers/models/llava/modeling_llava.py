@@ -46,10 +46,7 @@ class LoopVisionTower:
     def __init__(self, vision_tower: RBLNModel) -> None:
         self.vision_tower = vision_tower
 
-    def forward(self, *args, **kwargs):
-        pixel_values = args[0]
-        image_sizes = kwargs.pop("image_sizes", None)
-
+    def forward(self, pixel_values, image_sizes: Optional[torch.Tensor] = None, **kwargs):
         outputs = []
         for i in range(pixel_values.shape[0]):
             outputs.append(
@@ -161,6 +158,7 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
         model_config: Optional["PretrainedConfig"] = None,
         rbln_config: Optional[RBLNModelConfig] = None,
     ) -> RBLNModelConfig:
+        # support for pixtral that needs padding
         if hasattr(rbln_config.vision_tower, "max_image_size"):
             num_positions = (
                 rbln_config.vision_tower.batch_size
@@ -171,7 +169,10 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
 
         else:
             num_positions = (model_config.vision_config.image_size // model_config.vision_config.patch_size) ** 2 + 1
-            selected_image_feature_dim = num_positions - 1
+            if model_config.vision_feature_select_strategy == "default":
+                selected_image_feature_dim = num_positions - 1
+            else:
+                selected_image_feature_dim = num_positions
 
         input_info = [
             (
