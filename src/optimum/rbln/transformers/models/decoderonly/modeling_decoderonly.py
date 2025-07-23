@@ -1213,7 +1213,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
                 kvcache_block_size=rbln_config.kvcache_block_size,
                 nbits_per_param=16 if not rbln_config.quantization else 4,  # TODO(jongho): FIX Ad-hoc
                 n_model_params=sum(p.numel() for p in model.parameters()),
-                num_runtimes=1 if rbln_config.can_generate else 1 + len(rbln_config.decoder_batch_sizes),
+                num_runtimes=1 if not rbln_config.can_generate else 1 + len(rbln_config.decoder_batch_sizes),
             )
 
             max_num_blocks = min(max_num_blocks, estimated_max_num_blocks)
@@ -1395,8 +1395,12 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
         # The decoder stage operates as usual, processing inputs in batch mode.
 
         # for only use forward
-        if not self.can_generate():
-            generate_idx = attention_mask.sum(dim=-1, keepdim=True).int()
+        if generate_idx is None:
+            generate_idx = (
+                attention_mask.sum(dim=-1, keepdim=True).int()
+                if attention_mask is not None
+                else torch.full((input_ids.shape[0], 1), input_ids.shape[1], dtype=torch.int32)
+            )
             padded_cache_lengths = torch.zeros_like(generate_idx)
 
         # Prefll
