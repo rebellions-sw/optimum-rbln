@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union, get_args
 
 from ....configuration_utils import RBLNModelConfig
 from ....utils.logging import get_logger
@@ -380,8 +380,8 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNDecoderOnlyModelConfig):
     def validate_phases_type(phases: List[PhaseType]):
         if not isinstance(phases, list):
             raise ValueError("`phases` must be a list.")
-        if not all(isinstance(phase, PhaseType) for phase in phases):
-            raise ValueError("All elements in `phases` must be of type `PhaseType`.")
+        if not all(phase in get_args(PhaseType) for phase in phases):
+            raise ValueError(f"All elements in `phases` must be of type `PhaseType`({get_args(PhaseType)}).")
 
     @property
     def use_multiple_decoder(self):
