@@ -37,6 +37,14 @@ class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
         )
         self.image_prefill_chunk_size = image_prefill_chunk_size
 
+    @property
+    def use_image_prefill(self):
+        return self.image_prefill_chunk_size is not None
+
+    @property
+    def decoder_runtime_idx(self):
+        return 2 if self.use_image_prefill else 1
+
 
 class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):
     submodules = ["vision_tower", "language_model"]
