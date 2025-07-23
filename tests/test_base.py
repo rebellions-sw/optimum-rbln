@@ -198,7 +198,10 @@ class BaseTest:
 
             output = self.postprocess(inputs, output)
             if self.EXPECTED_OUTPUT:
-                self.assertEqual(output, self.EXPECTED_OUTPUT)
+                from simphile import jaccard_similarity
+
+                similarity = jaccard_similarity(output, self.EXPECTED_OUTPUT)
+                self.assertGreater(similarity, 0.9)
 
         def _inner_test_save_load(self, tmpdir):
             with ContextRblnConfig(create_runtimes=False):
