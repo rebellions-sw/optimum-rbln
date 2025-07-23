@@ -352,6 +352,8 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNDecoderOnlyModelConfig):
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
+        if phases is not None:
+            self.validate_phases_type(phases)
         self.phases = phases or ["prefill", "decode"]
 
         if "decode" in self.phases:
@@ -373,6 +375,13 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNDecoderOnlyModelConfig):
 
                 # Larger batch size should be at the beginning of the list.
                 self.decoder_batch_sizes.sort(reverse=True)
+
+    @staticmethod
+    def validate_phases_type(phases: List[PhaseType]):
+        if not isinstance(phases, list):
+            raise ValueError("`phases` must be a list.")
+        if not all(isinstance(phase, PhaseType) for phase in phases):
+            raise ValueError("All elements in `phases` must be of type `PhaseType`.")
 
     @property
     def use_multiple_decoder(self):
