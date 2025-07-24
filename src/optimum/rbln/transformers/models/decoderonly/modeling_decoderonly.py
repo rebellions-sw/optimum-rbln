@@ -316,8 +316,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_embed = (
                 position_embed[:, :, :, attention_mask.bool(), :] if attention_mask is not None else position_embed
             )
-        if token_type_ids is not None:
-            token_type_ids = token_type_ids[:, attention_mask.bool()] if attention_mask is not None else token_type_ids
 
         query_length = inputs.shape[1]
         if query_length > self.rbln_config.max_seq_len:
@@ -1415,20 +1413,30 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
             )
             padded_cache_lengths = torch.zeros_like(generate_idx)
 
-        # Prefll
+        # Prefill
         if cache_position is None:
             logits = []
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
             batch_size = inputs.shape[0]
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
+
+                if token_type_ids is not None:
+                    token_type_id = (
+                        token_type_ids[b_idx:b_idx + 1, attention_mask[b_idx].bool()]
+                        if attention_mask is not None
+                        else token_type_ids
+                    )
+                else:
+                    token_type_id = None
+
                 output = self.prefill_decoder(
                     input_ids=inputs[b_idx : b_idx + 1] if inputs_embeds is None else None,
                     inputs_embeds=inputs[b_idx : b_idx + 1] if inputs_embeds is not None else None,
                     attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                     cache_position=cache_position,
                     batch_idx=b_idx,
-                    token_type_ids=token_type_ids[b_idx : b_idx + 1] if token_type_ids is not None else None,
+                    token_type_ids=token_type_id,
                 )
                 padded_cache_lengths[b_idx] += output.padded_cache_lengths
                 logits.append(output.logits)
