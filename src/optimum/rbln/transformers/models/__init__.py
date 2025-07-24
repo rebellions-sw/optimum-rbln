@@ -84,6 +84,8 @@ _import_structure = {
         "RBLNQwen2_5_VLForConditionalGenerationConfig",
     ],
     "decoderonly": [
+        "RBLNDecoderOnlyModelConfig",
+        "RBLNDecoderOnlyModel",
         "RBLNDecoderOnlyModelForCausalLM",
         "RBLNDecoderOnlyModelForCausalLMConfig",
     ],
@@ -216,6 +218,8 @@ if TYPE_CHECKING:
         RBLNColPaliForRetrievalConfig,
     )
     from .decoderonly import (
+        RBLNDecoderOnlyModel,
+        RBLNDecoderOnlyModelConfig,
         RBLNDecoderOnlyModelForCausalLM,
         RBLNDecoderOnlyModelForCausalLMConfig,
     )
