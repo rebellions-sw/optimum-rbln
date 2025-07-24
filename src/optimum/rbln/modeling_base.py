@@ -348,7 +348,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         model_id: Union[str, Path],
         export: bool = False,
         rbln_config: Optional[Union[Dict, RBLNModelConfig]] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ) -> "RBLNBaseModel":
         """
         The `from_pretrained()` function is utilized in its standard form as in the HuggingFace transformers library.

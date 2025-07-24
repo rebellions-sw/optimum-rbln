@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from ....configuration_utils import RBLNModelConfig
 from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
@@ -24,7 +24,7 @@ class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
         use_position_ids: Optional[bool] = None,
         use_attention_mask: Optional[bool] = None,
         image_prefill_chunk_size: Optional[int] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         # use_attention_mask and use_position_ids are always True for Gemma3
         use_attention_mask = use_attention_mask or True
@@ -54,7 +54,7 @@ class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):
         batch_size: Optional[int] = None,
         vision_tower: Optional[RBLNModelConfig] = None,
         language_model: Optional[RBLNModelConfig] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         """
         Args:

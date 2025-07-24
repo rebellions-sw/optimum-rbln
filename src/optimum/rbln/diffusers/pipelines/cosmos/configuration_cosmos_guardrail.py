@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from ....configuration_utils import RBLNAutoConfig, RBLNModelConfig
 from ....transformers import RBLNLlamaForCausalLMConfig, RBLNSiglipVisionModelConfig
@@ -69,7 +69,7 @@ class RBLNCosmosSafetyCheckerConfig(RBLNModelConfig):
         image_size: Optional[Tuple[int, int]] = None,
         height: Optional[int] = None,
         width: Optional[int] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         super().__init__(**kwargs)
         if height is not None and width is not None:

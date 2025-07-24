@@ -87,7 +87,7 @@ class RBLNCosmosVideoToWorldPipeline(RBLNDiffusionMixin, CosmosVideoToWorldPipel
         export: bool = False,
         safety_checker: Optional[RBLNCosmosSafetyChecker] = None,
         rbln_config: Dict[str, Any] = {},
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         rbln_config, kwargs = cls.get_rbln_config_class().initialize_from_kwargs(rbln_config, **kwargs)
         if safety_checker is None and export:
