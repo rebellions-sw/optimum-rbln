@@ -93,7 +93,7 @@ jobs:
 
       - name: Setup Python
         if: steps.should_skip.outputs.skip != 'true'
-        run: uv python install 3.9
+        run: uv python install 3.12
 
       - name: Install optimum-rbln with tests group dependencies
         if: steps.should_skip.outputs.skip != 'true'
