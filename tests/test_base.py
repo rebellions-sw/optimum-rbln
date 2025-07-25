@@ -200,8 +200,13 @@ class BaseTest:
             if self.EXPECTED_OUTPUT:
                 from simphile import jaccard_similarity
 
-                similarity = jaccard_similarity(output, self.EXPECTED_OUTPUT)
-                self.assertGreater(similarity, 0.9)
+                if isinstance(self.EXPECTED_OUTPUT, str):
+                    similarity = jaccard_similarity(output, self.EXPECTED_OUTPUT)
+                    self.assertGreater(similarity, 0.9)
+                else:
+                    for o, e_o in zip(output, self.EXPECTED_OUTPUT):
+                        similarity = jaccard_similarity(o, e_o)
+                        self.assertGreater(similarity, 0.9)
 
         def _inner_test_save_load(self, tmpdir):
             with ContextRblnConfig(create_runtimes=False):

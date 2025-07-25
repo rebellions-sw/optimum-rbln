@@ -23,14 +23,17 @@ class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
         self,
         use_position_ids: Optional[bool] = None,
         use_attention_mask: Optional[bool] = None,
+        prefill_chunk_size: Optional[int] = None,
         image_prefill_chunk_size: Optional[int] = None,
         **kwargs: Dict[str, Any],
     ):
         # use_attention_mask and use_position_ids are always True for Gemma3
         use_attention_mask = use_attention_mask or True
         use_position_ids = use_position_ids or True
+        prefill_chunk_size = prefill_chunk_size or 256
 
         super().__init__(
+            prefill_chunk_size=prefill_chunk_size,
             use_attention_mask=use_attention_mask,
             use_position_ids=use_position_ids,
             **kwargs,
@@ -73,3 +76,11 @@ class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):
 
         self.vision_tower = self.init_submodule_config(RBLNSiglipVisionModelConfig, vision_tower)
         self.language_model = self.init_submodule_config(RBLNGemma3ForCausalLMConfig, language_model)
+
+    @property
+    def image_prefill_chunk_size(self):
+        return self.language_model.image_prefill_chunk_size
+
+    @property
+    def prefill_chunk_size(self):
+        return self.language_model.prefill_chunk_size

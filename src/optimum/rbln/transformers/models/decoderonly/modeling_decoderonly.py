@@ -1403,7 +1403,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
             )
             padded_cache_lengths = torch.zeros_like(generate_idx)
 
-        # Prefll
+        # Prefill
         if cache_position is None:
             logits = []
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
