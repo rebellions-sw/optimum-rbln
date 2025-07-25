@@ -14,7 +14,7 @@
 
 import re
 import threading
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, List, Optional, Union
 
 import rebel
 import torch
@@ -94,7 +94,7 @@ class RBLNPytorchRuntime:
     def __call__(self, *args: Any, **kwds: Any) -> Any:
         return self.forward(*args, **kwds)
 
-    def forward(self, *args: List["torch.Tensor"], **kwargs: Dict[str, "torch.Tensor"]):
+    def forward(self, *args: List["torch.Tensor"], **kwargs: "torch.Tensor"):
         # filtering useless args or kwarg such as None.
         args = list(filter(lambda arg: isinstance(arg, torch.Tensor), args))
         kwargs = dict(filter(lambda kwarg: isinstance(kwarg[1], torch.Tensor) or kwarg[0] == "out", kwargs.items()))
@@ -142,7 +142,7 @@ class UnavailableRuntime:
         """Returns an iterator with self as the only item."""
         return iter([self])
 
-    def forward(self, *args: List["torch.Tensor"], **kwargs: Dict[str, "torch.Tensor"]):
+    def forward(self, *args: List["torch.Tensor"], **kwargs: "torch.Tensor"):
         """Raises a detailed RuntimeError explaining why inference cannot be performed."""
         raise RuntimeError(
             "Cannot perform inference: RBLN runtime is not available.\n\n"

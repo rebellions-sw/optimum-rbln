@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from ....configuration_utils import RBLNModelConfig
 
@@ -29,7 +29,7 @@ class RBLNControlNetModelConfig(RBLNModelConfig):
         unet_sample_size: Optional[Tuple[int, int]] = None,
         vae_sample_size: Optional[Tuple[int, int]] = None,
         text_model_hidden_size: Optional[int] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         """
         Args:

@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNCLIPTextModelConfig(RBLNModelConfig):
-    def __init__(self, batch_size: Optional[int] = None, **kwargs: Dict[str, Any]):
+    def __init__(self, batch_size: Optional[int] = None, **kwargs: Any):
         """
         Args:
             batch_size (Optional[int]): The batch size for text processing. Defaults to 1.
@@ -50,7 +50,7 @@ class RBLNCLIPVisionModelConfig(RBLNModelConfig):
         interpolate_pos_encoding: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         output_attentions: Optional[bool] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         """
         Args:

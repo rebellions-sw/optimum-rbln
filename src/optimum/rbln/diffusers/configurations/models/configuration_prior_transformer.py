@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from ....configuration_utils import RBLNModelConfig
 
@@ -32,7 +32,7 @@ class RBLNPriorTransformerConfig(RBLNModelConfig):
         batch_size: Optional[int] = None,
         embedding_dim: Optional[int] = None,
         num_embeddings: Optional[int] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         """
         Args:

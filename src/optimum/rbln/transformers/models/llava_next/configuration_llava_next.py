@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from ....configuration_utils import RBLNModelConfig
 from ....utils.logging import get_logger
@@ -38,7 +38,7 @@ class RBLNLlavaNextForConditionalGenerationConfig(RBLNModelConfig):
         batch_size: Optional[int] = None,
         vision_tower: Optional[RBLNModelConfig] = None,
         language_model: Optional[RBLNModelConfig] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         """
         Args:

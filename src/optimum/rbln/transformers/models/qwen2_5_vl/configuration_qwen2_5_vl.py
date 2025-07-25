@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, List, Optional, Union
 
 from ....configuration_utils import RBLNModelConfig
 from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
@@ -33,7 +33,7 @@ class RBLNQwen2_5_VLForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausal
         self,
         visual: Optional[RBLNModelConfig] = None,
         use_inputs_embeds: bool = True,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         super().__init__(use_inputs_embeds=use_inputs_embeds, **kwargs)
         if not self.use_inputs_embeds:
@@ -53,7 +53,7 @@ class RBLNQwen2_5_VisionTransformerPretrainedModelConfig(RBLNModelConfig):
     mechanisms for processing images and videos.
     """
 
-    def __init__(self, max_seq_lens: Union[int, List[int]] = None, **kwargs: Dict[str, Any]):
+    def __init__(self, max_seq_lens: Union[int, List[int]] = None, **kwargs: Any):
         """
         Args:
             max_seq_lens (Optional[Union[int, List[int]]]): Maximum sequence lengths for Vision

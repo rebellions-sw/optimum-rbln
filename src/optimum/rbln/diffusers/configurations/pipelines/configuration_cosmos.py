@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from ....configuration_utils import RBLNModelConfig
 from ....transformers import RBLNT5EncoderModelConfig
@@ -41,7 +41,7 @@ class RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
         num_frames: Optional[int] = None,
         fps: Optional[int] = None,
         max_seq_len: Optional[int] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         """
         Args:

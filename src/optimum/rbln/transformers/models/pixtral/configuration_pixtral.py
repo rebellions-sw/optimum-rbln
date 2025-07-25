@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from ....configuration_utils import RBLNModelConfig
 
@@ -23,7 +23,7 @@ class RBLNPixtralVisionModelConfig(RBLNModelConfig):
         max_image_size: Tuple = None,
         batch_size: Optional[int] = None,
         output_hidden_states: Optional[bool] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         """
         Args:
