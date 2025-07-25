@@ -307,11 +307,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
 
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
-                token_type_id = (
-                    token_type_ids[b_idx : b_idx + 1, attention_mask[b_idx].bool()]
-                    if attention_mask is not None
-                    else token_type_ids[b_idx : b_idx + 1]
-                )
+                token_type_id =  token_type_ids[b_idx : b_idx + 1, attention_mask[b_idx].bool()]
                 cache_position = self.get_padded_cache_position(cache_position, token_type_id)
 
                 output = self.language_model.prefill_decoder(
