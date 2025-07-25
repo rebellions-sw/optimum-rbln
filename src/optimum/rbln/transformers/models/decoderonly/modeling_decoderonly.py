@@ -1423,7 +1423,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
 
                 if token_type_ids is not None:
                     token_type_id = (
-                        token_type_ids[b_idx:b_idx + 1, attention_mask[b_idx].bool()]
+                        token_type_ids[b_idx : b_idx + 1, attention_mask[b_idx].bool()]
                         if attention_mask is not None
                         else token_type_ids
                     )

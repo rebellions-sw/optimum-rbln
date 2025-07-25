@@ -281,7 +281,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
                 if token_type_ids is not None:
                     token_type_id = (
-                        token_type_ids[b_idx:b_idx + 1, attention_mask[b_idx].bool()]
+                        token_type_ids[b_idx : b_idx + 1, attention_mask[b_idx].bool()]
                         if attention_mask is not None
                         else token_type_ids
                     )
@@ -354,10 +354,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                 padded_input_len += pad_needed
 
             return torch.cat(
-                [
-                    cache_position,
-                    torch.arange(seq_len, padded_input_len, dtype=torch.int32).unsqueeze(0)
-                ],
+                [cache_position, torch.arange(seq_len, padded_input_len, dtype=torch.int32).unsqueeze(0)],
                 dim=1,
             )
         else:
