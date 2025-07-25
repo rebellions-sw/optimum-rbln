@@ -76,3 +76,11 @@ class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):
 
         self.vision_tower = self.init_submodule_config(RBLNSiglipVisionModelConfig, vision_tower)
         self.language_model = self.init_submodule_config(RBLNGemma3ForCausalLMConfig, language_model)
+
+    @property
+    def image_prefill_chunk_size(self):
+        return self.language_model.image_prefill_chunk_size
+
+    @property
+    def prefill_chunk_size(self):
+        return self.language_model.prefill_chunk_size

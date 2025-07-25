@@ -79,9 +79,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 torch.ones(1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.prefill_chunk_size), diagonal=1
             )
 
-    def get_padded_cache_position(self, cache_position: torch.Tensor, token_type_ids: torch.Tensor) -> torch.Tensor:
-        return cache_position
-
     def get_block_tables(
         self, cache_position: torch.Tensor, batch_idx: int = None, token_type_ids: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
@@ -139,9 +136,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 prev_blocks = self.block_tables[batch_idx][self.block_tables[batch_idx] != self.empty_block].tolist()
                 self.free_block_pool.extend(prev_blocks)
                 self.block_tables[batch_idx].fill_(self.empty_block)
-
-                if token_type_ids is not None:
-                    cache_position = self.get_padded_cache_position(cache_position, token_type_ids)
 
                 # Get the start (s) and end (e) positions from cache_position and
                 # iterate over the cache positions to allocate necessary blocks
@@ -316,6 +310,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_embed = (
                 position_embed[:, :, :, attention_mask.bool(), :] if attention_mask is not None else position_embed
             )
+        if token_type_ids is not None:
+            token_type_ids = token_type_ids[:, attention_mask.bool()] if attention_mask is not None else token_type_ids
 
         query_length = inputs.shape[1]
         if query_length > self.rbln_config.max_seq_len:
@@ -1420,23 +1416,13 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
             batch_size = inputs.shape[0]
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
-
-                if token_type_ids is not None:
-                    token_type_id = (
-                        token_type_ids[b_idx : b_idx + 1, attention_mask[b_idx].bool()]
-                        if attention_mask is not None
-                        else token_type_ids
-                    )
-                else:
-                    token_type_id = None
-
                 output = self.prefill_decoder(
                     input_ids=inputs[b_idx : b_idx + 1] if inputs_embeds is None else None,
                     inputs_embeds=inputs[b_idx : b_idx + 1] if inputs_embeds is not None else None,
                     attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                     cache_position=cache_position,
                     batch_idx=b_idx,
-                    token_type_ids=token_type_id,
+                    token_type_ids=token_type_ids[b_idx : b_idx + 1] if token_type_ids is not None else None,
                 )
                 padded_cache_lengths[b_idx] += output.padded_cache_lengths
                 logits.append(output.logits)

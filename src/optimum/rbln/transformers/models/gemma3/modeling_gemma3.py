@@ -258,17 +258,45 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
 
         return inputs_embeds
 
+    def get_padded_cache_position(
+        self,
+        cache_position: torch.Tensor,  # shape: [1, seq_len]
+        token_type_ids: torch.Tensor,  # shape: [1, seq_len]
+    ) -> torch.Tensor:
+        seq_len = cache_position[0][-1].item() + 1
+
+        # Find image start positions
+        image_starts = [
+            s
+            for s in torch.where(token_type_ids == 1)[1]
+            if torch.all(token_type_ids[:, s : s + self.rbln_config.image_prefill_chunk_size] == 1)
+        ]
+
+        # Initialize padded tensors
+        padded_input_len = seq_len
+        for image_start in image_starts:
+            pad_needed = (
+                self.rbln_config.image_prefill_chunk_size
+                - (image_start + padded_input_len - seq_len) % self.rbln_config.image_prefill_chunk_size
+            ) % self.rbln_config.image_prefill_chunk_size
+            padded_input_len += pad_needed
+
+        return torch.cat(
+            [cache_position, torch.arange(seq_len, padded_input_len, dtype=torch.int32).unsqueeze(0)],
+            dim=1,
+        )
+
     def forward(
         self,
         input_ids: torch.LongTensor = None,
+        attention_mask: torch.Tensor = None,
+        token_type_ids: torch.Tensor = None,
         pixel_values: torch.FloatTensor = None,
-        attention_mask: Optional[torch.Tensor] = None,
         cache_position: Optional[torch.LongTensor] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
         generate_idx: Optional[torch.Tensor] = None,
         padded_cache_lengths: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
-        token_type_ids: Optional[torch.Tensor] = None,
         **lm_kwargs: Dict[str, Any],
     ) -> Union[Tuple, RBLNDecoderOnlyForCausalLMOutput]:
         # prefill
@@ -279,21 +307,19 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
 
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
-                if token_type_ids is not None:
-                    token_type_id = (
-                        token_type_ids[b_idx : b_idx + 1, attention_mask[b_idx].bool()]
-                        if attention_mask is not None
-                        else token_type_ids
-                    )
-                else:
-                    token_type_id = None
+                token_type_id = (
+                    token_type_ids[b_idx : b_idx + 1, attention_mask[b_idx].bool()]
+                    if attention_mask is not None
+                    else token_type_ids[b_idx : b_idx + 1]
+                )
+                cache_position = self.get_padded_cache_position(cache_position, token_type_id)
 
                 output = self.language_model.prefill_decoder(
                     inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
                     attention_mask=attention_mask[b_idx],
                     cache_position=cache_position,
                     batch_idx=b_idx,
-                    token_type_ids=token_type_id,
+                    token_type_ids=token_type_ids[b_idx : b_idx + 1],  # do not pass token_type_id
                 )
                 padded_cache_lengths[b_idx] += output.padded_cache_lengths
                 logits.append(output.logits)
@@ -328,37 +354,6 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         self.image_prefill = image_prefill  # FIXME(taehoon)
         self.prefill = self.runtime if self.phase == "prefill" else None  # FIXME
         self.decode = self.runtime if self.phase == "decode" else None
-
-    def get_padded_cache_position(
-        self,
-        cache_position: torch.Tensor,  # shape: [1, seq_len]
-        token_type_ids: torch.Tensor,  # shape: [1, seq_len]
-        batch_idx: int = None,
-    ) -> torch.Tensor:
-        if self.rbln_config.use_image_prefill:
-            seq_len = cache_position[0][-1].item() + 1
-            # Find image start positions
-            image_starts = [
-                s
-                for s in torch.where(token_type_ids == 1)[1]
-                if torch.all(token_type_ids[:, s : s + self.rbln_config.image_prefill_chunk_size] == 1)
-            ]
-
-            # Initialize padded tensors
-            padded_input_len = seq_len
-            for image_start in image_starts:
-                pad_needed = (
-                    self.rbln_config.image_prefill_chunk_size
-                    - (image_start + padded_input_len - seq_len) % self.rbln_config.image_prefill_chunk_size
-                ) % self.rbln_config.image_prefill_chunk_size
-                padded_input_len += pad_needed
-
-            return torch.cat(
-                [cache_position, torch.arange(seq_len, padded_input_len, dtype=torch.int32).unsqueeze(0)],
-                dim=1,
-            )
-        else:
-            return cache_position
 
     def _prepare_prefill_inputs(self, *args, **kwargs):
         (
