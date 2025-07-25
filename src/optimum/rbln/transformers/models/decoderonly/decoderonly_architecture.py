@@ -861,7 +861,7 @@ class AttentionOp(nn.Module):
             op_args["mask"] = attn_mask
 
         if self.phase == "prefill" or self.phase == "image_prefill":
-            if not self.use_attention_mask or self.use_position_ids:
+            if not self.use_attention_mask:
                 op_args["is_bidirectional"] = self.phase == "image_prefill"  # FIXME, Hard-coded for Gemma3.
 
         attn_op_name = self.get_attn_op_name()
@@ -956,7 +956,7 @@ class FlashAttentionOp(AttentionOp):
             op_args["mask"] = attn_mask
 
         if self.phase == "prefill" or self.phase == "image_prefill":
-            if not self.use_attention_mask or self.use_position_ids:
+            if not self.use_attention_mask:
                 op_args["is_bidirectional"] = self.phase == "image_prefill"  # FIXME, Hard-coded for Gemma3.
 
         attn_op_name = self.get_attn_op_name()
