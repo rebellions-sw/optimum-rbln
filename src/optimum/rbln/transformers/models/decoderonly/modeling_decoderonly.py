@@ -79,9 +79,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 torch.ones(1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.prefill_chunk_size), diagonal=1
             )
 
-    def get_block_tables(
-        self, cache_position: torch.Tensor, batch_idx: int = None, token_type_ids: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+    def get_block_tables(self, cache_position: torch.Tensor, batch_idx: int = None) -> torch.Tensor:
         """
         Manages and returns the KV cache block tables.
         Updates the block tables based on the given cache_position, allocating new blocks or reusing existing ones as needed.
@@ -124,9 +122,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             else:
                 raise RuntimeError(NO_BLOCKS_ERROR)
 
-        def get_global_block_tables(
-            cache_position: torch.Tensor, batch_idx: int, token_type_ids: Optional[torch.Tensor] = None
-        ):
+        def get_global_block_tables(batch_idx: int):
             if self.rbln_config.cache_impl == "sliding_window":
                 return None
 
@@ -166,7 +162,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     else torch.arange(self.batch_size, dtype=torch.int16).view(self.batch_size, -1)
                 )
 
-        return get_global_block_tables(cache_position, batch_idx, token_type_ids), get_local_block_tables(batch_idx)
+        return get_global_block_tables(batch_idx), get_local_block_tables(batch_idx)
 
     def is_external_block_tables(
         self, block_tables: Optional[torch.Tensor], local_block_tables: Optional[torch.Tensor]
@@ -210,9 +206,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
         is_external_block_tables = self.is_external_block_tables(block_tables, local_block_tables)
         if not is_external_block_tables:
-            block_tables, local_block_tables = self.get_block_tables(
-                cache_position, batch_idx=batch_idx, token_type_ids=token_type_ids
-            )
+            block_tables, local_block_tables = self.get_block_tables(cache_position, batch_idx=batch_idx)
 
         if self.phase == "decode":
             return self.decode_forward(
