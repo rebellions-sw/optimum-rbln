@@ -35,20 +35,10 @@ _import_structure = {
 }
 
 if TYPE_CHECKING:
-    from .autoencoders import (
-        RBLNAutoencoderKL,
-        RBLNAutoencoderKLCosmos,
-        RBLNVQModel,
-    )
+    from .autoencoders import RBLNAutoencoderKL, RBLNAutoencoderKLCosmos, RBLNVQModel
     from .controlnet import RBLNControlNetModel
-    from .transformers import (
-        RBLNCosmosTransformer3DModel,
-        RBLNPriorTransformer,
-        RBLNSD3Transformer2DModel,
-    )
-    from .unets import (
-        RBLNUNet2DConditionModel,
-    )
+    from .transformers import RBLNCosmosTransformer3DModel, RBLNPriorTransformer, RBLNSD3Transformer2DModel
+    from .unets import RBLNUNet2DConditionModel
 else:
     import sys
 

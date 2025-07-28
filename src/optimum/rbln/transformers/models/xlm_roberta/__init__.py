@@ -12,14 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .configuration_xlm_roberta import (
-    RBLNXLMRobertaForSequenceClassificationConfig,
-    RBLNXLMRobertaModelConfig,
-)
-from .modeling_xlm_roberta import (
-    RBLNXLMRobertaForSequenceClassification,
-    RBLNXLMRobertaModel,
-)
+from .configuration_xlm_roberta import RBLNXLMRobertaForSequenceClassificationConfig, RBLNXLMRobertaModelConfig
+from .modeling_xlm_roberta import RBLNXLMRobertaForSequenceClassification, RBLNXLMRobertaModel
 
 
 __all__ = [

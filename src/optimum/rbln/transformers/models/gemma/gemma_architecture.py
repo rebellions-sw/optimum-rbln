@@ -13,10 +13,7 @@
 # limitations under the License.
 
 
-from ...models.decoderonly.decoderonly_architecture import (
-    DecoderOnlyModel,
-    DecoderOnlyWrapper,
-)
+from ...models.decoderonly.decoderonly_architecture import DecoderOnlyModel, DecoderOnlyWrapper
 
 
 class GemmaWrapper(DecoderOnlyWrapper):

@@ -28,9 +28,7 @@ from .qwen3_architecture import Qwen3Wrapper
 logger = logging.get_logger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import (
-        PretrainedConfig,
-    )
+    from transformers import PretrainedConfig
 
 
 class RBLNQwen3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):

@@ -22,12 +22,7 @@ from diffusers import (
     UNet2DConditionModel,
     VQModel,
 )
-from transformers import (
-    CLIPImageProcessor,
-    CLIPTextModelWithProjection,
-    CLIPTokenizer,
-    CLIPVisionModelWithProjection,
-)
+from transformers import CLIPImageProcessor, CLIPTextModelWithProjection, CLIPTokenizer, CLIPVisionModelWithProjection
 
 from ...configurations import RBLNKandinskyV22CombinedPipelineConfig
 from ...modeling_diffusers import RBLNDiffusionMixin

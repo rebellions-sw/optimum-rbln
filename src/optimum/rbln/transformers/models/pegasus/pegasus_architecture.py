@@ -16,9 +16,7 @@ from typing import Tuple
 
 import torch
 from torch import nn
-from transformers.modeling_attn_mask_utils import (
-    _prepare_4d_attention_mask,
-)
+from transformers.modeling_attn_mask_utils import _prepare_4d_attention_mask
 from transformers.utils import logging
 
 from ..seq2seq.seq2seq_architecture import (

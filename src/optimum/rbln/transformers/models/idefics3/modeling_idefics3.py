@@ -34,17 +34,11 @@ from transformers.models.idefics3.modeling_idefics3 import Idefics3CausalLMOutpu
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.runtime_utils import RBLNPytorchRuntime
-from ..decoderonly.modeling_decoderonly import (
-    RBLNDecoderOnlyForCausalLMOutput,
-)
+from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyForCausalLMOutput
 
 
 if TYPE_CHECKING:
-    from transformers import (
-        AutoFeatureExtractor,
-        AutoProcessor,
-        AutoTokenizer,
-    )
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
 
 
 class RBLNRuntimeVisionModel(RBLNPytorchRuntime):

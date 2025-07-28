@@ -162,10 +162,7 @@ _import_structure = {
 }
 
 if TYPE_CHECKING:
-    from .audio_spectrogram_transformer import (
-        RBLNASTForAudioClassification,
-        RBLNASTForAudioClassificationConfig,
-    )
+    from .audio_spectrogram_transformer import RBLNASTForAudioClassification, RBLNASTForAudioClassificationConfig
     from .auto import (
         RBLNAutoModel,
         RBLNAutoModelForAudioClassification,
@@ -213,24 +210,15 @@ if TYPE_CHECKING:
         RBLNCLIPVisionModelWithProjection,
         RBLNCLIPVisionModelWithProjectionConfig,
     )
-    from .colpali import (
-        RBLNColPaliForRetrieval,
-        RBLNColPaliForRetrievalConfig,
-    )
+    from .colpali import RBLNColPaliForRetrieval, RBLNColPaliForRetrievalConfig
     from .decoderonly import (
         RBLNDecoderOnlyModel,
         RBLNDecoderOnlyModelConfig,
         RBLNDecoderOnlyModelForCausalLM,
         RBLNDecoderOnlyModelForCausalLMConfig,
     )
-    from .distilbert import (
-        RBLNDistilBertForQuestionAnswering,
-        RBLNDistilBertForQuestionAnsweringConfig,
-    )
-    from .dpt import (
-        RBLNDPTForDepthEstimation,
-        RBLNDPTForDepthEstimationConfig,
-    )
+    from .distilbert import RBLNDistilBertForQuestionAnswering, RBLNDistilBertForQuestionAnsweringConfig
+    from .dpt import RBLNDPTForDepthEstimation, RBLNDPTForDepthEstimationConfig
     from .exaone import RBLNExaoneForCausalLM, RBLNExaoneForCausalLMConfig
     from .gemma import RBLNGemmaForCausalLM, RBLNGemmaForCausalLMConfig, RBLNGemmaModel, RBLNGemmaModelConfig
     from .gemma3 import (

@@ -13,10 +13,7 @@
 # limitations under the License.
 
 
-from ..decoderonly.decoderonly_architecture import (
-    DecoderOnlyAttention,
-    DecoderOnlyWrapper,
-)
+from ..decoderonly.decoderonly_architecture import DecoderOnlyAttention, DecoderOnlyWrapper
 
 
 class Qwen3Wrapper(DecoderOnlyWrapper):
