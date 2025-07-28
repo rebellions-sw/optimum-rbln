@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Optional, Tuple, Union
 
 import torch
 from transformers import SiglipVisionConfig, SiglipVisionModel
@@ -126,7 +126,7 @@ class RBLNSiglipVisionModel(RBLNModel):
         output_attentions: bool = None,
         output_hidden_states: bool = None,
         interpolate_pos_encoding: bool = False,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
         if len(kwargs) > 0 and any(value is not None for value in kwargs.values()):
             logger.warning(

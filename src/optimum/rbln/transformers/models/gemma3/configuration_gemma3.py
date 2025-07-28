@@ -11,9 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Any, Dict, Optional
-
-import rebel
+from typing import Any, Optional
 
 from ....configuration_utils import RBLNModelConfig
 from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
@@ -23,10 +21,11 @@ from ..siglip.configuration_siglip import RBLNSiglipVisionModelConfig
 class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
     def __init__(
         self,
-        prefill_chunk_size: Optional[int] = None,
         use_position_ids: Optional[bool] = None,
         use_attention_mask: Optional[bool] = None,
-        **kwargs: Dict[str, Any],
+        prefill_chunk_size: Optional[int] = None,
+        image_prefill_chunk_size: Optional[int] = None,
+        **kwargs: Any,
     ):
         # use_attention_mask and use_position_ids are always True for Gemma3
         use_attention_mask = use_attention_mask or True
@@ -39,10 +38,15 @@ class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
             use_position_ids=use_position_ids,
             **kwargs,
         )
+        self.image_prefill_chunk_size = image_prefill_chunk_size
 
-        npu = self.npu or rebel.get_npu_name()
-        if npu == "RBLN-CA02":
-            raise NotImplementedError("Gemma3 is currently not supported on RBLN-CA02")
+    @property
+    def use_image_prefill(self):
+        return self.image_prefill_chunk_size is not None
+
+    @property
+    def decoder_runtime_idx(self):
+        return 2 if self.use_image_prefill else 1
 
 
 class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):
@@ -53,7 +57,7 @@ class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):
         batch_size: Optional[int] = None,
         vision_tower: Optional[RBLNModelConfig] = None,
         language_model: Optional[RBLNModelConfig] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         """
         Args:
@@ -72,3 +76,11 @@ class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):
 
         self.vision_tower = self.init_submodule_config(RBLNSiglipVisionModelConfig, vision_tower)
         self.language_model = self.init_submodule_config(RBLNGemma3ForCausalLMConfig, language_model)
+
+    @property
+    def image_prefill_chunk_size(self):
+        return self.language_model.image_prefill_chunk_size
+
+    @property
+    def prefill_chunk_size(self):
+        return self.language_model.prefill_chunk_size

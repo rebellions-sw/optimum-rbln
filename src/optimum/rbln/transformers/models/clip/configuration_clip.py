@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNCLIPTextModelConfig(RBLNModelConfig):
-    def __init__(self, batch_size: Optional[int] = None, **kwargs: Dict[str, Any]):
+    def __init__(self, batch_size: Optional[int] = None, **kwargs: Any):
         """
         Args:
             batch_size (Optional[int]): The batch size for text processing. Defaults to 1.
@@ -43,7 +43,15 @@ class RBLNCLIPTextModelWithProjectionConfig(RBLNCLIPTextModelConfig):
 
 
 class RBLNCLIPVisionModelConfig(RBLNModelConfig):
-    def __init__(self, batch_size: Optional[int] = None, image_size: Optional[int] = None, **kwargs: Dict[str, Any]):
+    def __init__(
+        self,
+        batch_size: Optional[int] = None,
+        image_size: Optional[int] = None,
+        interpolate_pos_encoding: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        output_attentions: Optional[bool] = None,
+        **kwargs: Any,
+    ):
         """
         Args:
             batch_size (Optional[int]): The batch size for image processing. Defaults to 1.
@@ -60,6 +68,9 @@ class RBLNCLIPVisionModelConfig(RBLNModelConfig):
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
         self.image_size = image_size
+        self.interpolate_pos_encoding = interpolate_pos_encoding or False
+        self.output_hidden_states = output_hidden_states
+        self.output_attentions = output_attentions
 
     @property
     def image_width(self):

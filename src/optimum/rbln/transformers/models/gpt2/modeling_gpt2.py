@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from ....utils import logging
-from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM
+from ...models.decoderonly import RBLNDecoderOnlyModel, RBLNDecoderOnlyModelForCausalLM
 from .gpt2_architecture import GPT2Wrapper
 
 
@@ -32,6 +32,21 @@ class RBLNGPT2LMHeadModel(RBLNDecoderOnlyModelForCausalLM):
     - transferring the checkpoint weights of the original into an optimized RBLN graph,
     - compiling the resulting graph using the RBLN compiler.
 
+    """
+
+    _decoder_wrapper_cls = GPT2Wrapper
+    _use_rotary_emb = False
+
+
+class RBLNGPT2Model(RBLNDecoderOnlyModel):
+    """
+    The GPT2 Model transformer without a language modeling head.
+
+    This model inherits from [`RBLNDecoderOnlyModel`]. Check the superclass documentation for the generic methods the
+    library implements for all its model.
+
+    A class to convert and run pre-trained transformers based GPT2Model model on RBLN devices.
+    It implements the methods to convert a pre-trained transformers GPT2Model model into a RBLN transformer model by:
     """
 
     _decoder_wrapper_cls = GPT2Wrapper

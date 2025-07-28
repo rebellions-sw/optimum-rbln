@@ -15,8 +15,12 @@
 from transformers import PretrainedConfig
 
 from ....utils import logging
-from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyModelForCausalLMConfig
-from .mistral_architecture import MistralForCausalLMWrapper
+from ...models.decoderonly import (
+    RBLNDecoderOnlyModel,
+    RBLNDecoderOnlyModelForCausalLM,
+    RBLNDecoderOnlyModelForCausalLMConfig,
+)
+from .mistral_architecture import MistralWrapper
 
 
 logger = logging.get_logger(__name__)
@@ -79,7 +83,26 @@ class RBLNMistralForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         ```
     """
 
-    _decoder_wrapper_cls = MistralForCausalLMWrapper
+    _decoder_wrapper_cls = MistralWrapper
+
+    @classmethod
+    def _update_sliding_window_config(
+        cls, model_config: PretrainedConfig, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig
+    ):
+        rbln_config.cache_impl = "sliding_window"
+        rbln_config.sliding_window = model_config.sliding_window
+        rbln_config.sliding_window_layers = list(range(model_config.num_hidden_layers))
+
+        return rbln_config
+
+
+class RBLNMistralModel(RBLNDecoderOnlyModel):
+    """
+    The Mistral Model transformer without a language modeling head.
+    This model inherits from [`RBLNDecoderOnlyModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
+    """
+
+    _decoder_wrapper_cls = MistralWrapper
 
     @classmethod
     def _update_sliding_window_config(
