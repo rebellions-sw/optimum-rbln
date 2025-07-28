@@ -3,7 +3,7 @@
 
 <div align="center">
 
-<img src="assets/full_logo_black.png" width="60%"/>
+<img src="assets/rbln_logo.png" width="60%"/>
 
 [![PyPI version](https://badge.fury.io/py/optimum-rbln.svg)](https://badge.fury.io/py/optimum-rbln)
 [![License](https://img.shields.io/github/license/rebellions-sw/optimum-rbln)](https://github.com/rebellions-sw/optimum-rbln/blob/main/LICENSE)
