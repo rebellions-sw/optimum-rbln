@@ -4,10 +4,7 @@ import torch
 from torch import nn
 from transformers import GemmaForCausalLM, GemmaModel
 
-from ..decoderonly.decoderonly_architecture import (
-    RotaryEmbedding,
-    apply_rotary_pos_emb,
-)
+from ..decoderonly.decoderonly_architecture import RotaryEmbedding, apply_rotary_pos_emb
 
 
 def slice_and_unsqueeze_cos_sin(cos, sin, position_ids):

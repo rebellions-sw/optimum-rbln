@@ -16,12 +16,7 @@ import inspect
 from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 
 import torch
-from transformers import (
-    AutoModelForImageTextToText,
-    LlavaForConditionalGeneration,
-    PretrainedConfig,
-    PreTrainedModel,
-)
+from transformers import AutoModelForImageTextToText, LlavaForConditionalGeneration, PretrainedConfig, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPooling
 from transformers.models.llava.modeling_llava import LlavaCausalLMOutputWithPast
 
@@ -34,12 +29,7 @@ from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyForCausalLMOutput
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import (
-        AutoFeatureExtractor,
-        AutoProcessor,
-        AutoTokenizer,
-        PretrainedConfig,
-    )
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
 
 
 class LoopVisionTower:

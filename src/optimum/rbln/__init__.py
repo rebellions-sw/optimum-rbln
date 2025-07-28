@@ -231,11 +231,7 @@ _import_structure = {
 }
 
 if TYPE_CHECKING:
-    from .configuration_utils import (
-        RBLNAutoConfig,
-        RBLNCompileConfig,
-        RBLNModelConfig,
-    )
+    from .configuration_utils import RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig
     from .diffusers import (
         RBLNAutoencoderKL,
         RBLNAutoencoderKLConfig,
@@ -301,10 +297,7 @@ if TYPE_CHECKING:
         RBLNVQModel,
         RBLNVQModelConfig,
     )
-    from .modeling import (
-        RBLNBaseModel,
-        RBLNModel,
-    )
+    from .modeling import RBLNBaseModel, RBLNModel
     from .transformers import (
         RBLNASTForAudioClassification,
         RBLNASTForAudioClassificationConfig,

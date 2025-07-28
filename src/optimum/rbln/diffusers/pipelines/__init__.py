@@ -63,11 +63,7 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLControlNetImg2ImgPipeline,
         RBLNStableDiffusionXLControlNetPipeline,
     )
-    from .cosmos import (
-        RBLNCosmosSafetyChecker,
-        RBLNCosmosTextToWorldPipeline,
-        RBLNCosmosVideoToWorldPipeline,
-    )
+    from .cosmos import RBLNCosmosSafetyChecker, RBLNCosmosTextToWorldPipeline, RBLNCosmosVideoToWorldPipeline
     from .kandinsky2_2 import (
         RBLNKandinskyV22CombinedPipeline,
         RBLNKandinskyV22Img2ImgCombinedPipeline,

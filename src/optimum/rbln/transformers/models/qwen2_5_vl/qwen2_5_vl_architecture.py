@@ -4,10 +4,7 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 
-from ..decoderonly.decoderonly_architecture import (
-    DecoderOnlyWrapper,
-    apply_rotary_pos_emb,
-)
+from ..decoderonly.decoderonly_architecture import DecoderOnlyWrapper, apply_rotary_pos_emb
 
 
 class Qwen2_5_VisionTransformerWrapper(nn.Module):

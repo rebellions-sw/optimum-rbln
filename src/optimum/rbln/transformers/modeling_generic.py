@@ -34,10 +34,7 @@ from transformers import (
     AutoModelForTextEncoding,
     PretrainedConfig,
 )
-from transformers.modeling_outputs import (
-    BaseModelOutput,
-    QuestionAnsweringModelOutput,
-)
+from transformers.modeling_outputs import BaseModelOutput, QuestionAnsweringModelOutput
 
 from ..configuration_utils import RBLNCompileConfig
 from ..modeling import RBLNModel

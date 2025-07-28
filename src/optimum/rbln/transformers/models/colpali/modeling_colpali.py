@@ -17,10 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Union
 
 import torch
-from transformers import (
-    PretrainedConfig,
-    PreTrainedModel,
-)
+from transformers import PretrainedConfig, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPooling
 from transformers.modeling_utils import no_init_weights
 from transformers.models.colpali.modeling_colpali import ColPaliForRetrievalOutput
@@ -32,12 +29,7 @@ from .colpali_architecture import RBLNColPaliForRetrievalWrapper
 
 
 if TYPE_CHECKING:
-    from transformers import (
-        AutoFeatureExtractor,
-        AutoProcessor,
-        AutoTokenizer,
-        PretrainedConfig,
-    )
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
 
 
 class LoopVisionTower:
