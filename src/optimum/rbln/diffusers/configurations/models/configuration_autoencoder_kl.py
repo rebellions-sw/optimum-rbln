@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from ....configuration_utils import RBLNModelConfig
 
@@ -33,7 +33,7 @@ class RBLNAutoencoderKLConfig(RBLNModelConfig):
         vae_scale_factor: Optional[float] = None,  # TODO: rename to scaling_factor
         in_channels: Optional[int] = None,
         latent_channels: Optional[int] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         """
         Args:

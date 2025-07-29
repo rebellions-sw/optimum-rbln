@@ -12,11 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 import threading
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, List, Optional, Union
 
 import rebel
 import torch
+
+
+def normalize_npu(npu: str) -> str:
+    """Normalize the NPU string by removing the form factor."""
+    match = re.match(r"(RBLN-CA|RBLN-CR)(\d+)", npu)
+    if match:
+        prefix, num = match.groups()
+        if len(num) == 1:
+            # Convert "RBLN-CAx" → "RBLN-CA0"
+            # (e.g., "RBLN-CA2" -> "RBLN-CA0")
+            npu = f"{prefix}0"
+        elif len(num) == 2:
+            # Strip form factor (e.g., "RBLN-CA15" → "RBLN-CA1")
+            npu = f"{prefix}{num[:-1]}"
+    return npu
 
 
 def tp_and_devices_are_ok(
@@ -58,7 +74,7 @@ def tp_and_devices_are_ok(
     if npu is not None:
         for device_id in device:
             npu_name = rebel.get_npu_name(device_id)
-            if npu_name != npu:
+            if normalize_npu(npu_name) != normalize_npu(npu):
                 return f"Device {device_id} ({npu_name}) is not on the same NPU as {npu}."
 
     return None
@@ -78,7 +94,7 @@ class RBLNPytorchRuntime:
     def __call__(self, *args: Any, **kwds: Any) -> Any:
         return self.forward(*args, **kwds)
 
-    def forward(self, *args: List["torch.Tensor"], **kwargs: Dict[str, "torch.Tensor"]):
+    def forward(self, *args: List["torch.Tensor"], **kwargs: "torch.Tensor"):
         # filtering useless args or kwarg such as None.
         args = list(filter(lambda arg: isinstance(arg, torch.Tensor), args))
         kwargs = dict(filter(lambda kwarg: isinstance(kwarg[1], torch.Tensor) or kwarg[0] == "out", kwargs.items()))
@@ -126,7 +142,7 @@ class UnavailableRuntime:
         """Returns an iterator with self as the only item."""
         return iter([self])
 
-    def forward(self, *args: List["torch.Tensor"], **kwargs: Dict[str, "torch.Tensor"]):
+    def forward(self, *args: List["torch.Tensor"], **kwargs: "torch.Tensor"):
         """Raises a detailed RuntimeError explaining why inference cannot be performed."""
         raise RuntimeError(
             "Cannot perform inference: RBLN runtime is not available.\n\n"
@@ -147,13 +163,20 @@ class ContextRblnConfig:
     _local = threading.local()
 
     def __init__(
-        self, device=None, device_map=None, create_runtimes=None, optimize_host_mem=None, activate_profiler=None
+        self,
+        device=None,
+        device_map=None,
+        create_runtimes=None,
+        optimize_host_mem=None,
+        activate_profiler=None,
+        timeout=None,
     ):
         self.device = device
         self.device_map = device_map
         self.create_runtimes = create_runtimes
         self.optimize_host_mem = optimize_host_mem
         self.activate_profiler = activate_profiler
+        self.timeout = timeout
         self._previous_context = None
 
     def __enter__(self):
@@ -163,6 +186,7 @@ class ContextRblnConfig:
             "create_runtimes": getattr(self._local, "create_runtimes", None),
             "optimize_host_memory": getattr(self._local, "optimize_host_memory", None),
             "activate_profiler": getattr(self._local, "activate_profiler", None),
+            "timeout": getattr(self._local, "timeout", None),
         }
 
         if self.device is not None:
@@ -175,6 +199,8 @@ class ContextRblnConfig:
             self._local.optimize_host_memory = self.optimize_host_mem
         if self.activate_profiler is not None:
             self._local.activate_profiler = self.activate_profiler
+        if self.timeout is not None:
+            self._local.timeout = self.timeout
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -184,6 +210,7 @@ class ContextRblnConfig:
             self._local.create_runtimes = self._previous_context["create_runtimes"]
             self._local.optimize_host_memory = self._previous_context["optimize_host_memory"]
             self._local.activate_profiler = self._previous_context["activate_profiler"]
+            self._local.timeout = self._previous_context["timeout"]
 
     @classmethod
     def get_current_context(cls):
@@ -193,4 +220,5 @@ class ContextRblnConfig:
             "create_runtimes": getattr(cls._local, "create_runtimes", None),
             "optimize_host_memory": getattr(cls._local, "optimize_host_memory", None),
             "activate_profiler": getattr(cls._local, "activate_profiler", None),
+            "timeout": getattr(cls._local, "timeout", None),
         }

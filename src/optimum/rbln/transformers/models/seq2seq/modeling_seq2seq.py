@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 class RBLNRuntimeEncoder(RBLNPytorchRuntime):
     mandatory_members = ["main_input_name"]
 
-    def forward(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
+    def forward(self, *args: List[torch.Tensor], **kwargs: torch.Tensor):
         output = super().forward(*args, **kwargs)
         return BaseModelOutput(last_hidden_state=output)
 
@@ -327,12 +327,14 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
                 tensor_type="pt",
                 device=rbln_config.device_map["encoder"],
                 activate_profiler=rbln_config.activate_profiler,
+                timeout=rbln_config.timeout,
             ),
             rebel.Runtime(
                 compiled_models[1],
                 tensor_type="pt",
                 device=rbln_config.device_map["decoder"],
                 activate_profiler=rbln_config.activate_profiler,
+                timeout=rbln_config.timeout,
             ),
         ]
 

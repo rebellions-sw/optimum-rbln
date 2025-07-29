@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from ....configuration_utils import RBLNModelConfig
 
@@ -33,7 +33,7 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
         num_latent_frames: Optional[int] = None,
         latent_height: Optional[int] = None,
         latent_width: Optional[int] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         """
         Args:
@@ -52,6 +52,9 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
         Raises:
             ValueError: If batch_size is not a positive integer.
         """
+        if kwargs.get("timeout") is None:
+            kwargs["timeout"] = 80
+
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
         self.num_frames = num_frames or 121

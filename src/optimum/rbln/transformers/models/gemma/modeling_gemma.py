@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from ....utils import logging
-from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM
+from ...models.decoderonly import RBLNDecoderOnlyModel, RBLNDecoderOnlyModelForCausalLM
 from .gemma_architecture import GemmaWrapper
 
 
@@ -78,6 +78,18 @@ class RBLNGemmaForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             rbln_config=config
         )
         ```
+    """
+
+    _decoder_wrapper_cls = GemmaWrapper
+
+
+class RBLNGemmaModel(RBLNDecoderOnlyModel):
+    """
+    The Gemma Model transformer without a language modeling head.
+    This model inherits from [`RBLNDecoderOnlyModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    A class to convert and run pre-trained transformers based GemmaModel model on RBLN devices.
+    It implements the methods to convert a pre-trained transformers GemmaModel model into a RBLN transformer model by:
     """
 
     _decoder_wrapper_cls = GemmaWrapper
