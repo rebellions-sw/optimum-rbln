@@ -56,6 +56,7 @@ class RBLNAutoencoderKLWan(RBLNModel):
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
+        self.temperal_downsample = self.config.temperal_downsample
 
         if self.rbln_config.uses_encoder:
             self.encoder = RBLNRuntimeWanVAEEncoder(
