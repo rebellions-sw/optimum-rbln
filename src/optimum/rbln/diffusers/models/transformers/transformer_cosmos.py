@@ -213,7 +213,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
     ) -> RBLNCosmosTransformer3DModelConfig:
         if rbln_config.transformer.num_frames is None:
             if pipe.transformer.config.extra_pos_embed_type is None:
-                rbln_config.transformer.num_frames = 93  if rbln_config.vae.uses_encoder else 1
+                rbln_config.transformer.num_frames = 93 if rbln_config.vae.uses_encoder else 1
             else:
                 rbln_config.transformer.num_frames = 121
 
@@ -222,7 +222,6 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
                 rbln_config.transformer.height = 768
             else:
                 rbln_config.transformer.height = 704
-
 
         if rbln_config.transformer.width is None:
             if pipe.transformer.config.extra_pos_embed_type is None and not rbln_config.vae.uses_encoder:
