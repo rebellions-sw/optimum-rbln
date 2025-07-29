@@ -625,6 +625,7 @@ class DecoderOnlyLayer(nn.Module):
         self._original_mod = layer
         self.self_attn = self_attn
         self._phase = "prefill"
+        self.mlp = layer.mlp
 
     @property
     def phase(self):
@@ -668,7 +669,7 @@ class DecoderOnlyLayer(nn.Module):
         # Fully Connected
         residual = hidden_states
         hidden_states = self.get_post_attention_layernorm()(hidden_states)
-        hidden_states = self._original_mod.mlp(hidden_states)
+        hidden_states = self.mlp(hidden_states)
         hidden_states = residual + hidden_states
 
         return hidden_states
