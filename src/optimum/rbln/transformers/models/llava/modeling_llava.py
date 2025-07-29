@@ -124,6 +124,29 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
             },
         )
         model.save_pretrained("compiled-llava-1.5-7b-hf")
+
+        # Using a RBLNLlavaForConditionalGenerationConfig instance (recommended for type checking)
+        from optimum.rbln import RBLNLlavaForConditionalGenerationConfig
+        vision_config = RBLNCLIPVisionModelConfig(
+            batch_size=1,
+            output_hidden_states=True
+        )
+        language_model_config = RBLNLlamaForCausalLMConfig(
+            batch_size=1,
+            max_seq_len=4096,
+            use_inputs_embeds=True,
+            tensor_parallel_size=4
+        )
+        llava_config = RBLNLlavaForConditionalGenerationConfig(
+            batch_size=1,
+            vision_tower=vision_config,
+            language_model=language_model_config
+        )
+        model = RBLNLlavaForConditionalGeneration.from_pretrained(
+            "llava-hf/llava-1.5-7b-hf",
+            export=True,
+            rbln_config=llava_config
+        )
         ```
     """
 
