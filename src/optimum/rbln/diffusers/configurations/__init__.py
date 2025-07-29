@@ -10,6 +10,8 @@ from .models import (
     RBLNVQModelConfig,
 )
 from .pipelines import (
+    RBLNCosmos2TextToImagePipelineConfig,
+    RBLNCosmos2VideoToWorldPipelineConfig,
     RBLNCosmosTextToWorldPipelineConfig,
     RBLNCosmosVideoToWorldPipelineConfig,
     RBLNKandinskyV22CombinedPipelineConfig,
