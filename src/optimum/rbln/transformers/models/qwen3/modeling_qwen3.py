@@ -32,6 +32,56 @@ if TYPE_CHECKING:
 
 
 class RBLNQwen3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
+    """
+    The Qwen3 Model transformer with a language modeling head (linear layer) on top.
+    This model inherits from [`RBLNDecoderOnlyModelForCausalLM`]. Check the superclass documentation for the generic methods the library implements for all its models.
+    A class to convert and run pre-trained transformers based Qwen3ForCausalLM model on RBLN devices.
+    It implements the methods to convert a pre-trained transformers Qwen3ForCausalLM model into a RBLN transformer model by:
+    - transferring the checkpoint weights of the original into an optimized RBLN graph,
+    - compiling the resulting graph using the RBLN compiler.
+    **Configuration:**
+    This model uses [`RBLNQwen3ForCausalLMConfig`] for configuration. When calling methods like `from_pretrained` or `from_model`,
+    the `rbln_config` parameter should be an instance of [`RBLNQwen3ForCausalLMConfig`] or a dictionary conforming to its structure.
+    See the [`RBLNQwen3ForCausalLMConfig`] class for all available configuration options.
+    Examples:
+        ```python
+        from optimum.rbln import RBLNQwen3ForCausalLM
+        # Simple usage using rbln_* arguments
+        # `max_seq_len` is automatically inferred from the model config
+        model = RBLNQwen3ForCausalLM.from_pretrained(
+            "Qwen/Qwen3-4B",
+            export=True,
+            rbln_batch_size=1,
+            rbln_tensor_parallel_size=4,
+        )
+        # Using a config dictionary
+        rbln_config = {
+            "batch_size": 1,
+            "max_seq_len": 40_960,
+            "tensor_parallel_size": 4,
+            "kvcache_partition_len": 8192,
+        }
+        model = RBLNQwen3ForCausalLM.from_pretrained(
+            "Qwen/Qwen3-4B",
+            export=True,
+            rbln_config=rbln_config
+        )
+        # Using a RBLNQwen3ForCausalLMConfig instance (recommended for type checking)
+        from optimum.rbln import RBLNQwen3ForCausalLMConfig
+        config = RBLNQwen3ForCausalLMConfig(
+            batch_size=1,
+            max_seq_len=40_960,
+            tensor_parallel_size=4,
+            kvcache_partition_len=8192,
+        )
+        model = RBLNQwen3ForCausalLM.from_pretrained(
+            "Qwen/Qwen3-4B",
+            export=True,
+            rbln_config=config
+        )
+        ```
+    """
+
     _decoder_wrapper_cls = Qwen3Wrapper
 
     @classmethod
@@ -53,5 +103,31 @@ class RBLNQwen3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
 
 class RBLNQwen3Model(RBLNDecoderOnlyModel):
+    """
+    The bare Qwen3 Model outputting raw hidden-states without any specific head on top.
+    This model inherits from [`RBLNDecoderOnlyModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
+    A class to convert and run pre-trained transformers based Qwen3Model on RBLN devices.
+    It implements the methods to convert a pre-trained transformers Qwen3Model into a RBLN transformer model by:
+    - transferring the checkpoint weights of the original into an optimized RBLN graph,
+    - compiling the resulting graph using the RBLN compiler.
+    **Configuration:**
+    This model uses [`RBLNQwen3ModelConfig`] for configuration. When calling methods like `from_pretrained` or `from_model`,
+    the `rbln_config` parameter should be an instance of [`RBLNQwen3ModelConfig`] or a dictionary conforming to its structure.
+    See the [`RBLNQwen3ModelConfig`] class for all available configuration options.
+    Examples:
+        ```python
+        from optimum.rbln import RBLNQwen3Model
+        # Simple usage using rbln_* arguments
+        # `max_seq_len` is automatically inferred from the model config
+        model = RBLNQwen3Model.from_pretrained(
+            "Qwen/Qwen3-Embedding-4B",
+            export=True,
+            rbln_batch_size=1,
+            rbln_max_seq_len=40_960,
+            rbln_tensor_parallel_size=4,
+            rbln_kvcache_partition_len=8192,
+        )
+    """
+
     _decoder_wrapper_cls = Qwen3Wrapper
     _use_rotary_emb = True
