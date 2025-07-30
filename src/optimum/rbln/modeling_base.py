@@ -372,7 +372,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     def from_pretrained(
         cls: Type["RBLNBaseModel"],
         model_id: Union[str, Path],
-        export: bool = False,
+        export: bool = None,
         rbln_config: Optional[Union[Dict, RBLNModelConfig]] = None,
         **kwargs: Any,
     ) -> "RBLNBaseModel":
