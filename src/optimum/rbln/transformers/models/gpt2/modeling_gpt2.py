@@ -47,6 +47,8 @@ class RBLNGPT2Model(RBLNDecoderOnlyModel):
 
     A class to convert and run pre-trained transformers based GPT2Model model on RBLN devices.
     It implements the methods to convert a pre-trained transformers GPT2Model model into a RBLN transformer model by:
+    - transferring the checkpoint weights of the original into an optimized RBLN graph,
+    - compiling the resulting graph using the RBLN compiler.
     """
 
     _decoder_wrapper_cls = GPT2Wrapper

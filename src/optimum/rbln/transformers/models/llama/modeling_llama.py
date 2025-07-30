@@ -85,11 +85,20 @@ class RBLNLlamaForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
 class RBLNLlamaModel(RBLNDecoderOnlyModel):
     """
-    The Llama Model transformer with a language modeling head (linear layer) on top.
+    The Llama Model transformer outputting raw hidden-states without any specific head on top.
     This model inherits from [`RBLNDecoderOnlyModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
 
-    A class to convert and run pre-trained transformers based LlamaModel model on RBLN devices.
-    It implements the methods to convert a pre-trained transformers LlamaModel model into a RBLN transformer model by:
+    A class to convert and run pre-trained transformers based LlamaModel on RBLN devices.
+    It implements the methods to convert a pre-trained transformers LlamaModel into a RBLN transformer model by:
+
+    - transferring the checkpoint weights of the original into an optimized RBLN graph,
+    - compiling the resulting graph using the RBLN compiler.
+
+    **Configuration:**
+    This model uses [`RBLNLlamaModelConfig`] for configuration. When calling methods like `from_pretrained` or `from_model`,
+    the `rbln_config` parameter should be an instance of [`RBLNLlamaModelConfig`] or a dictionary conforming to its structure.
+
+    See the [`RBLNLlamaModelConfig`] class for all available configuration options.
     """
 
     _decoder_wrapper_cls = LlamaWrapper
