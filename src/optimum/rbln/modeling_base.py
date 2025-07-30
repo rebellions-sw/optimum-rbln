@@ -343,6 +343,32 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         return rbln_config, kwargs
 
     @classmethod
+    def _is_compiled(
+        cls,
+        model_id: Union[str, Path],
+        token: Optional[Union[bool, str]] = None,
+        revision: Optional[str] = None,
+        force_download: bool = False,
+        cache_dir: Optional[str] = None,
+        subfolder: str = "",
+        local_files_only: bool = False,
+    ) -> bool:
+        # Check if the model is already compiled.
+        try:
+            cls._load_compiled_model_dir(
+                model_id=model_id,
+                token=token,
+                revision=revision,
+                force_download=force_download,
+                cache_dir=cache_dir,
+                subfolder=subfolder,
+                local_files_only=local_files_only,
+            )
+            return True
+        except (FileNotFoundError, KeyError):
+            return False
+
+    @classmethod
     def from_pretrained(
         cls: Type["RBLNBaseModel"],
         model_id: Union[str, Path],
@@ -368,6 +394,18 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
         if isinstance(model_id, Path):
             model_id = model_id.as_posix()
+
+        if export is None:
+            export = not cls._is_compiled(
+                model_id=model_id,
+                token=kwargs.get("token"),
+                revision=kwargs.get("revision"),
+                force_download=kwargs.get("force_download", False),
+                cache_dir=kwargs.get("cache_dir"),
+                subfolder=kwargs.get("subfolder", ""),
+                local_files_only=kwargs.get("local_files_only", False),
+            )
+
         from_pretrained_method = cls._export if export else cls._from_pretrained
         return from_pretrained_method(model_id=model_id, **kwargs, rbln_config=rbln_config)
 
