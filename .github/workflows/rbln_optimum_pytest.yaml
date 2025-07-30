@@ -1,4 +1,4 @@
-name: Optimum-rbln / PR / Pytest
+name: Optimum-rbln / Tests
 
 on:
   workflow_call:
@@ -35,12 +35,12 @@ env:
   HF_AUTH_TOKEN: ${{ inputs.enable_hf_hub_tests && secrets.HF_AUTH_TOKEN || '' }}
 
 jobs:
-  pytest:
-    name: Pytest (${{ matrix.test_type }})
+  test:
+    name: Test (${{ matrix.test_type }})
     runs-on: vm-ci-0
     strategy:
       matrix:
-        test_type: [config, transformers, diffusers, llm]
+        test_type: [config, transformers, diffusers, llm, cli-basic, cli-argument-parsing, cli-error-handling]
     steps:
       - name: Checkout the optimum-rbln repository
         uses: actions/checkout@v4
@@ -80,6 +80,15 @@ jobs:
                 SKIP=true
               fi
               ;;
+            cli-*)
+              if [[ "$COMMIT_MESSAGE" == *"[skip-cli]"* ]]; then
+                SKIP=true
+              fi
+              # Skip advanced CLI tests if test_level is default
+              if [[ "${{ inputs.test_level }}" == "default" && "${{ matrix.test_type }}" != "cli-basic" ]]; then
+                SKIP=true
+              fi
+              ;;
           esac
           
           echo "skip=$SKIP" >> $GITHUB_OUTPUT
@@ -106,7 +115,7 @@ jobs:
           PYPI_URL=$(echo ${{ env.REBEL_PYPI_ENDPOINT }} | sed "s/\/\//\0${{ env.REBEL_PYPI_USERNAME}}:${{ env.REBEL_PYPI_PASSWORD}}@/")
           uv pip install --extra-index-url $PYPI_URL rebel-compiler==${{ inputs.rebel_compiler_version }}
 
-      - name: Run pytest
+      - name: Run tests
         if: steps.should_skip.outputs.skip != 'true'
         env:
           OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
@@ -123,6 +132,22 @@ jobs:
               ;;
             "llm")
               uv run --no-sync pytest tests/test_llm.py -vv --durations 0
+              ;;
+            cli-*)
+              # Extract test type from matrix
+              case "${{ matrix.test_type }}" in
+                "cli-basic")
+                  CLI_TEST_TYPE="basic"
+                  ;;
+                "cli-argument-parsing")
+                  CLI_TEST_TYPE="argument-parsing"
+                  ;;
+                "cli-error-handling")
+                  CLI_TEST_TYPE="error-handling"
+                  ;;
+              esac
+              echo "Running CLI test: $CLI_TEST_TYPE"
+              python .github/scripts/test_cli.py "$CLI_TEST_TYPE"
               ;;
           esac
 
