@@ -147,7 +147,7 @@ jobs:
                   ;;
               esac
               echo "Running CLI test: $CLI_TEST_TYPE"
-              python .github/scripts/test_cli.py "$CLI_TEST_TYPE"
+              uv run --no-sync .github/scripts/test_cli.py "$CLI_TEST_TYPE"
               ;;
           esac
 

@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import argparse
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -52,17 +53,54 @@ def parse_value(value_str):
         value_str: String value to parse
 
     Returns:
-        Parsed value (bool, int, float, or str)
+        Parsed value (bool, int, float, list, dict, or str)
     """
+    # First try to parse as JSON (handles dicts, lists, etc.)
+    try:
+        return json.loads(value_str)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Handle boolean values
     if value_str.lower() in ["true", "false"]:
         return value_str.lower() == "true"
-    elif value_str.isdigit():
+
+    # Handle comma-separated values as lists
+    if "," in value_str:
+        parts = [part.strip() for part in value_str.split(",")]
+        # Recursively parse each part
+        return [parse_single_value(part) for part in parts]
+
+    # Handle single values
+    return parse_single_value(value_str)
+
+
+def parse_single_value(value_str):
+    """
+    Parse a single string value to appropriate Python type.
+
+    Args:
+        value_str: String value to parse (no commas)
+
+    Returns:
+        Parsed value (bool, int, float, or str)
+    """
+    # Handle boolean values
+    if value_str.lower() in ["true", "false"]:
+        return value_str.lower() == "true"
+
+    # Handle integer values
+    if value_str.isdigit() or (value_str.startswith("-") and value_str[1:].isdigit()):
         return int(value_str)
-    else:
-        try:
-            return float(value_str)
-        except ValueError:
-            return value_str
+
+    # Handle float values
+    try:
+        return float(value_str)
+    except ValueError:
+        pass
+
+    # Return as string if all else fails
+    return value_str
 
 
 def main():
