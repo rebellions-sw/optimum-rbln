@@ -156,15 +156,15 @@ class Qwen2_5_VLVisionWindowAttention(nn.Module):
 class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
     def prepare_forward_args(self, *args):
         args = list(args)
-        input_ids = None if self.use_inputs_embeds else args.pop(0)
-        inputs_embeds = args.pop(0) if self.use_inputs_embeds else None
+        input_ids = None if self.rbln_config.use_inputs_embeds else args.pop(0)
+        inputs_embeds = args.pop(0) if self.rbln_config.use_inputs_embeds else None
         cache_position = args.pop(0)
         global_block_tables = args.pop(0)
         local_block_tables = None
         position_embeds = args.pop(0)
         query_position = args.pop(0) if self.phase == "prefill" else None
         position_ids = None
-        attention_mask = args.pop(0) if self.use_attention_mask else None
+        attention_mask = args.pop(0) if self.rbln_config.use_attention_mask else None
         past_key_values = args
 
         if len(past_key_values) != 2 * self.num_hidden_layers:
