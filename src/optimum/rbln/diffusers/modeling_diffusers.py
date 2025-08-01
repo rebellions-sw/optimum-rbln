@@ -184,7 +184,15 @@ class RBLNDiffusionMixin:
         if export is None:
             export = False
             for submodule_name in cls._submodules:
-                if not RBLNModel._is_compiled(model_id, subfolder=submodule_name, **kwargs):
+                if not RBLNModel._is_compiled(
+                    model_id,
+                    token=kwargs.get("token"),
+                    revision=kwargs.get("revision"),
+                    force_download=kwargs.get("force_download", False),
+                    cache_dir=kwargs.get("cache_dir"),
+                    subfolder=submodule_name,
+                    local_files_only=kwargs.get("local_files_only", False),
+                ):
                     export = True
                     break
 
