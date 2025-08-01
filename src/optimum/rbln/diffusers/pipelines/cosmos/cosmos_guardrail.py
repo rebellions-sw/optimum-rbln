@@ -327,7 +327,9 @@ class RBLNLlamaGuard3(LlamaGuard3):
 
         else:
             super().__init__(checkpoint_id, base_model_id)
-            self.model = RBLNAutoModelForCausalLM.from_model(self.model, rbln_config=rbln_config.llamaguard3)
+            model = self.model
+            del self.model
+            self.model = RBLNAutoModelForCausalLM.from_model(model, rbln_config=rbln_config.llamaguard3)
 
         self.rbln_config = rbln_config
         self.dtype = torch.bfloat16
