@@ -15,13 +15,12 @@
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Deque, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Deque, List, Optional, Tuple, Union
 
 import rebel
 import torch
 from rebel.compile_context import CompileContext
 from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, PretrainedConfig, PreTrainedModel
-from transformers.generation.utils import GenerationMixin
 from transformers.modeling_outputs import BaseModelOutputWithPast
 from transformers.modeling_utils import no_init_weights
 from transformers.utils import ModelOutput
@@ -39,6 +38,7 @@ from ...modeling_attention_utils import (
 from ...utils.rbln_quantization import prepare_model_for_quantization
 from .configuration_decoderonly import RBLNDecoderOnlyModelConfig, RBLNDecoderOnlyModelForCausalLMConfig
 from .decoderonly_architecture import DecoderOnlyWrapper
+from .generation_decoderonly import RBLNDecoderOnlyGenerationMixin
 
 
 logger = get_logger()
@@ -1084,7 +1084,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         return BaseModelOutputWithPast(last_hidden_state=last_hidden_states)
 
 
-class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, GenerationMixin):
+class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGenerationMixin):
     """
     A base class for decoder-only transformer models optimized for causal language modeling tasks on RBLN devices.
     This class serves as the foundation for various decoder-only architectures like GPT, LLaMA, etc.
@@ -1106,7 +1106,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, GenerationMixin):
     """
 
     auto_model_class = AutoModelForCausalLM
-    _supports_cache_class = False  # Needed for GenerationMixin
 
     def __post_init__(self, **kwargs):
         main_input_name = self.main_input_name
@@ -1164,67 +1163,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, GenerationMixin):
     @classmethod
     def use_query_position(cls, use_local_attention: bool, is_prefill: bool = True):
         return is_prefill
-
-    def _reorder_cache(self, past_key_values, beam_idx):
-        raise NotImplementedError
-
-    def prepare_inputs_for_generation(
-        self,
-        input_ids: torch.LongTensor,
-        generate_idx: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.LongTensor] = None,
-        inputs_embeds: Optional[torch.Tensor] = None,
-        padded_cache_lengths: Optional[torch.Tensor] = None,
-        **kwargs,
-    ):
-        model_inputs = {}
-        is_prefill_phase = generate_idx is None
-
-        if is_prefill_phase:
-            generate_idx = attention_mask.sum(dim=-1, keepdim=True).int()
-            padded_cache_lengths = torch.zeros_like(generate_idx)
-            cache_position = None
-            position_ids = None
-        else:
-            if inputs_embeds is not None:
-                # if `inputs_embeds` are passed, only use them in the 1st generation step for every prompt.
-                inputs_embeds = None
-
-            input_ids = input_ids[:, -1:]
-            position_ids = generate_idx
-            cache_position = generate_idx + padded_cache_lengths if padded_cache_lengths is not None else generate_idx
-            generate_idx = generate_idx + 1
-            model_inputs.update({"input_ids": input_ids})
-
-        if inputs_embeds is not None:
-            if self.rbln_config.use_inputs_embeds:
-                model_inputs.update({"inputs_embeds": inputs_embeds})
-            else:
-                raise ValueError(
-                    "The specifying inputs_embeds is only supported when using a compiled RBLN model with 'rbln_use_inputs_embeds' set to True."
-                )
-        else:
-            model_inputs.update({"input_ids": input_ids})
-
-        model_inputs.update(
-            {
-                "attention_mask": attention_mask,
-                "cache_position": cache_position,
-                "generate_idx": generate_idx,
-                "position_ids": position_ids,
-                "padded_cache_lengths": padded_cache_lengths,
-            }
-        )
-
-        return model_inputs
-
-    def _update_model_kwargs_for_generation(
-        self, outputs: RBLNDecoderOnlyForCausalLMOutput, model_kwargs: Dict[str, Any], **kwargs
-    ) -> Dict[str, Any]:
-        # update generate_idx
-        model_kwargs["generate_idx"] = outputs.generate_idx
-        model_kwargs["padded_cache_lengths"] = outputs.padded_cache_lengths
-        return model_kwargs
 
     def forward(
         self,
