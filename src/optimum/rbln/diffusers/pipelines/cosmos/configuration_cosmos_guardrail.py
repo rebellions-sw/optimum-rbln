@@ -56,11 +56,11 @@ class RBLNCosmosSafetyCheckerConfig(RBLNModelConfig):
     Configuration class for RBLN Cosmos Safety Checker.
     """
 
-    submodules = ["aegis", "video_safety_model", "face_blur_filter", "siglip_encoder"]
+    submodules = ["llamaguard3", "video_safety_model", "face_blur_filter", "siglip_encoder"]
 
     def __init__(
         self,
-        aegis: Optional[RBLNModelConfig] = None,
+        llamaguard3: Optional[RBLNModelConfig] = None,
         video_safety_model: Optional[RBLNModelConfig] = None,
         face_blur_filter: Optional[RBLNModelConfig] = None,
         siglip_encoder: Optional[RBLNSiglipVisionModelConfig] = None,
@@ -77,9 +77,9 @@ class RBLNCosmosSafetyCheckerConfig(RBLNModelConfig):
 
         tensor_parallel_size = kwargs.get("tensor_parallel_size")
 
-        self.aegis = self.init_submodule_config(
+        self.llamaguard3 = self.init_submodule_config(
             RBLNLlamaForCausalLMConfig,
-            aegis,
+            llamaguard3,
             batch_size=batch_size,
             tensor_parallel_size=tensor_parallel_size,
         )
