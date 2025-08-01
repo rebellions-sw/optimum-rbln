@@ -20,7 +20,6 @@ from torch import nn
 from transformers import PretrainedConfig, PreTrainedModel
 
 from ....utils import logging
-from ...modeling_attention_utils import DEFAULT_FLASH_ATTN_PARTITION_LENGTH
 from ...modeling_rope_utils import ROPE_INIT_FUNCTIONS
 
 
@@ -71,14 +70,6 @@ class DecoderOnlyWrapper(nn.Module):
                 self.rotary_emb = rotary_embs
         else:
             self.rotary_emb = None
-
-        # Only store computed values that are different from config
-        if rbln_config.attn_impl == "flash_attn":
-            self.kvcache_partition_len = rbln_config.kvcache_partition_len or DEFAULT_FLASH_ATTN_PARTITION_LENGTH
-        elif rbln_config.attn_impl == "eager":
-            self.kvcache_partition_len = None
-        else:
-            raise ValueError(f"Unknown attn_impl : {rbln_config.attn_impl}")
 
         if rbln_config.kvcache_partition_len and rbln_config.kvcache_partition_len > rbln_config.max_seq_len:
             raise ValueError(
