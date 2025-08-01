@@ -33,9 +33,9 @@ if is_cosmos_guardrail_available():
     from cosmos_guardrail import CosmosSafetyChecker
     from cosmos_guardrail.cosmos_guardrail import (
         COSMOS_GUARDRAIL_CHECKPOINT,
-        LlamaGuard3,
         Blocklist,
         GuardrailRunner,
+        LlamaGuard3,
         ModelConfig,
         RetinaFaceFilter,
         SafetyClassifier,
@@ -327,10 +327,7 @@ class RBLNLlamaGuard3(LlamaGuard3):
 
         else:
             super().__init__(checkpoint_id, base_model_id)
-            model = self.model.merge_and_unload()  # peft merge
-            del self.model
-
-            self.model = RBLNAutoModelForCausalLM.from_model(model, rbln_config=rbln_config.llamaguard3)
+            self.model = RBLNAutoModelForCausalLM.from_model(self.model, rbln_config=rbln_config.llamaguard3)
 
         self.rbln_config = rbln_config
         self.dtype = torch.bfloat16
