@@ -246,6 +246,15 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         local_block_tables: Optional[torch.Tensor] = None,
         lora_int_id: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
+        if self.rbln_config.use_lora and lora_int_id is None:
+            if self.lora_int_ids is None:
+                raise ValueError(
+                    "lora_int_id is required when using LoRA. "
+                    "You should call set_lora_int_ids() before forward() or pass lora_int_id to forward()."
+                )
+            
+            lora_int_id = self.lora_int_ids
+
         batch_size = inputs.shape[0]
         if batch_size != self.batch_size:
             raise RuntimeError(
@@ -390,6 +399,14 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         Instead of processing the entire sequence at once, the input is divided into chunks of size `prefill_chunk_size`,
         and each chunk is processed sequentially. This allows for better memory utilization and compatibility with continuous batching.
         """
+        if self.rbln_config.use_lora and lora_int_id is None:
+            if self.lora_int_ids is None:
+                raise ValueError(
+                    "lora_int_id is required when using LoRA. "
+                    "You should call set_lora_int_ids() before forward() or pass lora_int_id to forward()."
+                )
+            lora_int_id = self.lora_int_ids
+
         (
             inputs,
             cache_position,
@@ -1192,6 +1209,10 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
             lora_int_ids = torch.tensor(lora_int_ids, dtype=torch.int32)
 
         self.lora_int_ids = lora_int_ids
+
+        self.prefill_decoder.lora_int_ids = lora_int_ids
+        for batch_size in self.rbln_config.decoder_batch_sizes:
+            self.decoders[batch_size].lora_int_ids = lora_int_ids
 
     def set_adapter(self, adapter_name: Union[str, List[str]]) -> None:
         """
