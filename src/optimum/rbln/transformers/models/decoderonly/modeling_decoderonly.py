@@ -574,6 +574,14 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             )
         return embed_tokens
 
+    def get_decoder(self):
+        if not self.can_generate():
+            raise ValueError("Decode stage is not supported in this model.")
+        return self.decoder
+
+    def can_generate(self):
+        return self.rbln_config.can_generate
+
     def get_input_embeddings(self):
         return self.embed_tokens
 
@@ -821,10 +829,40 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             max_seq_len=rbln_config.max_seq_len,
         )
 
+        required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
+        max_num_blocks = required_num_blocks
+
+        if rbln_config.attn_impl == "flash_attn":
+            estimated_max_num_blocks = cls.get_maximum_num_blocks(
+                config=model_config,
+                tensor_parallel_size=rbln_config.tensor_parallel_size or 1,
+                kvcache_block_size=rbln_config.kvcache_block_size,
+                nbits_per_param=16 if not rbln_config.quantization else 4,  # TODO(jongho): FIX Ad-hoc
+                n_model_params=sum(p.numel() for p in model.parameters()),
+                num_runtimes=1 if not rbln_config.can_generate else 1 + len(rbln_config.decoder_batch_sizes),
+            )
+
+            max_num_blocks = min(max_num_blocks, estimated_max_num_blocks)
+
+            flash_min_blocks = rbln_config.max_seq_len // rbln_config.kvcache_block_size + 1
+            if rbln_config.batch_size > 1 and max_num_blocks < flash_min_blocks:
+                max_num_blocks = flash_min_blocks
+
+            if max_num_blocks < rbln_config.batch_size:
+                raise RuntimeError(
+                    f"Batch size ({rbln_config.batch_size}) exceeds available KV cache blocks ({max_num_blocks}). "
+                    "Ensure the number of blocks is at least equal to the batch size."
+                )
+
         if rbln_config.kvcache_num_blocks is None:
-            rbln_config.kvcache_num_blocks = (
-                rbln_config.max_seq_len // rbln_config.kvcache_block_size
-            ) * rbln_config.batch_size
+            rbln_config.kvcache_num_blocks = max_num_blocks
+        elif rbln_config.kvcache_num_blocks > max_num_blocks:
+            logger.warning(
+                f"The set `kvcache_num_blocks` ({rbln_config.kvcache_num_blocks}) is greater"
+                f" than the estimated maximum number of blocks ({max_num_blocks})."
+                "This can cause a failure during model compilation."
+            )
+        logger.info(f"[KVCache] Compiling with num_blocks: {rbln_config.kvcache_num_blocks}")
 
         return rbln_config
 
@@ -1127,69 +1165,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, GenerationMixin):
     def use_query_position(cls, use_local_attention: bool, is_prefill: bool = True):
         return is_prefill
 
-    @classmethod
-    def _update_attention_config(
-        cls, model: PreTrainedModel, model_config: PretrainedConfig, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig
-    ):
-        rbln_config.attn_impl, rbln_config.kvcache_partition_len, rbln_config.kvcache_block_size = set_default_values(
-            attn_impl=rbln_config.attn_impl,
-            kvcache_partition_len=rbln_config.kvcache_partition_len,
-            kvcache_block_size=rbln_config.kvcache_block_size,
-            max_seq_len=rbln_config.max_seq_len,
-        )
-
-        validate_attention_method(
-            attn_impl=rbln_config.attn_impl,
-            kvcache_partition_len=rbln_config.kvcache_partition_len,
-            kvcache_block_size=rbln_config.kvcache_block_size,
-            max_seq_len=rbln_config.max_seq_len,
-        )
-
-        required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
-        max_num_blocks = required_num_blocks
-
-        if rbln_config.attn_impl == "flash_attn":
-            estimated_max_num_blocks = cls.get_maximum_num_blocks(
-                config=model_config,
-                tensor_parallel_size=rbln_config.tensor_parallel_size or 1,
-                kvcache_block_size=rbln_config.kvcache_block_size,
-                nbits_per_param=16 if not rbln_config.quantization else 4,  # TODO(jongho): FIX Ad-hoc
-                n_model_params=sum(p.numel() for p in model.parameters()),
-                num_runtimes=1 if not rbln_config.can_generate else 1 + len(rbln_config.decoder_batch_sizes),
-            )
-
-            max_num_blocks = min(max_num_blocks, estimated_max_num_blocks)
-
-            flash_min_blocks = rbln_config.max_seq_len // rbln_config.kvcache_block_size + 1
-            if rbln_config.batch_size > 1 and max_num_blocks < flash_min_blocks:
-                max_num_blocks = flash_min_blocks
-
-            if max_num_blocks < rbln_config.batch_size:
-                raise RuntimeError(
-                    f"Batch size ({rbln_config.batch_size}) exceeds available KV cache blocks ({max_num_blocks}). "
-                    "Ensure the number of blocks is at least equal to the batch size."
-                )
-
-        if rbln_config.kvcache_num_blocks is None:
-            rbln_config.kvcache_num_blocks = max_num_blocks
-        elif rbln_config.kvcache_num_blocks > max_num_blocks:
-            logger.warning(
-                f"The set `kvcache_num_blocks` ({rbln_config.kvcache_num_blocks}) is greater"
-                f" than the estimated maximum number of blocks ({max_num_blocks})."
-                "This can cause a failure during model compilation."
-            )
-        logger.info(f"[KVCache] Compiling with num_blocks: {rbln_config.kvcache_num_blocks}")
-
-        return rbln_config
-
-    def get_decoder(self):
-        if not self.can_generate():
-            raise ValueError("Decode stage is not supported in this model.")
-        return self.decoder
-
-    def can_generate(self):
-        return self.rbln_config.can_generate
-
     def _reorder_cache(self, past_key_values, beam_idx):
         raise NotImplementedError
 
@@ -1244,15 +1219,11 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, GenerationMixin):
         return model_inputs
 
     def _update_model_kwargs_for_generation(
-        self,
-        outputs: RBLNDecoderOnlyForCausalLMOutput,
-        model_kwargs: Dict[str, Any],
-        **kwargs,
+        self, outputs: RBLNDecoderOnlyForCausalLMOutput, model_kwargs: Dict[str, Any], **kwargs
     ) -> Dict[str, Any]:
         # update generate_idx
         model_kwargs["generate_idx"] = outputs.generate_idx
         model_kwargs["padded_cache_lengths"] = outputs.padded_cache_lengths
-
         return model_kwargs
 
     def forward(
