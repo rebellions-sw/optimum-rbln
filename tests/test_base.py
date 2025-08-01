@@ -109,7 +109,6 @@ class BaseHubTest:
 
             _ = self.RBLN_CLASS.from_pretrained(
                 f"{HF_USER_ID}/{self.get_hf_remote_dir()}",
-                export=False,
                 **self.HF_CONFIG_KWARGS,
                 rbln_device=self.DEVICE,
                 token=HF_AUTH_TOKEN,
@@ -146,7 +145,6 @@ class BaseTest:
 
             cls.model = cls.RBLN_CLASS.from_pretrained(
                 cls.HF_MODEL_ID,
-                export=True,
                 model_save_dir=cls.get_rbln_local_dir(),
                 rbln_device=cls.DEVICE,
                 **cls.RBLN_CLASS_KWARGS,
@@ -219,7 +217,6 @@ class BaseTest:
                     # Test load
                     _ = self.RBLN_CLASS.from_pretrained(
                         tmpdir,
-                        export=False,
                         **self.HF_CONFIG_KWARGS,
                     )
 
@@ -228,7 +225,6 @@ class BaseTest:
                     self.model.save_pretrained(tmpdir)
                     _ = self.RBLN_CLASS.from_pretrained(
                         tmpdir,
-                        export=False,
                         rbln_create_runtimes=False,
                         **self.HF_CONFIG_KWARGS,
                     )
@@ -242,7 +238,6 @@ class BaseTest:
                 # Test model_save_dir
                 _ = self.RBLN_CLASS.from_pretrained(
                     self.get_rbln_local_dir(),
-                    export=False,
                     rbln_create_runtimes=False,
                     **self.HF_CONFIG_KWARGS,
                 )
@@ -294,7 +289,6 @@ class DisallowedTestBase:
             try:
                 _ = self.RBLN_CLASS.from_pretrained(
                     self.HF_MODEL_ID,
-                    export=True,
                     model_save_dir=self.get_rbln_local_dir(),
                     **self.RBLN_CLASS_KWARGS,
                     **self.HF_CONFIG_KWARGS,
