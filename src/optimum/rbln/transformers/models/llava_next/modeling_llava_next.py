@@ -28,6 +28,7 @@ from transformers.models.llava_next.modeling_llava_next import (
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
+from ...utils.rbln_runtime_wrapper import LoopProcessor
 from ....utils.logging import get_logger
 from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyForCausalLMOutput
 
@@ -38,45 +39,39 @@ if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
 
 
-class LoopVisionTower:
-    def __init__(self, vision_tower: RBLNModel) -> None:
-        self.vision_tower = vision_tower
+class LoopVisionTower(LoopProcessor):
+    def __init__(self, vision_tower: "RBLNModel"):
+        super().__init__(model=vision_tower.model[0])
+        
+    def _get_batch_size(self, pixel_values, **kwargs):
+        return pixel_values.shape[0]
 
-    def forward(self, *args, **kwargs):
-        # Loop instead of batch
-        # shape of pixel_values : [batch, num_patches, num_channel, height, width]
-        pixel_values = args[0]
+    def _prepare_inputs_for_iteration(self, index, pixel_values, **kwargs):
+        pixel_values_item = pixel_values[index: index+1]
+        return ([pixel_values_item], {})
+    
+    def _process_outputs(self, outputs: list) -> "BaseModelOutputWithPooling":
+        last_hidden_states = torch.cat([output[0] for output in outputs], dim=0)
+        pooler_output = torch.cat([output[1] for output in outputs], dim=0)
+        hidden_states_per_item = [output[2:] for output in outputs]
+        
+        if not hidden_states_per_item:
+            hidden_states = None
+        else:
+            num_hidden_layers = len(hidden_states_per_item[0])
+            batch_size = len(outputs)
 
-        batch_size = pixel_values.shape[0]
-        outputs = []
-        for i in range(batch_size):
-            outputs.append(self.vision_tower.model[0](pixel_values[i : i + 1]))
-
-        last_hidden_states = [output[0] for output in outputs]
-        pooler_output = [output[1] for output in outputs]
-
-        # FIXME:: This can be optimized using out= API of rbln runtime.
-        last_hidden_states = torch.cat(last_hidden_states, dim=0)
-        pooler_output = torch.cat(pooler_output, dim=0)
-
-        hidden_states = [output[2:] for output in outputs]  # batch x (hidden x 1)
-
-        hidden_states = tuple(
-            torch.cat(tuple((hidden_states[n][i] for n in range(batch_size))), dim=0)
-            for i in range(len(hidden_states[0]))
-        )  # hidden x (batch,)
-
+            hidden_states = tuple(
+                torch.cat(
+                    [hidden_states_per_item[b][l] for b in range(batch_size)],
+                    dim=0
+                ) for l in range(num_hidden_layers)
+            )
         return BaseModelOutputWithPooling(
             last_hidden_state=last_hidden_states,
             pooler_output=pooler_output,
             hidden_states=hidden_states,
         )
-
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
-        return self.forward(*args, **kwds)
-
-    def __repr__(self) -> str:
-        return repr(self.vision_tower)
 
 
 class LoopProjector:
