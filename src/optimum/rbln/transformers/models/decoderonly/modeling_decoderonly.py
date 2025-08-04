@@ -39,7 +39,7 @@ from ...modeling_attention_utils import (
 from ...utils.rbln_quantization import prepare_model_for_quantization
 from .configuration_decoderonly import RBLNDecoderOnlyModelConfig, RBLNDecoderOnlyModelForCausalLMConfig
 from .decoderonly_architecture import DecoderOnlyWrapper
-from .generation_decoderonly import RBLNDecoderOnlyGenerationMixin
+from .generation_decoderonly import RBLNDecoderOnlyGenerationMixin, RBLNDecoderOnlyChunkedPrefillMixin
 
 
 logger = get_logger()
@@ -461,7 +461,7 @@ class RBLNDecoderOnlyForCausalLMOutput(ModelOutput):
     padded_cache_lengths: int = None
 
 
-class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
+class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin, RBLNDecoderOnlyChunkedPrefillMixin):
     """
     A base class for decoder-only transformer models outputting raw hidden-states without any specific head on top.
     This class is used for RBLN-optimized models that are not causal language models.
@@ -500,14 +500,20 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         self.prefill_decoder = RBLNPytorchRuntime(runtime=self.model[0])
 
         # attributes for prefill
-        if self.rbln_config.use_global_attention:
-            self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
-        if self.rbln_config.use_local_attention:
-            self.local_block_tables = torch.tensor([0], dtype=torch.int16)
+        self.block_tables = (
+            torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
+            if self.rbln_config.use_global_attention
+            else None
+        )
+        self.local_block_tables = (
+            torch.tensor([0], dtype=torch.int16) if self.rbln_config.use_local_attention else None
+        )
         if self.rbln_config.use_attention_mask:
             self.causal_mask = 1 - torch.triu(
                 torch.ones(1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.prefill_chunk_size), diagonal=1
             )
+
+        self.output_size = (1, self.rbln_config.prefill_chunk_size, self.config.hidden_size)
 
     @classmethod
     def get_quantized_model(
@@ -973,100 +979,8 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             )
         return ret_val
 
-    def _preprocess_chunked_prefill(
-        self,
-        inputs: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_embed: Optional[torch.Tensor] = None,
-    ):
-        # valid sequence length of inputs_embeds
-        query_length = inputs.shape[1] if attention_mask is None else torch.sum(attention_mask.view(-1)).item()
-
-        # extract valid inputs
-        inputs = inputs[:, attention_mask.bool()] if attention_mask is not None else inputs
-
-        if inputs.dim() == 2 and self.rbln_config.use_inputs_embeds:
-            inputs = self.get_input_embeddings()(inputs)
-
-        if position_embed is not None:
-            position_embed = (
-                position_embed[:, :, :, attention_mask.bool(), :] if attention_mask is not None else position_embed
-            )
-
-        # padding for chunked prefill
-        padding_size = (
-            self.rbln_config.prefill_chunk_size - (query_length % self.rbln_config.prefill_chunk_size)
-        ) % self.rbln_config.prefill_chunk_size
-        padded_len = query_length + padding_size
-
-        inputs = (
-            torch.nn.functional.pad(inputs, (0, padding_size))
-            if not self.rbln_config.use_inputs_embeds
-            else torch.nn.functional.pad(inputs, (0, 0, 0, padding_size))
-        )
-        position_embed = (
-            None if position_embed is None else torch.nn.functional.pad(position_embed, (0, 0, 0, padding_size))
-        )
-        cache_position = torch.arange(padded_len, dtype=torch.int32).unsqueeze(0)
-
-        chunked_attention_mask = (
-            torch.zeros(1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.max_seq_len, dtype=torch.float32)
-            if self.rbln_config.use_attention_mask
-            else None
-        )
-
-        return inputs, position_embed, cache_position, query_length, chunked_attention_mask
-
-    def _chunked_prefill_forward(
-        self,
-        inputs: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_embed: Optional[torch.Tensor] = None,
-    ):
-        padded_input, padded_position_embed, cache_position, query_length, chunked_attention_mask = (
-            self._preprocess_chunked_prefill(inputs, attention_mask, position_embed)
-        )
-
-        # chunked prefill
-        last_hidden_states = []
-        for step in range(0, query_length, self.rbln_config.prefill_chunk_size):
-            # Extract the current chunk of inputs and cache positions
-            input_chunk = padded_input[:, step : step + self.rbln_config.prefill_chunk_size]
-            cache_pos_chunk = cache_position[:, step : step + self.rbln_config.prefill_chunk_size]
-
-            valid_length = (
-                self.rbln_config.prefill_chunk_size
-                if (step + self.rbln_config.prefill_chunk_size) <= query_length
-                else query_length - step
-            )
-            if self.rbln_config.use_local_attention:
-                query_position = torch.tensor(valid_length - 1, dtype=torch.int16)
-            else:
-                query_position = None
-
-            if self.rbln_config.use_attention_mask:
-                if step > 0:
-                    chunked_attention_mask[:, :, :, :step] = 1
-                chunked_attention_mask[:, :, :, step : step + self.rbln_config.prefill_chunk_size] = self.causal_mask
-
-            # Forward pass for the current chunk
-            last_hidden_states_chunk = self.prefill_decoder(
-                input_ids=input_chunk if not self.rbln_config.use_inputs_embeds else None,
-                inputs_embeds=input_chunk if self.rbln_config.use_inputs_embeds else None,
-                cache_position=cache_pos_chunk,
-                block_tables=self.block_tables if self.rbln_config.use_global_attention else None,
-                local_block_tables=self.local_block_tables if self.rbln_config.use_local_attention else None,
-                query_position=query_position,
-                attention_mask=chunked_attention_mask,
-                position_emb=padded_position_embed,
-            )
-            last_hidden_states.append(last_hidden_states_chunk)
-        last_hidden_states = torch.concat(last_hidden_states, dim=-2)[:, :query_length]
-
-        return self._postprocess_chunked_prefill(last_hidden_states, attention_mask)
-
     def _postprocess_chunked_prefill(
-        self, last_hidden_states: torch.Tensor, attention_mask: Optional[torch.Tensor] = None
+        self, last_hidden_states: torch.Tensor, attention_mask: Optional[torch.Tensor] = None, **kwargs
     ):
         # index copy for attention mask
         if attention_mask is not None:
@@ -1097,6 +1011,8 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
                 inputs[b_idx : b_idx + 1],
                 attention_mask[b_idx] if attention_mask is not None else None,
                 position_embed[b_idx : b_idx + 1] if position_embed is not None else None,
+                block_tables=self.block_tables,
+                local_block_tables=self.local_block_tables,
             )
             all_last_hidden_states.append(last_hidden_states)
 
