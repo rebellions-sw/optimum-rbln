@@ -35,7 +35,7 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
     """
 
     _default_phases = ["prefill"]
-    _default_logits_to_keep = None
+    _default_logits_to_keep = 0
 
     def __init__(
         self,
@@ -102,8 +102,8 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
             sliding_window_layers (Optional[List[int]]): The layers to use for the sliding window used in the hybrid model. Defaults to None.
             phases (Optional[List[PhaseType]]): The phases to compile the model for. Defaults to ["prefill"] if DecoderOnlyModel is used,
                 ["prefill", "decode"] if DecoderOnlyModelForCausalLM is used.
-            logits_to_keep (Optional[int]): The number of logits to keep for the decoder. Defaults to None if DecoderOnlyModel is used,
-                1 if DecoderOnlyModelForCausalLM is used.
+            logits_to_keep (Optional[int]): The number of logits to keep for the decoder.  If set to 0, the decoder will keep all logits.
+                Defaults to 0 if DecoderOnlyModel is used, 1 if DecoderOnlyModelForCausalLM is used.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
