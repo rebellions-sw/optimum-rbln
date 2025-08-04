@@ -13,8 +13,6 @@
 # limitations under the License.
 
 import inspect
-from collections import deque
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Deque, List, Optional, Tuple, Union
 
@@ -24,7 +22,6 @@ from rebel.compile_context import CompileContext
 from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, PretrainedConfig, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPast
 from transformers.modeling_utils import no_init_weights
-from transformers.utils import ModelOutput
 
 from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
@@ -39,7 +36,11 @@ from ...modeling_attention_utils import (
 from ...utils.rbln_quantization import prepare_model_for_quantization
 from .configuration_decoderonly import RBLNDecoderOnlyModelConfig, RBLNDecoderOnlyModelForCausalLMConfig
 from .decoderonly_architecture import DecoderOnlyWrapper
-from .generation_decoderonly import RBLNDecoderOnlyGenerationMixin, RBLNDecoderOnlyChunkedPrefillMixin
+from .generation_decoderonly import (
+    RBLNDecoderOnlyChunkedPrefillMixin,
+    RBLNDecoderOnlyForCausalLMOutput,
+    RBLNDecoderOnlyGenerationMixin,
+)
 
 
 logger = get_logger()
@@ -454,13 +455,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         return RBLNDecoderOnlyForCausalLMOutput(logits=logits, padded_cache_lengths=padded_cache_lengths)
 
 
-@dataclass
-class RBLNDecoderOnlyForCausalLMOutput(ModelOutput):
-    logits: torch.FloatTensor = None
-    generate_idx: torch.Tensor = None
-    padded_cache_lengths: int = None
-
-
 class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin, RBLNDecoderOnlyChunkedPrefillMixin):
     """
     A base class for decoder-only transformer models outputting raw hidden-states without any specific head on top.
@@ -497,7 +491,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin, RBLNDe
             self.embed_tokens = None
 
         # TODO: add prefill runtime class.
-        self.prefill_decoder = RBLNPytorchRuntime(runtime=self.model[0])
+        self.prefill_runtime = RBLNPytorchRuntime(runtime=self.model[0])
 
         # attributes for prefill
         self.block_tables = (
@@ -512,8 +506,11 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin, RBLNDe
             self.causal_mask = 1 - torch.triu(
                 torch.ones(1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.prefill_chunk_size), diagonal=1
             )
-
-        self.output_size = (1, self.rbln_config.prefill_chunk_size, self.config.hidden_size)
+        self.output_size = (
+            1,
+            self.rbln_config.prefill_chunk_size if self.rbln_config.logits_to_keep == 0 else 1,
+            self.config.hidden_size,
+        )
 
     @classmethod
     def get_quantized_model(
@@ -1020,7 +1017,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin, RBLNDe
         return BaseModelOutputWithPast(last_hidden_state=last_hidden_states)
 
 
-class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGenerationMixin):
+class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyGenerationMixin, RBLNDecoderOnlyModel):
     """
     A base class for decoder-only transformer models optimized for causal language modeling tasks on RBLN devices.
     This class serves as the foundation for various decoder-only architectures like GPT, LLaMA, etc.
@@ -1044,57 +1041,23 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
     auto_model_class = AutoModelForCausalLM
 
     def __post_init__(self, **kwargs):
-        main_input_name = self.main_input_name
-
         if self.rbln_config.use_inputs_embeds:
-            main_input_name = "inputs_embeds"
+            self.main_input_name = "inputs_embeds"
             artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
             self.embed_tokens = self._create_embedding_layer()
             self.embed_tokens.load_state_dict(artifacts["embed_tokens"])
         else:
             self.embed_tokens = None
 
-        # Initialize shared resources to be used across Runtime instances (prefill and decode phases)
-        dec_attn_mask = torch.zeros(
-            self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=torch.float32
-        )
-        block_tables = torch.zeros(
-            self.rbln_config.batch_size,
-            self.rbln_config.max_seq_len // self.rbln_config.kvcache_block_size,
-            dtype=torch.int16,
-        ).fill_(-1)
-        free_block_pool = deque(x for x in range(self.rbln_config.kvcache_num_blocks))
-
-        self.prefill_decoder = RBLNRuntimeModel(
-            runtime=self.model[0],
-            main_input_name=main_input_name,
-            embed_tokens=self.embed_tokens,
-            phase="prefill",
-            batch_size=self.rbln_config.batch_size,
-            dec_attn_mask=dec_attn_mask,
-            block_tables=block_tables,
-            free_block_pool=free_block_pool,
-            rbln_config=self.rbln_config,
-            vocab_size=self.config.vocab_size,
-        )
-
+        self.prefill_runtime = RBLNPytorchRuntime(runtime=self.model[0])
         if self.can_generate():
-            self.decoders = {}
+            self.decoders_runtime = {}
             for i, batch_size in enumerate(self.rbln_config.decoder_batch_sizes):
-                self.decoders[batch_size] = RBLNRuntimeModel(
-                    runtime=self.model[i + 1],
-                    main_input_name=main_input_name,
-                    embed_tokens=self.embed_tokens,
-                    phase="decode",
-                    batch_size=batch_size,
-                    dec_attn_mask=dec_attn_mask,
-                    block_tables=block_tables,
-                    free_block_pool=free_block_pool,
-                    rbln_config=self.rbln_config,
-                )
-
+                self.decoders_runtime[batch_size] = RBLNPytorchRuntime(runtime=self.model[i + 1])
             # NOTE(eunji): Use a decoder whose batch size matches the model's main batch size for compatibility.
-            self.decoder = self.decoders[self.rbln_config.batch_size]
+            self.decoder_runtime = self.decoders_runtime[self.rbln_config.batch_size]
+
+        self._setup_generation_components()
 
     @classmethod
     def use_query_position(cls, use_local_attention: bool, is_prefill: bool = True):
