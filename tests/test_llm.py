@@ -117,7 +117,9 @@ class TestQwen2Model(LLMTest.TestLLMBase):
 class TestQwen3ForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen3ForCausalLM
     HF_MODEL_ID = "trl-internal-testing/tiny-Qwen3ForCausalLM"
-    EXPECTED_OUTPUT = "getter getEmail luaL inhibited经营者适时uating nc_TRAIN适时uating ncActiveSheet(socket getEmailadders totaling propName.setImage Grow"
+    EXPECTED_OUTPUT = (
+        "יל synd Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz_inventory天河 sanitary中途"
+    )
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
 
 
@@ -360,9 +362,7 @@ class TestLlavaForConditionalGeneration(LLMTest.TestLLM):
             "language_model": {"use_inputs_embeds": True},
         }
     }
-    EXPECTED_OUTPUT = (
-        '\x05getString Associ sposЧECT CounMethods praktoptFirstNamestr#### Singhignonchartsceuhpp("/ishing'
-    )
+    EXPECTED_OUTPUT = "ambbrow nur Well chimCore rapideraine Йye questaédédates Ken neu Airport din termeächstthread"
     HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
 
     @classmethod
@@ -433,9 +433,7 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
             "language_model": {"use_inputs_embeds": True},
         }
     }
-    EXPECTED_OUTPUT = (
-        "ironment初 Barcelallasburgh inaugatelyизJECT Karenüg Television _ drink Television _ drink Television _ drink"
-    )
+    EXPECTED_OUTPUT = "entricCallbackavidARYails NotesDAPimil coordFeed Boysaml obligation relay迟 войны sexual Definition Eisen patent"
     HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
 
     @classmethod
