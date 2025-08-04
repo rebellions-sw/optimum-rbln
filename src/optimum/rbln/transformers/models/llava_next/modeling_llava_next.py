@@ -48,24 +48,19 @@ class LoopVisionTower(LoopProcessor):
 
     def _prepare_inputs_for_iteration(self, index, pixel_values, **kwargs):
         pixel_values_item = pixel_values[index : index + 1]
-        out = [tensor[index : index + 1] for tensor in kwargs["out_buffer"]]
-        return ([pixel_values_item], {"out": out})
+        out_buffer = [tensor[index : index + 1] for tensor in kwargs["out"]]
+        return ([pixel_values_item], {"out": out_buffer})
 
-    def _process_outputs(self, outputs: list) -> "BaseModelOutputWithPooling":
-        last_hidden_states = torch.cat([output[0] for output in outputs], dim=0)
-        pooler_output = torch.cat([output[1] for output in outputs], dim=0)
-        hidden_states_per_item = [output[2:] for output in outputs]
+    def _process_outputs(self, outputs: list, **kwargs) -> "BaseModelOutputWithPooling":
+        output = kwargs["out"]
+        last_hidden_states = output[0]
+        pooler_output = output[1]
 
-        if not hidden_states_per_item:
+        if not output[2:]:
             hidden_states = None
         else:
-            num_hidden_layers = len(hidden_states_per_item[0])
-            batch_size = len(outputs)
+            hidden_states = tuple(output[2:])
 
-            hidden_states = tuple(
-                torch.cat([hidden_states_per_item[b][l] for b in range(batch_size)], dim=0)
-                for l in range(num_hidden_layers)
-            )
         return BaseModelOutputWithPooling(
             last_hidden_state=last_hidden_states,
             pooler_output=pooler_output,
@@ -82,11 +77,12 @@ class LoopProjector(LoopProcessor):
 
     def _prepare_inputs_for_iteration(self, index, image_feature, **kwargs):
         image_feature_item = image_feature[index : index + 1]
-        out = [tensor[index : index + 1] for tensor in kwargs["out_buffer"]]
-        return ([image_feature_item], {"out": out})
+        out_buffer = [tensor[index : index + 1] for tensor in kwargs["out"]]
+        return ([image_feature_item], {"out": out_buffer})
 
-    def _process_outputs(self, outputs: list) -> "BaseModelOutputWithPooling":
-        return torch.cat(outputs, dim=0)
+    def _process_outputs(self, outputs: list, **kwargs):
+        output = kwargs["out"]
+        return torch.cat(output, dim=0)
 
 
 class RBLNLlavaNextForConditionalGeneration(RBLNModel):
@@ -300,7 +296,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
             # otherwise has to be stacked from list of (num_patches, num_channels, height, width)
             raise ValueError(f"pixel_values of shape {pixel_values.shape}, expect to be of 4 or 5 dimensions")
 
-        image_features = self.vision_tower(pixel_values, output_hidden_states=True, out_buffer=vision_out_buffer)
+        image_features = self.vision_tower(pixel_values, output_hidden_states=True, out=vision_out_buffer)
         # If we have one vision feature layer, return the corresponding hidden states,
         # otherwise, select the hidden states of each feature layer and concatenate them
         if isinstance(vision_feature_layer, int):
@@ -314,7 +310,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         elif vision_feature_select_strategy == "full":
             selected_image_feature = selected_image_feature
 
-        image_features = self.multi_modal_projector(selected_image_feature, out_buffer=projector_out_buffer)
+        image_features = self.multi_modal_projector(selected_image_feature, out=projector_out_buffer)
         image_features = torch.split(image_features, image_num_patches, dim=0)
         return image_features
 
