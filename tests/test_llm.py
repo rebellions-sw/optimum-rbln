@@ -609,6 +609,9 @@ class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
     PROMPT = "<bos><start_of_turn>user\n<start_of_image>Describe the image.<end_of_turn>\n<start_of_turn>model\n'"
     RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True, "kvcache_partition_len": 4096}}}
     EXPECTED_OUTPUT = " அனுமதி Bryson Earlyheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserिल्म हस्ता"
+    HF_CONFIG_KWARGS = {
+        "revision": "e1f4b0516ec80f86ed75c8cb1d45ede72526ad24",
+    }
     TEST_LEVEL = TestLevel.FULL
 
     @classmethod
@@ -620,7 +623,7 @@ class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
     # override
     @classmethod
     def setUpClass(cls):
-        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
+        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID, revision="e1f4b0516ec80f86ed75c8cb1d45ede72526ad24")
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 2
         text_config["sliding_window_pattern"] = 2
