@@ -69,7 +69,7 @@ class RBLNCosmosSafetyCheckerConfig(RBLNModelConfig):
         image_size: Optional[Tuple[int, int]] = None,
         height: Optional[int] = None,
         width: Optional[int] = None,
-        max_seq_len: Optional[int] = None, 
+        max_seq_len: Optional[int] = None,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
