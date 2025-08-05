@@ -30,11 +30,7 @@ from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 import rebel
 import torch
 from rebel.compile_context import CompileContext
-from transformers import (
-    PretrainedConfig,
-    TimeSeriesTransformerForPrediction,
-    TimeSeriesTransformerModel,
-)
+from transformers import PretrainedConfig, TimeSeriesTransformerForPrediction, TimeSeriesTransformerModel
 from transformers.modeling_outputs import ModelOutput, SampleTSPredictionOutput, Seq2SeqTSModelOutput
 from transformers.modeling_utils import no_init_weights
 

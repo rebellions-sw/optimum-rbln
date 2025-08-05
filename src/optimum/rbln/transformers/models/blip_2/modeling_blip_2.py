@@ -35,11 +35,7 @@ from ....modeling import RBLNModel
 logger = logging.get_logger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import (
-        AutoFeatureExtractor,
-        AutoProcessor,
-        AutoTokenizer,
-    )
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
 
 
 class LoopProjector:
