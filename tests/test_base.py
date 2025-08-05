@@ -22,6 +22,7 @@ class TestLevel(Enum):
     ESSENTIAL = 1
     DEFAULT = 2
     FULL = 3
+    DISABLED = 999
     UNKNOWN = -1
 
 
