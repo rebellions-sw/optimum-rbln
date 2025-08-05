@@ -69,7 +69,7 @@ class RBLNCosmosSafetyCheckerConfig(RBLNModelConfig):
         image_size: Optional[Tuple[int, int]] = None,
         height: Optional[int] = None,
         width: Optional[int] = None,
-        max_seq_len: Optional[int] = None,
+        max_seq_len: Optional[int] = 512,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -83,7 +83,7 @@ class RBLNCosmosSafetyCheckerConfig(RBLNModelConfig):
             llamaguard3,
             batch_size=batch_size,
             tensor_parallel_size=tensor_parallel_size,
-            max_seq_len=max_seq_len if max_seq_len is not None else 512,
+            max_seq_len=max_seq_len,
         )
 
         self.siglip_encoder = self.init_submodule_config(
