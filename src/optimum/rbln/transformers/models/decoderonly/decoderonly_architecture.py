@@ -1006,7 +1006,6 @@ class SlidingWindowAttentionOp(AttentionOp):
         v_scale: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         assert self.quantization is None, "Sliding window attention does not support quantization"
-        assert not self.use_attention_mask, "Sliding window attention does not support use_attention_mask=True"
         assert k_scale is None and v_scale is None, "Sliding window attention does not support quantization"
 
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
