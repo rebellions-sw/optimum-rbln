@@ -246,7 +246,7 @@ class RBLNPageTableManager:
                 raise RuntimeError(NO_BLOCKS_ERROR)
 
         def get_global_block_tables(batch_idx: int, batch_size: int, phase: str):
-            if self.rbln_config.cache_impl == "sliding_window":
+            if not self.rbln_config.use_global_attention:
                 return None
 
             if phase == "prefill":
@@ -276,7 +276,7 @@ class RBLNPageTableManager:
                 return replace_empty_block(self.block_tables)
 
         def get_local_block_tables(batch_idx: int, batch_size: int, phase: str):
-            if self.rbln_config.cache_impl == "static":
+            if not self.rbln_config.use_local_attention:
                 return None
             else:
                 return (
