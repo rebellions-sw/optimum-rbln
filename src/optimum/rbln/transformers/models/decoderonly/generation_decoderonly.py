@@ -190,15 +190,16 @@ class RBLNDecoderOnlyChunkedPrefillMixin(ABC):
 
 
 class RBLNPageTableManager:
+    EMPTY_BLOCK = -1
+
     def __init__(self, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig):
         self.rbln_config = rbln_config
         self.block_tables = torch.zeros(
             self.rbln_config.batch_size,
             self.rbln_config.max_seq_len // self.rbln_config.kvcache_block_size,
             dtype=torch.int16,
-        ).fill_(-1)
+        ).fill_(self.EMPTY_BLOCK)
         self.free_block_pool = deque(x for x in range(self.rbln_config.kvcache_num_blocks))
-        self.empty_block = -1
 
     def get_block_tables(
         self, cache_position: torch.Tensor, batch_idx: int = None, batch_size: int = None, phase: str = "prefill"
@@ -315,7 +316,11 @@ class RBLNDecoderOnlyGenerationMixin(RBLNDecoderOnlyChunkedPrefillMixin, Generat
         self.dec_attn_mask = torch.zeros(
             self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=torch.float32
         )
-        self.output_size = [1, self.rbln_config.prefill_chunk_size, self.config.vocab_size] if self.rbln_config.logits_to_keep == 0 else [1, 1, self.rbln_config.logits_to_keep]
+        self.output_size = (
+            [1, self.rbln_config.prefill_chunk_size, self.config.vocab_size]
+            if self.rbln_config.logits_to_keep == 0
+            else [1, 1, self.rbln_config.logits_to_keep]
+        )
         self.causal_mask = 1 - torch.triu(
             torch.ones(1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.prefill_chunk_size), diagonal=1
         )
@@ -466,6 +471,17 @@ class RBLNDecoderOnlyGenerationMixin(RBLNDecoderOnlyChunkedPrefillMixin, Generat
                 local_block_tables=local_block_tables,
             )
 
+    def _validate_decoder_batch_size(self, inputs: torch.Tensor, **kwargs):
+        batch_size = inputs.shape[0]
+        if batch_size not in self.rbln_config.decoder_batch_sizes:
+            raise RuntimeError(
+                f"Batch size mismatch: got {batch_size}, expected one of {self.rbln_config.decoder_batch_sizes} (compiled batch size)."
+            )
+
+        for arg_name, arg_value in kwargs.items():
+            if arg_value is not None and arg_value.shape[0] != batch_size:
+                raise RuntimeError(f"{arg_name} batch size mismatch: got {arg_value.shape[0]}, expected {batch_size}.")
+
     def _decode(
         self,
         inputs: torch.Tensor,
@@ -478,13 +494,14 @@ class RBLNDecoderOnlyGenerationMixin(RBLNDecoderOnlyChunkedPrefillMixin, Generat
         local_block_tables: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         batch_size = inputs.shape[0]
-        if batch_size not in self.rbln_config.decoder_batch_sizes:
-            raise RuntimeError(
-                f"Batch size mismatch: got {batch_size}, expected one of {self.rbln_config.decoder_batch_sizes} (compiled batch size)."
-            )
-
-        if batch_size != cache_position.shape[0]:
-            raise RuntimeError(f"Cache position size mismatch: got {cache_position.shape[0]}, expected {batch_size}.")
+        self._validate_decoder_batch_size(
+            inputs,
+            cache_position=cache_position,
+            block_tables=block_tables,
+            attention_mask=attention_mask,
+            position_embed=position_embed,
+            position_ids=position_ids,
+        )
 
         if self.rbln_config.use_attention_mask and attention_mask is None:
             for b_idx in range(batch_size):
@@ -501,12 +518,6 @@ class RBLNDecoderOnlyGenerationMixin(RBLNDecoderOnlyChunkedPrefillMixin, Generat
                     self.dec_attn_mask[b_idx, :, :, decoding_step] = 1
 
             attention_mask = self.dec_attn_mask
-
-        if self.rbln_config.use_global_attention and batch_size < block_tables.shape[0]:
-            block_tables = block_tables[:batch_size]
-
-        if attention_mask is not None and batch_size < attention_mask.shape[0]:
-            attention_mask = attention_mask[:batch_size]
 
         logits = self.decoders_runtime[batch_size](
             inputs,
