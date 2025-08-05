@@ -769,7 +769,7 @@ class AttentionOp(nn.Module):
 
     def get_attn_op_name(self):
         phase = "decode" if self.phase == "decode" else "prefill"
-        if self.use_attention_mask:
+        if self.use_attention_mask and not self.use_position_ids:
             attn_op_name = "paged_attn_"
         else:
             attn_op_name = "paged_causal_attn_"
