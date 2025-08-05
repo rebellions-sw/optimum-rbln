@@ -275,11 +275,11 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
             (self.config.vision_config.image_size // self.config.vision_config.patch_size) ** 2 + 1,
             self.config.vision_config.hidden_size,
         ]
-        pool_size = [pixel_values.shape[0] * pixel_values.shape[1], self.config.vision_config.hidden_size]
-        vision_out_buffer = [torch.empty(size=vision_out_size, dtype=torch.float32, device="cpu")] * (
-            self.config.vision_config.num_hidden_layers + 2  # hidden_layers + last_hidden_state
-        )
-        vision_out_buffer.insert(1, torch.empty(size=pool_size, dtype=torch.float32, device="cpu"))
+        pooler_out_size = [pixel_values.shape[0] * pixel_values.shape[1], self.config.vision_config.hidden_size]
+        vision_out_buffer = []
+        for i in range(self.config.vision_config.num_hidden_layers + 2):
+            vision_out_buffer.append(torch.empty(size=vision_out_size, dtype=torch.float32, device="cpu"))
+        vision_out_buffer.insert(1, torch.empty(size=pooler_out_size, dtype=torch.float32, device="cpu"))
 
         projector_out_size = [
             pixel_values.shape[0] * pixel_values.shape[1],
