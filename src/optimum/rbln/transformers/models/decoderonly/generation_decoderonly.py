@@ -315,7 +315,7 @@ class RBLNDecoderOnlyGenerationMixin(RBLNDecoderOnlyChunkedPrefillMixin, Generat
         self.dec_attn_mask = torch.zeros(
             self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=torch.float32
         )
-        self.output_size = [1, 1, self.config.vocab_size]
+        self.output_size = [1, self.rbln_config.prefill_chunk_size, self.config.vocab_size] if self.rbln_config.logits_to_keep == 0 else [1, 1, self.rbln_config.logits_to_keep]
         self.causal_mask = 1 - torch.triu(
             torch.ones(1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.prefill_chunk_size), diagonal=1
         )
