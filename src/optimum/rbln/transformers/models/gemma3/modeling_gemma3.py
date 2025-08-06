@@ -351,31 +351,29 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         dec_attn_mask = torch.zeros(self.rbln_config.batch_size, self.rbln_config.max_seq_len, dtype=torch.float32)
         page_table_manager = RBLNPageTableManager(self.rbln_config)
 
-        main_input_name = "inputs_embeds" if self.rbln_config.use_inputs_embeds else "input_ids"
+        common_kwargs = {
+            "main_input_name": "inputs_embeds" if self.rbln_config.use_inputs_embeds else "input_ids",
+            "embed_tokens": self.embed_tokens,
+            "dec_attn_mask": dec_attn_mask,
+            "page_table_manager": page_table_manager,
+            "rbln_config": self.rbln_config,
+        }
 
         self.prefill_decoder = RBLNGemma3RuntimeModel(
             runtime=self.model[0],
             image_prefill=self.model[1] if self.rbln_config.use_image_prefill else None,
-            main_input_name=main_input_name,
-            embed_tokens=self.embed_tokens,
             phase="prefill",
             batch_size=self.rbln_config.batch_size,
-            dec_attn_mask=dec_attn_mask,
-            page_table_manager=page_table_manager,
-            rbln_config=self.rbln_config,
+            **common_kwargs,
         )
 
         self.decoders = {}
         for i, batch_size in enumerate(self.rbln_config.decoder_batch_sizes):
             self.decoders[batch_size] = RBLNGemma3RuntimeModel(
                 runtime=self.model[i + self.rbln_config.decoder_runtime_idx],
-                main_input_name=main_input_name,
-                embed_tokens=self.embed_tokens,
                 phase="decode",
                 batch_size=batch_size,
-                dec_attn_mask=dec_attn_mask,
-                page_table_manager=page_table_manager,
-                rbln_config=self.rbln_config,
+                **common_kwargs,
             )
 
         # NOTE(eunji): Use a decoder whose batch size matches the model's main batch size for compatibility.

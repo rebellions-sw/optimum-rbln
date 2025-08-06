@@ -122,6 +122,7 @@ class RBLNPageTableManager:
 
         return get_global_block_tables(), get_local_block_tables()
 
+    # Whether block_tables and local_block_tables are provided by the user
     def is_external_block_tables(
         self, block_tables: Optional[torch.Tensor], local_block_tables: Optional[torch.Tensor]
     ):

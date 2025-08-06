@@ -91,31 +91,28 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         )
         out_buffers = [torch.empty(self.prefill_output_size, dtype=torch.float32, device="cpu")]
 
-        main_input_name = "inputs_embeds" if self.rbln_config.use_inputs_embeds else "input_ids"
+        common_kwargs = {
+            "main_input_name": "inputs_embeds" if self.rbln_config.use_inputs_embeds else "input_ids",
+            "embed_tokens": self.embed_tokens,
+            "dec_attn_mask": dec_attn_mask,
+            "page_table_manager": page_table_manager,
+            "rbln_config": self.rbln_config,
+        }
         self.prefill_decoder = RBLNRuntimeModel(
             runtime=self.model[0],
-            main_input_name=main_input_name,
-            embed_tokens=self.embed_tokens,
             phase="prefill",
             batch_size=self.rbln_config.batch_size,
-            dec_attn_mask=dec_attn_mask,
-            page_table_manager=page_table_manager,
-            rbln_config=self.rbln_config,
             out_buffers=out_buffers,
+            **common_kwargs,
         )
-
         if self.can_generate():
             self.decoders = {}
             for i, batch_size in enumerate(self.rbln_config.decoder_batch_sizes):
                 self.decoders[batch_size] = RBLNRuntimeModel(
                     runtime=self.model[i + 1],
-                    main_input_name=main_input_name,
-                    embed_tokens=self.embed_tokens,
                     phase="decode",
                     batch_size=batch_size,
-                    dec_attn_mask=dec_attn_mask,
-                    page_table_manager=page_table_manager,
-                    rbln_config=self.rbln_config,
+                    **common_kwargs,
                 )
 
             # NOTE(eunji): Use a decoder whose batch size matches the model's main batch size for compatibility.
