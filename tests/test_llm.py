@@ -117,7 +117,9 @@ class TestQwen2Model(LLMTest.TestLLMBase):
 class TestQwen3ForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen3ForCausalLM
     HF_MODEL_ID = "trl-internal-testing/tiny-Qwen3ForCausalLM"
-    EXPECTED_OUTPUT = "getter getEmail luaL inhibited经营者适时uating nc_TRAIN适时uating ncActiveSheet(socket getEmailadders totaling propName.setImage Grow"
+    EXPECTED_OUTPUT = (
+        "יל synd Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz_inventory天河 sanitary中途"
+    )
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
 
 
@@ -360,9 +362,7 @@ class TestLlavaForConditionalGeneration(LLMTest.TestLLM):
             "language_model": {"use_inputs_embeds": True},
         }
     }
-    EXPECTED_OUTPUT = (
-        '\x05getString Associ sposЧECT CounMethods praktoptFirstNamestr#### Singhignonchartsceuhpp("/ishing'
-    )
+    EXPECTED_OUTPUT = "ambbrow nur Well chimCore rapideraine Йye questaédédates Ken neu Airport din termeächstthread"
     HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
 
     @classmethod
@@ -426,14 +426,14 @@ class TestPegasusModel(LLMTest.TestLLM):
 class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
     RBLN_CLASS = RBLNLlavaNextForConditionalGeneration
-    HF_MODEL_ID = "llava-hf/llava-v1.6-mistral-7b-hf"  # No tiny model yet.
+    HF_MODEL_ID = "trl-internal-testing/tiny-LlavaNextForConditionalGeneration"
     PROMPT = "[INST] <image>\nWhat’s shown in this image? [/INST]"
     RBLN_CLASS_KWARGS = {
         "rbln_config": {
             "language_model": {"use_inputs_embeds": True},
         }
     }
-    EXPECTED_OUTPUT = "aille kennisSoft /******/ Brunershot childhoodhoodRx̧̧̧̧̧̧̧̧̧̧"
+    EXPECTED_OUTPUT = "entricCallbackavidARYails NotesDAPimil coordFeed Boysaml obligation relay迟 войны sexual Definition Eisen patent"
     HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
 
     @classmethod
@@ -609,6 +609,9 @@ class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
     PROMPT = "<bos><start_of_turn>user\n<start_of_image>Describe the image.<end_of_turn>\n<start_of_turn>model\n'"
     RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True, "kvcache_partition_len": 4096}}}
     EXPECTED_OUTPUT = " அனுமதி Bryson Earlyheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserिल्म हस्ता"
+    HF_CONFIG_KWARGS = {
+        "revision": "e1f4b0516ec80f86ed75c8cb1d45ede72526ad24",
+    }
     TEST_LEVEL = TestLevel.FULL
 
     @classmethod
@@ -620,7 +623,7 @@ class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
     # override
     @classmethod
     def setUpClass(cls):
-        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
+        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID, revision="e1f4b0516ec80f86ed75c8cb1d45ede72526ad24")
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 2
         text_config["sliding_window_pattern"] = 2
