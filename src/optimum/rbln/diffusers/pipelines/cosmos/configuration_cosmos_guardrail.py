@@ -69,12 +69,15 @@ class RBLNCosmosSafetyCheckerConfig(RBLNModelConfig):
         image_size: Optional[Tuple[int, int]] = None,
         height: Optional[int] = None,
         width: Optional[int] = None,
-        max_seq_len: Optional[int] = 512,
+        max_seq_len: Optional[int] = None,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
         if height is not None and width is not None:
             image_size = (height, width)
+
+        if max_seq_len is None:
+            max_seq_len = 512
 
         tensor_parallel_size = kwargs.get("tensor_parallel_size")
 
