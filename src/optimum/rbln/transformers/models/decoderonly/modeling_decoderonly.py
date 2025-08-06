@@ -34,13 +34,14 @@ from ...modeling_attention_utils import (
     validate_attention_method,
     validate_sliding_window,
 )
+from ...modeling_outputs import RBLNDecoderOnlyForCausalLMOutput
 from ...utils.rbln_quantization import prepare_model_for_quantization
 from .configuration_decoderonly import RBLNDecoderOnlyModelConfig, RBLNDecoderOnlyModelForCausalLMConfig
 from .decoderonly_architecture import DecoderOnlyWrapper
 from .generation_decoderonly import (
-    RBLNDecoderOnlyForCausalLMOutput,
     RBLNDecoderOnlyGenerationMixin,
 )
+from .page_table_manager import RBLNPageTableManager
 
 
 logger = get_logger()
@@ -107,6 +108,16 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         )
         # Buffer for storing output logits
         self.out_buffers = [torch.empty(output_size, dtype=torch.float32, device="cpu")]
+
+        self.page_table_manager = RBLNPageTableManager(self.rbln_config)
+
+        # # FIXME: this is a hack to keep backward compatibility with the old generation API
+        # self.prefill_decoder = self._prefill_forward
+        # self.decoder = self._decode_forward
+        # if self.can_generate():
+        #     self.decoders = {}
+        #     for batch_size in self.rbln_config.decoder_batch_sizes:
+        #         self.decoders[batch_size] = self._decode_forward
 
     @classmethod
     def get_quantized_model(
@@ -805,9 +816,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyGenerationMixin, RBLNDecode
                 self.decoders_runtime[batch_size] = RBLNPytorchRuntime(runtime=self.model[i + 1])
             # NOTE(eunji): Use a decoder whose batch size matches the model's main batch size for compatibility.
             self.decoder_runtime = self.decoders_runtime[self.rbln_config.batch_size]
-        
+
         self.setup_forward_components()
-        self.setup_generation_components()
 
     def setup_forward_components(self):
         super().setup_forward_components()
@@ -866,6 +876,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyGenerationMixin, RBLNDecode
         position_ids: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
         return_dict: Optional[torch.Tensor] = None,
+        block_tables: Optional[torch.Tensor] = None,
+        local_block_tables: Optional[torch.Tensor] = None,
+        position_embed: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
         # Forward method for the RBLN-optimized model, designed for integration with the HuggingFace generate API.
@@ -873,7 +886,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyGenerationMixin, RBLNDecode
         # A for-loop ensures synchronization with the HuggingFace generate API.
         # The decoder stage operates as usual, processing inputs in batch mode.
 
-        # for only use forward
+        # for only use forward, not for generate API
+        # FIXME(taehoon): remove generate_idx if you can.
         if generate_idx is None:
             generate_idx = (
                 attention_mask.sum(dim=-1, keepdim=True).int()
@@ -882,39 +896,60 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyGenerationMixin, RBLNDecode
             )
             padded_cache_lengths = torch.zeros_like(generate_idx)
 
+        inputs = inputs_embeds if inputs_embeds is not None else input_ids
+        batch_size = inputs.shape[0]
+
+
         # Prefill
-        if cache_position is None:
+        if cache_position is None or cache_position.shape[1] > 1:
             logits = []
-            inputs = inputs_embeds if inputs_embeds is not None else input_ids
-            batch_size = inputs.shape[0]
             for b_idx in range(batch_size):
-                cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
-                output = self.prefill_decoder(
-                    input_ids=inputs[b_idx : b_idx + 1] if inputs_embeds is None else None,
-                    inputs_embeds=inputs[b_idx : b_idx + 1] if inputs_embeds is not None else None,
-                    attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
-                    cache_position=cache_position,
-                    batch_idx=b_idx,
-                    token_type_ids=token_type_ids[b_idx : b_idx + 1] if token_type_ids is not None else None,
+                input_ids = inputs[b_idx : b_idx + 1] if input_ids is not None else None
+                inputs_embeds = inputs[b_idx : b_idx + 1] if inputs_embeds is not None else None
+                attention_mask = attention_mask[b_idx] if attention_mask is not None else None
+                token_type_ids = token_type_ids[b_idx : b_idx + 1] if token_type_ids is not None else None
+                position_embed = position_embed[b_idx : b_idx + 1] if position_embed is not None else None
+                cache_position = (
+                    cache_position[b_idx : b_idx + 1, attention_mask.bool()]
+                    if cache_position is not None
+                    else torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32)
+                )
+
+                inputs = self.inputs_embeddings_if_needed(input_ids, inputs_embeds)
+                block_tables, local_block_tables, is_external_block_tables = (
+                    self.page_table_manager.get_block_tables_if_needed(
+                        inputs.shape[0],
+                        cache_position,
+                        batch_idx=b_idx,
+                        phase="prefill",
+                        block_tables=block_tables,
+                        local_block_tables=local_block_tables,
+                    )
+                )
+                output = self._chunked_prefill_forward(
+                    inputs,
+                    cache_position,
+                    attention_mask.to(torch.float32),
+                    b_idx,
+                    block_tables=block_tables,
+                    is_external_block_tables=is_external_block_tables,
+                    token_type_ids=token_type_ids,
+                    local_block_tables=local_block_tables,
+                    position_embed=position_embed,
                 )
                 padded_cache_lengths[b_idx] += output.padded_cache_lengths
                 logits.append(output.logits)
             logits = torch.cat(logits, dim=0)
         # Decoder
         else:
-            inputs = inputs_embeds if inputs_embeds is not None else input_ids
-            batch_size = inputs.shape[0]
-            if batch_size not in self.decoders:
-                raise ValueError(
-                    f"No decoder runtime available for batch size {batch_size}. "
-                    f"Available batch sizes are: {list(self.decoders.keys())}. "
-                    f"Please run your model with one of these batch sizes or add support for batch size {batch_size}."
-                )
-            logits = self.decoders[batch_size](
-                input_ids=input_ids,
-                inputs_embeds=inputs_embeds,
+            logits = self._decode(
+                input_ids,
+                inputs_embeds,
                 cache_position=cache_position,
+                block_tables=block_tables,
+                local_block_tables=local_block_tables,
                 position_ids=position_ids if self.rbln_config.use_position_ids else None,
+                attention_mask=attention_mask.to(torch.float32),
             ).logits
 
         if not return_dict:
@@ -923,3 +958,77 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyGenerationMixin, RBLNDecode
             return RBLNDecoderOnlyForCausalLMOutput(
                 logits=logits, generate_idx=generate_idx, padded_cache_lengths=padded_cache_lengths
             )
+
+    def _validate_decoder_batch_size(self, inputs: torch.Tensor, **kwargs):
+        batch_size = inputs.shape[0]
+        if batch_size not in self.rbln_config.decoder_batch_sizes:
+            raise ValueError(
+                f"No decoder runtime available for batch size {batch_size}. "
+                f"Available batch sizes are: {list(self.decoders.keys())}. "
+                f"Please run your model with one of these batch sizes or add support for batch size {batch_size}."
+            )
+
+        for arg_name, arg_value in kwargs.items():
+            if arg_value is not None and arg_value.shape[0] != batch_size:
+                raise ValueError(f"{arg_name} batch size mismatch: got {arg_value.shape[0]}, expected {batch_size}.")
+
+    def _decode(
+        self,
+        input_ids: Optional[torch.Tensor] = None,
+        inputs_embeds: Optional[torch.Tensor] = None,
+        cache_position: torch.Tensor = None,
+        block_tables: torch.Tensor = None,
+        is_external_block_tables: bool = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_embed: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
+        local_block_tables: Optional[torch.Tensor] = None,
+    ) -> torch.FloatTensor:
+
+        inputs = self.inputs_embeddings_if_needed(input_ids, inputs_embeds)
+        block_tables, local_block_tables, is_external_block_tables = (
+            self.page_table_manager.get_block_tables_if_needed(
+                inputs.shape[0],
+                cache_position,
+                phase="decode",
+                block_tables=block_tables,
+                local_block_tables=local_block_tables,
+            )
+        )
+        self._validate_decoder_batch_size(
+            inputs,
+            cache_position=cache_position,
+            block_tables=block_tables,
+            attention_mask=attention_mask,
+            position_embed=position_embed,
+            position_ids=position_ids,
+        )
+
+        batch_size = inputs.shape[0]
+        if self.rbln_config.use_attention_mask and (attention_mask is None or attention_mask.dim() < 4):
+            for b_idx in range(batch_size):
+                decoding_step = cache_position[b_idx].item()
+                if not (0 <= decoding_step < self.dec_attn_mask.shape[-1]):
+                    raise ValueError(
+                        f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
+                    )
+
+                if is_external_block_tables:
+                    self.dec_attn_mask[b_idx].fill_(0)
+                    self.dec_attn_mask[b_idx, :, :, : decoding_step + 1] = 1
+                else:
+                    self.dec_attn_mask[b_idx, :, :, decoding_step] = 1
+
+            attention_mask = self.dec_attn_mask
+
+        logits = self.decoders_runtime[batch_size](
+            inputs,
+            cache_position,
+            block_tables,
+            local_block_tables,
+            position_embed,
+            attention_mask if self.rbln_config.use_attention_mask else None,
+            position_ids if self.rbln_config.use_position_ids else None,
+        )
+
+        return RBLNDecoderOnlyForCausalLMOutput(logits=logits)

@@ -13,7 +13,6 @@
 # limitations under the License.
 import inspect
 from collections import deque
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
 import rebel
@@ -26,10 +25,10 @@ from transformers.models.gemma3.modeling_gemma3 import Gemma3TextScaledWordEmbed
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
+from ...modeling_outputs import RBLNDecoderOnlyForCausalLMOutput, RBLNGemma3ForCausalLMOutput
 from ..decoderonly.modeling_decoderonly import (
-    RBLNDecoderOnlyForCausalLMOutput,
     RBLNDecoderOnlyModelForCausalLM,
-    RBLNRuntimeModel,
+    # RBLNRuntimeModel,
 )
 from .configuration_gemma3 import RBLNGemma3ForCausalLMConfig
 from .gemma3_architecture import Gemma3ForCausalLMWrapper
@@ -37,11 +36,6 @@ from .gemma3_architecture import Gemma3ForCausalLMWrapper
 
 if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, Gemma3ForConditionalGeneration
-
-
-@dataclass
-class RBLNGemma3ForCausalLMOutput(RBLNDecoderOnlyForCausalLMOutput):
-    attention_mask: Optional[torch.Tensor] = None
 
 
 class LoopVisionTower:
@@ -339,7 +333,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         )
 
 
-class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
+class RBLNGemma3RuntimeModel:
     def __init__(self, *args, image_prefill: Optional[rebel.Runtime] = None, **kwargs):
         super().__init__(*args, **kwargs)
         self.image_prefill = image_prefill  # FIXME(taehoon)
