@@ -7,7 +7,7 @@ from transformers.generation.utils import GenerationMixin
 
 
 if TYPE_CHECKING:
-    from .modeling_decoderonly import RBLNDecoderOnlyForCausalLMOutput
+    from ...modeling_outputs import RBLNDecoderOnlyOutput
 
 
 class RBLNDecoderOnlyGenerationMixin(GenerationMixin):
@@ -68,7 +68,7 @@ class RBLNDecoderOnlyGenerationMixin(GenerationMixin):
         return model_inputs
 
     def _update_model_kwargs_for_generation(
-        self, outputs: "RBLNDecoderOnlyForCausalLMOutput", model_kwargs: Dict[str, Any], **kwargs
+        self, outputs: "RBLNDecoderOnlyOutput", model_kwargs: Dict[str, Any], **kwargs
     ) -> Dict[str, Any]:
         # update generate_idx
         model_kwargs["generate_idx"] = outputs.generate_idx

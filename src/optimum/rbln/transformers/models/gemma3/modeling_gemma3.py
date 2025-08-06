@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import inspect
-from collections import deque
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
 import rebel
@@ -26,22 +24,18 @@ from transformers.models.gemma3.modeling_gemma3 import Gemma3TextScaledWordEmbed
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
+from ...modeling_outputs import RBLNDecoderOnlyOutput, RBLNGemma3ForCausalLMOutput
 from ..decoderonly.modeling_decoderonly import (
-    RBLNDecoderOnlyForCausalLMOutput,
     RBLNDecoderOnlyModelForCausalLM,
     RBLNRuntimeModel,
 )
+from ..decoderonly.decoderonly_runtime_utils import RBLNPageTableManager
 from .configuration_gemma3 import RBLNGemma3ForCausalLMConfig
 from .gemma3_architecture import Gemma3ForCausalLMWrapper
 
 
 if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, Gemma3ForConditionalGeneration
-
-
-@dataclass
-class RBLNGemma3ForCausalLMOutput(RBLNDecoderOnlyForCausalLMOutput):
-    attention_mask: Optional[torch.Tensor] = None
 
 
 class LoopVisionTower:
@@ -196,7 +190,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
 
     def _update_model_kwargs_for_generation(
         self,
-        outputs: RBLNDecoderOnlyForCausalLMOutput,
+        outputs: RBLNDecoderOnlyOutput,
         model_kwargs: Dict[str, Any],
         **kwargs,
     ) -> Dict[str, Any]:
@@ -293,7 +287,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         padded_cache_lengths: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
         **lm_kwargs: Dict[str, Any],
-    ) -> Union[Tuple, RBLNDecoderOnlyForCausalLMOutput]:
+    ) -> Union[Tuple, RBLNDecoderOnlyOutput]:
         # prefill
         if cache_position is None:
             logits = []
@@ -334,7 +328,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
                 position_ids=position_ids if self.rbln_config.language_model.use_position_ids else None,
             ).logits
 
-        return RBLNDecoderOnlyForCausalLMOutput(
+        return RBLNDecoderOnlyOutput(
             logits=logits, generate_idx=generate_idx, padded_cache_lengths=padded_cache_lengths
         )
 
@@ -351,7 +345,6 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
             inputs,
             cache_position,
             chunked_attention_mask,
-            out_buffers,
             position_ids,
             position_embed,
             padded_cache_lengths,
@@ -375,7 +368,6 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
             inputs,
             cache_position,
             chunked_attention_mask,
-            out_buffers,
             position_ids,
             position_embed,
             padded_cache_lengths,
@@ -404,7 +396,6 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
             inputs,
             cache_position,
             chunked_attention_mask,
-            out_buffers,
             position_ids,
             position_embed,
             padded_cache_lengths,
@@ -463,7 +454,6 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                     query_position,
                     chunked_attention_mask,
                     position_ids_chunk,
-                    out=out_buffers,
                 )
             else:
                 logits = self.prefill(
@@ -474,7 +464,6 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                     query_position,
                     chunked_attention_mask,
                     position_ids_chunk,
-                    out=out_buffers,
                 )
 
             padded_cache_lengths += current_padded_cache_lengths
@@ -538,7 +527,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
 
         logits = self.decode(inputs, cache_position, block_tables, local_block_tables, attention_mask, position_ids)
 
-        return RBLNDecoderOnlyForCausalLMOutput(logits=logits)
+        return RBLNDecoderOnlyOutput(logits=logits)
 
 
 class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
@@ -554,25 +543,12 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
     _decoder_wrapper_cls = Gemma3ForCausalLMWrapper
 
-    def __post_init__(self, **kwargs):
-        main_input_name = self.main_input_name
-
-        if self.rbln_config.use_inputs_embeds:
-            main_input_name = "inputs_embeds"
-            artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
-            self.embed_tokens = self._create_embedding_layer()
-            self.embed_tokens.load_state_dict(artifacts["embed_tokens"])
-        else:
-            self.embed_tokens = None
-
+    def setup_runtime(self):
         # Initialize shared resources to be used across Runtime instances (prefill and decode phases)
         dec_attn_mask = torch.zeros(self.rbln_config.batch_size, self.rbln_config.max_seq_len, dtype=torch.float32)
-        block_tables = torch.zeros(
-            self.rbln_config.batch_size,
-            self.rbln_config.max_seq_len // self.rbln_config.kvcache_block_size,
-            dtype=torch.int16,
-        ).fill_(-1)
-        free_block_pool = deque(x for x in range(self.rbln_config.kvcache_num_blocks))
+        page_table_manager = RBLNPageTableManager(self.rbln_config)
+
+        main_input_name = "inputs_embeds" if self.rbln_config.use_inputs_embeds else "input_ids"
 
         self.prefill_decoder = RBLNGemma3RuntimeModel(
             runtime=self.model[0],
@@ -582,9 +558,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             phase="prefill",
             batch_size=self.rbln_config.batch_size,
             dec_attn_mask=dec_attn_mask,
-            block_tables=block_tables,
-            vocab_size=self.config.vocab_size,
-            free_block_pool=free_block_pool,
+            page_table_manager=page_table_manager,
             rbln_config=self.rbln_config,
         )
 
@@ -597,8 +571,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
                 phase="decode",
                 batch_size=batch_size,
                 dec_attn_mask=dec_attn_mask,
-                block_tables=block_tables,
-                free_block_pool=free_block_pool,
+                page_table_manager=page_table_manager,
                 rbln_config=self.rbln_config,
             )
 
