@@ -13,15 +13,14 @@
 # limitations under the License.
 
 import inspect
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable
 
 from transformers import PegasusForConditionalGeneration, PreTrainedModel
 
-from ....configuration_utils import RBLNCompileConfig
 from ....utils.logging import get_logger
 from ...modeling_generic import RBLNTransformerEncoderForFeatureExtraction
 from ...models.seq2seq import RBLNModelForSeq2SeqLM
-from .configuration_pegasus import RBLNPegasusForConditionalGenerationConfig, RBLNPegasusModelConfig
+from .configuration_pegasus import RBLNPegasusForConditionalGenerationConfig
 from .pegasus_architecture import PegasusWrapper
 
 
@@ -29,7 +28,7 @@ logger = get_logger()
 
 
 if TYPE_CHECKING:
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig, PreTrainedModel
+    from transformers import PreTrainedModel
 
 
 class RBLNPegasusModel(RBLNTransformerEncoderForFeatureExtraction):
@@ -41,48 +40,6 @@ class RBLNPegasusModel(RBLNTransformerEncoderForFeatureExtraction):
     """
 
     rbln_model_input_names = ["input_ids", "attention_mask", "decoder_input_ids", "decoder_attention_mask"]
-
-    @classmethod
-    def update_rbln_config_for_transformers_encoder(
-        cls,
-        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
-        model: Optional["PreTrainedModel"] = None,
-        model_config: Optional["PretrainedConfig"] = None,
-        rbln_config: Optional[RBLNPegasusModelConfig] = None,
-    ) -> RBLNPegasusModelConfig:
-        max_position_embeddings = getattr(model_config, "n_positions", None) or getattr(
-            model_config, "max_position_embeddings", None
-        )
-
-        if rbln_config.max_seq_len is None:
-            rbln_config.max_seq_len = max_position_embeddings
-            if rbln_config.max_seq_len is None:
-                for tokenizer in preprocessors:
-                    if hasattr(tokenizer, "model_max_length"):
-                        rbln_config.max_seq_len = tokenizer.model_max_length
-                        break
-                if rbln_config.max_seq_len is None:
-                    raise ValueError("`max_seq_len` should be specified!")
-
-        if max_position_embeddings is not None and rbln_config.max_seq_len > max_position_embeddings:
-            raise ValueError("`max_seq_len` should be less or equal than max_position_embeddings!")
-
-        if rbln_config.model_input_names is None and cls.rbln_model_input_names is not None:
-            rbln_config.model_input_names = cls.rbln_model_input_names
-
-        if rbln_config.model_input_names is None or len(rbln_config.model_input_names) == 0:
-            raise ValueError(
-                "Specify the model input names obtained by the tokenizer via `rbln_model_input_names`. "
-                "This is an internal error. Please report it to the developers."
-            )
-
-        input_info = [
-            (model_input_name, [rbln_config.batch_size, rbln_config.max_seq_len], cls.rbln_dtype)
-            for model_input_name in rbln_config.model_input_names
-        ]
-
-        rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
-        return rbln_config
 
 
 class RBLNPegasusForConditionalGeneration(RBLNModelForSeq2SeqLM):
