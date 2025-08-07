@@ -124,10 +124,12 @@ class TestQwen3ForCausalLM(LLMTest.TestLLM):
 
 
 class TestQwen3ForCausalLM_UAM(TestQwen3ForCausalLM):
+    RBLN_AUTO_CLASS = RBLNAutoModelForCausalLM
     RBLN_CLASS_KWARGS = {"rbln_config": {"use_attention_mask": True}}
 
 
 class TestQwen3Model(LLMTest.TestLLMBase):
+    RBLN_AUTO_CLASS = RBLNAutoModel
     RBLN_CLASS = RBLNQwen3Model
     HF_MODEL_ID = "trl-internal-testing/tiny-Qwen3ForCausalLM"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}

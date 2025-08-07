@@ -11,6 +11,7 @@ from optimum.rbln import (
     RBLNBartModel,
     RBLNBertForMaskedLM,
     RBLNBertForQuestionAnswering,
+    RBLNBertModel,
     RBLNCLIPTextModel,
     RBLNColPaliForRetrieval,
     RBLNDPTForDepthEstimation,
@@ -32,6 +33,7 @@ from optimum.rbln.transformers.models.auto.modeling_auto import (
     RBLNAutoModelForQuestionAnswering,
     RBLNAutoModelForSequenceClassification,
     RBLNAutoModelForSpeechSeq2Seq,
+    RBLNAutoModelForTextEncoding,
 )
 from optimum.rbln.utils.runtime_utils import ContextRblnConfig
 from optimum.rbln.utils.save_utils import maybe_load_preprocessors
@@ -108,6 +110,17 @@ class TestResNetModel(BaseTest.TestModel, BaseHubTest.TestHub):
 
 
 class TestBertModel(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = [RBLNAutoModelForTextEncoding, RBLNAutoModel]
+    RBLN_CLASS = RBLNBertModel
+    HF_MODEL_ID = "hf-tiny-model-private/tiny-random-BertModel"
+    GENERATION_KWARGS = {
+        "input_ids": RANDOM_INPUT_IDS,
+        "attention_mask": RANDOM_ATTN_MASK,
+        "token_type_ids": RANDOM_TOKEN_TYPE_IDS,
+    }
+
+
+class TestBertForQuestionAnswering(BaseTest.TestModel):
     RBLN_AUTO_CLASS = RBLNAutoModelForQuestionAnswering
     RBLN_CLASS = RBLNBertForQuestionAnswering
     HF_MODEL_ID = "hf-internal-testing/tiny-random-BertForQuestionAnswering"
@@ -137,7 +150,7 @@ class TestDPTModel(BaseTest.TestModel):
 
 
 class TestT5EncoderModel(BaseTest.TestModel):
-    RBLN_AUTO_CLASS = None
+    RBLN_AUTO_CLASS = RBLNAutoModelForTextEncoding
     RBLN_CLASS = RBLNT5EncoderModel
 
     HF_MODEL_ID = "t5-small"
@@ -324,7 +337,7 @@ class TestRBLNXLMRobertaForSequenceClassification(BaseTest.TestModel):
 
 
 class TestXLMRobertaModel(BaseTest.TestModel):
-    RBLN_AUTO_CLASS = RBLNAutoModel
+    RBLN_AUTO_CLASS = RBLNAutoModelForTextEncoding
     RBLN_CLASS = RBLNXLMRobertaModel
     TEST_LEVEL = TestLevel.FULL
     # HF_MODEL_ID = "hf-internal-testing/tiny-xlm-roberta"
@@ -345,16 +358,21 @@ class TestXLMRobertaModel(BaseTest.TestModel):
     }
 
 
-class TestCLIPModel(BaseTest.TestModel):
+class TestCLIPTextModel(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoModelForTextEncoding
     RBLN_CLASS = RBLNCLIPTextModel
-    HF_MODEL_ID = "hf-internal-testing/tiny-random-CLIPModel"
+    HF_MODEL_ID = "peft-internal-testing/tiny-clip-text-2"
     GENERATION_KWARGS = {
-        "input_ids": RANDOM_INPUT_IDS,
-        "attention_mask": RANDOM_ATTN_MASK,
+        "input_ids": RANDOM_INPUT_IDS[:, :77],
+        "attention_mask": RANDOM_ATTN_MASK[:, :77],
+    }
+    HF_CONFIG_KWARGS = {
+        "num_hidden_layers": 1,
     }
 
 
 class TestColPaliModel(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = None
     RBLN_CLASS = RBLNColPaliForRetrieval
     HF_MODEL_ID = "thkim93/colpali-hf-1layer"
     GENERATION_KWARGS = {
