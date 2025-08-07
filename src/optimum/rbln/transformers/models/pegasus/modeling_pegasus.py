@@ -29,7 +29,7 @@ logger = get_logger()
 
 
 if TYPE_CHECKING:
-    from transformers import PreTrainedModel
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PreTrainedModel
 
 
 class RBLNPegasusModel(RBLNTransformerEncoderForFeatureExtraction):
