@@ -406,6 +406,7 @@ class TestRBLNBartModel(BaseTest.TestModel):
 
 
 class TestPegasusModel(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoModel
     RBLN_CLASS = RBLNPegasusModel
     HF_MODEL_ID = "hf-tiny-model-private/tiny-random-PegasusModel"
     RBLN_CLASS_KWARGS = {"rbln_max_seq_len": 100}
