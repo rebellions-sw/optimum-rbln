@@ -365,9 +365,7 @@ class TestLlavaForConditionalGeneration(LLMTest.TestLLM):
         }
     }
     EXPECTED_OUTPUT = "ambbrow nur Well chimCore rapideraine Йye questaédédates Ken neu Airport din termeächstthread"
-    HF_CONFIG_KWARGS = {
-        "revision": "8ab8bfc820a6bb9e0f8de1ac715f4b53db44e684"
-    }
+    HF_CONFIG_KWARGS = {"revision": "8ab8bfc820a6bb9e0f8de1ac715f4b53db44e684"}
 
     @classmethod
     def get_tokenizer(cls):
@@ -438,9 +436,7 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
         }
     }
     EXPECTED_OUTPUT = "entricCallbackavidARYails NotesDAPimil coordFeed Boysaml obligation relay迟 войны sexual Definition Eisen patent"
-    HF_CONFIG_KWARGS = {
-        "revision": "21948c1af6a0666e341b6403dc1cbbd5c8900e7d"
-    }
+    HF_CONFIG_KWARGS = {"revision": "21948c1af6a0666e341b6403dc1cbbd5c8900e7d"}
 
     @classmethod
     def get_tokenizer(cls):
