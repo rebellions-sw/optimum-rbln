@@ -14,10 +14,14 @@ from optimum.rbln import (
     RBLNBertModel,
     RBLNCLIPTextModel,
     RBLNColPaliForRetrieval,
+    RBLNDistilBertForQuestionAnswering,
     RBLNDPTForDepthEstimation,
     RBLNResNetForImageClassification,
+    RBLNRobertaForMaskedLM,
+    RBLNRobertaForSequenceClassification,
     RBLNT5EncoderModel,
     RBLNTimeSeriesTransformerForPrediction,
+    RBLNViTForImageClassification,
     RBLNWav2Vec2ForCTC,
     RBLNWhisperForConditionalGeneration,
     RBLNXLMRobertaForSequenceClassification,
@@ -47,7 +51,7 @@ RANDOM_TOKEN_TYPE_IDS = torch.randint(low=0, high=3, size=(1, 512), generator=to
 RANDOM_AUDIO = torch.randn(size=(1, 160005), generator=torch.manual_seed(42), dtype=torch.float32)
 
 
-class TestASTModel(BaseTest.TestModel):
+class TestASTForAudioClassification(BaseTest.TestModel):
     RBLN_AUTO_CLASS = RBLNAutoModelForAudioClassification
     RBLN_CLASS = RBLNASTForAudioClassification
     # HF_MODEL_ID = "hf-internal-testing/tiny-random-ASTForAudioClassification"
@@ -369,6 +373,7 @@ class TestCLIPTextModel(BaseTest.TestModel):
     HF_CONFIG_KWARGS = {
         "num_hidden_layers": 1,
     }
+    TEST_LEVEL = TestLevel.FULL
 
 
 class TestColPaliModel(BaseTest.TestModel):
@@ -410,7 +415,7 @@ class TestTimeSeriesTransformerForPrediction(BaseTest.TestModel):
         _ = self.model.generate(**inputs)
 
 
-class TestRBLNBartModel(BaseTest.TestModel):
+class TestBartModel(BaseTest.TestModel):
     RBLN_CLASS = RBLNBartModel
     HF_MODEL_ID = "hf-internal-testing/tiny-random-BartModel"
     RBLN_CLASS_KWARGS = {"rbln_max_seq_len": 100}
@@ -419,6 +424,56 @@ class TestRBLNBartModel(BaseTest.TestModel):
         "attention_mask": torch.randint(
             low=0, high=2, size=(1, 100), generator=torch.manual_seed(42), dtype=torch.int64
         ),
+    }
+
+
+class TestDistilBertForQuestionAnswering(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoModelForQuestionAnswering
+    RBLN_CLASS = RBLNDistilBertForQuestionAnswering
+    HF_MODEL_ID = "hf-tiny-model-private/tiny-random-DistilBertForQuestionAnswering"
+    GENERATION_KWARGS = {
+        "input_ids": RANDOM_INPUT_IDS,
+        "attention_mask": RANDOM_ATTN_MASK,
+    }
+    TEST_LEVEL = TestLevel.FULL
+
+
+class TestRobertaForMaskedLM(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoModelForMaskedLM
+    RBLN_CLASS = RBLNRobertaForMaskedLM
+    HF_MODEL_ID = "hf-tiny-model-private/tiny-random-RobertaForMaskedLM"
+    GENERATION_KWARGS = {
+        "input_ids": RANDOM_INPUT_IDS[:, :256],
+        "attention_mask": RANDOM_ATTN_MASK[:, :256],
+    }
+    RBLN_CLASS_KWARGS = {"rbln_max_seq_len": 256, "rbln_batch_size": 1}
+    HF_CONFIG_KWARGS = {
+        "num_hidden_layers": 1,
+    }
+    TEST_LEVEL = TestLevel.FULL
+
+
+class TestRobertaForSequenceClassification(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoModelForSequenceClassification
+    RBLN_CLASS = RBLNRobertaForSequenceClassification
+    HF_MODEL_ID = "hf-tiny-model-private/tiny-random-RobertaForSequenceClassification"
+    GENERATION_KWARGS = {
+        "input_ids": RANDOM_INPUT_IDS[:, :256],
+        "attention_mask": RANDOM_ATTN_MASK[:, :256],
+    }
+    RBLN_CLASS_KWARGS = {"rbln_max_seq_len": 256, "rbln_batch_size": 1}
+    HF_CONFIG_KWARGS = {
+        "num_hidden_layers": 1,
+    }
+    TEST_LEVEL = TestLevel.FULL
+
+
+class TestViTForImageClassification(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoModelForImageClassification
+    RBLN_CLASS = RBLNViTForImageClassification
+    HF_MODEL_ID = "WinKawaks/vit-tiny-patch16-224"
+    GENERATION_KWARGS = {
+        "pixel_values": torch.randn(1, 3, 224, 224, generator=torch.manual_seed(42)),
     }
 
 
