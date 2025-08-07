@@ -182,9 +182,8 @@ class RBLNDiffusionMixin:
         rbln_config, kwargs = cls.get_rbln_config_class().initialize_from_kwargs(rbln_config, **kwargs)
 
         if export is None:
-            export = False
-            for submodule_name in cls._submodules:
-                if not RBLNModel._is_compiled(
+            export = any(
+                not RBLNModel._is_compiled(
                     model_id,
                     token=kwargs.get("token"),
                     revision=kwargs.get("revision"),
@@ -192,9 +191,9 @@ class RBLNDiffusionMixin:
                     cache_dir=kwargs.get("cache_dir"),
                     subfolder=submodule_name,
                     local_files_only=kwargs.get("local_files_only", False),
-                ):
-                    export = True
-                    break
+                )
+                for submodule_name in cls._submodules
+            )
 
         if export:
             # keep submodules if user passed any of them.
