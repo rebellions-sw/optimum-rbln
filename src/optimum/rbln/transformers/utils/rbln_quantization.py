@@ -253,9 +253,9 @@ def determine_format_from_index(index_data: Optional[Dict]) -> str:
         raise ValueError("weight_map not found in safetensors.index.json")
 
     if any("self_attn.k_proj.k_scale" in key for key in index_data["weight_map"]):
-        return "nvidia"
+        return "tensorrt"
     elif any("self_attn.kv_scale" in key for key in index_data["weight_map"]):
-        return "amd"
+        return "quark"
     elif any("weight_scale" in key or "input_scale" in key for key in index_data["weight_map"]):
         return "default"
     else:
@@ -323,7 +323,7 @@ def load_weights_from_files(
                 model_params[key].data.copy_(value)
             elif key in model_buffers:
                 model_buffers[key].data.copy_(value)
-            elif "kv_scale" in key and determined_format == "amd":
+            elif "kv_scale" in key and determined_format == "quark":
                 if rbln_quantization.kv_caches == "fp8":
                     model_params[key.replace("kv_scale", "k_proj.k_scale")].data.copy_(value)
                     model_params[key.replace("kv_scale", "v_proj.v_scale")].data.copy_(value)
