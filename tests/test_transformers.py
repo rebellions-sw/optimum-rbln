@@ -14,6 +14,7 @@ from optimum.rbln import (
     RBLNCLIPTextModel,
     RBLNColPaliForRetrieval,
     RBLNDPTForDepthEstimation,
+    RBLNPegasusModel,
     RBLNResNetForImageClassification,
     RBLNT5EncoderModel,
     RBLNTimeSeriesTransformerForPrediction,
@@ -399,6 +400,24 @@ class TestRBLNBartModel(BaseTest.TestModel):
     GENERATION_KWARGS = {
         "input_ids": torch.randint(low=0, high=50, size=(1, 100), generator=torch.manual_seed(42), dtype=torch.int64),
         "attention_mask": torch.randint(
+            low=0, high=2, size=(1, 100), generator=torch.manual_seed(42), dtype=torch.int64
+        ),
+    }
+
+
+class TestPegasusModel(BaseTest.TestModel):
+    RBLN_CLASS = RBLNPegasusModel
+    HF_MODEL_ID = "hf-tiny-model-private/tiny-random-PegasusModel"
+    RBLN_CLASS_KWARGS = {"rbln_max_seq_len": 100}
+    GENERATION_KWARGS = {
+        "input_ids": torch.randint(low=0, high=50, size=(1, 100), generator=torch.manual_seed(42), dtype=torch.int64),
+        "attention_mask": torch.randint(
+            low=0, high=2, size=(1, 100), generator=torch.manual_seed(42), dtype=torch.int64
+        ),
+        "decoder_input_ids": torch.randint(
+            low=0, high=50, size=(1, 100), generator=torch.manual_seed(42), dtype=torch.int64
+        ),
+        "decoder_attention_mask": torch.randint(
             low=0, high=2, size=(1, 100), generator=torch.manual_seed(42), dtype=torch.int64
         ),
     }

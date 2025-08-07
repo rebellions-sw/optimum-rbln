@@ -17,13 +17,13 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from transformers import PegasusForConditionalGeneration, PreTrainedModel
 
+from ....configuration_utils import RBLNCompileConfig
 from ....utils.logging import get_logger
 from ...modeling_generic import RBLNTransformerEncoderForFeatureExtraction
 from ...models.seq2seq import RBLNModelForSeq2SeqLM
 from .configuration_pegasus import RBLNPegasusForConditionalGenerationConfig, RBLNPegasusModelConfig
 from .pegasus_architecture import PegasusWrapper
 
-from ....configuration_utils import RBLNCompileConfig
 
 logger = get_logger()
 
@@ -73,7 +73,7 @@ class RBLNPegasusModel(RBLNTransformerEncoderForFeatureExtraction):
         #         rbln_config.model_input_names = [
         #             name for name in signature_params if name in tokenizer.model_input_names
         #         ]
-                
+
         #         names = ["decoder_"+name for name in rbln_config.model_input_names]
         #         rbln_config.model_input_names.extend(names)
 
@@ -81,7 +81,7 @@ class RBLNPegasusModel(RBLNTransformerEncoderForFeatureExtraction):
         #         if invalid_params:
         #             raise ValueError(f"Invalid model input names: {invalid_params}")
         #         break
-        
+
         if rbln_config.model_input_names is None and cls.rbln_model_input_names is not None:
             rbln_config.model_input_names = cls.rbln_model_input_names
 
