@@ -30,7 +30,7 @@ logger = get_logger()
 
 class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
     SUPPORTED_FORMATS = ["rbln"]
-    SUPPORTED_WEIGHTS = ["int4", "fp16"]
+    SUPPORTED_WEIGHTS = ["int4", "int8", "fp16"]
     SUPPORTED_ACTIVATIONS = ["fp16"]
 
     # The RBLN_QUANT_BITS environment variable defines the precision of each layer during the graph compilation process.
@@ -52,6 +52,9 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
 
             if precision == "w4a16":
                 weights = "int4"
+                activations = "fp16"
+            elif precision == "w8a16":
+                weights = "int8"
                 activations = "fp16"
             else:
                 raise ValueError(f"Invalid precision: {precision}")
@@ -81,8 +84,8 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
 
     def maybe_set_quantization_env(self):
         quant_bits = None
-        if self.weights == "int4":
-            quant_bits = "4"
+        if self.weights in ("int4", "int8"):
+            quant_bits = self.weights[-1]
             os.environ[self.RBLN_QUANT_BITS_ENV] = quant_bits
 
     def maybe_reset_quantization_env(self):
