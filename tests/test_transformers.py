@@ -341,7 +341,7 @@ class TestRBLNXLMRobertaForSequenceClassification(BaseTest.TestModel):
 
 
 class TestXLMRobertaModel(BaseTest.TestModel):
-    RBLN_AUTO_CLASS = RBLNAutoModelForTextEncoding
+    RBLN_AUTO_CLASS = [RBLNAutoModelForTextEncoding, RBLNAutoModel]
     RBLN_CLASS = RBLNXLMRobertaModel
     TEST_LEVEL = TestLevel.FULL
     # HF_MODEL_ID = "hf-internal-testing/tiny-xlm-roberta"
@@ -416,6 +416,7 @@ class TestTimeSeriesTransformerForPrediction(BaseTest.TestModel):
 
 
 class TestBartModel(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoModel
     RBLN_CLASS = RBLNBartModel
     HF_MODEL_ID = "hf-internal-testing/tiny-random-BartModel"
     RBLN_CLASS_KWARGS = {"rbln_max_seq_len": 100}
