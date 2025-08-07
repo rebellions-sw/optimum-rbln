@@ -33,13 +33,14 @@ if TYPE_CHECKING:
 
 
 class RBLNPegasusModel(RBLNTransformerEncoderForFeatureExtraction):
-    rbln_model_input_names = ["input_ids", "attention_mask", "decoder_input_ids", "decoder_attention_mask"]
     """
     RBLN optimized PEGASUS model for feature extraction tasks.
 
     This class provides hardware-accelerated inference for PEGASUS encoder models
     on RBLN devices, optimized for feature extraction use cases.
     """
+
+    rbln_model_input_names = ["input_ids", "attention_mask", "decoder_input_ids", "decoder_attention_mask"]
 
     @classmethod
     def update_rbln_config_for_transformers_encoder(
@@ -65,22 +66,6 @@ class RBLNPegasusModel(RBLNTransformerEncoderForFeatureExtraction):
 
         if max_position_embeddings is not None and rbln_config.max_seq_len > max_position_embeddings:
             raise ValueError("`max_seq_len` should be less or equal than max_position_embeddings!")
-
-        # signature_params = inspect.signature(model.forward).parameters.keys()
-
-        # for tokenizer in preprocessors:
-        #     if hasattr(tokenizer, "model_input_names"):
-        #         rbln_config.model_input_names = [
-        #             name for name in signature_params if name in tokenizer.model_input_names
-        #         ]
-
-        #         names = ["decoder_"+name for name in rbln_config.model_input_names]
-        #         rbln_config.model_input_names.extend(names)
-
-        #         invalid_params = set(rbln_config.model_input_names) - set(signature_params)
-        #         if invalid_params:
-        #             raise ValueError(f"Invalid model input names: {invalid_params}")
-        #         break
 
         if rbln_config.model_input_names is None and cls.rbln_model_input_names is not None:
             rbln_config.model_input_names = cls.rbln_model_input_names
