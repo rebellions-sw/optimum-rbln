@@ -191,14 +191,6 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
     def use_local_attention(self):
         return self.cache_impl in ["sliding_window", "hybrid"]
 
-    @property
-    def flash_min_blocks(self):
-        return (
-            self.max_seq_len // self.kvcache_block_size + 1
-            if self.batch_size > 1
-            else self.max_seq_len // self.kvcache_block_size
-        )
-
 
 class RBLNDecoderOnlyModelForCausalLMConfig(RBLNDecoderOnlyModelConfig):
     """
