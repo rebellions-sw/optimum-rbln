@@ -445,7 +445,7 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
     # override
     @classmethod
     def setUpClass(cls):
-        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
+        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
 
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 1
