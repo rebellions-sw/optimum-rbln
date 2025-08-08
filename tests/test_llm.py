@@ -124,10 +124,12 @@ class TestQwen3ForCausalLM(LLMTest.TestLLM):
 
 
 class TestQwen3ForCausalLM_UAM(TestQwen3ForCausalLM):
+    RBLN_AUTO_CLASS = RBLNAutoModelForCausalLM
     RBLN_CLASS_KWARGS = {"rbln_config": {"use_attention_mask": True}}
 
 
 class TestQwen3Model(LLMTest.TestLLMBase):
+    RBLN_AUTO_CLASS = RBLNAutoModel
     RBLN_CLASS = RBLNQwen3Model
     HF_MODEL_ID = "trl-internal-testing/tiny-Qwen3ForCausalLM"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
@@ -654,6 +656,25 @@ class TestGemma3ForCausalLM(LLMTest.TestLLM):
         "max_position_embeddings": 1024,
         "trust_remote_code": True,
     }
+
+
+class TestLlamaForCausalLM_fp8(LLMTest.TestLLM):
+    RBLN_CLASS = RBLNLlamaForCausalLM
+    HF_MODEL_ID = "RedHatAI/Meta-Llama-3-8B-Instruct-FP8-KV"  # No tiny model yet.
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1}
+    RBLN_CLASS_KWARGS = {
+        "rbln_config": {
+            "quantization": {"weights": "fp8", "kv_caches": "fp8"},
+            "create_runtimes": False,
+            "npu": "RBLN-CR03",
+            "attn_impl": "flash_attn",
+            "kvcache_partition_len": 4096,
+            "max_seq_len": 8192,
+            "tensor_parallel_size": 1,
+        },
+    }
+    EXPECTED_OUTPUT = None  # Cannot generate output with fp8 quantization in ATOM™
+    TEST_LEVEL = TestLevel.DISABLED
 
 
 class TestDisallowedLlama_1(DisallowedTestBase.DisallowedTest):
