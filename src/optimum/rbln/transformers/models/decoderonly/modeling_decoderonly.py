@@ -1199,7 +1199,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
             )
 
             if rbln_config.kvcache_num_blocks is None:
-                if estimated_max_num_blocks < rbln_config.flash_min_blocks:
+                if estimated_max_num_blocks < num_full_blocks:
                     rbln_config.kvcache_num_blocks = (
                         estimated_max_num_blocks
                         if rbln_config.flash_min_blocks < estimated_max_num_blocks
