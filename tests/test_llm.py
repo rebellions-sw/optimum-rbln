@@ -124,10 +124,12 @@ class TestQwen3ForCausalLM(LLMTest.TestLLM):
 
 
 class TestQwen3ForCausalLM_UAM(TestQwen3ForCausalLM):
+    RBLN_AUTO_CLASS = RBLNAutoModelForCausalLM
     RBLN_CLASS_KWARGS = {"rbln_config": {"use_attention_mask": True}}
 
 
 class TestQwen3Model(LLMTest.TestLLMBase):
+    RBLN_AUTO_CLASS = RBLNAutoModel
     RBLN_CLASS = RBLNQwen3Model
     HF_MODEL_ID = "trl-internal-testing/tiny-Qwen3ForCausalLM"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
@@ -363,12 +365,12 @@ class TestLlavaForConditionalGeneration(LLMTest.TestLLM):
         }
     }
     EXPECTED_OUTPUT = "ambbrow nur Well chimCore rapideraine Йye questaédédates Ken neu Airport din termeächstthread"
-    HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
+    HF_CONFIG_KWARGS = {"revision": "8ab8bfc820a6bb9e0f8de1ac715f4b53db44e684"}
 
     @classmethod
     def get_tokenizer(cls):
         if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
         return cls._tokenizer
 
     def get_inputs(self):
@@ -434,18 +436,18 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
         }
     }
     EXPECTED_OUTPUT = "entricCallbackavidARYails NotesDAPimil coordFeed Boysaml obligation relay迟 войны sexual Definition Eisen patent"
-    HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
+    HF_CONFIG_KWARGS = {"revision": "21948c1af6a0666e341b6403dc1cbbd5c8900e7d"}
 
     @classmethod
     def get_tokenizer(cls):
         if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
         return cls._tokenizer
 
     # override
     @classmethod
     def setUpClass(cls):
-        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
+        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
 
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 1
@@ -617,13 +619,13 @@ class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
     @classmethod
     def get_tokenizer(cls):
         if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
         return cls._tokenizer
 
     # override
     @classmethod
     def setUpClass(cls):
-        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID, revision="e1f4b0516ec80f86ed75c8cb1d45ede72526ad24")
+        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 2
         text_config["sliding_window_pattern"] = 2

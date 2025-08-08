@@ -11,12 +11,17 @@ from optimum.rbln import (
     RBLNBartModel,
     RBLNBertForMaskedLM,
     RBLNBertForQuestionAnswering,
+    RBLNBertModel,
     RBLNCLIPTextModel,
     RBLNColPaliForRetrieval,
+    RBLNDistilBertForQuestionAnswering,
     RBLNDPTForDepthEstimation,
     RBLNResNetForImageClassification,
+    RBLNRobertaForMaskedLM,
+    RBLNRobertaForSequenceClassification,
     RBLNT5EncoderModel,
     RBLNTimeSeriesTransformerForPrediction,
+    RBLNViTForImageClassification,
     RBLNWav2Vec2ForCTC,
     RBLNWhisperForConditionalGeneration,
     RBLNXLMRobertaForSequenceClassification,
@@ -32,6 +37,7 @@ from optimum.rbln.transformers.models.auto.modeling_auto import (
     RBLNAutoModelForQuestionAnswering,
     RBLNAutoModelForSequenceClassification,
     RBLNAutoModelForSpeechSeq2Seq,
+    RBLNAutoModelForTextEncoding,
 )
 from optimum.rbln.utils.runtime_utils import ContextRblnConfig
 from optimum.rbln.utils.save_utils import maybe_load_preprocessors
@@ -45,7 +51,7 @@ RANDOM_TOKEN_TYPE_IDS = torch.randint(low=0, high=3, size=(1, 512), generator=to
 RANDOM_AUDIO = torch.randn(size=(1, 160005), generator=torch.manual_seed(42), dtype=torch.float32)
 
 
-class TestASTModel(BaseTest.TestModel):
+class TestASTForAudioClassification(BaseTest.TestModel):
     RBLN_AUTO_CLASS = RBLNAutoModelForAudioClassification
     RBLN_CLASS = RBLNASTForAudioClassification
     # HF_MODEL_ID = "hf-internal-testing/tiny-random-ASTForAudioClassification"
@@ -108,6 +114,17 @@ class TestResNetModel(BaseTest.TestModel, BaseHubTest.TestHub):
 
 
 class TestBertModel(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = [RBLNAutoModelForTextEncoding, RBLNAutoModel]
+    RBLN_CLASS = RBLNBertModel
+    HF_MODEL_ID = "hf-tiny-model-private/tiny-random-BertModel"
+    GENERATION_KWARGS = {
+        "input_ids": RANDOM_INPUT_IDS,
+        "attention_mask": RANDOM_ATTN_MASK,
+        "token_type_ids": RANDOM_TOKEN_TYPE_IDS,
+    }
+
+
+class TestBertForQuestionAnswering(BaseTest.TestModel):
     RBLN_AUTO_CLASS = RBLNAutoModelForQuestionAnswering
     RBLN_CLASS = RBLNBertForQuestionAnswering
     HF_MODEL_ID = "hf-internal-testing/tiny-random-BertForQuestionAnswering"
@@ -137,7 +154,7 @@ class TestDPTModel(BaseTest.TestModel):
 
 
 class TestT5EncoderModel(BaseTest.TestModel):
-    RBLN_AUTO_CLASS = None
+    RBLN_AUTO_CLASS = RBLNAutoModelForTextEncoding
     RBLN_CLASS = RBLNT5EncoderModel
 
     HF_MODEL_ID = "t5-small"
@@ -324,7 +341,7 @@ class TestRBLNXLMRobertaForSequenceClassification(BaseTest.TestModel):
 
 
 class TestXLMRobertaModel(BaseTest.TestModel):
-    RBLN_AUTO_CLASS = RBLNAutoModel
+    RBLN_AUTO_CLASS = [RBLNAutoModelForTextEncoding, RBLNAutoModel]
     RBLN_CLASS = RBLNXLMRobertaModel
     TEST_LEVEL = TestLevel.FULL
     # HF_MODEL_ID = "hf-internal-testing/tiny-xlm-roberta"
@@ -345,16 +362,22 @@ class TestXLMRobertaModel(BaseTest.TestModel):
     }
 
 
-class TestCLIPModel(BaseTest.TestModel):
+class TestCLIPTextModel(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoModelForTextEncoding
     RBLN_CLASS = RBLNCLIPTextModel
-    HF_MODEL_ID = "hf-internal-testing/tiny-random-CLIPModel"
+    HF_MODEL_ID = "peft-internal-testing/tiny-clip-text-2"
     GENERATION_KWARGS = {
-        "input_ids": RANDOM_INPUT_IDS,
-        "attention_mask": RANDOM_ATTN_MASK,
+        "input_ids": RANDOM_INPUT_IDS[:, :77],
+        "attention_mask": RANDOM_ATTN_MASK[:, :77],
     }
+    HF_CONFIG_KWARGS = {
+        "num_hidden_layers": 1,
+    }
+    TEST_LEVEL = TestLevel.FULL
 
 
 class TestColPaliModel(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = None
     RBLN_CLASS = RBLNColPaliForRetrieval
     HF_MODEL_ID = "thkim93/colpali-hf-1layer"
     GENERATION_KWARGS = {
@@ -392,7 +415,8 @@ class TestTimeSeriesTransformerForPrediction(BaseTest.TestModel):
         _ = self.model.generate(**inputs)
 
 
-class TestRBLNBartModel(BaseTest.TestModel):
+class TestBartModel(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoModel
     RBLN_CLASS = RBLNBartModel
     HF_MODEL_ID = "hf-internal-testing/tiny-random-BartModel"
     RBLN_CLASS_KWARGS = {"rbln_max_seq_len": 100}
@@ -401,6 +425,56 @@ class TestRBLNBartModel(BaseTest.TestModel):
         "attention_mask": torch.randint(
             low=0, high=2, size=(1, 100), generator=torch.manual_seed(42), dtype=torch.int64
         ),
+    }
+
+
+class TestDistilBertForQuestionAnswering(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoModelForQuestionAnswering
+    RBLN_CLASS = RBLNDistilBertForQuestionAnswering
+    HF_MODEL_ID = "hf-tiny-model-private/tiny-random-DistilBertForQuestionAnswering"
+    GENERATION_KWARGS = {
+        "input_ids": RANDOM_INPUT_IDS,
+        "attention_mask": RANDOM_ATTN_MASK,
+    }
+    TEST_LEVEL = TestLevel.FULL
+
+
+class TestRobertaForMaskedLM(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoModelForMaskedLM
+    RBLN_CLASS = RBLNRobertaForMaskedLM
+    HF_MODEL_ID = "hf-tiny-model-private/tiny-random-RobertaForMaskedLM"
+    GENERATION_KWARGS = {
+        "input_ids": RANDOM_INPUT_IDS[:, :256],
+        "attention_mask": RANDOM_ATTN_MASK[:, :256],
+    }
+    RBLN_CLASS_KWARGS = {"rbln_max_seq_len": 256, "rbln_batch_size": 1}
+    HF_CONFIG_KWARGS = {
+        "num_hidden_layers": 1,
+    }
+    TEST_LEVEL = TestLevel.FULL
+
+
+class TestRobertaForSequenceClassification(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoModelForSequenceClassification
+    RBLN_CLASS = RBLNRobertaForSequenceClassification
+    HF_MODEL_ID = "hf-tiny-model-private/tiny-random-RobertaForSequenceClassification"
+    GENERATION_KWARGS = {
+        "input_ids": RANDOM_INPUT_IDS[:, :256],
+        "attention_mask": RANDOM_ATTN_MASK[:, :256],
+    }
+    RBLN_CLASS_KWARGS = {"rbln_max_seq_len": 256, "rbln_batch_size": 1}
+    HF_CONFIG_KWARGS = {
+        "num_hidden_layers": 1,
+    }
+    TEST_LEVEL = TestLevel.FULL
+
+
+class TestViTForImageClassification(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoModelForImageClassification
+    RBLN_CLASS = RBLNViTForImageClassification
+    HF_MODEL_ID = "WinKawaks/vit-tiny-patch16-224"
+    GENERATION_KWARGS = {
+        "pixel_values": torch.randn(1, 3, 224, 224, generator=torch.manual_seed(42)),
     }
 
 
