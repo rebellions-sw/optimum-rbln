@@ -34,7 +34,7 @@ from transformers.models.idefics3.modeling_idefics3 import Idefics3CausalLMOutpu
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.runtime_utils import RBLNPytorchRuntime
-from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyForCausalLMOutput
+from ...modeling_outputs import RBLNDecoderOnlyOutput
 
 
 if TYPE_CHECKING:
@@ -488,7 +488,7 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
         if not return_dict:
             return logits, generate_idx
         else:
-            return RBLNDecoderOnlyForCausalLMOutput(
+            return RBLNDecoderOnlyOutput(
                 logits=logits,
                 generate_idx=generate_idx,
             )

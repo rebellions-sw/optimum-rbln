@@ -23,7 +23,7 @@ from transformers.models.llava.modeling_llava import LlavaCausalLMOutputWithPast
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyForCausalLMOutput
+from ...modeling_outputs import RBLNDecoderOnlyOutput
 
 
 logger = get_logger(__name__)
@@ -413,7 +413,7 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
         if not return_dict:
             return logits, generate_idx
         else:
-            return RBLNDecoderOnlyForCausalLMOutput(
+            return RBLNDecoderOnlyOutput(
                 logits=logits,
                 generate_idx=generate_idx,
             )
