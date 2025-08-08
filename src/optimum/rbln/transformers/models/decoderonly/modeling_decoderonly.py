@@ -138,6 +138,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         subfolder: str = "",
         local_files_only: bool = False,
         trust_remote_code: bool = False,
+        rbln_config: Optional[RBLNDecoderOnlyModelConfig] = None,
         **kwargs,
     ):
         kwargs = cls.update_kwargs(kwargs)
@@ -152,6 +153,9 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
                 trust_remote_code=trust_remote_code,
                 **kwargs,
             )
+            if config.torch_dtype == torch.bfloat16:
+                # FIXME: bfloat16 is not supported by rebel-compiler
+                config.torch_dtype = torch.float32
 
         with no_init_weights():
             model = cls.auto_model_class.from_config(config)
@@ -165,6 +169,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             cache_dir=cache_dir,
             force_download=force_download,
             local_files_only=local_files_only,
+            rbln_quantization=rbln_config.quantization,
         )
         return model
 
@@ -333,7 +338,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         cls, *args, rbln_config: Optional[RBLNDecoderOnlyModelConfig] = None, **kwargs
     ) -> PreTrainedModel:
         if rbln_config and rbln_config.quantization:
-            model = cls.get_quantized_model(*args, **kwargs)
+            model = cls.get_quantized_model(*args, rbln_config=rbln_config, **kwargs)
         else:
             model = super().get_pytorch_model(*args, **kwargs)
 
@@ -388,6 +393,10 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         if rbln_config.use_position_ids:
             input_info.append(("position_ids", [batch_size, query_length], "int32"))
 
+        kvcache_dtype = "float32"
+        if rbln_config.quantization and rbln_config.quantization.kv_caches == "fp8":
+            kvcache_dtype = "float8_e4m3fn"
+
         global_kvcache_shape = [
             rbln_config.kvcache_num_blocks,
             num_key_value_heads,
@@ -402,7 +411,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
                     local_kvcache_shape
                     if rbln_config.sliding_window is not None and ((i // 2) in rbln_config.sliding_window_layers)
                     else global_kvcache_shape,
-                    "float32",
+                    kvcache_dtype,
                 )
                 for i in range(num_hidden_layers * 2)
             ]
