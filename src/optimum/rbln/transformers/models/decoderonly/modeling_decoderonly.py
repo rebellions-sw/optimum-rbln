@@ -252,7 +252,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     "lora_int_id is required when using LoRA. "
                     "You should call set_lora_int_ids() before forward() or pass lora_int_id to forward()."
                 )
-            
+
             lora_int_id = self.lora_int_ids
 
         batch_size = inputs.shape[0]

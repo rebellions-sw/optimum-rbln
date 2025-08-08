@@ -96,36 +96,43 @@ class LoRALinear(nn.Module):
 
         lora_a_weights = []
         lora_b_weights = []
-        scaling_factors = []
 
         for adapter in self.lora_config.adapters:
             if self.projection_name not in adapter.target_modules:
                 # Create zero weights for adapters that don't target this projection
                 lora_a_weights.append(torch.zeros(adapter.r, self.in_features))
                 lora_b_weights.append(torch.zeros(self.out_features, adapter.r))
-                scaling_factors.append(0.0)
                 continue
 
             adapter_weights = self._load_adapter_weights(adapter.local_adapter_path)
 
-            layer_key = f"base_model.model.model.layers.{self.layer_idx}.self_attn.{self.projection_name}"
+            # Determine module type from projection name
+            attn_projs = {"q_proj", "k_proj", "v_proj", "o_proj"}
+            mlp_projs = {"gate_proj", "up_proj", "down_proj"}
+            if self.projection_name in attn_projs:
+                module_type = "self_attn"
+            elif self.projection_name in mlp_projs:
+                module_type = "mlp"
+            else:
+                module_type = "self_attn"
+
+            layer_key = f"base_model.model.model.layers.{self.layer_idx}.{module_type}.{self.projection_name}"
             lora_a_key = f"{layer_key}.lora_A.weight"
             lora_b_key = f"{layer_key}.lora_B.weight"
 
             if lora_a_key in adapter_weights and lora_b_key in adapter_weights:
-                lora_a_weights.append(adapter_weights[lora_a_key])
-                lora_b_weights.append(adapter_weights[lora_b_key])
-
-                # Calculate scaling factor
+                # Calculate scaling factor and fold it into lora_b
                 scaling = adapter.lora_alpha / adapter.r
                 if adapter.use_rslora:
                     scaling = scaling / math.sqrt(adapter.r)
-                scaling_factors.append(scaling * adapter.scaling_factor)
+                scaling = scaling * adapter.scaling_factor
+
+                lora_a_weights.append(adapter_weights[lora_a_key])
+                lora_b_weights.append(adapter_weights[lora_b_key] * scaling)
             else:
                 logger.warning(f"No LoRA weights found for {lora_a_key} or {lora_b_key}")
                 lora_a_weights.append(torch.zeros(adapter.r, self.in_features))
                 lora_b_weights.append(torch.zeros(self.out_features, adapter.r))
-                scaling_factors.append(0.0)
 
         # Stack weights along adapter dimension
         max_rank = self.lora_config.max_lora_rank
@@ -157,7 +164,7 @@ class LoRALinear(nn.Module):
         self.register_buffer(
             "lora_b_weights", torch.stack(lora_b_transposed, dim=0)
         )  # [num_adapters, rank, out_features]
-        self.register_buffer("scaling_factors", torch.tensor(scaling_factors, dtype=torch.float32))
+        # scaling is pre-applied to lora_b_weights
 
     def forward(self, x: torch.Tensor, lora_int_id: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
@@ -179,7 +186,6 @@ class LoRALinear(nn.Module):
             # lora_int_id: [batch_size] -> use as indices to select weights
             selected_lora_a = self.lora_a_weights[lora_int_id]  # [batch_size, in_features, rank]
             selected_lora_b = self.lora_b_weights[lora_int_id]  # [batch_size, rank, out_features]
-            selected_scaling = self.scaling_factors[lora_int_id]  # [batch_size]
 
             # Batched matrix multiplication for LoRA computation
             # x: [batch_size, seq_len, in_features]
@@ -191,10 +197,6 @@ class LoRALinear(nn.Module):
 
             # Second matmul: temp @ lora_b -> [batch_size, seq_len, out_features]
             lora_delta = torch.bmm(temp, selected_lora_b)
-
-            # Apply scaling: [batch_size] -> [batch_size, 1, 1] for broadcasting
-            scaling_expanded = selected_scaling.unsqueeze(1).unsqueeze(2)
-            lora_delta = lora_delta * scaling_expanded
 
             # Add LoRA delta to base output
             output = output + lora_delta

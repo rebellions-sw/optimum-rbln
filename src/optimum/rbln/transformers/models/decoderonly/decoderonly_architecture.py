@@ -248,7 +248,7 @@ class DecoderOnlyWrapper(nn.Module):
                 kvcache_partition_len=self.kvcache_partition_len,
                 lora_config=self.lora_config,
             )
-            new_layer = self.get_rbln_layer_class()(layer, new_self_attn)
+            new_layer = self.get_rbln_layer_class()(layer, new_self_attn, lora_config=self.lora_config)
             new_layers.append(new_layer)
 
         new_model = self.get_rbln_model_class()(
@@ -633,11 +633,27 @@ class DecoderOnlyLayer(nn.Module):
         phase: Current operation phase ("prefill" or "decode")
     """
 
-    def __init__(self, layer, self_attn: "DecoderOnlyAttention"):
+    def __init__(self, layer, self_attn: "DecoderOnlyAttention", lora_config: Optional[RBLNLoRAConfig] = None):
         super().__init__()
         self._original_mod = layer
         self.self_attn = self_attn
         self._phase = "prefill"
+        self.lora_config = lora_config
+
+        # Replace target Linear modules in MLP with LoRALinear if configured
+        if self.lora_config:
+            mlp = self.get_mlp()
+            for proj_name in ["gate_proj", "up_proj", "down_proj"]:
+                if hasattr(mlp, proj_name):
+                    original_linear = getattr(mlp, proj_name)
+                    if isinstance(original_linear, nn.Linear):
+                        lora_linear = LoRALinear(
+                            original_linear=original_linear,
+                            lora_config=self.lora_config,
+                            projection_name=proj_name,
+                            layer_idx=self.self_attn.layer_idx,
+                        )
+                        setattr(mlp, proj_name, lora_linear)
 
     @property
     def phase(self):
@@ -656,6 +672,22 @@ class DecoderOnlyLayer(nn.Module):
 
     def get_mlp(self) -> nn.Module:
         return self._original_mod.mlp
+
+    def forward_mlp(self, hidden_states: torch.Tensor, lora_int_id: Optional[torch.Tensor] = None) -> torch.Tensor:
+        mlp = self.get_mlp()
+        if self.lora_config and lora_int_id is not None:
+            gate = mlp.gate_proj(hidden_states, lora_int_id)
+            up = mlp.up_proj(hidden_states, lora_int_id)
+            act_fn = getattr(mlp, "act_fn", None) or getattr(mlp, "activation_fn", None)
+            if act_fn is None:
+                gate = torch.nn.functional.silu(gate)
+            else:
+                gate = act_fn(gate)
+            fused = gate * up
+            hidden_states = mlp.down_proj(fused, lora_int_id)
+        else:
+            hidden_states = mlp(hidden_states)
+        return hidden_states
 
     def forward(
         self,
@@ -686,7 +718,7 @@ class DecoderOnlyLayer(nn.Module):
         # Fully Connected
         residual = hidden_states
         hidden_states = self.get_post_attention_layernorm()(hidden_states)
-        hidden_states = self.get_mlp()(hidden_states)
+        hidden_states = self.forward_mlp(hidden_states, lora_int_id)
         hidden_states = residual + hidden_states
 
         return hidden_states
