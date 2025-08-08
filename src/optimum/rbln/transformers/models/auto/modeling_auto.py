@@ -35,6 +35,8 @@ from transformers.models.auto.modeling_auto import (
     MODEL_FOR_SEQUENCE_CLASSIFICATION_MAPPING_NAMES,
     MODEL_FOR_SPEECH_SEQ_2_SEQ_MAPPING,
     MODEL_FOR_SPEECH_SEQ_2_SEQ_MAPPING_NAMES,
+    MODEL_FOR_TEXT_ENCODING_MAPPING,
+    MODEL_FOR_TEXT_ENCODING_MAPPING_NAMES,
     MODEL_FOR_VISION_2_SEQ_MAPPING,
     MODEL_FOR_VISION_2_SEQ_MAPPING_NAMES,
     MODEL_MAPPING,
@@ -115,3 +117,8 @@ class RBLNAutoModelForImageClassification(_BaseAutoModelClass):
 class RBLNAutoModelForQuestionAnswering(_BaseAutoModelClass):
     _model_mapping = MODEL_FOR_QUESTION_ANSWERING_MAPPING
     _model_mapping_names = MODEL_FOR_QUESTION_ANSWERING_MAPPING_NAMES
+
+
+class RBLNAutoModelForTextEncoding(_BaseAutoModelClass):
+    _model_mapping = MODEL_FOR_TEXT_ENCODING_MAPPING
+    _model_mapping_names = MODEL_FOR_TEXT_ENCODING_MAPPING_NAMES

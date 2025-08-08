@@ -135,6 +135,7 @@ if TYPE_CHECKING:
     from .modeling_diffusers import RBLNDiffusionMixin
     from .models import (
         RBLNAutoencoderKL,
+        RBLNAutoencoderKLCosmos,
         RBLNControlNetModel,
         RBLNCosmosTransformer3DModel,
         RBLNPriorTransformer,
