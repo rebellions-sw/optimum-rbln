@@ -368,7 +368,7 @@ class TestLlavaForConditionalGeneration(LLMTest.TestLLM):
     @classmethod
     def get_tokenizer(cls):
         if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
         return cls._tokenizer
 
     def get_inputs(self):
@@ -439,7 +439,7 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
     @classmethod
     def get_tokenizer(cls):
         if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
         return cls._tokenizer
 
     # override
@@ -617,13 +617,13 @@ class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
     @classmethod
     def get_tokenizer(cls):
         if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
         return cls._tokenizer
 
     # override
     @classmethod
     def setUpClass(cls):
-        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID, revision="e1f4b0516ec80f86ed75c8cb1d45ede72526ad24")
+        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 2
         text_config["sliding_window_pattern"] = 2
