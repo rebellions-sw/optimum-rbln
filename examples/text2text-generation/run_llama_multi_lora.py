@@ -7,6 +7,9 @@ from transformers import AutoTokenizer
 from optimum.rbln import RBLNLlamaForCausalLM, RBLNLoRAAdapterConfig, RBLNLoRAConfig
 
 
+SYSTEM_PROMPT = "You are a helpful assistant. Always be concise."
+
+
 def native_run_peft(
     model_id: str = "meta-llama/Llama-3.1-8B-Instruct",
     lora_ids: typing.List[str] = [
@@ -36,7 +39,11 @@ def native_run_peft(
         # Prepare batch inputs
         batch_sentences = [sentences[i % len(sentences)] for i in range(batch_size)]
         texts = [
-            tokenizer.apply_chat_template(sentence, add_generation_prompt=True, tokenize=False)
+            tokenizer.apply_chat_template(
+                ([{"role": "system", "content": SYSTEM_PROMPT}] + sentence),
+                add_generation_prompt=True,
+                tokenize=False,
+            )
             for sentence in batch_sentences
         ]
         batch_inputs = tokenizer(texts, return_tensors="pt", padding=True)
@@ -105,7 +112,7 @@ def main(
             rbln_tensor_parallel_size=tensor_parallel_size,
             rbln_lora_config=lora_config,
             rbln_attn_impl="flash_attn",
-            num_hidden_layers=1,
+            # num_hidden_layers=1,
         )
         model.save_pretrained(os.path.basename(model_id))
     else:
@@ -123,7 +130,11 @@ def main(
         # Prepare batch inputs for this adapter
         batch_sentences = [sentences[i % len(sentences)] for i in range(batch_size)]
         texts = [
-            tokenizer.apply_chat_template(sentence, add_generation_prompt=True, tokenize=False)
+            tokenizer.apply_chat_template(
+                ([{"role": "system", "content": SYSTEM_PROMPT}] + sentence),
+                add_generation_prompt=True,
+                tokenize=False,
+            )
             for sentence in batch_sentences
         ]
         batch_inputs = tokenizer(texts, return_tensors="pt", padding=True)
