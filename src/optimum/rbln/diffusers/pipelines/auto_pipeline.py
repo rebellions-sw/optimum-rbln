@@ -1,4 +1,3 @@
-import inspect
 from typing import Optional
 
 from diffusers.models.controlnets import ControlNetUnionModel
@@ -13,8 +12,6 @@ from diffusers.pipelines.auto_pipeline import (
 )
 from huggingface_hub.utils import validate_hf_hub_args
 
-from ...configuration_utils import RBLNAutoConfig
-from ...modeling_base import RBLNBaseModel
 from ...utils.model_utils import (
     convert_hf_to_rbln_model_name,
     convert_rbln_to_hf_model_name,
@@ -23,18 +20,17 @@ from ...utils.model_utils import (
 
 
 class RBLNAutoPipelineBase:
-    _model_mapping_names = None
+    _model_mapping = None
 
     @classmethod
     @validate_hf_hub_args
-    def from_pretrained(cls, pretrained_model_or_path, export: Optional[bool] = None, **kwargs):
+    def from_pretrained(cls, model_id: str, export: Optional[bool] = None, **kwargs):
         if export:
-            hf_model_class = cls.infer_hf_model_class(pretrained_model_or_path, **kwargs)
+            hf_model_class = cls.infer_hf_model_class(model_id, **kwargs)
             rbln_class_name = convert_hf_to_rbln_model_name(hf_model_class.__name__)
         else:
-            rbln_class_name = cls.get_rbln_model_cls_name(pretrained_model_or_path, **kwargs)
-
-            if convert_rbln_to_hf_model_name(rbln_class_name) not in cls._model_mapping_names.values():
+            rbln_class_name = cls.get_rbln_model_cls_name(model_id, **kwargs)
+            if convert_rbln_to_hf_model_name(rbln_class_name) not in [x.__name__ for x in cls._model_mapping.values()]:
                 raise ValueError(
                     f"The architecture '{rbln_class_name}' is not supported by the `{cls.__name__}.from_pretrained()` method. "
                     "Please use the `from_pretrained()` method of the appropriate class to load this model, "
@@ -45,11 +41,11 @@ class RBLNAutoPipelineBase:
             rbln_cls = get_rbln_model_cls(rbln_class_name)
         except AttributeError as e:
             raise AttributeError(
-                f"Class '{rbln_class_name}' not found in 'optimum.rbln' module for model ID '{pretrained_model_or_path}'. "
+                f"Class '{rbln_class_name}' not found in 'optimum.rbln' module for model ID '{model_id}'. "
                 "Ensure that the class name is correctly mapped and available in the 'optimum.rbln' module."
             ) from e
 
-        return rbln_cls.from_pretrained(pretrained_model_or_path, export=export, **kwargs)
+        return rbln_cls.from_pretrained(model_id, export=export, **kwargs)
 
     @classmethod
     def get_rbln_model_cls_name(cls, pretrained_model_name_or_path, **kwargs):
@@ -58,21 +54,12 @@ class RBLNAutoPipelineBase:
 
         Args:
             pretrained_model_name_or_path (str): Identifier of the model.
-            kwargs: Additional arguments that match the parameters of `_load_compiled_model_dir`.
 
         Returns:
             str: Path to the compiled model directory.
         """
-        sig = inspect.signature(RBLNBaseModel._load_compiled_model_dir)
-        valid_params = sig.parameters.keys()
-        filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_params}
-
-        model_path_subfolder = RBLNBaseModel._load_compiled_model_dir(
-            model_id=pretrained_model_name_or_path, **filtered_kwargs
-        )
-        rbln_config = RBLNAutoConfig.load(model_path_subfolder)
-
-        return rbln_config.rbln_model_cls_name
+        model_index_config = cls.load_config(pretrained_model_name_or_path)
+        return model_index_config["_class_name"]
 
     @classmethod
     def infer_hf_model_class(
@@ -100,7 +87,7 @@ class RBLNAutoPipelineBase:
         config = cls.load_config(pretrained_model_or_path, **load_config_kwargs)
         pipeline_key_name = cls.get_pipeline_key_name(config, **kwargs)
 
-        pipeline_cls = _get_task_class(cls._model_mapping_names, pipeline_key_name)
+        pipeline_cls = _get_task_class(cls._model_mapping, pipeline_key_name)
 
         return pipeline_cls
 
@@ -126,11 +113,11 @@ class RBLNAutoPipelineBase:
 
 
 class RBLNAutoPipelineForText2Image(RBLNAutoPipelineBase, AutoPipelineForText2Image):
-    _model_mapping_names = AUTO_TEXT2IMAGE_PIPELINES_MAPPING
+    _model_mapping = AUTO_TEXT2IMAGE_PIPELINES_MAPPING
 
 
 class RBLNAutoPipelineForImage2Image(RBLNAutoPipelineBase, AutoPipelineForImage2Image):
-    _model_mapping_names = AUTO_IMAGE2IMAGE_PIPELINES_MAPPING
+    _model_mapping = AUTO_IMAGE2IMAGE_PIPELINES_MAPPING
 
     @classmethod
     def get_pipeline_key_name(cls, config, **kwargs):
@@ -163,7 +150,7 @@ class RBLNAutoPipelineForImage2Image(RBLNAutoPipelineBase, AutoPipelineForImage2
 
 
 class RBLNAutoPipelineForInpainting(RBLNAutoPipelineBase, AutoPipelineForInpainting):
-    _model_mapping_names = AUTO_INPAINT_PIPELINES_MAPPING
+    _model_mapping = AUTO_INPAINT_PIPELINES_MAPPING
 
     @classmethod
     def get_pipeline_key_name(cls, config, **kwargs):
