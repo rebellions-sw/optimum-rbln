@@ -4,6 +4,9 @@ import torch
 from diffusers import ControlNetModel
 
 from optimum.rbln import (
+    RBLNAutoPipelineForImage2Image,
+    # RBLNAutoPipelineForInpainting, FIXME: add inpainting tests
+    RBLNAutoPipelineForText2Image,
     RBLNKandinskyV22CombinedPipeline,
     RBLNKandinskyV22Img2ImgCombinedPipeline,
     RBLNStableDiffusion3Img2ImgPipeline,
@@ -13,9 +16,6 @@ from optimum.rbln import (
     RBLNStableDiffusionPipeline,
     RBLNStableDiffusionXLControlNetPipeline,
     RBLNStableDiffusionXLPipeline,
-    RBLNAutoPipelineForText2Image,
-    RBLNAutoPipelineForImage2Image,
-    # RBLNAutoPipelineForInpainting, FIXME: add inpainting tests
 )
 
 from .test_base import BaseHubTest, BaseTest
