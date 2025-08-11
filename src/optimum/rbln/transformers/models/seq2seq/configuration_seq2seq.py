@@ -69,5 +69,5 @@ class RBLNModelForSeq2SeqLMConfig(RBLNModelConfig):
         else:
             if kvcache_num_blocks is not None or kvcache_block_size is not None:
                 raise ValueError(
-                    "You cannot set kvcache_num_blocks or kvcache_block_size as paged attention is not supported this model."
+                    "You cannot set kvcache_num_blocks or kvcache_block_size as paged attention is not supported for the model."
                 )
