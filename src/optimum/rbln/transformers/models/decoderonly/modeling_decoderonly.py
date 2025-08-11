@@ -403,10 +403,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             rbln_config.kvcache_block_size,
             head_dim,
         ]
-
-        # the maximum input batch size for the graph in compilation
-        graph_compile_batch_size = rbln_config.batch_size if rbln_config.can_generate else 1
-        local_kvcache_shape = [graph_compile_batch_size, num_key_value_heads, rbln_config.sliding_window, head_dim]
+        local_kvcache_shape = [rbln_config.batch_size, num_key_value_heads, rbln_config.sliding_window, head_dim]
         input_info.extend(
             [
                 (
@@ -478,9 +475,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             max_seq_len=rbln_config.max_seq_len,
         )
 
-        # the maximum input batch size for the graph in compilation
-        graph_compile_batch_size = rbln_config.batch_size if rbln_config.can_generate else 1
-        required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * graph_compile_batch_size
+        required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
         max_num_blocks = required_num_blocks
 
         if rbln_config.attn_impl == "flash_attn":
@@ -496,12 +491,12 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             max_num_blocks = min(max_num_blocks, estimated_max_num_blocks)
 
             flash_min_blocks = rbln_config.max_seq_len // rbln_config.kvcache_block_size + 1
-            if graph_compile_batch_size > 1 and max_num_blocks < flash_min_blocks:
+            if rbln_config.batch_size > 1 and max_num_blocks < flash_min_blocks:
                 max_num_blocks = flash_min_blocks
 
-            if max_num_blocks < graph_compile_batch_size:
+            if max_num_blocks < rbln_config.batch_size:
                 raise RuntimeError(
-                    f"Batch size ({graph_compile_batch_size}) exceeds available KV cache blocks ({max_num_blocks}). "
+                    f"Batch size ({rbln_config.batch_size}) exceeds available KV cache blocks ({max_num_blocks}). "
                     "Ensure the number of blocks is at least equal to the batch size."
                 )
 
@@ -631,7 +626,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
                 attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                 position_embed=position_embed[b_idx : b_idx + 1] if position_embed is not None else None,
                 cache_position=cache_position,
-                batch_idx=0,
+                batch_idx=b_idx,
             ).logits
             all_last_hidden_states.append(last_hidden_states)
 
