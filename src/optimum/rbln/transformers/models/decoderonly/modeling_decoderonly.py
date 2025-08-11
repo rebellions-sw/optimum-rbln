@@ -1201,11 +1201,13 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel):
             if rbln_config.kvcache_num_blocks is None:
                 if estimated_max_num_blocks < num_full_blocks:
                     # lower bound of the number of blocks for flash attention.
-                    flash_min_blocks = min(rbln_config.max_seq_len // rbln_config.kvcache_block_size + 1, num_full_blocks)
-                    if flash_min_blocks > estimated_max_num_blocks:
+                    min_blocks_for_flash = min(
+                        rbln_config.max_seq_len // rbln_config.kvcache_block_size + 1, num_full_blocks
+                    )
+                    if min_blocks_for_flash > estimated_max_num_blocks:
                         # NOTE: Just try to compile with lower bound of blocks for flash attention.
                         # Even if it's larger than the estimated maximum number of blocks.
-                        rbln_config.kvcache_num_blocks = flash_min_blocks
+                        rbln_config.kvcache_num_blocks = min_blocks_for_flash
                     else:
                         logger.info(f"[KVCache] Compiling with num_blocks: {rbln_config.kvcache_num_blocks}")
                         rbln_config.kvcache_num_blocks = estimated_max_num_blocks
