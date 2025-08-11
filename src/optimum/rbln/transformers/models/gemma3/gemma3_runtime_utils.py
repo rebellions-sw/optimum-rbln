@@ -11,19 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 import rebel
 import torch
 
 from ...modeling_outputs import RBLNDecoderOnlyOutput, RBLNGemma3ForCausalLMOutput
-from ..decoderonly.modeling_decoderonly import (
-    RBLNRuntimeModel,
-)
-
-
-if TYPE_CHECKING:
-    pass
+from ..decoderonly.modeling_decoderonly import RBLNRuntimeModel
 
 
 class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
