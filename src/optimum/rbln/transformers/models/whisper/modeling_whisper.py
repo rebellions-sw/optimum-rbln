@@ -254,7 +254,9 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
         return {"encoder": compiled_encoder, "decoder": compiled_decoder}
 
     @classmethod
-    def _update_paged_attention_config(cls, model_config: PretrainedConfig, rbln_config: RBLNWhisperForConditionalGenerationConfig):
+    def _update_paged_attention_config(
+        cls, model_config: PretrainedConfig, rbln_config: RBLNWhisperForConditionalGenerationConfig
+    ):
         rbln_config.kvcache_num_blocks = rbln_config.kvcache_num_blocks or rbln_config.batch_size
         rbln_config.kvcache_block_size = rbln_config.kvcache_block_size or rbln_config.dec_max_seq_len
 
