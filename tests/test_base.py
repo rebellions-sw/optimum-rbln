@@ -5,6 +5,7 @@ import shutil
 import tempfile
 import unittest
 from enum import Enum
+from typing import Iterable
 
 import transformers
 from diffusers import DiffusionPipeline
@@ -22,6 +23,7 @@ class TestLevel(Enum):
     ESSENTIAL = 1
     DEFAULT = 2
     FULL = 3
+    DISABLED = 999
     UNKNOWN = -1
 
 
@@ -245,11 +247,20 @@ class BaseTest:
         def test_automap(self):
             if self.RBLN_AUTO_CLASS is None:
                 self.skipTest("Skipping test because RBLN_AUTO_CLASS is None")
-            assert self.RBLN_CLASS == self.RBLN_AUTO_CLASS.get_rbln_cls(
-                self.HF_MODEL_ID,
-                **self.RBLN_CLASS_KWARGS,
-                **self.HF_CONFIG_KWARGS,
-            )
+
+            if isinstance(self.RBLN_AUTO_CLASS, Iterable):
+                for auto_class in self.RBLN_AUTO_CLASS:
+                    assert self.RBLN_CLASS == auto_class.get_rbln_cls(
+                        self.HF_MODEL_ID,
+                        **self.RBLN_CLASS_KWARGS,
+                        **self.HF_CONFIG_KWARGS,
+                    )
+            else:
+                assert self.RBLN_CLASS == self.RBLN_AUTO_CLASS.get_rbln_cls(
+                    self.HF_MODEL_ID,
+                    **self.RBLN_CLASS_KWARGS,
+                    **self.HF_CONFIG_KWARGS,
+                )
 
         # check if this use a pipeline
         def test_infer_framework(self):

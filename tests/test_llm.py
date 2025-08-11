@@ -117,15 +117,19 @@ class TestQwen2Model(LLMTest.TestLLMBase):
 class TestQwen3ForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen3ForCausalLM
     HF_MODEL_ID = "trl-internal-testing/tiny-Qwen3ForCausalLM"
-    EXPECTED_OUTPUT = "getter getEmail luaL inhibited经营者适时uating nc_TRAIN适时uating ncActiveSheet(socket getEmailadders totaling propName.setImage Grow"
+    EXPECTED_OUTPUT = (
+        "יל synd Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz_inventory天河 sanitary中途"
+    )
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
 
 
 class TestQwen3ForCausalLM_UAM(TestQwen3ForCausalLM):
+    RBLN_AUTO_CLASS = RBLNAutoModelForCausalLM
     RBLN_CLASS_KWARGS = {"rbln_config": {"use_attention_mask": True}}
 
 
 class TestQwen3Model(LLMTest.TestLLMBase):
+    RBLN_AUTO_CLASS = RBLNAutoModel
     RBLN_CLASS = RBLNQwen3Model
     HF_MODEL_ID = "trl-internal-testing/tiny-Qwen3ForCausalLM"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
@@ -360,15 +364,13 @@ class TestLlavaForConditionalGeneration(LLMTest.TestLLM):
             "language_model": {"use_inputs_embeds": True},
         }
     }
-    EXPECTED_OUTPUT = (
-        '\x05getString Associ sposЧECT CounMethods praktoptFirstNamestr#### Singhignonchartsceuhpp("/ishing'
-    )
-    HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
+    EXPECTED_OUTPUT = "ambbrow nur Well chimCore rapideraine Йye questaédédates Ken neu Airport din termeächstthread"
+    HF_CONFIG_KWARGS = {"revision": "8ab8bfc820a6bb9e0f8de1ac715f4b53db44e684"}
 
     @classmethod
     def get_tokenizer(cls):
         if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
         return cls._tokenizer
 
     def get_inputs(self):
@@ -433,21 +435,19 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
             "language_model": {"use_inputs_embeds": True},
         }
     }
-    EXPECTED_OUTPUT = (
-        "ironment初 Barcelallasburgh inaugatelyизJECT Karenüg Television _ drink Television _ drink Television _ drink"
-    )
-    HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
+    EXPECTED_OUTPUT = "entricCallbackavidARYails NotesDAPimil coordFeed Boysaml obligation relay迟 войны sexual Definition Eisen patent"
+    HF_CONFIG_KWARGS = {"revision": "21948c1af6a0666e341b6403dc1cbbd5c8900e7d"}
 
     @classmethod
     def get_tokenizer(cls):
         if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
         return cls._tokenizer
 
     # override
     @classmethod
     def setUpClass(cls):
-        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
+        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
 
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 1
@@ -611,18 +611,21 @@ class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
     PROMPT = "<bos><start_of_turn>user\n<start_of_image>Describe the image.<end_of_turn>\n<start_of_turn>model\n'"
     RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True, "kvcache_partition_len": 4096}}}
     EXPECTED_OUTPUT = " அனுமதி Bryson Earlyheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserिल्म हस्ता"
+    HF_CONFIG_KWARGS = {
+        "revision": "e1f4b0516ec80f86ed75c8cb1d45ede72526ad24",
+    }
     TEST_LEVEL = TestLevel.FULL
 
     @classmethod
     def get_tokenizer(cls):
         if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
         return cls._tokenizer
 
     # override
     @classmethod
     def setUpClass(cls):
-        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
+        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 2
         text_config["sliding_window_pattern"] = 2
@@ -653,6 +656,25 @@ class TestGemma3ForCausalLM(LLMTest.TestLLM):
         "max_position_embeddings": 1024,
         "trust_remote_code": True,
     }
+
+
+class TestLlamaForCausalLM_fp8(LLMTest.TestLLM):
+    RBLN_CLASS = RBLNLlamaForCausalLM
+    HF_MODEL_ID = "RedHatAI/Meta-Llama-3-8B-Instruct-FP8-KV"  # No tiny model yet.
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1}
+    RBLN_CLASS_KWARGS = {
+        "rbln_config": {
+            "quantization": {"weights": "fp8", "kv_caches": "fp8"},
+            "create_runtimes": False,
+            "npu": "RBLN-CR03",
+            "attn_impl": "flash_attn",
+            "kvcache_partition_len": 4096,
+            "max_seq_len": 8192,
+            "tensor_parallel_size": 1,
+        },
+    }
+    EXPECTED_OUTPUT = None  # Cannot generate output with fp8 quantization in ATOM™
+    TEST_LEVEL = TestLevel.DISABLED
 
 
 class TestDisallowedLlama_1(DisallowedTestBase.DisallowedTest):
