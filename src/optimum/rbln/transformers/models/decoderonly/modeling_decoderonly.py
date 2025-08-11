@@ -609,8 +609,14 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     ) -> Tuple[torch.FloatTensor]:
         inputs = inputs_embeds if inputs_embeds is not None else input_ids
         batch_size = inputs.shape[0]
+
+        if batch_size != self.rbln_config.batch_size:
+            raise ValueError(
+                f"Batch size ({batch_size}) must be equal to the batch size of the model ({self.rbln_config.batch_size})."
+            )
+
         all_last_hidden_states = []
-        for b_idx in range(batch_size):
+        for b_idx in range(self.rbln_config.batch_size):
             query_length = (
                 attention_mask[b_idx].sum(dim=-1).int().item() if attention_mask is not None else inputs.shape[1]
             )
@@ -620,7 +626,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
                 attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                 position_embed=position_embed[b_idx : b_idx + 1] if position_embed is not None else None,
                 cache_position=cache_position,
-                batch_idx=0,
+                batch_idx=b_idx,
             ).logits
             all_last_hidden_states.append(last_hidden_states)
 
