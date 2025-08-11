@@ -23,3 +23,17 @@ def linear(input: Tensor, weight: Tensor, bias: Optional[Tensor] = None) -> Tens
     output_shape = list(input.shape[:-1])
     output_shape += [weight.shape[0]]
     return torch.empty(size=output_shape, dtype=input.dtype, device=input.device, requires_grad=input.requires_grad)
+
+
+@torch.library.custom_op("rbln_custom_ops::linear_lora", mutates_args=())
+def linear_lora(
+    input: Tensor,
+    weight: Tensor,
+    lora_a_weights: Tensor,
+    lora_b_weights: Tensor,
+    lora_int_id: Tensor,
+    bias: Optional[Tensor] = None,
+) -> Tensor:
+    output_shape = list(input.shape[:-1])
+    output_shape += [weight.shape[0]]
+    return torch.empty(size=output_shape, dtype=input.dtype, device=input.device, requires_grad=input.requires_grad)

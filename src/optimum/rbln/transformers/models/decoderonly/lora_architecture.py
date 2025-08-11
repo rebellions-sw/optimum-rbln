@@ -159,10 +159,10 @@ class LoRALinear(nn.Module):
         lora_b_transposed = [lora_b.transpose(0, 1) for lora_b in padded_lora_b]  # [rank, out_features]
 
         self.register_buffer(
-            "lora_a_weights", torch.stack(lora_a_transposed, dim=0)
+            "lora_a_weights", torch.stack(lora_a_transposed, dim=0).to(self.weight.dtype)
         )  # [num_adapters, in_features, rank]
         self.register_buffer(
-            "lora_b_weights", torch.stack(lora_b_transposed, dim=0)
+            "lora_b_weights", torch.stack(lora_b_transposed, dim=0).to(self.weight.dtype)
         )  # [num_adapters, rank, out_features]
         # scaling is pre-applied to lora_b_weights
 
@@ -177,28 +177,19 @@ class LoRALinear(nn.Module):
         Returns:
             Output tensor [batch_size, seq_len, out_features]
         """
-        # Base linear transformation
-        output = torch.nn.functional.linear(x, self.weight, self.bias)
 
-        # Apply LoRA if enabled and adapter ID is provided
         if self._should_apply_lora() and lora_int_id is not None:
-            # Gather LoRA weights for each batch item
-            # lora_int_id: [batch_size] -> use as indices to select weights
-            selected_lora_a = self.lora_a_weights[lora_int_id]  # [batch_size, in_features, rank]
-            selected_lora_b = self.lora_b_weights[lora_int_id]  # [batch_size, rank, out_features]
-
-            # Batched matrix multiplication for LoRA computation
-            # x: [batch_size, seq_len, in_features]
-            # selected_lora_a: [batch_size, in_features, rank] (already transposed)
-            # selected_lora_b: [batch_size, rank, out_features] (already transposed)
-
-            # First matmul: x @ lora_a -> [batch_size, seq_len, rank]
-            temp = torch.bmm(x, selected_lora_a)
-
-            # Second matmul: temp @ lora_b -> [batch_size, seq_len, out_features]
-            lora_delta = torch.bmm(temp, selected_lora_b)
-
-            # Add LoRA delta to base output
-            output = output + lora_delta
+            # Apply LoRA if enabled and adapter ID is provided
+            output = torch.ops.rbln_custom_ops.linear_lora(
+                x,
+                weight=self.weight,
+                lora_a_weights=self.lora_a_weights,
+                lora_b_weights=self.lora_b_weights,
+                lora_int_id=lora_int_id,
+                bias=self.bias,
+            )
+        else:
+            # Base linear transformation
+            output = torch.nn.functional.linear(x, self.weight, self.bias)
 
         return output
