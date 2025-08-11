@@ -290,11 +290,6 @@ def _print_rbln_config_options(class_name: str):
         else:
             specific_keys.append(p)
 
-    def fmt_param(p: inspect.Parameter) -> str:
-        if p.default is inspect._empty:  # type: ignore[attr-defined]
-            return f"{p.name} (required)"
-        return f"{p.name} (default={p.default!r})"
-
     print(_section(f"RBLN class: {class_name}", ANSI_BRIGHT_BLUE, icon="🧩"))
     print(_underline(_color(f"Config class: {config_cls.__name__}", ANSI_BRIGHT_CYAN)))
     if class_doc:
@@ -488,7 +483,6 @@ def main():
         print(f"{_label('rbln_config:')} {json.dumps(rbln_config, indent=2, ensure_ascii=False)}")
 
         with ContextRblnConfig(create_runtimes=create_runtimes):
-            # Compile the model - pass all arguments as rbln_config
             _ = model_class.from_pretrained(
                 args.model_id, export=True, model_save_dir=str(output_path), rbln_config=rbln_config
             )

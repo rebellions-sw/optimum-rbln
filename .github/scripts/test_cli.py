@@ -61,7 +61,6 @@ def test_resnet_compilation():
         "RBLNResNetForImageClassification",
         "--model-id",
         "hf-internal-testing/tiny-random-ResNetForImageClassification",
-        "--overwrite",
     ]
 
     if not run_command(cmd):
@@ -106,7 +105,6 @@ def test_stable_diffusion_compilation():
         "RBLNStableDiffusionPipeline",
         "--model-id",
         "hf-internal-testing/tiny-sd-pipe",
-        "--overwrite",
         "--vae.sample_size",
         "64,64",  # Fix incorrect tiny-sd-pipe's vae config.json sample_size
         "--unet.batch_size",
@@ -204,7 +202,6 @@ def test_error_handling():
             "RBLNAutoModelForCausalLM",
             "--model-id",
             "non-existent-model",
-            "--overwrite",
         ],
         capture_output=True,
         text=True,
