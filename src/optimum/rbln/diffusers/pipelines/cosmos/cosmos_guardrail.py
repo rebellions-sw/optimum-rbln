@@ -33,9 +33,9 @@ if is_cosmos_guardrail_available():
     from cosmos_guardrail import CosmosSafetyChecker
     from cosmos_guardrail.cosmos_guardrail import (
         COSMOS_GUARDRAIL_CHECKPOINT,
-        Aegis,
         Blocklist,
         GuardrailRunner,
+        LlamaGuard3,
         ModelConfig,
         RetinaFaceFilter,
         SafetyClassifier,
@@ -55,7 +55,7 @@ else:
 
     COSMOS_GUARDRAIL_CHECKPOINT = None
 
-    class Aegis(FailToImportCosmosGuardrail): ...
+    class LlamaGuard3(FailToImportCosmosGuardrail): ...
 
     class Blocklist(FailToImportCosmosGuardrail): ...
 
@@ -312,33 +312,31 @@ class RBLNVideoContentSafetyFilter(VideoContentSafetyFilter):
         self.encoder.save_pretrained(checkpoint_id)
 
 
-class RBLNAegis(Aegis):
+class RBLNLlamaGuard3(LlamaGuard3):
     def __init__(
         self,
         checkpoint_id: str = COSMOS_GUARDRAIL_CHECKPOINT,
-        base_model_id: str = "meta-llama/LlamaGuard-7b",
-        aegis_adapter: str = "nvidia/Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0",
+        base_model_id: str = "meta-llama/Llama-Guard-3-8B",
         rbln_config: Optional[RBLNCosmosSafetyCheckerConfig] = None,
     ) -> None:
         if is_compiled_dir(checkpoint_id):
             torch.nn.Module.__init__(self)
-            cache_dir = pathlib.Path(checkpoint_id) / "aegis"
+            cache_dir = pathlib.Path(checkpoint_id) / "llamaguard3"
             self.tokenizer = AutoTokenizer.from_pretrained(cache_dir)
-            self.model = RBLNAutoModelForCausalLM.from_pretrained(cache_dir, rbln_config=rbln_config.aegis)
+            self.model = RBLNAutoModelForCausalLM.from_pretrained(cache_dir, rbln_config=rbln_config.llamaguard3)
 
         else:
-            super().__init__(checkpoint_id, base_model_id, aegis_adapter)
-            model = self.model.merge_and_unload()  # peft merge
+            super().__init__(checkpoint_id, base_model_id)
+            model = self.model
             del self.model
-
-            self.model = RBLNAutoModelForCausalLM.from_model(model, rbln_config=rbln_config.aegis)
+            self.model = RBLNAutoModelForCausalLM.from_model(model, rbln_config=rbln_config.llamaguard3)
 
         self.rbln_config = rbln_config
         self.dtype = torch.bfloat16
         self.device = torch.device("cpu")
 
     def save_pretrained(self, checkpoint_id: str):
-        cache_dir = pathlib.Path(checkpoint_id) / "aegis"
+        cache_dir = pathlib.Path(checkpoint_id) / "llamaguard3"
         self.model.save_pretrained(cache_dir)
         self.tokenizer.save_pretrained(cache_dir)
 
@@ -351,8 +349,7 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker):
     def __init__(
         self,
         checkpoint_id: str = COSMOS_GUARDRAIL_CHECKPOINT,
-        aegis_model_id: str = "meta-llama/LlamaGuard-7b",
-        aegis_adapter_id: str = "nvidia/Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0",
+        llamaguard_model_id: str = "meta-llama/Llama-Guard-3-8B",
         rbln_config: Optional[RBLNCosmosSafetyCheckerConfig] = None,
     ) -> None:
         torch.nn.Module.__init__(self)
@@ -369,10 +366,9 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker):
         self.text_guardrail = GuardrailRunner(
             safety_models=[
                 Blocklist(COSMOS_GUARDRAIL_CHECKPOINT),  # Changed since it cannot be saved
-                RBLNAegis(
+                RBLNLlamaGuard3(
                     checkpoint_id=checkpoint_id,
-                    base_model_id=aegis_model_id,
-                    aegis_adapter=aegis_adapter_id,
+                    base_model_id=llamaguard_model_id,
                     rbln_config=rbln_config,
                 ),
             ]
@@ -387,7 +383,7 @@ class RBLNCosmosSafetyChecker(CosmosSafetyChecker):
 
     def save_pretrained(self, save_dir: str):
         for text_safety_models in self.text_guardrail.safety_models:
-            if isinstance(text_safety_models, RBLNAegis):
+            if isinstance(text_safety_models, RBLNLlamaGuard3):
                 text_safety_models.save_pretrained(save_dir)
 
         for video_safety_models in self.video_guardrail.safety_models:
