@@ -13,18 +13,18 @@
 # limitations under the License.
 
 import inspect
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from transformers import BartForConditionalGeneration, PreTrainedModel
 
-from ....utils.logging import get_logger
 from ...modeling_generic import RBLNTransformerEncoderForFeatureExtraction
 from ...models.seq2seq import RBLNModelForSeq2SeqLM
 from .bart_architecture import BartWrapper
 from .configuration_bart import RBLNBartForConditionalGenerationConfig
 
 
-logger = get_logger()
+if TYPE_CHECKING:
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
 
 
 class RBLNBartModel(RBLNTransformerEncoderForFeatureExtraction):
@@ -63,3 +63,28 @@ class RBLNBartForConditionalGeneration(RBLNModelForSeq2SeqLM):
             return redirect(val)
 
         return val
+
+    @classmethod
+    def _update_rbln_config(
+        cls,
+        preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
+        model: Optional["PreTrainedModel"] = None,
+        model_config: Optional["PretrainedConfig"] = None,
+        rbln_config: Optional[RBLNBartForConditionalGenerationConfig] = None,
+    ) -> RBLNBartForConditionalGenerationConfig:
+        rbln_config = super()._update_rbln_config(preprocessors, model, model_config, rbln_config)
+
+        rbln_config.kvcache_num_blocks = rbln_config.kvcache_num_blocks or rbln_config.batch_size
+        rbln_config.kvcache_block_size = rbln_config.kvcache_block_size or rbln_config.dec_max_seq_len
+
+        if rbln_config.kvcache_num_blocks != rbln_config.batch_size:
+            raise NotImplementedError(
+                f"kvcache_num_blocks ({rbln_config.kvcache_num_blocks}) must be equal to batch_size ({rbln_config.batch_size}) as flash attention is not supported yet."
+            )
+
+        if rbln_config.kvcache_block_size != rbln_config.dec_max_seq_len:
+            raise NotImplementedError(
+                f"kvcache_block_size ({rbln_config.kvcache_block_size}) must be equal to dec_max_seq_len ({rbln_config.dec_max_seq_len}) as flash attention is not supported yet."
+            )
+
+        return rbln_config
