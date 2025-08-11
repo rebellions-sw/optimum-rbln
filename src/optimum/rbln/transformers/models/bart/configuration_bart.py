@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
-
 from ...configuration_generic import RBLNTransformerEncoderForFeatureExtractionConfig
 from ..seq2seq import RBLNModelForSeq2SeqLMConfig
 
@@ -34,23 +32,3 @@ class RBLNBartForConditionalGenerationConfig(RBLNModelForSeq2SeqLMConfig):
     This configuration class stores the configuration parameters specific to
     RBLN-optimized BART models for conditional text generation tasks.
     """
-
-    def __init__(
-        self,
-        *args,
-        kvcache_num_blocks: Optional[int] = None,
-        kvcache_block_size: Optional[int] = None,
-        **kwargs,
-    ):
-        """
-        Args:
-            kvcache_num_blocks (Optional[int]): The total number of blocks to allocate for the
-                PagedAttention KV cache for the SelfAttention. Defaults to batch_size.
-            kvcache_block_size (Optional[int]): Sets the size (in number of tokens) of each block
-                in the PagedAttention KV cache for the SelfAttention. Defaults to dec_max_seq_len.
-
-        **kwargs: Any,
-        """
-        super().__init__(*args, **kwargs)
-        self.kvcache_num_blocks = kvcache_num_blocks
-        self.kvcache_block_size = kvcache_block_size
