@@ -16,10 +16,6 @@ import inspect
 import warnings
 from typing import Type
 
-from diffusers.models.controlnets import ControlNetUnionModel
-from diffusers.pipelines.auto_pipeline import (
-    _get_task_class,
-)
 from transformers import AutoConfig, PretrainedConfig
 from transformers.dynamic_module_utils import get_class_from_dynamic_module
 from transformers.models.auto.auto_factory import _get_model_class
@@ -37,7 +33,6 @@ from optimum.rbln.utils.model_utils import (
 class _BaseAutoModelClass:
     # Base class for auto models.
     _model_mapping = None
-    _model_mapping_names = None
 
     def __init__(self, *args, **kwargs):
         raise EnvironmentError(
@@ -195,57 +190,3 @@ class _BaseAutoModelClass:
                 raise ValueError(f"Model for {rbln_cls.__name__} already registered.")
 
         MODEL_MAPPING[rbln_cls.__name__] = rbln_cls
-
-
-class _BaseAutoPipelineClass(_BaseAutoModelClass):
-    _model_mapping = None
-    _model_mapping_names = None
-
-    @classmethod
-    def infer_hf_model_class(
-        cls,
-        pretrained_model_or_path,
-        **kwargs,
-    ):
-        cache_dir = kwargs.pop("cache_dir", None)
-        force_download = kwargs.pop("force_download", False)
-        proxies = kwargs.pop("proxies", None)
-        token = kwargs.pop("token", None)
-        local_files_only = kwargs.pop("local_files_only", False)
-        revision = kwargs.pop("revision", None)
-
-        load_config_kwargs = {
-            "cache_dir": cache_dir,
-            "force_download": force_download,
-            "proxies": proxies,
-            "token": token,
-            "local_files_only": local_files_only,
-            "revision": revision,
-        }
-
-        config = cls.load_config(pretrained_model_or_path, **load_config_kwargs)
-        pipeline_key_name = cls.get_pipeline_key_name(config, **kwargs)
-
-        pipeline_cls = _get_task_class(cls._model_mapping, pipeline_key_name)
-
-        return pipeline_cls
-
-    @classmethod
-    def get_pipeline_key_name(cls, config, **kwargs):
-        orig_class_name = config["_class_name"]
-        if "ControlPipeline" in orig_class_name:
-            to_replace = "ControlPipeline"
-        else:
-            to_replace = "Pipeline"
-
-        if "controlnet" in kwargs:
-            if isinstance(kwargs["controlnet"], ControlNetUnionModel):
-                orig_class_name = config["_class_name"].replace(to_replace, "ControlNetUnionPipeline")
-            else:
-                orig_class_name = config["_class_name"].replace(to_replace, "ControlNetPipeline")
-        if "enable_pag" in kwargs:
-            enable_pag = kwargs.pop("enable_pag")
-            if enable_pag:
-                orig_class_name = orig_class_name.replace(to_replace, "PAGPipeline")
-
-        return orig_class_name

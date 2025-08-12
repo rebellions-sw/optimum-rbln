@@ -21,22 +21,6 @@ from .utils import check_version_compats
 
 
 _import_structure = {
-    "auto": [
-        "RBLNAutoModel",
-        "RBLNAutoModelForAudioClassification",
-        "RBLNAutoModelForCausalLM",
-        "RBLNAutoModelForCTC",
-        "RBLNAutoModelForDepthEstimation",  
-        "RBLNAutoModelForImageClassification",
-        "RBLNAutoModelForImageTextToText",
-        "RBLNAutoModelForMaskedLM",
-        "RBLNAutoModelForQuestionAnswering",
-        "RBLNAutoModelForSeq2SeqLM",
-        "RBLNAutoModelForSequenceClassification",
-        "RBLNAutoPipelineForText2Image",
-        "RBLNAutoPipelineForImage2Image",
-        "RBLNAutoPipelineForInpainting",
-    ],
     "modeling": [
         "RBLNBaseModel",
         "RBLNModel",
@@ -187,6 +171,9 @@ _import_structure = {
         "RBLNAutoencoderKLCosmosConfig",
         "RBLNControlNetModel",
         "RBLNControlNetModelConfig",
+        "RBLNAutoPipelineForText2Image",
+        "RBLNAutoPipelineForImage2Image",
+        "RBLNAutoPipelineForInpainting",
         "RBLNCosmosTextToWorldPipeline",
         "RBLNCosmosVideoToWorldPipeline",
         "RBLNCosmosTextToWorldPipelineConfig",
@@ -248,31 +235,15 @@ _import_structure = {
 }
 
 if TYPE_CHECKING:
-    from .auto import (
-        RBLNAutoModel,
-        RBLNAutoModelForAudioClassification,
-        RBLNAutoModelForCausalLM,
-        RBLNAutoModelForCTC,
-        RBLNAutoModelForDepthEstimation,
-        RBLNAutoModelForImageClassification,
-        RBLNAutoModelForImageTextToText,
-        RBLNAutoModelForMaskedLM,
-        RBLNAutoModelForQuestionAnswering,
-        RBLNAutoModelForSeq2SeqLM,
-        RBLNAutoModelForSequenceClassification,
-        RBLNAutoModelForSpeechSeq2Seq,
-        RBLNAutoModelForTextEncoding,
-        RBLNAutoModelForVision2Seq,
-        RBLNAutoPipelineForText2Image,
-        RBLNAutoPipelineForImage2Image,
-        RBLNAutoPipelineForInpainting,
-    )
     from .configuration_utils import RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig
     from .diffusers import (
         RBLNAutoencoderKL,
         RBLNAutoencoderKLConfig,
         RBLNAutoencoderKLCosmos,
-        RBLNAutoencoderKLCosmosConfig,  
+        RBLNAutoencoderKLCosmosConfig,
+        RBLNAutoPipelineForImage2Image,
+        RBLNAutoPipelineForInpainting,
+        RBLNAutoPipelineForText2Image,
         RBLNControlNetModel,
         RBLNControlNetModelConfig,
         RBLNCosmosSafetyChecker,

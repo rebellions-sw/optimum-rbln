@@ -22,6 +22,22 @@ _import_structure = {
         "RBLNASTForAudioClassification",
         "RBLNASTForAudioClassificationConfig",
     ],
+    "auto": [
+        "RBLNAutoModel",
+        "RBLNAutoModelForAudioClassification",
+        "RBLNAutoModelForCausalLM",
+        "RBLNAutoModelForCTC",
+        "RBLNAutoModelForDepthEstimation",
+        "RBLNAutoModelForImageClassification",
+        "RBLNAutoModelForMaskedLM",
+        "RBLNAutoModelForQuestionAnswering",
+        "RBLNAutoModelForSeq2SeqLM",
+        "RBLNAutoModelForSequenceClassification",
+        "RBLNAutoModelForSpeechSeq2Seq",
+        "RBLNAutoModelForVision2Seq",
+        "RBLNAutoModelForImageTextToText",
+        "RBLNAutoModelForTextEncoding",
+    ],
     "bart": [
         "RBLNBartForConditionalGeneration",
         "RBLNBartModel",
@@ -148,6 +164,22 @@ _import_structure = {
 
 if TYPE_CHECKING:
     from .audio_spectrogram_transformer import RBLNASTForAudioClassification, RBLNASTForAudioClassificationConfig
+    from .auto import (
+        RBLNAutoModel,
+        RBLNAutoModelForAudioClassification,
+        RBLNAutoModelForCausalLM,
+        RBLNAutoModelForCTC,
+        RBLNAutoModelForDepthEstimation,
+        RBLNAutoModelForImageClassification,
+        RBLNAutoModelForImageTextToText,
+        RBLNAutoModelForMaskedLM,
+        RBLNAutoModelForQuestionAnswering,
+        RBLNAutoModelForSeq2SeqLM,
+        RBLNAutoModelForSequenceClassification,
+        RBLNAutoModelForSpeechSeq2Seq,
+        RBLNAutoModelForTextEncoding,
+        RBLNAutoModelForVision2Seq,
+    )
     from .bart import (
         RBLNBartForConditionalGeneration,
         RBLNBartForConditionalGenerationConfig,
