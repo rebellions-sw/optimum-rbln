@@ -27,4 +27,7 @@ from .modeling_auto import (
     RBLNAutoModelForSpeechSeq2Seq,
     RBLNAutoModelForTextEncoding,
     RBLNAutoModelForVision2Seq,
+    RBLNAutoPipelineForText2Image,
+    RBLNAutoPipelineForImage2Image,
+    RBLNAutoPipelineForInpainting,
 )
