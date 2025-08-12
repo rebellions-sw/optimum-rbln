@@ -30,7 +30,6 @@ class RBLNLoRAAdapterConfig(RBLNSerializableConfigProtocol):
         target_modules: Optional[List[str]] = None,
         bias: Optional[str] = None,
         use_rslora: Optional[bool] = None,
-        use_dora: Optional[bool] = None,
         scaling_factor: Optional[float] = None,
     ):
         """
@@ -50,8 +49,6 @@ class RBLNLoRAAdapterConfig(RBLNSerializableConfigProtocol):
                 If None, will be loaded from adapter config file.
             use_rslora (Optional[bool]): Whether to use Rank-Stabilized LoRA. If None,
                 will be loaded from adapter config file.
-            use_dora (Optional[bool]): Whether to use DoRA (Weight-Decomposed Low-Rank Adaptation).
-                If None, will be loaded from adapter config file.
             scaling_factor (Optional[float]): Additional scaling factor for this adapter. Defaults to 1.0.
             **kwargs: Additional adapter-specific arguments.
 
@@ -90,7 +87,6 @@ class RBLNLoRAAdapterConfig(RBLNSerializableConfigProtocol):
             raise NotImplementedError("bias != 'none' is not supported yet")
 
         self.use_rslora = use_rslora if use_rslora is not None else adapter_config.get("use_rslora", False)
-        self.use_dora = use_dora if use_dora is not None else adapter_config.get("use_dora", False)
         self.scaling_factor = scaling_factor if scaling_factor is not None else 1.0
 
         # Validate the final values
@@ -170,16 +166,9 @@ class RBLNLoRAAdapterConfig(RBLNSerializableConfigProtocol):
             "target_modules": self.target_modules,
             "bias": self.bias,
             "use_rslora": self.use_rslora,
-            "use_dora": self.use_dora,
             "scaling_factor": self.scaling_factor,
         }
         return config_dict
-
-    def to_dict(self) -> Dict[str, Any]:
-        return self._prepare_for_serialization()
-
-    def __repr__(self) -> str:
-        return f"RBLNLoRAAdapterConfig(lora_int_id={self.lora_int_id}, lora_name={self.lora_name}, r={self.r}, lora_alpha={self.lora_alpha})"
 
 
 class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
@@ -204,7 +193,6 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
         lora_extra_vocab_size: Optional[int] = None,
         fully_sharded_loras: Optional[bool] = None,
         enable_lora_bias: Optional[bool] = None,
-        long_lora_scaling_factor: Optional[float] = None,
     ):
         """
         Args:
@@ -218,8 +206,6 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
             fully_sharded_loras (Optional[bool]): Whether to use fully sharded LoRA weights across devices.
                 Useful for very large LoRA adapters. Defaults to False.
             enable_lora_bias (Optional[bool]): Whether to enable bias terms for LoRA layers. Defaults to False.
-            long_lora_scaling_factor (Optional[float]): Scaling factor for long sequence LoRA.
-                Defaults to None.
             **kwargs: Additional arguments for future extensions.
 
         Raises:
@@ -256,7 +242,6 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
         self.lora_extra_vocab_size = lora_extra_vocab_size
         self.fully_sharded_loras = fully_sharded_loras
         self.enable_lora_bias = enable_lora_bias
-        self.long_lora_scaling_factor = long_lora_scaling_factor
 
         # Calculate max_lora_rank if not provided
         if max_lora_rank is None:
@@ -332,7 +317,6 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
             "lora_extra_vocab_size": self.lora_extra_vocab_size,
             "fully_sharded_loras": self.fully_sharded_loras,
             "enable_lora_bias": self.enable_lora_bias,
-            "long_lora_scaling_factor": self.long_lora_scaling_factor,
         }
         return serializable_map
 

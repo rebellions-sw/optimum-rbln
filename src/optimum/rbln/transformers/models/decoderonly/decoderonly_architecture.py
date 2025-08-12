@@ -54,12 +54,7 @@ class DecoderOnlyWrapper(nn.Module):
 
     _use_learned_pos_emb = False
 
-    def __init__(
-        self,
-        model: PreTrainedModel,
-        rbln_config: "RBLNDecoderOnlyModelConfig",
-        use_rotary_emb: bool,
-    ):
+    def __init__(self, model: PreTrainedModel, rbln_config: "RBLNDecoderOnlyModelConfig", use_rotary_emb: bool):
         super().__init__()
         self.quantization = rbln_config.quantization
         self.config = model.config

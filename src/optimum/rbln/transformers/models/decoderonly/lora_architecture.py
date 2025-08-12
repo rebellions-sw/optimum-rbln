@@ -128,6 +128,7 @@ class LoRALinear(nn.Module):
                 scaling = scaling * adapter.scaling_factor
 
                 lora_a_weights.append(adapter_weights[lora_a_key])
+                # scaling is pre-applied to lora_b_weights
                 lora_b_weights.append(adapter_weights[lora_b_key] * scaling)
             else:
                 logger.warning(f"No LoRA weights found for {lora_a_key} or {lora_b_key}")
@@ -159,12 +160,11 @@ class LoRALinear(nn.Module):
         lora_b_transposed = [lora_b.transpose(0, 1) for lora_b in padded_lora_b]  # [rank, out_features]
 
         self.register_buffer(
-            "lora_a_weights", torch.stack(lora_a_transposed, dim=0)
+            "lora_a_weights", torch.stack(lora_a_transposed, dim=0).to(self.weight.dtype)
         )  # [num_adapters, in_features, rank]
         self.register_buffer(
-            "lora_b_weights", torch.stack(lora_b_transposed, dim=0)
+            "lora_b_weights", torch.stack(lora_b_transposed, dim=0).to(self.weight.dtype)
         )  # [num_adapters, rank, out_features]
-        # scaling is pre-applied to lora_b_weights
 
     def forward(self, x: torch.Tensor, lora_int_id: Optional[torch.Tensor] = None) -> torch.Tensor:
         """

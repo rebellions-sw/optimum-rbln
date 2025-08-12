@@ -394,7 +394,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             input_info.append(("position_ids", [batch_size, query_length], "int32"))
 
         if rbln_config.use_lora:
-            input_info.append(("adapter_id", [batch_size], "int32"))
+            input_info.append(("lora_int_ids", [batch_size], "int32"))
 
         kvcache_dtype = "float32"
         if rbln_config.quantization and rbln_config.quantization.kv_caches == "fp8":
@@ -715,8 +715,8 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
             )
 
         # Get the adapter IDs and set them
-        adapter_ids = [available_adapters[name] for name in adapter_names]
-        self.set_lora_int_ids(torch.tensor(adapter_ids, dtype=torch.int32))
+        lora_int_ids = [available_adapters[name] for name in adapter_names]
+        self.set_lora_int_ids(torch.tensor(lora_int_ids, dtype=torch.int32))
 
     def forward(
         self,
