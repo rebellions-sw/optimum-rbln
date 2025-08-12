@@ -187,12 +187,7 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
     """
 
     def __init__(
-        self,
-        adapters: List[Union[Dict[str, Any], RBLNLoRAAdapterConfig]],
-        max_lora_rank: Optional[int] = None,
-        lora_extra_vocab_size: Optional[int] = None,
-        fully_sharded_loras: Optional[bool] = None,
-        enable_lora_bias: Optional[bool] = None,
+        self, adapters: List[Union[Dict[str, Any], RBLNLoRAAdapterConfig]], max_lora_rank: Optional[int] = None
     ):
         """
         Args:
@@ -201,12 +196,6 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
                 accessible at compile time.
             max_lora_rank (Optional[int]): Maximum rank across all adapters. If None, automatically
                 determined from the provided adapters. Used for memory allocation optimization.
-            lora_extra_vocab_size (Optional[int]): Additional vocabulary size for LoRA embeddings.
-                Defaults to 256.
-            fully_sharded_loras (Optional[bool]): Whether to use fully sharded LoRA weights across devices.
-                Useful for very large LoRA adapters. Defaults to False.
-            enable_lora_bias (Optional[bool]): Whether to enable bias terms for LoRA layers. Defaults to False.
-            **kwargs: Additional arguments for future extensions.
 
         Raises:
             ValueError: If adapters list is empty.
@@ -215,14 +204,6 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
         """
         if not adapters:
             raise ValueError("adapters list cannot be empty")
-
-        # Set default values
-        lora_extra_vocab_size = lora_extra_vocab_size if lora_extra_vocab_size is not None else 0
-        if lora_extra_vocab_size != 0:
-            raise NotImplementedError("lora_extra_vocab_size != 0 is not supported yet")
-
-        fully_sharded_loras = fully_sharded_loras if fully_sharded_loras is not None else False
-        enable_lora_bias = enable_lora_bias if enable_lora_bias is not None else False
 
         # Convert dict adapters to RBLNLoRAAdapterConfig objects
         self.adapters: List[RBLNLoRAAdapterConfig] = []
@@ -239,10 +220,6 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
         if len(adapter_ids) != len(set(adapter_ids)):
             raise ValueError("All adapter IDs must be unique")
 
-        self.lora_extra_vocab_size = lora_extra_vocab_size
-        self.fully_sharded_loras = fully_sharded_loras
-        self.enable_lora_bias = enable_lora_bias
-
         # Calculate max_lora_rank if not provided
         if max_lora_rank is None:
             self.max_lora_rank = max(adapter.r for adapter in self.adapters)
@@ -257,35 +234,29 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
 
     @property
     def num_adapters(self) -> int:
-        """Get the number of LoRA adapters."""
         return len(self.adapters)
 
     @property
     def adapter_ids(self) -> List[int]:
-        """Get list of all adapter IDs."""
         return [adapter.lora_int_id for adapter in self.adapters]
 
     @property
     def adapter_names(self) -> List[str]:
-        """Get list of all adapter names."""
         return [adapter.lora_name for adapter in self.adapters]
 
     def get_adapter_by_id(self, lora_int_id: int) -> Optional[RBLNLoRAAdapterConfig]:
-        """Get an adapter configuration by its ID."""
         for adapter in self.adapters:
             if adapter.lora_int_id == lora_int_id:
                 return adapter
         return None
 
     def get_adapter_by_name(self, lora_name: str) -> Optional[RBLNLoRAAdapterConfig]:
-        """Get an adapter configuration by its name."""
         for adapter in self.adapters:
             if adapter.lora_name == lora_name:
                 return adapter
         return None
 
     def validate_adapter_weights(self) -> Dict[int, bool]:
-        """Validate that all adapter weights are accessible at compile time."""
         validation_results = {}
         for adapter in self.adapters:
             try:
@@ -310,24 +281,8 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
         return validation_results
 
     def _prepare_for_serialization(self) -> Dict[str, Any]:
-        """Prepare the LoRA configuration for serialization by converting nested objects to dictionaries."""
         serializable_map = {
             "adapters": [adapter._prepare_for_serialization() for adapter in self.adapters],
             "max_lora_rank": self.max_lora_rank,
-            "lora_extra_vocab_size": self.lora_extra_vocab_size,
-            "fully_sharded_loras": self.fully_sharded_loras,
-            "enable_lora_bias": self.enable_lora_bias,
         }
         return serializable_map
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert the LoRA configuration to a dictionary."""
-        return self._prepare_for_serialization()
-
-    @classmethod
-    def from_dict(cls, config_dict: Dict[str, Any]) -> "RBLNLoRAConfig":
-        """Create a LoRA configuration from a dictionary."""
-        return cls(**config_dict)
-
-    def __repr__(self) -> str:
-        return f"RBLNLoRAConfig(num_adapters={self.num_adapters}, adapter_ids={self.adapter_ids}, max_lora_rank={self.max_lora_rank})"

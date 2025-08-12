@@ -232,6 +232,7 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
         if self.logits_to_keep is not None and self.logits_to_keep > 1:
             raise NotImplementedError("`logits_to_keep` > 1 is currently not supported for RBLN models.")
 
+        self.decoder_batch_sizes = None
         if "decode" in self.phases:
             self.decoder_batch_sizes = decoder_batch_sizes
             if self.decoder_batch_sizes is None:
@@ -275,86 +276,6 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
     def use_lora(self):
         """Check if LoRA is enabled for this configuration."""
         return self.lora_config is not None
-
-    @property
-    def num_lora_adapters(self):
-        """Get the number of LoRA adapters configured for compilation."""
-        if self.lora_config is None:
-            return 0
-        return self.lora_config.num_adapters
-
-    @property
-    def max_lora_rank(self):
-        """Get the maximum LoRA rank across all adapters."""
-        if self.lora_config is None:
-            return 0
-        return self.lora_config.max_lora_rank
-
-    @property
-    def lora_adapter_ids(self):
-        """Get the list of LoRA adapter IDs that will be available at runtime."""
-        if self.lora_config is None:
-            return []
-        return self.lora_config.adapter_ids
-
-    @property
-    def lora_adapter_names(self):
-        """Get the list of LoRA adapter names for human-readable identification."""
-        if self.lora_config is None:
-            return []
-        return self.lora_config.adapter_names
-
-    def get_lora_target_modules(self):
-        """Get the global list of target modules for LoRA application."""
-        if self.lora_config is None:
-            return []
-        return self.lora_config.global_target_modules
-
-    def get_lora_config_dict(self):
-        """Get the complete LoRA configuration as a dictionary."""
-        if self.lora_config is None:
-            return {}
-        return self.lora_config.to_dict()
-
-    def get_lora_adapter_by_id(self, adapter_id: str):
-        """Get a specific LoRA adapter configuration by its ID."""
-        if self.lora_config is None:
-            return None
-        return self.lora_config.get_adapter_by_id(adapter_id)
-
-    def get_lora_adapter_by_name(self, adapter_name: str):
-        """Get a specific LoRA adapter configuration by its name."""
-        if self.lora_config is None:
-            return None
-        return self.lora_config.get_adapter_by_name(adapter_name)
-
-    def validate_lora_adapters(self):
-        """Validate that all LoRA adapter weights are accessible for compilation."""
-        if self.lora_config is None:
-            return {}
-        return self.lora_config.validate_adapter_weights()
-
-    def get_lora_compilation_info(self):
-        """Get information needed for LoRA compilation process."""
-        if self.lora_config is None:
-            return None
-
-        return {
-            "num_adapters": self.num_lora_adapters,
-            "max_rank": self.max_lora_rank,
-            "global_dtype": self.lora_config.global_lora_dtype,
-            "target_modules": self.get_lora_target_modules(),
-            "adapter_paths": [adapter.adapter_path for adapter in self.lora_config.adapters],
-            "adapter_configs": [adapter.to_dict() for adapter in self.lora_config.adapters],
-            "validation_results": self.validate_lora_adapters(),
-        }
-
-    # Backward compatibility properties (deprecated)
-    @property
-    def max_loras(self):
-        """Get the number of LoRA adapters (deprecated, use num_lora_adapters instead)."""
-        logger.warning("max_loras is deprecated, use num_lora_adapters instead")
-        return self.num_lora_adapters
 
     def can_generate(self) -> bool:
         return "decode" in self.phases

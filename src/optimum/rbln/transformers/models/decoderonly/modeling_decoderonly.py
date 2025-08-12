@@ -681,8 +681,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
         self.lora_int_ids = lora_int_ids
 
         self.prefill_decoder.lora_int_ids = lora_int_ids
-        for batch_size in self.rbln_config.decoder_batch_sizes:
-            self.decoders[batch_size].lora_int_ids = lora_int_ids
+        if self.rbln_config.can_generate:
+            for batch_size in self.rbln_config.decoder_batch_sizes:
+                self.decoders[batch_size].lora_int_ids = lora_int_ids
 
     def set_adapter(self, adapter_name: Union[str, List[str]]) -> None:
         """
@@ -728,7 +729,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
         padded_cache_lengths: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
-        lora_int_id: Optional[torch.Tensor] = None,
+        lora_int_ids: Optional[torch.Tensor] = None,
         return_dict: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
@@ -736,13 +737,13 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
         # For continuous batching, the prefill stage processes one batch at a time and updates the KV cache using batch_idx.
         # A for-loop ensures synchronization with the HuggingFace generate API.
         # The decoder stage operates as usual, processing inputs in batch mode.
-        if self.rbln_config.use_lora and lora_int_id is None:
+        if self.rbln_config.use_lora and lora_int_ids is None:
             if self.lora_int_ids is None:
                 raise ValueError(
                     "lora_int_id is required when using LoRA. "
                     "You should call set_lora_int_ids() before forward() or pass lora_int_id to forward()."
                 )
-            lora_int_id = self.lora_int_ids
+            lora_int_ids = self.lora_int_ids
 
         # for only use forward
         if generate_idx is None:
@@ -767,7 +768,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
                     cache_position=cache_position,
                     batch_idx=b_idx,
                     token_type_ids=token_type_ids[b_idx : b_idx + 1] if token_type_ids is not None else None,
-                    lora_int_id=lora_int_id[b_idx : b_idx + 1] if lora_int_id is not None else None,
+                    lora_int_ids=lora_int_ids[b_idx : b_idx + 1] if lora_int_ids is not None else None,
                 )
                 padded_cache_lengths[b_idx] += output.padded_cache_lengths
                 logits.append(output.logits)
@@ -787,7 +788,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
                 position_ids=position_ids if self.rbln_config.use_position_ids else None,
-                lora_int_id=lora_int_id,
+                lora_int_ids=lora_int_ids,
             ).logits
 
         if not return_dict:

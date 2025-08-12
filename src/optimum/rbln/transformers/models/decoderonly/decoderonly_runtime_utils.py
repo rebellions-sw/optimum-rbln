@@ -187,6 +187,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 torch.ones(1, 1, self.rbln_config.prefill_chunk_size, self.rbln_config.prefill_chunk_size), diagonal=1
             )
 
+        self.lora_int_ids = None
+
     def inputs_embeddings_if_needed(
         self, input_ids: Optional[torch.Tensor] = None, inputs_embeds: Optional[torch.Tensor] = None
     ):
@@ -210,7 +212,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         position_ids: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
-        lora_int_id: Optional[torch.Tensor] = None,
+        lora_int_ids: Optional[torch.Tensor] = None,
     ):
         inputs = self.inputs_embeddings_if_needed(input_ids, inputs_embeds)
         block_tables, local_block_tables, is_external_block_tables = (
@@ -234,7 +236,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 position_embed=position_embed,
                 position_ids=position_ids,
                 local_block_tables=local_block_tables,
-                lora_int_id=lora_int_id,
+                lora_int_ids=lora_int_ids,
             )
         else:
             return self.prefill_forward(
@@ -247,7 +249,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 position_embed=position_embed,
                 token_type_ids=token_type_ids,
                 local_block_tables=local_block_tables,
-                lora_int_id=lora_int_id,
+                lora_int_ids=lora_int_ids,
             )
 
     def decode_forward(
@@ -260,16 +262,19 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         position_embed: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
-        lora_int_id: Optional[torch.Tensor] = None,
+        lora_int_ids: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
-        if self.rbln_config.use_lora and lora_int_id is None:
+        if self.rbln_config.use_lora and lora_int_ids is None:
             if self.lora_int_ids is None:
                 raise ValueError(
                     "lora_int_id is required when using LoRA. "
                     "You should call set_lora_int_ids() before forward() or pass lora_int_id to forward()."
                 )
 
-            lora_int_id = self.lora_int_ids
+            lora_int_ids = self.lora_int_ids
+
+        if lora_int_ids is not None and lora_int_ids.shape[0] != self.batch_size:
+            raise ValueError(f"lora_int_ids size mismatch: got {lora_int_ids.shape[0]}, expected {self.batch_size}.")
 
         if self.batch_size != cache_position.shape[0]:
             raise RuntimeError(
@@ -300,7 +305,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             position_embed,
             attention_mask if self.rbln_config.use_attention_mask else None,
             position_ids if self.rbln_config.use_position_ids else None,
-            lora_int_id if self.rbln_config.use_lora else None,
+            lora_int_ids if self.rbln_config.use_lora else None,
         )
 
         return RBLNDecoderOnlyOutput(logits=logits)
@@ -377,21 +382,21 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         position_embed: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
-        lora_int_id: Optional[torch.Tensor] = None,
+        lora_int_ids: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         """
         Performs chunked prefill for efficient KV-cache updates and memory optimization.
         Instead of processing the entire sequence at once, the input is divided into chunks of size `prefill_chunk_size`,
         and each chunk is processed sequentially. This allows for better memory utilization and compatibility with continuous batching.
         """
-        if self.rbln_config.use_lora and lora_int_id is None:
+        if self.rbln_config.use_lora and lora_int_ids is None:
             if self.lora_int_ids is None:
                 raise ValueError(
                     "lora_int_id is required when using LoRA. "
                     "You should call set_lora_int_ids() before forward() or pass lora_int_id to forward()."
                 )
 
-            lora_int_id = self.lora_int_ids
+            lora_int_ids = self.lora_int_ids[batch_idx : batch_idx + 1].clone()
 
         (
             inputs,
@@ -444,7 +449,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 query_position,
                 chunked_attention_mask if self.rbln_config.use_attention_mask else None,
                 position_ids_chunk,
-                lora_int_id if self.rbln_config.use_lora else None,
+                lora_int_ids if self.rbln_config.use_lora else None,
                 out=self.out_buffers,
             )
             output_logits.append(output_logit)

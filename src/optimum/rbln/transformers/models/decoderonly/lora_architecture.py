@@ -48,7 +48,7 @@ class LoRALinear(nn.Module):
         if original_linear.bias is not None:
             self.register_buffer("bias", original_linear.bias.data)
         else:
-            self.register_buffer("bias", torch.zeros(self.out_features))
+            self.bias = None
 
         # Initialize LoRA weights
         self._init_lora_weights()
