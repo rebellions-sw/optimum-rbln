@@ -66,8 +66,9 @@ class LLMTest:
 
         def get_inputs(self):
             inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt")
-            inputs["max_new_tokens"] = 20
-            inputs["do_sample"] = False
+            if self.model.can_generate():
+                inputs["max_new_tokens"] = 20
+                inputs["do_sample"] = False
             return inputs
 
         def postprocess(self, inputs, output):
@@ -77,15 +78,8 @@ class LLMTest:
             )
             return generated_text
 
-    class TestLLMBase(TestLLM):
+    class TestLLMWithoutLMHead(TestLLM):
         RBLN_AUTO_CLASS = RBLNAutoModel
-        PROMPT = ["Who are you?", "What is the capital of France?"]
-
-        def get_inputs(self):
-            tokenizer = self.get_tokenizer()
-            tokenizer.pad_token = tokenizer.eos_token
-            inputs = tokenizer(self.PROMPT, return_tensors="pt", padding=True)
-            return inputs
 
 
 class TestMistralForCausalLM(LLMTest.TestLLM):
@@ -95,7 +89,7 @@ class TestMistralForCausalLM(LLMTest.TestLLM):
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "sliding_window": 512}
 
 
-class TestMistralModel(LLMTest.TestLLMBase):
+class TestMistralModel(LLMTest.TestLLMWithoutLMHead):
     RBLN_CLASS = RBLNMistralModel
     HF_MODEL_ID = "openaccess-ai-collective/tiny-mistral"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "sliding_window": 512}
@@ -108,7 +102,7 @@ class TestQwen2ForCausalLM(LLMTest.TestLLM):
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
 
 
-class TestQwen2Model(LLMTest.TestLLMBase):
+class TestQwen2Model(LLMTest.TestLLMWithoutLMHead):
     RBLN_CLASS = RBLNQwen2Model
     HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
@@ -128,7 +122,7 @@ class TestQwen3ForCausalLM_UAM(TestQwen3ForCausalLM):
     RBLN_CLASS_KWARGS = {"rbln_config": {"use_attention_mask": True}}
 
 
-class TestQwen3Model(LLMTest.TestLLMBase):
+class TestQwen3Model(LLMTest.TestLLMWithoutLMHead):
     RBLN_AUTO_CLASS = RBLNAutoModel
     RBLN_CLASS = RBLNQwen3Model
     HF_MODEL_ID = "trl-internal-testing/tiny-Qwen3ForCausalLM"
@@ -146,7 +140,7 @@ class TestOPTForCausalLM(LLMTest.TestLLM):
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 2048}
 
 
-class TestOPTModel(LLMTest.TestLLMBase):
+class TestOPTModel(LLMTest.TestLLMWithoutLMHead):
     RBLN_CLASS = RBLNOPTModel
     HF_MODEL_ID = "facebook/opt-2.7b"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 2048}
@@ -165,7 +159,7 @@ class TestLlamaForCausalLM(LLMTest.TestLLM):
         return inputs
 
 
-class TestLlamaModel(LLMTest.TestLLMBase):
+class TestLlamaModel(LLMTest.TestLLMWithoutLMHead):
     RBLN_CLASS = RBLNLlamaModel
     HF_MODEL_ID = "afmck/testing-llama-tiny"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
@@ -185,7 +179,7 @@ class TestLlamaForCausalLM_Flash(LLMTest.TestLLM):
         return inputs
 
 
-class TestLlamaModel_Flash(LLMTest.TestLLMBase):
+class TestLlamaModel_Flash(LLMTest.TestLLMWithoutLMHead):
     RBLN_CLASS = RBLNLlamaModel
     HF_MODEL_ID = "afmck/testing-llama-tiny"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 8192}
@@ -226,7 +220,7 @@ class TestGPT2LMHeadModel(LLMTest.TestLLM):
     HF_CONFIG_KWARGS = {"n_layer": 1, "max_position_embeddings": 1024}
 
 
-class TestGPT2Model(LLMTest.TestLLMBase):
+class TestGPT2Model(LLMTest.TestLLMWithoutLMHead):
     RBLN_CLASS = RBLNGPT2Model
     HF_MODEL_ID = "openai-community/gpt2"
     HF_CONFIG_KWARGS = {"n_layer": 1, "max_position_embeddings": 1024}
@@ -241,7 +235,7 @@ class TestPhiForCausalLM(LLMTest.TestLLM):
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "trust_remote_code": True}
 
 
-class TestPhiModel(LLMTest.TestLLMBase):
+class TestPhiModel(LLMTest.TestLLMWithoutLMHead):
     RBLN_CLASS = RBLNPhiModel
     HF_MODEL_ID = "microsoft/phi-2"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "trust_remote_code": True}
