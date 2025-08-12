@@ -17,12 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 
 import torch
-from transformers import (
-    AutoModelForVision2Seq,
-    PretrainedConfig,
-    PreTrainedModel,
-    Qwen2_5_VLForConditionalGeneration,
-)
+from transformers import AutoModelForVision2Seq, PretrainedConfig, PreTrainedModel, Qwen2_5_VLForConditionalGeneration
 from transformers.modeling_utils import no_init_weights
 from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     Qwen2_5_VisionPatchEmbed,
@@ -34,7 +29,8 @@ from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
 from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyOutput
+from ...modeling_outputs import RBLNDecoderOnlyOutput
+from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM
 from .configuration_qwen2_5_vl import (
     RBLNQwen2_5_VisionTransformerPretrainedModelConfig,
     RBLNQwen2_5_VLForConditionalGenerationConfig,
@@ -45,12 +41,7 @@ from .qwen2_5_vl_architecture import Qwen2_5_VisionTransformerWrapper, Qwen2_5_V
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import (
-        AutoFeatureExtractor,
-        AutoProcessor,
-        AutoTokenizer,
-        PretrainedConfig,
-    )
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
 
 
 class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):

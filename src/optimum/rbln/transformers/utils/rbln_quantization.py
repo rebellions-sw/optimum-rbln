@@ -13,10 +13,12 @@
 # limitations under the License.
 
 import glob
+import json
 import os
 from typing import Any, Dict, Optional, Union
 
 import torch
+from huggingface_hub import hf_hub_download, list_repo_files
 from safetensors.torch import load_file
 from torch.nn import Linear, Parameter
 from torch.nn import functional as F
@@ -30,21 +32,24 @@ logger = get_logger()
 
 class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
     SUPPORTED_FORMATS = ["rbln"]
-    SUPPORTED_WEIGHTS = ["int4", "fp16"]
-    SUPPORTED_ACTIVATIONS = ["fp16"]
-
-    # The RBLN_QUANT_BITS environment variable defines the precision of each layer during the graph compilation process.
-    # It specifies the quantization bit depth. For instance, setting RBLN_QUANT_BITS=4 will apply 4-bit precision for quantization.
+    SUPPORTED_WEIGHTS = ["int4", "fp8", "fp16"]
+    SUPPORTED_ACTIVATIONS = ["fp8", "fp16"]
+    SUPPORTED_KVCACHES = ["fp8", "fp16"]
     RBLN_QUANT_BITS_ENV = "RBLN_QUANT_BITS"
 
     def __init__(
         self,
         format: Optional[str] = None,
-        precision: Optional[str] = None,
         weights: Optional[str] = None,
         activations: Optional[str] = None,
+        kv_caches: Optional[str] = None,
+        *,
+        precision: Optional[str] = None,
     ):
-        self.format = format
+        self.format = format or "rbln"
+        if self.format not in self.SUPPORTED_FORMATS:
+            raise ValueError(f"Invalid format: {self.format}, supported formats are: {self.SUPPORTED_FORMATS}")
+
         if precision is not None:
             logger.warning("The `precision` argument is deprecated. Use `weights` and `activations` instead.")
             if any(precision_arg is not None for precision_arg in (weights, activations)):
@@ -58,6 +63,8 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
 
         self.weights = weights or "fp16"
         self.activations = activations or "fp16"
+        self.kv_caches = kv_caches or "fp16"
+
         self._validate()
 
     def _validate(self):
@@ -69,25 +76,47 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
             raise ValueError(
                 f"Invalid activations: {self.activations}, supported activations are: {self.SUPPORTED_ACTIVATIONS}"
             )
+        if self.kv_caches not in self.SUPPORTED_KVCACHES:
+            raise ValueError(
+                f"Invalid kv_caches: {self.kv_caches}, supported kv_caches are: {self.SUPPORTED_KVCACHES}"
+            )
         if self.weights == "fp16" and self.activations == "fp16":
-            raise ValueError("weights and activations cannot be both fp16. It is meaningless.")
+            raise ValueError("weights and activations of QuantizationConfig cannot be both fp16. It is meaningless.")
 
     def _prepare_for_serialization(self) -> Dict[str, Any]:
         return {
             "format": self.format,
             "weights": self.weights,
             "activations": self.activations,
+            "kv_caches": self.kv_caches,
         }
 
     def maybe_set_quantization_env(self):
-        quant_bits = None
         if self.weights == "int4":
-            quant_bits = "4"
-            os.environ[self.RBLN_QUANT_BITS_ENV] = quant_bits
+            os.environ[self.RBLN_QUANT_BITS_ENV] = "4"
 
     def maybe_reset_quantization_env(self):
         if self.RBLN_QUANT_BITS_ENV in os.environ:
             os.environ.pop(self.RBLN_QUANT_BITS_ENV)
+
+
+class QuantizedLayerFactory:
+    def __init__(self, quantization_config: RBLNQuantizationConfig):
+        self.quantization_config = quantization_config
+
+    def create_linear(self, layer: Linear) -> Linear:
+        if self.quantization_config.weights == "int4":
+            return self.create_qlinear(layer)
+        elif self.quantization_config.weights == "fp8":
+            return self.create_fp8linear(layer)
+        else:
+            raise ValueError(f"Invalid quantization weights: {self.quantization_config.weights}")
+
+    def create_qlinear(self, layer: Linear) -> Linear:
+        return create_qlinear(layer, self.quantization_config)
+
+    def create_fp8linear(self, layer: Linear) -> Linear:
+        return create_fp8linear(layer, self.quantization_config)
 
 
 # Constants
@@ -111,64 +140,60 @@ def prepare_model_for_quantization(
     cache_dir: Optional[str] = None,
     force_download: bool = False,
     local_files_only: bool = False,
+    rbln_quantization: Optional[RBLNQuantizationConfig] = None,
 ) -> torch.nn.Module:
     """
     Prepare the model for quantization by updating specified linear layers to quantized (qlinear) layers.
     """
-    update_layers_to_quantize(model)
-    load_weights(
-        model,
+
+    # 1. Load weight files and safetensors.index.json
+    safetensor_files, index_data = load_weight_files_and_index(
         model_id,
-        n_layer,
         use_auth_token=use_auth_token,
         revision=revision,
         cache_dir=cache_dir,
         force_download=force_download,
         local_files_only=local_files_only,
     )
+
+    # 2. Determine format from safetensors.index.json
+    determined_format = determine_format_from_index(index_data)
+
+    # 3. Update linear layers based on the determined format
+    update_layers_to_quantize(model, rbln_quantization)
+
+    # 4. Load weights into model parameters
+    load_weights_from_files(
+        model,
+        safetensor_files,
+        n_layer,
+        rbln_quantization=rbln_quantization,
+        determined_format=determined_format,
+    )
+
     return model
 
 
-def update_layers_to_quantize(module: torch.nn.Module) -> None:
-    """
-    Updates specified linear layers to quantized (qlinear) layers in the given module.
-    """
-
-    logger.debug("Updating layers to be quantized")  # TODO(jongho): remove.
-    processed_layers = []
-
-    for name, layer in module.named_modules():
-        if is_target_for_qlinear_replacement(name, layer):
-            parent_module, layer_name = get_parent_and_child(module, name)
-            setattr(parent_module, layer_name, create_qlinear(layer))
-            processed_layers.append(name)
-
-    if processed_layers:
-        logger.debug(f"Updated the following linear layers to quantized layers:\n {{{', '.join(processed_layers)}}}")
-
-
-def load_weights(
-    model,
-    model_id,
-    n_layer=None,
-    use_auth_token=None,
-    revision=None,
-    cache_dir=None,
-    force_download=False,
-    local_files_only=False,
-):
+def load_weight_files_and_index(
+    model_id: str,
+    use_auth_token: Optional[Union[bool, str]] = None,
+    revision: Optional[str] = None,
+    cache_dir: Optional[str] = None,
+    force_download: bool = False,
+    local_files_only: bool = False,
+) -> tuple[list[str], Optional[Dict]]:
     """
     Load safetensor file data directly into the model, filtering by layer if n_layer is provided.
     """
-
-    model_params = dict(model.named_parameters(recurse=True))
-    model_buffers = dict(model.named_buffers(recurse=True))
+    index_data = None
 
     if os.path.isdir(model_id):
         safetensor_files = glob.glob(f"{model_id}/*.safetensors")
+        index_path = os.path.join(model_id, "model.safetensors.index.json")
+        if os.path.exists(index_path):
+            with open(index_path, "r") as f:
+                index_data = json.load(f)
     else:
-        from huggingface_hub import hf_hub_download, list_repo_files
-
         try:
             # List all files in the repository
             repo_files = list_repo_files(model_id, revision=revision, token=use_auth_token)
@@ -188,6 +213,20 @@ def load_weights(
                         local_files_only=local_files_only,
                     )
                     safetensor_files.append(downloaded_file)
+                elif file == "model.safetensors.index.json":
+                    # Download the index file
+                    index_file = hf_hub_download(
+                        repo_id=model_id,
+                        filename=file,
+                        revision=revision,
+                        token=use_auth_token,
+                        cache_dir=cache_dir,
+                        force_download=force_download,
+                        local_files_only=local_files_only,
+                    )
+
+                    with open(index_file, "r") as f:
+                        index_data = json.load(f)
         except Exception as e:
             logger.error(f"Failed to download safetensors files from Hugging Face Hub: {e}")
             raise e
@@ -195,12 +234,85 @@ def load_weights(
     if not safetensor_files:
         raise FileNotFoundError(f"No safetensors files found for model_id: {model_id}")
 
+    return safetensor_files, index_data
+
+
+def determine_format_from_index(index_data: Optional[Dict]) -> str:
+    """
+    Determine the quantization format from safetensors.index.json data.
+
+    Args:
+        index_data: The loaded safetensors.index.json content
+
+    Returns:
+        str: The determined format string
+    """
+    if index_data is None:
+        raise ValueError("safetensors.index.json not found")
+    if "weight_map" not in index_data:
+        raise ValueError("weight_map not found in safetensors.index.json")
+
+    if any("self_attn.k_proj.k_scale" in key for key in index_data["weight_map"]):
+        return "tensorrt"
+    elif any("self_attn.kv_scale" in key for key in index_data["weight_map"]):
+        return "quark"
+    elif any("weight_scale" in key or "input_scale" in key for key in index_data["weight_map"]):
+        return "default"
+    else:
+        raise ValueError("Unknown quantization format of the index data of weight map.")
+
+
+def update_layers_to_quantize(
+    module: torch.nn.Module,
+    rbln_quantization: Optional[RBLNQuantizationConfig] = None,
+) -> None:
+    """
+    Updates specified linear layers to quantized (qlinear) layers in the given module.
+    """
+
+    processed_layers = []
+    quantized_layer_factory = QuantizedLayerFactory(rbln_quantization)
+
+    for name, layer in module.named_modules():
+        if is_target_for_qlinear_replacement(name, layer):
+            parent_module, layer_name = get_parent_and_child(module, name)
+            setattr(parent_module, layer_name, quantized_layer_factory.create_linear(layer))
+            processed_layers.append(name)
+
+    if processed_layers:
+        logger.debug(f"Updated the following linear layers to quantized layers:\n {{{', '.join(processed_layers)}}}")
+
+
+def load_weights_from_files(
+    model: torch.nn.Module,
+    safetensor_files: list[str],
+    n_layer: Optional[int] = None,
+    rbln_quantization: Optional[RBLNQuantizationConfig] = None,
+    determined_format: Optional[str] = None,
+):
+    """
+    Load safetensor file data directly into the model from provided safetensor files,
+    filtering by layer if n_layer is provided.
+    """
+
+    model_params = dict(model.named_parameters(recurse=True))
+    model_buffers = dict(model.named_buffers(recurse=True))
+
     target_layers = list(range(n_layer)) if n_layer is not None else None
 
     unloaded_keys = []
+    loaded_input_scale = False
+    loaded_kv_scale = False
+    loaded_weight_scale = False
+
     for safetensor_file in safetensor_files:
         file_data = load_file(safetensor_file)
+
         for key, value in file_data.items():
+            loaded_input_scale = loaded_input_scale or "input_scale" in key
+            loaded_weight_scale = loaded_weight_scale or "weight_scale" in key
+            loaded_kv_scale = loaded_kv_scale or any(scale in key for scale in ["kv_scale", "k_scale", "v_scale"])
+
             if target_layers is not None:
                 parts = key.split(".")
 
@@ -211,11 +323,37 @@ def load_weights(
                 model_params[key].data.copy_(value)
             elif key in model_buffers:
                 model_buffers[key].data.copy_(value)
+            elif "kv_scale" in key and determined_format == "quark":
+                if rbln_quantization.kv_caches == "fp8":
+                    model_params[key.replace("kv_scale", "k_proj.k_scale")].data.copy_(value)
+                    model_params[key.replace("kv_scale", "v_proj.v_scale")].data.copy_(value)
+                else:
+                    unloaded_keys.append(key)
             else:
                 unloaded_keys.append(key)
 
     if len(unloaded_keys) > 0:
         logger.warning(f"There are unexpected parameters/buffers on the checkpoint: {unloaded_keys}")
+
+    if not loaded_input_scale and rbln_quantization.activations == "fp8":
+        raise ValueError(
+            "No input_scale found in the checkpoint. Did you use the correct quantization config? "
+            "If you are using fp8 quantization, you need to use the correct quantization config."
+        )
+    if not loaded_weight_scale and rbln_quantization.weights == "fp8":
+        raise ValueError(
+            "No weight_scale found in the checkpoint. Did you use the correct quantization config? "
+            "If you are using fp8 quantization, you need to use the correct quantization config."
+        )
+    if not loaded_kv_scale and rbln_quantization.kv_caches == "fp8":
+        raise ValueError(
+            "No kv_scale found in the checkpoint. Did you use the correct quantization config? "
+            "If you are using fp8 quantization, you need to use the correct quantization config."
+        )
+    if loaded_kv_scale and rbln_quantization.kv_caches != "fp8":
+        logger.warning(
+            "kv_scale found in the checkpoint, but kv_caches of quantization config is not fp8. Ignoring kv_scale."
+        )
 
 
 def is_target_for_qlinear_replacement(layer_name: str, layer: torch.nn.Module) -> bool:
@@ -223,6 +361,10 @@ def is_target_for_qlinear_replacement(layer_name: str, layer: torch.nn.Module) -
     Checks if a layer is a target for qlinear replacement.
     """
     return layer_name.split(".")[-1] in QUANTIZED_WEIGHTS and isinstance(layer, torch.nn.Linear)
+
+
+def is_target_for_adding_kv_scales(layer_name: str) -> bool:
+    return layer_name.split(".")[-1] in ["self_attn"]
 
 
 def get_parent_and_child(module: torch.nn.Module, full_name: str) -> tuple:
@@ -243,7 +385,7 @@ def access_attribute(obj: Any, attributes: list[str]) -> Any:
     return obj
 
 
-def create_qlinear(layer: Linear) -> Linear:
+def create_qlinear(layer: Linear, rbln_quantization: RBLNQuantizationConfig) -> Linear:
     """
     Converts a standard linear layer to a quantized linear (qlinear) layer with a custom forward pass.
     """
@@ -260,5 +402,66 @@ def create_qlinear(layer: Linear) -> Linear:
     layer.weight = Parameter(layer.weight.to(torch.int8), requires_grad=False)
     layer.scales = Parameter(torch.ones(layer.out_features, dtype=torch.float32), requires_grad=False)
     layer.forward = lambda inputs: qlinear_forward(layer, inputs)
+
+    return layer
+
+
+def create_fp8linear(layer: Linear, rbln_quantization: RBLNQuantizationConfig) -> Linear:
+    """
+    Converts a standard linear layer to a fp8 linear layer with a custom forward pass.
+    """
+
+    def static_per_tensor_quantize(tensor: torch.Tensor, inv_scale: float) -> torch.Tensor:
+        finfo = torch.finfo(torch.float8_e4m3fn)
+        qweight = (tensor / inv_scale).clamp(min=finfo.min, max=finfo.max)
+        return qweight
+
+    def fp8_gemm(A: torch.Tensor, A_scale, B: torch.Tensor, B_scale, bias, out_dtype: torch.dtype):
+        A = A.type(out_dtype)
+        B = B.type(out_dtype)
+
+        if A_scale is not None:
+            A *= A_scale
+        if B_scale is not None:
+            B *= B_scale.to(out_dtype)
+
+        output = torch.nn.functional.linear(A, B, bias=bias)
+        return output
+
+    def fp8linear_forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self.input_scale:
+            input = static_per_tensor_quantize(x, self.input_scale)
+        else:
+            input = x
+
+        if self.weight_scale:
+            # broadcast weight_scale to vector
+            weight_scale = self.weight_scale.broadcast_to(self.weight.shape[-1:])
+        else:
+            weight_scale = None
+        output = fp8_gemm(
+            A=input,
+            A_scale=self.input_scale,
+            B=self.weight,
+            B_scale=weight_scale,
+            bias=self.bias,
+            out_dtype=x.dtype,
+        )
+
+        return output
+
+    layer.weight = Parameter(layer.weight.to(torch.float8_e4m3fn), requires_grad=False)
+    layer.weight_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
+
+    if rbln_quantization.activations == "fp8":
+        layer.input_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
+    else:
+        layer.input_scale = None
+
+    if rbln_quantization.kv_caches == "fp8":
+        layer.k_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
+        layer.v_scale = Parameter(torch.tensor(1, dtype=torch.float32), requires_grad=False)
+
+    layer.forward = lambda inputs: fp8linear_forward(layer, inputs)
 
     return layer

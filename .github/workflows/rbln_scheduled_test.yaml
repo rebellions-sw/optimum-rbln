@@ -47,6 +47,8 @@ jobs:
       ref: main
       rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
       test_level: "full"
+      enable_hf_hub_tests: true
+      fail_fast: false
     secrets: inherit
 
   optimum-rbln-inference-test:

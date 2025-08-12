@@ -20,18 +20,31 @@ on:
         required: false
         type: string
         default: "default"
+      enable_hf_hub_tests:
+        description: "Whether to enable HF Hub tests (requires HF credentials)"
+        required: false
+        type: boolean
+        default: false
+      fail_fast:
+        description: "Whether to fail fast when one matrix job fails"
+        required: false
+        type: boolean
+        default: true
 
 env:
   REBEL_PYPI_ENDPOINT: ${{ vars.REBEL_PYPI_INTERNAL_ENDPOINT }}
   REBEL_PYPI_USERNAME: ${{ secrets.REBEL_PYPI_USERNAME }}
   REBEL_PYPI_PASSWORD: ${{ secrets.REBEL_PYPI_PASSWORD }}
   HF_HOME: ${{ secrets.HF_HOME }}
+  HF_USER_ID: ${{ inputs.enable_hf_hub_tests && secrets.HF_USER_ID || '' }}
+  HF_AUTH_TOKEN: ${{ inputs.enable_hf_hub_tests && secrets.HF_AUTH_TOKEN || '' }}
 
 jobs:
   pytest:
     name: Pytest (${{ matrix.test_type }})
     runs-on: vm-ci-0
     strategy:
+      fail-fast: ${{ inputs.fail_fast }}
       matrix:
         test_type: [config, transformers, diffusers, llm]
     steps:

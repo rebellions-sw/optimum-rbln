@@ -4,10 +4,7 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 
-from ..decoderonly.decoderonly_architecture import (
-    DecoderOnlyWrapper,
-    apply_rotary_pos_emb,
-)
+from ..decoderonly.decoderonly_architecture import DecoderOnlyWrapper, apply_rotary_pos_emb
 
 
 class Qwen2_5_VisionTransformerWrapper(nn.Module):
@@ -159,8 +156,8 @@ class Qwen2_5_VLVisionWindowAttention(nn.Module):
 class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
     def prepare_forward_args(self, *args):
         args = list(args)
-        input_ids = None if self.use_inputs_embeds else args.pop(0)
-        inputs_embeds = args.pop(0) if self.use_inputs_embeds else None
+        input_ids = None if self.rbln_config.use_inputs_embeds else args.pop(0)
+        inputs_embeds = args.pop(0) if self.rbln_config.use_inputs_embeds else None
         cache_position = args.pop(0)
         global_block_tables = args.pop(0)
         local_block_tables = None
@@ -168,7 +165,7 @@ class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
         query_position = args.pop(0) if self.phase == "prefill" else None
         position_ids = None
         lora_int_id = None
-        attention_mask = args.pop(0) if self.use_attention_mask else None
+        attention_mask = args.pop(0) if self.rbln_config.use_attention_mask else None
         past_key_values = args
 
         if len(past_key_values) != 2 * self.num_hidden_layers:

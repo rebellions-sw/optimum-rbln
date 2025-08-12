@@ -23,6 +23,7 @@ import numpy as np
 import torch
 
 from .__version__ import __version__
+from .utils.depreacate_utils import warn_deprecated_npu
 from .utils.logging import get_logger
 from .utils.runtime_utils import ContextRblnConfig
 
@@ -493,7 +494,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         self,
         submodule_config_cls: Type["RBLNModelConfig"],
         submodule_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ) -> "RBLNModelConfig":
         # Initialize a submodule config from a dict or a RBLNModelConfig.
         # kwargs is specified from the predecessor config.
@@ -568,7 +569,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         timeout: Optional[int] = None,
         optimum_rbln_version: Optional[str] = None,
         _compile_cfgs: List[RBLNCompileConfig] = [],
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         """
         Initialize a RBLN model configuration with runtime options and compile configurations.
@@ -678,6 +679,9 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
             compile_cfg.npu = self.npu
             compile_cfg.tensor_parallel_size = self.tensor_parallel_size
 
+        target_npu = self.npu or next((cfg.npu for cfg in self._compile_cfgs if cfg.npu is not None), None)
+        warn_deprecated_npu(target_npu)
+
     def freeze(self):
         if self._frozen:
             raise RuntimeError(f"`{self.__class__.__name__}` is already frozen.")
@@ -716,7 +720,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
             json.dump(serializable_data, jsonf, indent=2)
 
     @classmethod
-    def load(cls, path: str, **kwargs: Dict[str, Any]) -> "RBLNModelConfig":
+    def load(cls, path: str, **kwargs: Any) -> "RBLNModelConfig":
         """
         Load a RBLNModelConfig from a path.
 
@@ -749,7 +753,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
     def initialize_from_kwargs(
         cls: Type["RBLNModelConfig"],
         rbln_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ) -> Tuple["RBLNModelConfig", Dict[str, Any]]:
         # Initialize RBLNModelConfig from kwargs.
         kwargs_keys = list(kwargs.keys())

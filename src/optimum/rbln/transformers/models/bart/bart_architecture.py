@@ -16,9 +16,7 @@ from typing import Tuple
 
 import torch
 from torch import nn
-from transformers.modeling_attn_mask_utils import (
-    _prepare_4d_attention_mask,
-)
+from transformers.modeling_attn_mask_utils import _prepare_4d_attention_mask
 from transformers.utils import logging
 
 from ..seq2seq.seq2seq_architecture import (
@@ -56,10 +54,7 @@ class BartDecoderWrapper(Seq2SeqDecoderWrapper):
 
 
 class BartForConditionalGeneration(Seq2SeqForConditionalGeneration):
-    has_rescaling = False
-
-    def __post_init__(self):
-        self.scaling = self.config.d_model**-0.5
+    pass
 
 
 class BartDecoder(Seq2SeqDecoder):

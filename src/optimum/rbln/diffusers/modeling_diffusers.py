@@ -70,8 +70,6 @@ class RBLNDiffusionMixin:
     _submodules = []
     _optional_submodules = []
     _prefix = {}
-    _rbln_config_class = None
-    _hf_class = None
 
     @staticmethod
     def _maybe_apply_and_fuse_lora(
@@ -114,14 +112,14 @@ class RBLNDiffusionMixin:
     @classmethod
     def get_rbln_config_class(cls) -> Type[RBLNModelConfig]:
         # Lazily loads and caches the corresponding RBLN model config class.
-        if cls._rbln_config_class is None:
+        if "_rbln_config_class" not in cls.__dict__ or cls._rbln_config_class is None:
             rbln_config_class_name = cls.__name__ + "Config"
             cls._rbln_config_class = get_rbln_config_class(rbln_config_class_name)
         return cls._rbln_config_class
 
     @classmethod
     def get_hf_class(cls):
-        if cls._hf_class is None:
+        if "_hf_class" not in cls.__dict__ or cls._hf_class is None:
             hf_cls_name = cls.__name__[4:]
             library = importlib.import_module("diffusers")
             cls._hf_class = getattr(library, hf_cls_name, None)
@@ -138,7 +136,7 @@ class RBLNDiffusionMixin:
         lora_ids: Optional[Union[str, List[str]]] = None,
         lora_weights_names: Optional[Union[str, List[str]]] = None,
         lora_scales: Optional[Union[float, List[float]]] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ) -> "RBLNDiffusionMixin":
         """
         Load a pretrained diffusion pipeline from a model checkpoint, with optional compilation for RBLN NPUs.
