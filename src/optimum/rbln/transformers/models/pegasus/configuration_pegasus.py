@@ -24,6 +24,8 @@ class RBLNPegasusModelConfig(RBLNTransformerEncoderForFeatureExtractionConfig):
     RBLN-optimized PEGASUS models for feature extraction tasks.
     """
 
+    rbln_model_input_names = ["input_ids", "attention_mask", "decoder_input_ids", "decoder_attention_mask"]
+
 
 class RBLNPegasusForConditionalGenerationConfig(RBLNModelForSeq2SeqLMConfig):
     """
