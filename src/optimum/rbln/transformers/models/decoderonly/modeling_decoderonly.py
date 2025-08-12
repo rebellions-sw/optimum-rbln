@@ -475,9 +475,9 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             max_seq_len=rbln_config.max_seq_len,
         )
 
-        required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
-        max_num_blocks = required_num_blocks
+        num_full_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
 
+        # Update kvcache_num_blocks based on the attention implementation.
         if rbln_config.attn_impl == "flash_attn":
             estimated_max_num_blocks = cls.get_maximum_num_blocks(
                 config=model_config,
@@ -488,26 +488,43 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
                 num_runtimes=1 if not rbln_config.can_generate else 1 + len(rbln_config.decoder_batch_sizes),
             )
 
-            max_num_blocks = min(max_num_blocks, estimated_max_num_blocks)
+            if rbln_config.kvcache_num_blocks is None:
+                if estimated_max_num_blocks < num_full_blocks:
+                    # lower bound of the number of blocks for flash attention.
+                    min_blocks_for_flash = min(
+                        rbln_config.max_seq_len // rbln_config.kvcache_block_size + 1, num_full_blocks
+                    )
+                    if min_blocks_for_flash > estimated_max_num_blocks:
+                        # NOTE: Just try to compile with lower bound of blocks for flash attention.
+                        # Even if it's larger than the estimated maximum number of blocks.
+                        rbln_config.kvcache_num_blocks = min_blocks_for_flash
+                    else:
+                        logger.info(f"[KVCache] Compiling with num_blocks: {rbln_config.kvcache_num_blocks}")
+                        rbln_config.kvcache_num_blocks = estimated_max_num_blocks
 
-            flash_min_blocks = rbln_config.max_seq_len // rbln_config.kvcache_block_size + 1
-            if rbln_config.batch_size > 1 and max_num_blocks < flash_min_blocks:
-                max_num_blocks = flash_min_blocks
-
-            if max_num_blocks < rbln_config.batch_size:
-                raise RuntimeError(
-                    f"Batch size ({rbln_config.batch_size}) exceeds available KV cache blocks ({max_num_blocks}). "
-                    "Ensure the number of blocks is at least equal to the batch size."
+                    if rbln_config.kvcache_num_blocks < rbln_config.batch_size:
+                        raise RuntimeError(
+                            f"Batch size ({rbln_config.batch_size}) exceeds num_blocks ({rbln_config.kvcache_num_blocks}). "
+                            "Ensure the number of blocks is at least equal to the batch size."
+                        )
+                else:
+                    rbln_config.kvcache_num_blocks = num_full_blocks
+            elif rbln_config.kvcache_num_blocks > estimated_max_num_blocks:
+                logger.warning(
+                    f"The set `kvcache_num_blocks` ({rbln_config.kvcache_num_blocks}) is greater"
+                    f" than the estimated maximum number of blocks ({estimated_max_num_blocks})."
+                    "This can cause a failure during model compilation."
+                )
+        else:
+            if rbln_config.kvcache_num_blocks is None:
+                rbln_config.kvcache_num_blocks = num_full_blocks
+            elif rbln_config.kvcache_num_blocks > num_full_blocks:
+                logger.warning(
+                    f"The set `kvcache_num_blocks` ({rbln_config.kvcache_num_blocks}) is greater"
+                    f" than the required number of blocks ({num_full_blocks})."
+                    "This can cause a failure during model compilation."
                 )
 
-        if rbln_config.kvcache_num_blocks is None:
-            rbln_config.kvcache_num_blocks = max_num_blocks
-        elif rbln_config.kvcache_num_blocks > max_num_blocks:
-            logger.warning(
-                f"The set `kvcache_num_blocks` ({rbln_config.kvcache_num_blocks}) is greater"
-                f" than the estimated maximum number of blocks ({max_num_blocks})."
-                "This can cause a failure during model compilation."
-            )
         logger.info(f"[KVCache] Compiling with num_blocks: {rbln_config.kvcache_num_blocks}")
 
         return rbln_config
