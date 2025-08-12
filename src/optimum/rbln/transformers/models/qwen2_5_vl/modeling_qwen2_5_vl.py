@@ -29,7 +29,8 @@ from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
 from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyForCausalLMOutput, RBLNDecoderOnlyModelForCausalLM
+from ...modeling_outputs import RBLNDecoderOnlyOutput
+from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM
 from .configuration_qwen2_5_vl import (
     RBLNQwen2_5_VisionTransformerPretrainedModelConfig,
     RBLNQwen2_5_VLForConditionalGenerationConfig,
@@ -585,7 +586,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         generate_idx: Optional[torch.Tensor] = None,
         return_dict: Optional[bool] = None,
         **kwargs,
-    ) -> RBLNDecoderOnlyForCausalLMOutput:
+    ) -> RBLNDecoderOnlyOutput:
         # Prefill
         if cache_position is None:
             inputs_embeds, position_embed, rope_deltas = self._preprocess_prefill(
@@ -627,7 +628,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         if not return_dict:
             return logits, generate_idx
         else:
-            return RBLNDecoderOnlyForCausalLMOutput(
+            return RBLNDecoderOnlyOutput(
                 logits=logits,
                 generate_idx=generate_idx,
             )
