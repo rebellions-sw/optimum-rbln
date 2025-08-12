@@ -32,3 +32,5 @@ class RBLNBartForConditionalGenerationConfig(RBLNModelForSeq2SeqLMConfig):
     This configuration class stores the configuration parameters specific to
     RBLN-optimized BART models for conditional text generation tasks.
     """
+
+    support_paged_attention = True
