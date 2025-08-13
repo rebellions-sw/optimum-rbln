@@ -38,7 +38,7 @@ class QLinear(nn.Module):
 class QIntLinear(QLinear):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.input_scale:
-            raise NotImplementedError("Input scale is currently not supported for int quantization")
+            x = (x / self.input_scale).clamp(min=-128, max=127)
 
         weight = self.weight * self.weight_scale
         return F.linear(x, weight, self.bias)
