@@ -13,9 +13,8 @@
 # limitations under the License.
 
 import glob
-import json
 import os
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 import torch
 from huggingface_hub import hf_hub_download, list_repo_files
@@ -30,10 +29,31 @@ from ...utils.logging import get_logger
 logger = get_logger()
 
 
+# Constants
+QUANTIZED_WEIGHTS = {
+    "q_proj",
+    "k_proj",
+    "v_proj",
+    "o_proj",
+    "gate_proj",
+    "up_proj",
+    "down_proj",
+}
+
+# Common alias sets seen in community checkpoints
+VARIANT_ALIASES: Dict[str, List[str]] = {
+    "weight_scale": ["weight_scale", "scales", "w_scale", "scale"],
+    "input_scale": ["input_scale", "act_scale", "activation_scale", "a_scale"],
+    "kv_scale": ["kv_scale", "kv_scales"],
+    "k_scale": ["k_scale", "k_scales"],
+    "v_scale": ["v_scale", "v_scales"],
+}
+
+
 class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
     SUPPORTED_FORMATS = ["rbln"]
-    SUPPORTED_WEIGHTS = ["int4", "fp8", "fp16"]
-    SUPPORTED_ACTIVATIONS = ["fp8", "fp16"]
+    SUPPORTED_WEIGHTS = ["int4", "int8", "fp8", "fp16"]
+    SUPPORTED_ACTIVATIONS = ["int8", "fp8", "fp16"]
     SUPPORTED_KVCACHES = ["fp8", "fp16"]
     RBLN_QUANT_BITS_ENV = "RBLN_QUANT_BITS"
 
@@ -64,7 +84,6 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
         self.weights = weights or "fp16"
         self.activations = activations or "fp16"
         self.kv_caches = kv_caches or "fp16"
-
         self._validate()
 
     def _validate(self):
@@ -105,7 +124,7 @@ class QuantizedLayerFactory:
         self.quantization_config = quantization_config
 
     def create_linear(self, layer: Linear) -> Linear:
-        if self.quantization_config.weights == "int4":
+        if self.quantization_config.weights in ["int4", "int8"]:
             return self.create_qlinear(layer)
         elif self.quantization_config.weights == "fp8":
             return self.create_fp8linear(layer)
@@ -117,18 +136,6 @@ class QuantizedLayerFactory:
 
     def create_fp8linear(self, layer: Linear) -> Linear:
         return create_fp8linear(layer, self.quantization_config)
-
-
-# Constants
-QUANTIZED_WEIGHTS = {
-    "q_proj",
-    "k_proj",
-    "v_proj",
-    "o_proj",
-    "gate_proj",
-    "up_proj",
-    "down_proj",
-}
 
 
 def prepare_model_for_quantization(
@@ -146,8 +153,8 @@ def prepare_model_for_quantization(
     Prepare the model for quantization by updating specified linear layers to quantized (qlinear) layers.
     """
 
-    # 1. Load weight files and safetensors.index.json
-    safetensor_files, index_data = load_weight_files_and_index(
+    # 1. Load weight files
+    safetensor_files = load_weight_files(
         model_id,
         use_auth_token=use_auth_token,
         revision=revision,
@@ -156,43 +163,34 @@ def prepare_model_for_quantization(
         local_files_only=local_files_only,
     )
 
-    # 2. Determine format from safetensors.index.json
-    determined_format = determine_format_from_index(index_data)
-
-    # 3. Update linear layers based on the determined format
+    # 2. Update linear layers based on the quantization config
     update_layers_to_quantize(model, rbln_quantization)
 
-    # 4. Load weights into model parameters
+    # 3. Load weights into model parameters
     load_weights_from_files(
         model,
         safetensor_files,
         n_layer,
         rbln_quantization=rbln_quantization,
-        determined_format=determined_format,
     )
 
     return model
 
 
-def load_weight_files_and_index(
+def load_weight_files(
     model_id: str,
     use_auth_token: Optional[Union[bool, str]] = None,
     revision: Optional[str] = None,
     cache_dir: Optional[str] = None,
     force_download: bool = False,
     local_files_only: bool = False,
-) -> tuple[list[str], Optional[Dict]]:
+) -> list[str]:
     """
-    Load safetensor file data directly into the model, filtering by layer if n_layer is provided.
+    Discover and download safetensors files for the given model id.
     """
-    index_data = None
 
     if os.path.isdir(model_id):
         safetensor_files = glob.glob(f"{model_id}/*.safetensors")
-        index_path = os.path.join(model_id, "model.safetensors.index.json")
-        if os.path.exists(index_path):
-            with open(index_path, "r") as f:
-                index_data = json.load(f)
     else:
         try:
             # List all files in the repository
@@ -213,20 +211,6 @@ def load_weight_files_and_index(
                         local_files_only=local_files_only,
                     )
                     safetensor_files.append(downloaded_file)
-                elif file == "model.safetensors.index.json":
-                    # Download the index file
-                    index_file = hf_hub_download(
-                        repo_id=model_id,
-                        filename=file,
-                        revision=revision,
-                        token=use_auth_token,
-                        cache_dir=cache_dir,
-                        force_download=force_download,
-                        local_files_only=local_files_only,
-                    )
-
-                    with open(index_file, "r") as f:
-                        index_data = json.load(f)
         except Exception as e:
             logger.error(f"Failed to download safetensors files from Hugging Face Hub: {e}")
             raise e
@@ -234,32 +218,7 @@ def load_weight_files_and_index(
     if not safetensor_files:
         raise FileNotFoundError(f"No safetensors files found for model_id: {model_id}")
 
-    return safetensor_files, index_data
-
-
-def determine_format_from_index(index_data: Optional[Dict]) -> str:
-    """
-    Determine the quantization format from safetensors.index.json data.
-
-    Args:
-        index_data: The loaded safetensors.index.json content
-
-    Returns:
-        str: The determined format string
-    """
-    if index_data is None:
-        raise ValueError("safetensors.index.json not found")
-    if "weight_map" not in index_data:
-        raise ValueError("weight_map not found in safetensors.index.json")
-
-    if any("self_attn.k_proj.k_scale" in key for key in index_data["weight_map"]):
-        return "tensorrt"
-    elif any("self_attn.kv_scale" in key for key in index_data["weight_map"]):
-        return "quark"
-    elif any("weight_scale" in key or "input_scale" in key for key in index_data["weight_map"]):
-        return "default"
-    else:
-        raise ValueError("Unknown quantization format of the index data of weight map.")
+    return safetensor_files
 
 
 def update_layers_to_quantize(
@@ -283,12 +242,139 @@ def update_layers_to_quantize(
         logger.debug(f"Updated the following linear layers to quantized layers:\n {{{', '.join(processed_layers)}}}")
 
 
+def _last_segment(key: str) -> str:
+    parts = key.split(".")
+    return parts[-1]
+
+
+def _replace_last_with(key: str, new_tail: str) -> str:
+    parts = key.split(".")
+    return ".".join(parts[:-1] + new_tail.split("."))
+
+
+def _matches_any_alias(key: str, kind: str) -> bool:
+    tail = _last_segment(key)
+    return tail in VARIANT_ALIASES.get(kind, [])
+
+
+def _reduce_to_scalar(t: torch.Tensor) -> torch.Tensor:
+    if t.ndim == 0:
+        return t
+    return t.reshape(-1).amax()
+
+
+def _coerce_per_out_channel_scale(scale: torch.Tensor, out_features: int) -> torch.Tensor:
+    s = scale
+    if s.ndim == 0:
+        # scalar -> expand to [out_features, 1]
+        return s.reshape(1, 1).expand(out_features, 1).contiguous()
+    if s.ndim == 1:
+        if s.numel() == 1:
+            return s.reshape(1, 1).expand(out_features, 1).contiguous()
+        if s.numel() == out_features:
+            return s.reshape(out_features, 1).contiguous()
+        # fallback: reduce to scalar then expand
+        v = _reduce_to_scalar(s)
+        return v.reshape(1, 1).expand(out_features, 1).contiguous()
+    if s.ndim == 2:
+        if s.shape == (out_features, 1):
+            return s.contiguous()
+        if s.shape == (1, out_features):
+            return s.transpose(0, 1).contiguous()
+        # fallback: reduce to [out_features] on non-out dims if possible
+        if s.shape[0] == out_features:
+            v = s
+            while v.ndim > 2:
+                v = v.amax(dim=-1)
+            if v.shape[-1] != 1:
+                v = v.amax(dim=-1, keepdim=True)
+            return v.contiguous()
+        # otherwise reduce to scalar then expand
+        v = _reduce_to_scalar(s)
+        return v.reshape(1, 1).expand(out_features, 1).contiguous()
+    # high-rank: reduce to scalar then expand
+    v = _reduce_to_scalar(s)
+    return v.reshape(1, 1).expand(out_features, 1).contiguous()
+
+
+def _kv_split_items(base_key: str, tensor: torch.Tensor) -> List[Tuple[str, torch.Tensor]]:
+    # base_key is the original key whose last token was 'kv_scale'
+    # We produce keys with 'k_proj.k_scale' and 'v_proj.v_scale'
+    if tensor.ndim == 1 and tensor.numel() >= 2:
+        tk, tv = tensor[0], tensor[1]
+    elif tensor.ndim == 2 and tensor.shape[0] >= 2 and tensor.shape[1] == 1:
+        tk, tv = tensor[0, 0], tensor[1, 0]
+    else:
+        tk = tv = tensor
+    k_key = _replace_last_with(base_key, "k_proj.k_scale")
+    v_key = _replace_last_with(base_key, "v_proj.v_scale")
+    return [(k_key, tk), (v_key, tv)]
+
+
+def canonicalize_checkpoint_items(
+    model: torch.nn.Module,
+    items: Iterable[Tuple[str, torch.Tensor]],
+    rbln_quantization: Optional[RBLNQuantizationConfig],
+) -> List[Tuple[str, torch.Tensor]]:
+    params = dict(model.named_parameters(recurse=True))
+    results: List[Tuple[str, torch.Tensor]] = []
+
+    for key, value in items:
+        t = value
+        # Normalize weight scale variants
+        if _matches_any_alias(key, "weight_scale"):
+            # rename last token to the canonical weight scale key
+            target_key = _replace_last_with(key, "weight_scale")
+
+            # Determine associated weight param to infer shape
+            weight_key = _replace_last_with(target_key, "weight")
+            out_features = None
+            if weight_key in params:
+                wshape = params[weight_key].shape
+                if len(wshape) == 2:
+                    out_features = int(wshape[0])
+
+            if rbln_quantization.weights in ["int4", "int8"] and out_features is not None:
+                t = _coerce_per_out_channel_scale(t.to(torch.float32), out_features)
+            elif rbln_quantization.weights == "fp8":
+                # Use a conservative scalar scale to ensure broadcastability
+                t = _reduce_to_scalar(t.to(torch.float32))
+            else:
+                t = t.to(torch.float32)
+
+            results.append((target_key, t))
+            continue
+
+        # Normalize input/activation scale variants
+        if _matches_any_alias(key, "input_scale"):
+            target_key = _replace_last_with(key, "input_scale")
+            t = _reduce_to_scalar(t.to(torch.float32))
+            results.append((target_key, t))
+            continue
+
+        # KV scale handling
+        if _matches_any_alias(key, "kv_scale"):
+            # For quark-like formats, expand to k/v
+            kv_items = _kv_split_items(key, t.to(torch.float32))
+            for k2, v2 in kv_items:
+                results.append((k2, v2))
+            continue
+
+        if _matches_any_alias(key, "k_scale") or _matches_any_alias(key, "v_scale"):
+            results.append((key, t.to(torch.float32)))
+            continue
+
+        # Default: passthrough
+        results.append((key, t))
+
+    return results
+
+
 def load_weights_from_files(
     model: torch.nn.Module,
     safetensor_files: list[str],
     n_layer: Optional[int] = None,
     rbln_quantization: Optional[RBLNQuantizationConfig] = None,
-    determined_format: Optional[str] = None,
 ):
     """
     Load safetensor file data directly into the model from provided safetensor files,
@@ -308,33 +394,43 @@ def load_weights_from_files(
     for safetensor_file in safetensor_files:
         file_data = load_file(safetensor_file)
 
-        for key, value in file_data.items():
-            loaded_input_scale = loaded_input_scale or "input_scale" in key
-            loaded_weight_scale = loaded_weight_scale or "weight_scale" in key
-            loaded_kv_scale = loaded_kv_scale or any(scale in key for scale in ["kv_scale", "k_scale", "v_scale"])
+        # Normalize all (key, tensor) pairs to the internal schema
+        normalized_items = canonicalize_checkpoint_items(
+            model=model,
+            items=file_data.items(),
+            rbln_quantization=rbln_quantization,
+        )
 
+        for key, value in normalized_items:
+            # Track which types of scales were observed (post-normalization)
+            if key.endswith("input_scale"):
+                loaded_input_scale = True
+            if key.endswith("weight_scale"):
+                loaded_weight_scale = True
+            if key.endswith("k_scale") or key.endswith("v_scale"):
+                loaded_kv_scale = True
+
+            # Filter by layer index if requested
             if target_layers is not None:
                 parts = key.split(".")
-
                 if len(parts) > 2 and parts[2].isdigit() and (int(parts[2]) not in target_layers):
                     continue
 
+            # Copy into parameters or buffers
             if key in model_params:
+                # Ensure dtype compatibility
+                if model_params[key].dtype != value.dtype:
+                    value = value.to(model_params[key].dtype)
                 model_params[key].data.copy_(value)
             elif key in model_buffers:
+                if model_buffers[key].dtype != value.dtype:
+                    value = value.to(model_buffers[key].dtype)
                 model_buffers[key].data.copy_(value)
-            elif "kv_scale" in key and determined_format == "quark":
-                if rbln_quantization.kv_caches == "fp8":
-                    model_params[key.replace("kv_scale", "k_proj.k_scale")].data.copy_(value)
-                    model_params[key.replace("kv_scale", "v_proj.v_scale")].data.copy_(value)
-                else:
-                    unloaded_keys.append(key)
             else:
                 unloaded_keys.append(key)
 
     if len(unloaded_keys) > 0:
         logger.warning(f"There are unexpected parameters/buffers on the checkpoint: {unloaded_keys}")
-
     if not loaded_input_scale and rbln_quantization.activations == "fp8":
         raise ValueError(
             "No input_scale found in the checkpoint. Did you use the correct quantization config? "
@@ -391,16 +487,17 @@ def create_qlinear(layer: Linear, rbln_quantization: RBLNQuantizationConfig) -> 
     """
 
     def qlinear_forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        if inputs.dtype != self.scales.dtype:
-            raise TypeError(f"Expected input dtype {self.scales.dtype}, but got {inputs.dtype}")
+        weight_scale = self.weight_scale
+        if inputs.dtype != weight_scale.dtype:
+            raise TypeError(f"Expected input dtype {weight_scale.dtype}, but got {inputs.dtype}")
 
         w_fp = self.weight.type(inputs.dtype)
-        w_fp *= self.scales.view(-1, 1)
+        w_fp *= weight_scale.view(-1, 1)
         return F.linear(inputs, w_fp, self.bias)
 
     # Convert weight to int8 and add scale parameter
     layer.weight = Parameter(layer.weight.to(torch.int8), requires_grad=False)
-    layer.scales = Parameter(torch.ones(layer.out_features, dtype=torch.float32), requires_grad=False)
+    layer.weight_scale = Parameter(torch.ones(layer.out_features, 1, dtype=torch.float32), requires_grad=False)
     layer.forward = lambda inputs: qlinear_forward(layer, inputs)
 
     return layer
