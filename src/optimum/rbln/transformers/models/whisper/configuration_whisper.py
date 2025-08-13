@@ -36,6 +36,8 @@ class RBLNWhisperForConditionalGenerationConfig(RBLNModelConfig):
         use_attention_mask: bool = None,
         enc_max_seq_len: int = None,
         dec_max_seq_len: int = None,
+        kvcache_num_blocks: int = None,
+        kvcache_block_size: int = None,
         **kwargs: Any,
     ):
         """
@@ -45,6 +47,10 @@ class RBLNWhisperForConditionalGenerationConfig(RBLNModelConfig):
             use_attention_mask (bool, optional): Whether to use attention masks during inference. This is automatically
             enc_max_seq_len (int, optional): Maximum sequence length for the encoder.
             dec_max_seq_len (int, optional): Maximum sequence length for the decoder.
+            kvcache_num_blocks (int, optional): The total number of blocks to allocate for the
+                PagedAttention KV cache for the SelfAttention. Defaults to batch_size.
+            kvcache_block_size (int, optional): Sets the size (in number of tokens) of each block
+                in the PagedAttention KV cache for the SelfAttention. Defaults to dec_max_seq_len.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -62,3 +68,5 @@ class RBLNWhisperForConditionalGenerationConfig(RBLNModelConfig):
 
         self.use_attention_mask = use_attention_mask
         self.use_attention_mask = self.use_attention_mask or False
+        self.kvcache_num_blocks = kvcache_num_blocks
+        self.kvcache_block_size = kvcache_block_size
