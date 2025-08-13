@@ -277,6 +277,7 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
         """Check if LoRA is enabled for this configuration."""
         return self.lora_config is not None
 
+    @property
     def can_generate(self) -> bool:
         return "decode" in self.phases
 
