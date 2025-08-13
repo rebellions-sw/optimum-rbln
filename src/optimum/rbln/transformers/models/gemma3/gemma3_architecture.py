@@ -127,12 +127,20 @@ class Gemma3DecoderLayer(DecoderOnlyLayer):
         cos: Optional[torch.Tensor] = None,
         sin: Optional[torch.Tensor] = None,
         block_tables: Optional[torch.Tensor] = None,
+        lora_int_id: Optional[torch.Tensor] = None,
     ):
         residual = hidden_states
         hidden_states = self.get_pre_attention_layernorm()(hidden_states)
 
         hidden_states = self.self_attn(
-            hidden_states, attention_mask, seq_positions, past_key_values, cos, sin, block_tables
+            hidden_states=hidden_states,
+            attention_mask=attention_mask,
+            seq_positions=seq_positions,
+            past_key_values=past_key_values,
+            cos=cos,
+            sin=sin,
+            block_tables=block_tables,
+            lora_int_id=lora_int_id,
         )
         hidden_states = self.get_post_attention_layernorm()(hidden_states)
         hidden_states = residual + hidden_states
@@ -140,7 +148,7 @@ class Gemma3DecoderLayer(DecoderOnlyLayer):
         # Fully Connected
         residual = hidden_states
         hidden_states = self.get_pre_feedforward_layernorm()(hidden_states)
-        hidden_states = self._original_mod.mlp(hidden_states)
+        hidden_states = self.forward_mlp(hidden_states, lora_int_id)
         hidden_states = self.get_post_feedforward_layernorm()(hidden_states)
         hidden_states = residual + hidden_states
 
