@@ -77,31 +77,36 @@ class RBLNAutoPipelineBase:
             str: Path to the compiled model directory.
         """
         model_index_config = cls.load_config(pretrained_model_name_or_path)
+
+        if "_class_name" not in model_index_config:
+            raise ValueError(
+                "The `_class_name` field is missing from model_index_config. This is unexpected and should be reported as an issue. "
+                "Please use the `from_pretrained()` method of the appropriate class to load this model."
+            )
+
         return model_index_config["_class_name"]
 
     @classmethod
     def infer_hf_model_class(
         cls,
         pretrained_model_or_path,
+        cache_dir=None,
+        force_download=False,
+        proxies=None,
+        token=None,
+        local_files_only=False,
+        revision=None,
         **kwargs,
     ):
-        cache_dir = kwargs.pop("cache_dir", None)
-        force_download = kwargs.pop("force_download", False)
-        proxies = kwargs.pop("proxies", None)
-        token = kwargs.pop("token", None)
-        local_files_only = kwargs.pop("local_files_only", False)
-        revision = kwargs.pop("revision", None)
-
-        load_config_kwargs = {
-            "cache_dir": cache_dir,
-            "force_download": force_download,
-            "proxies": proxies,
-            "token": token,
-            "local_files_only": local_files_only,
-            "revision": revision,
-        }
-
-        config = cls.load_config(pretrained_model_or_path, **load_config_kwargs)
+        config = cls.load_config(
+            pretrained_model_or_path,
+            cache_dir=cache_dir,
+            force_download=force_download,
+            proxies=proxies,
+            token=token,
+            local_files_only=local_files_only,
+            revision=revision,
+        )
         pipeline_key_name = cls.get_pipeline_key_name(config, **kwargs)
 
         pipeline_cls = _get_task_class(cls._model_mapping, pipeline_key_name)
