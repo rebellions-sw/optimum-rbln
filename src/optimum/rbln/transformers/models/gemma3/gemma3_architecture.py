@@ -63,6 +63,7 @@ class Gemma3TextModel(DecoderOnlyModel):
         rotary_emb: torch.nn.Module = None,
         global_block_tables: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
+        lora_int_id: Optional[torch.Tensor] = None,
     ):
         # retrieve input_ids and inputs_embeds
         if (input_ids is None) ^ (inputs_embeds is not None):
@@ -105,6 +106,7 @@ class Gemma3TextModel(DecoderOnlyModel):
                 cos=cos_local if is_sliding else cos_global,
                 sin=sin_local if is_sliding else sin_global,
                 block_tables=local_block_tables if is_sliding else global_block_tables,
+                lora_int_id=lora_int_id,
             )
 
         hidden_states = self.get_last_layernorm()(hidden_states)
