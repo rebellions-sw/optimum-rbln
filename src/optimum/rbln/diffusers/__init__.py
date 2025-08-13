@@ -59,9 +59,9 @@ _import_structure = {
         "RBLNVQModelConfig",
     ],
     "pipelines": [
-        "RBLNAutoPipelineForText2Image",
         "RBLNAutoPipelineForImage2Image",
         "RBLNAutoPipelineForInpainting",
+        "RBLNAutoPipelineForText2Image",
         "RBLNCosmosTextToWorldPipeline",
         "RBLNCosmosVideoToWorldPipeline",
         "RBLNCosmosSafetyChecker",

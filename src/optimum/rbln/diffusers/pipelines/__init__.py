@@ -19,9 +19,9 @@ from transformers.utils import _LazyModule
 
 _import_structure = {
     "auto_pipeline": [
-        "RBLNAutoPipelineForText2Image",
         "RBLNAutoPipelineForImage2Image",
         "RBLNAutoPipelineForInpainting",
+        "RBLNAutoPipelineForText2Image",
     ],
     "controlnet": [
         "RBLNMultiControlNetModel",
