@@ -18,6 +18,9 @@ import inspect
 import json
 import sys
 from pathlib import Path
+from typing import Optional
+
+from huggingface_hub import hf_hub_download
 
 from .__version__ import __version__
 from .configuration_utils import RBLNModelConfig
@@ -147,15 +150,14 @@ def _label(text: str) -> str:
     return _color(text, ANSI_BRIGHT_CYAN)
 
 
-EXAMPLES_TEXT = """
+EXAMPLES_TEXT = r"""
 Quick start examples
   1) Compile a Llama chat model for causal LM
      optimum-rbln-cli ./compiled_llama \
-       --class RBLNLlamaForCausalLM \
        --model-id meta-llama/Llama-2-7b-chat-hf \
        --batch-size 2 --tensor-parallel-size 4
 
-  2) Compile a BERT model for sequence classification
+  2) Compile with explicit class (Auto sequence classification)
      optimum-rbln-cli ./compiled_bert \
        --class RBLNAutoModelForSequenceClassification \
        --model-id bert-base-uncased \
@@ -169,13 +171,20 @@ Quick start examples
 
   4) Pass nested rbln_config with dot-notation (e.g., for diffusion)
      optimum-rbln-cli ./compiled_sd \
-       --class RBLNStableDiffusionPipeline \
        --model-id runwayml/stable-diffusion-v1-5 \
        --unet.batch_size 2 --vae.batch_size 1
 
+  5) Private repo with token and revision
+     optimum-rbln-cli ./compiled_private \
+       --model-id private-org/private-model \
+       --hf-token $HF_TOKEN --hf-revision main
+
 Notes
+  - --class is optional. If omitted, it is inferred from model files (model_index.json/_class_name or
+    config.json/architectures[0]).
   - Any extra --key value pairs not defined above are collected into rbln_config
     and forwarded to from_pretrained(..., rbln_config=...).
+  - Use --hf-token/--hf-revision/--hf-cache-dir/--hf-force-download/--hf-local-files-only for Hub access control.
   - Use --list-classes to see available RBLN classes.
   - Use --show-rbln-config CLASS to see accepted rbln_config keys for a class.
   - Show this examples list anytime with:  optimum-rbln-cli --examples
@@ -317,6 +326,107 @@ def _print_rbln_config_options(class_name: str):
     print("  - To see examples: optimum-rbln-cli --examples")
 
 
+def _read_json_from_model_id(
+    model_id: str,
+    filename: str,
+    *,
+    hf_token: Optional[str] = None,
+    hf_revision: Optional[str] = None,
+    hf_cache_dir: Optional[str] = None,
+    hf_force_download: bool = False,
+    hf_local_files_only: bool = False,
+) -> Optional[dict]:
+    """Read a JSON file (e.g., config.json or model_index.json) from a local path or the HuggingFace Hub.
+
+    Args:
+        model_id: Local directory path or HuggingFace Hub repo id
+        filename: Name of the JSON file to read
+
+    Returns:
+        Parsed JSON dictionary if found, else None
+    """
+    # Local directory
+    local_dir = Path(model_id)
+    if local_dir.exists() and local_dir.is_dir():
+        local_file = local_dir / filename
+        if local_file.exists():
+            try:
+                with local_file.open("r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                return None
+
+    # HuggingFace Hub
+    try:
+        downloaded_path = hf_hub_download(
+            repo_id=model_id,
+            filename=filename,
+            revision=hf_revision,
+            token=hf_token,
+            cache_dir=hf_cache_dir,
+            force_download=hf_force_download,
+            local_files_only=hf_local_files_only,
+        )
+        p = Path(downloaded_path)
+        if p.exists():
+            with p.open("r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        return None
+
+    return None
+
+
+def _infer_rbln_class_from_model_id(
+    model_id: str,
+    *,
+    hf_token: Optional[str] = None,
+    hf_revision: Optional[str] = None,
+    hf_cache_dir: Optional[str] = None,
+    hf_force_download: bool = False,
+    hf_local_files_only: bool = False,
+) -> Optional[str]:
+    """Infer RBLN class name from model files by prefixing discovered class with 'RBLN'.
+
+    Order of precedence:
+      1) model_index.json['pipeline'] -> e.g., 'StableDiffusionPipeline' -> 'RBLNStableDiffusionPipeline'
+      2) config.json['architectures'][0] -> e.g., 'LlamaForCausalLM' -> 'RBLNLlamaForCausalLM'
+    """
+    # 1) Diffusers-style pipeline
+    model_index = _read_json_from_model_id(
+        model_id,
+        "model_index.json",
+        hf_token=hf_token,
+        hf_revision=hf_revision,
+        hf_cache_dir=hf_cache_dir,
+        hf_force_download=hf_force_download,
+        hf_local_files_only=hf_local_files_only,
+    )
+    if isinstance(model_index, dict):
+        pipeline_cls = model_index.get("_class_name")
+        if isinstance(pipeline_cls, str) and pipeline_cls:
+            return f"RBLN{pipeline_cls}"
+
+    # 2) Transformers config architectures
+    cfg = _read_json_from_model_id(
+        model_id,
+        "config.json",
+        hf_token=hf_token,
+        hf_revision=hf_revision,
+        hf_cache_dir=hf_cache_dir,
+        hf_force_download=hf_force_download,
+        hf_local_files_only=hf_local_files_only,
+    )
+    if isinstance(cfg, dict):
+        architectures = cfg.get("architectures")
+        if isinstance(architectures, list) and architectures:
+            arch0 = architectures[0]
+            if isinstance(arch0, str) and arch0:
+                return f"RBLN{arch0}"
+
+    return None
+
+
 def main():
     """
     Main CLI function for optimum-rbln model compilation.
@@ -381,7 +491,7 @@ def main():
     parser = argparse.ArgumentParser(
         description=(
             "Compile and export HuggingFace models/pipelines for RBLN devices.\n\n"
-            "Required: output_dir, --class, --model-id.\n"
+            "Required: output_dir, --model-id. --class is optional and will be inferred from the model when omitted.\n"
             "Additional --key value pairs are forwarded to rbln_config.\n"
             "Use dot-notation for nested fields (e.g., --unet.batch_size 2)."
         ),
@@ -401,13 +511,16 @@ def main():
     # Required positional argument
     parser.add_argument("output_dir", type=str, help="Directory where the compiled model will be saved")
 
-    # Required arguments
+    # Optional class argument (can be inferred)
     parser.add_argument(
         "--class",
         dest="model_class",
         type=str,
-        required=True,
-        help="RBLN model class to use for compilation (e.g., RBLNLlamaForCausalLM, RBLNAutoModelForCausalLM)",
+        required=False,
+        help=(
+            "RBLN model class to use for compilation (e.g., RBLNLlamaForCausalLM, RBLNAutoModelForCausalLM). "
+            "If omitted, it will be inferred from model_id by reading model_index.json or config.json."
+        ),
     )
 
     parser.add_argument(
@@ -416,6 +529,40 @@ def main():
         type=str,
         required=True,
         help="Model ID from HuggingFace Hub or local directory path",
+    )
+    # HuggingFace Hub access options
+    parser.add_argument(
+        "--hf-token",
+        dest="hf_token",
+        type=str,
+        default=None,
+        help="HuggingFace token to access private repositories",
+    )
+    parser.add_argument(
+        "--hf-revision",
+        dest="hf_revision",
+        type=str,
+        default=None,
+        help="Specific model revision to download (branch, tag, or commit)",
+    )
+    parser.add_argument(
+        "--hf-cache-dir",
+        dest="hf_cache_dir",
+        type=str,
+        default=None,
+        help="Directory to use as HuggingFace download cache",
+    )
+    parser.add_argument(
+        "--hf-force-download",
+        dest="hf_force_download",
+        action="store_true",
+        help="Force redownload of files from the HuggingFace Hub",
+    )
+    parser.add_argument(
+        "--hf-local-files-only",
+        dest="hf_local_files_only",
+        action="store_true",
+        help="Only use local files and do not attempt to download from the network",
     )
     # All other arguments will be parsed dynamically and passed to from_pretrained
 
@@ -428,12 +575,30 @@ def main():
     args, unknown_args = parser.parse_known_args()
 
     try:
+        # Resolve or infer model class
+        resolved_class_name: Optional[str] = args.model_class
+        if not resolved_class_name:
+            resolved_class_name = _infer_rbln_class_from_model_id(
+                args.model_id,
+                hf_token=args.hf_token,
+                hf_revision=args.hf_revision,
+                hf_cache_dir=args.hf_cache_dir,
+                hf_force_download=args.hf_force_download,
+                hf_local_files_only=args.hf_local_files_only,
+            )
+            if not resolved_class_name:
+                print(
+                    "Could not infer RBLN class from model files. Please specify --class explicitly.",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+
         # Get the model class using the utility function (with helpful error)
         try:
-            model_class = get_rbln_model_cls(args.model_class)
+            model_class = get_rbln_model_cls(resolved_class_name)
         except AttributeError:
             print(
-                f"Unknown RBLN class: {args.model_class}.\n"
+                f"Unknown RBLN class: {resolved_class_name}.\n"
                 "Run 'optimum-rbln-cli --list-classes' to see available classes.",
                 file=sys.stderr,
             )
@@ -478,7 +643,7 @@ def main():
 
         print(_section("Starting compilation", ANSI_BRIGHT_BLUE, icon="🚀"))
         print(f"{_label('Model:')} {args.model_id}")
-        print(f"{_label('Class:')} {args.model_class}")
+        print(f"{_label('Class:')} {resolved_class_name}")
         print(f"{_label('Output:')} {output_path.absolute()}")
         print(f"{_label('rbln_config:')} {json.dumps(rbln_config, indent=2, ensure_ascii=False)}")
 

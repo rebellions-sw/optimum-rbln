@@ -57,8 +57,6 @@ def test_resnet_compilation():
         "-m",
         "optimum.rbln.cli",
         test_output_dir,
-        "--class",
-        "RBLNResNetForImageClassification",
         "--model-id",
         "hf-internal-testing/tiny-random-ResNetForImageClassification",
     ]
@@ -101,8 +99,6 @@ def test_stable_diffusion_compilation():
         "-m",
         "optimum.rbln.cli",
         test_output_dir,
-        "--class",
-        "RBLNStableDiffusionPipeline",
         "--model-id",
         "hf-internal-testing/tiny-sd-pipe",
         "--vae.sample_size",
