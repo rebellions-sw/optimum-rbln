@@ -160,6 +160,12 @@ _import_structure = {
         "RBLNXLMRobertaForSequenceClassification",
         "RBLNXLMRobertaForSequenceClassificationConfig",
     ],
+    "grounding_dino": [
+        "RBLNGroundingDinoForObjectDetection",
+        "RBLNGroundingDinoForObjectDetectionConfig",
+        "RBLNGroundingDinoEncoder",
+        "RBLNGroundingDinoEncoderConfig",
+    ],
 }
 
 if TYPE_CHECKING:
@@ -230,6 +236,12 @@ if TYPE_CHECKING:
         RBLNGemma3ForConditionalGenerationConfig,
     )
     from .gpt2 import RBLNGPT2LMHeadModel, RBLNGPT2LMHeadModelConfig, RBLNGPT2Model, RBLNGPT2ModelConfig
+    from .grounding_dino import (
+        RBLNGroundingDinoForObjectDetection,
+        RBLNGroundingDinoForObjectDetectionConfig,
+        RBLNGroundingDinoEncoder,
+        RBLNGroundingDinoEncoderConfig,
+    )
     from .idefics3 import (
         RBLNIdefics3ForConditionalGeneration,
         RBLNIdefics3ForConditionalGenerationConfig,
