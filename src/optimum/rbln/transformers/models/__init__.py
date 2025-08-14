@@ -165,6 +165,8 @@ _import_structure = {
         "RBLNGroundingDinoForObjectDetectionConfig",
         "RBLNGroundingDinoEncoder",
         "RBLNGroundingDinoEncoderConfig",
+        "RBLNGroundingDinoDecoder",
+        "RBLNGroundingDinoDecoderConfig",
     ],
 }
 
@@ -237,10 +239,12 @@ if TYPE_CHECKING:
     )
     from .gpt2 import RBLNGPT2LMHeadModel, RBLNGPT2LMHeadModelConfig, RBLNGPT2Model, RBLNGPT2ModelConfig
     from .grounding_dino import (
-        RBLNGroundingDinoForObjectDetection,
-        RBLNGroundingDinoForObjectDetectionConfig,
+        RBLNGroundingDinoDecoder,
+        RBLNGroundingDinoDecoderConfig,
         RBLNGroundingDinoEncoder,
         RBLNGroundingDinoEncoderConfig,
+        RBLNGroundingDinoForObjectDetection,
+        RBLNGroundingDinoForObjectDetectionConfig,
     )
     from .idefics3 import (
         RBLNIdefics3ForConditionalGeneration,

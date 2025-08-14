@@ -1,9 +1,8 @@
 import requests
-
 import torch
 from PIL import Image
-from transformers import AutoProcessor, GroundingDinoForObjectDetection
 from torch.nn.functional import pad
+from transformers import AutoProcessor, GroundingDinoForObjectDetection
 
 
 model_id = "IDEA-Research/grounding-dino-tiny"
@@ -28,7 +27,6 @@ inputs["pixel_values"] = pad(
 inputs["pixel_mask"] = pad(
     inputs["pixel_mask"], (0, 1333 - inputs["pixel_mask"].shape[-1], 0, 1333 - inputs["pixel_mask"].shape[-2]), value=0
 )
-breakpoint()
 with torch.no_grad():
     outputs = model(**inputs)
 

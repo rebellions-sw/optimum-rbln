@@ -33,11 +33,12 @@
 # )
 
 
-from transformers import AutoProcessor, AutoModel, AutoModelForZeroShotObjectDetection
-from PIL import Image
 import requests
+from PIL import Image
+from transformers import AutoProcessor
 
 from optimum.rbln import RBLNGroundingDinoForObjectDetection
+
 
 url = "http://images.cocodataset.org/val2017/000000039769.jpg"
 url2 = "http://images.cocodataset.org/val2017/000000000139.jpg"
