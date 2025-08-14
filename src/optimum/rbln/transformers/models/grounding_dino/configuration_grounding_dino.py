@@ -16,12 +16,16 @@ from ...configuration_generic import RBLNImageModelConfig
 
 
 class RBLNGroundingDinoForObjectDetectionConfig(RBLNImageModelConfig):
-    submodules = ["encoder"]
+    submodules = [
+        "encoder",
+        "decoder",
+    ]
 
     def __init__(
         self,
         batch_size: Optional[int] = None,
         encoder: Optional["RBLNGroundingDinoEncoderConfig"] = None,
+        decoder: Optional["RBLNGroundingDinoDecoderConfig"] = None,
         **kwargs: Any,
     ):
         """
@@ -34,6 +38,7 @@ class RBLNGroundingDinoForObjectDetectionConfig(RBLNImageModelConfig):
         """
         super().__init__(**kwargs)
         self.encoder = encoder
+        self.decoder = decoder
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 

@@ -24,7 +24,8 @@ from transformers.models.grounding_dino.modeling_grounding_dino import (
 from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from .configuration_grounding_dino import RBLNGroundingDinoEncoderConfig, RBLNGroundingDinoForObjectDetectionConfig
+from .configuration_grounding_dino import RBLNGroundingDinoEncoderConfig, RBLNGroundingDinoForObjectDetectionConfig, RBLNGroundingDinoDecoderConfig
+from .grounding_dino_architecture import GroundingDinoEncoder, GroundingDinoDecoder, _GroundingDinoModel
 
 
 # from transformers.models.grounding_dino.modeling_grounding_dino import generate_masks_with_special_tokens_and_transfer_map
@@ -61,6 +62,8 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         model = super().get_pytorch_model(*args, **kwargs)
         model.encoder = model.model.encoder
         model.encoder.config = model.config
+        model.decoder = model.model.decoder
+        model.decoder.config = model.config
         return model
 
     @classmethod
@@ -144,9 +147,6 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
     def forward(self, *args, return_dict: bool = None, **kwargs) -> torch.FloatTensor:
         # To ignore using attention_mask, we override forward method.
         output = super().forward(*args, **kwargs, return_dict=return_dict)
-        import pdb
-
-        pdb.set_trace()
         return output
 
     # def _prepare_output(self, output, return_dict):
@@ -268,7 +268,7 @@ class RBLNGroundingDinoDecoder(RBLNModel):
     def wrap_model_if_needed(
         cls, model: torch.nn.Module, rbln_config: RBLNGroundingDinoForObjectDetectionConfig
     ) -> torch.nn.Module:
-        return GroundingDinoEncoder(model).eval()
+        return GroundingDinoDecoder(model).eval()
 
     @classmethod
     def update_rbln_config_using_pipe(
@@ -295,6 +295,7 @@ class RBLNGroundingDinoDecoder(RBLNModel):
                 [
                     rbln_config.batch_size,
                     37150,
+                    model_config.d_model,
                 ],
                 "float32",
             ),

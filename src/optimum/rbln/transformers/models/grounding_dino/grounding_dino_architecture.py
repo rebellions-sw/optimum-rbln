@@ -18,7 +18,7 @@ from typing import List, Tuple
 
 
 import torch
-
+import torch.nn.functional as F
 from transformers.models.grounding_dino.modeling_grounding_dino import GroundingDinoEncoderOutput, GroundingDinoDecoderOutput, get_sine_pos_embed
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
@@ -287,8 +287,11 @@ class GroundingDinoDecoder(torch.nn.Module):
         #     (25, 38),
         #     (13, 19)
         # ]
-        self.spatial_shapes = torch.tensor([[167, 167], [83, 83], [41, 41], [20, 20]])
-        self.spatial_shapes_list = [(167, 167), (83, 83), (41, 41), (20, 20)]
+        self.spatial_shapes = torch.tensor([[167, 167], [84, 84], [42, 42], [21, 21]])
+        self.spatial_shapes_list = [(167, 167), (84, 84), (42, 42), (21, 21)]
+        self.reference_points_head = model.reference_points_head
+        self.bbox_embed = model.bbox_embed
+        self.layer_norm = model.layer_norm
 
     def forward(
         self,
@@ -467,3 +470,83 @@ class GroundingDinoDecoder(torch.nn.Module):
             hidden_states=all_hidden_states,
             attentions=all_attns,
         )
+
+class _GroundingDinoMultiscaleDeformableAttention(torch.nn.Module):
+    """
+    Multiscale deformable attention as proposed in Deformable DETR.
+    """
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        encoder_hidden_states=None,
+        encoder_attention_mask=None,
+        position_embeddings: Optional[torch.Tensor] = None,
+        reference_points=None,
+        spatial_shapes=None,
+        spatial_shapes_list=None,
+        level_start_index=None,
+        output_attentions: bool = False,
+    ):
+        # add position embeddings to the hidden states before projecting to queries and keys
+        if position_embeddings is not None:
+            hidden_states = self.with_pos_embed(hidden_states, position_embeddings)
+
+        batch_size, num_queries, _ = hidden_states.shape
+        batch_size, sequence_length, _ = encoder_hidden_states.shape
+        # Ignore copy
+        if (spatial_shapes[:, 0] * spatial_shapes[:, 1]).sum() != sequence_length:
+            raise ValueError(
+                "Make sure to align the spatial shapes with the sequence length of the encoder hidden states"
+            )
+
+        value = self.value_proj(encoder_hidden_states)
+        if attention_mask is not None:
+            # we invert the attention_mask
+            # value = value.masked_fill(~attention_mask[..., None], float(0))
+            mask = 1.0 - attention_mask[..., None]
+            value = mask.float() * value
+            
+        value = value.view(batch_size, sequence_length, self.n_heads, self.d_model // self.n_heads)
+        sampling_offsets = self.sampling_offsets(hidden_states).view(
+            batch_size, num_queries, self.n_heads, self.n_levels, self.n_points, 2
+        )
+        attention_weights = self.attention_weights(hidden_states).view(
+            batch_size, num_queries, self.n_heads, self.n_levels * self.n_points
+        )
+        attention_weights = F.softmax(attention_weights, -1).view(
+            batch_size, num_queries, self.n_heads, self.n_levels, self.n_points
+        )
+        # batch_size, num_queries, n_heads, n_levels, n_points, 2
+        num_coordinates = reference_points.shape[-1]
+        if num_coordinates == 2:
+            offset_normalizer = torch.stack([spatial_shapes[..., 1], spatial_shapes[..., 0]], -1)
+            sampling_locations = (
+                reference_points[:, :, None, :, None, :]
+                + sampling_offsets / offset_normalizer[None, None, None, :, None, :]
+            )
+        elif num_coordinates == 4:
+            sampling_locations = (
+                reference_points[:, :, None, :, None, :2]
+                + sampling_offsets / self.n_points * reference_points[:, :, None, :, None, 2:] * 0.5
+            )
+        else:
+            raise ValueError(f"Last dim of reference_points must be 2 or 4, but got {reference_points.shape[-1]}")
+
+        output = self.attn(
+            value,
+            spatial_shapes,
+            spatial_shapes_list,
+            level_start_index,
+            sampling_locations,
+            attention_weights,
+            self.im2col_step,
+        )
+
+        output = self.output_proj(output)
+
+        return output, attention_weights
+    
+from transformers.models.grounding_dino.modeling_grounding_dino import GroundingDinoMultiscaleDeformableAttention
+GroundingDinoMultiscaleDeformableAttention.forward = _GroundingDinoMultiscaleDeformableAttention.forward
