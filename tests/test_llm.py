@@ -26,6 +26,7 @@ from optimum.rbln import (
     RBLNLlamaModel,
     RBLNLlavaForConditionalGeneration,
     RBLNLlavaNextForConditionalGeneration,
+    RBLNLoRAAdapterConfig,
     RBLNMistralForCausalLM,
     RBLNMistralModel,
     RBLNOPTForCausalLM,
@@ -669,6 +670,59 @@ class TestLlamaForCausalLM_fp8(LLMTest.TestLLM):
     }
     EXPECTED_OUTPUT = None  # Cannot generate output with fp8 quantization in ATOM™
     TEST_LEVEL = TestLevel.DISABLED
+
+
+class TestMultiLora(LLMTest.TestLLM):
+    EXPECTED_OUTPUT = " bench_echointon Ebonylica Lennonnings909 norgeZN°Eusanpha701OPSadeleepromtrap乎 Howe"
+
+    HF_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
+    RBLN_CLASS = RBLNLlamaForCausalLM
+    RBLN_CLASS_KWARGS = {
+        "rbln_config": {
+            "max_seq_len": 1024,
+            "lora_config": {
+                "adapters": [
+                    RBLNLoRAAdapterConfig(0, "nemoguard", "nvidia/llama-3.1-nemoguard-8b-topic-control"),
+                    RBLNLoRAAdapterConfig(1, "abliterated", "reissbaker/llama-3.1-8b-abliterated-lora"),
+                ]
+            },
+        }
+    }
+    TEST_LEVEL = TestLevel.DISABLED
+
+    def get_inputs(self):
+        self.model.set_adapter(["abliterated"])
+        return super().get_inputs()
+
+
+class TestMultiLora_batch(LLMTest.TestLLM):
+    PROMPT = ["Who are you?", "What is the capital of France?"]
+    EXPECTED_OUTPUT = [
+        "reress makefable R���� noethetss0oss invetetet",
+        "resget makeget makeichget makeichualichual#choolchool accngngngng",
+    ]
+
+    HF_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
+    RBLN_CLASS = RBLNLlamaForCausalLM
+    RBLN_CLASS_KWARGS = {
+        "rbln_config": {
+            "batch_size": 2,
+            "max_seq_len": 1024,
+            "lora_config": {
+                "adapters": [
+                    RBLNLoRAAdapterConfig(0, "nemoguard", "nvidia/llama-3.1-nemoguard-8b-topic-control"),
+                    RBLNLoRAAdapterConfig(1, "abliterated", "reissbaker/llama-3.1-8b-abliterated-lora"),
+                ]
+            },
+        }
+    }
+    TEST_LEVEL = TestLevel.DISABLED
+
+    def get_inputs(self):
+        self.model.set_adapter(["nemoguard", "abliterated"])
+        return super().get_inputs()
 
 
 class TestDisallowedLlama_1(DisallowedTestBase.DisallowedTest):
