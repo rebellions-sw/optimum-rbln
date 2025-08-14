@@ -171,6 +171,49 @@ class RBLNLoRAAdapterConfig(RBLNSerializableConfigProtocol):
         return config_dict
 
 
+class RBLNLoRABaseAdapterConfig(RBLNLoRAAdapterConfig):
+    """
+    Special adapter config for the reserved base model adapter (lora_int_id = 0).
+    This adapter carries zero-effective LoRA weights by targeting no modules,
+    thereby producing no LoRA delta and yielding pure base-model behavior.
+    """
+
+    def __init__(
+        self,
+        lora_int_id: int = 0,
+        lora_name: str = "base",
+        lora_path: Union[str, Path] = "__reserved_base__",
+        r: Optional[int] = 1,
+        lora_alpha: Optional[float] = 1.0,
+        target_modules: Optional[List[str]] = None,
+        bias: Optional[str] = "none",
+        use_rslora: Optional[bool] = False,
+        scaling_factor: Optional[float] = 1.0,
+    ):
+        if lora_int_id != 0:
+            raise ValueError("RBLNLoRABaseAdapterConfig must have lora_int_id=0")
+
+        self.lora_int_id = 0
+        self.lora_name = lora_name
+        # Keep original lora_path for serialization purposes but do not resolve it.
+        self.lora_path = Path(str(lora_path))
+        self.local_adapter_path = None
+
+        # Set minimal defaults; target_modules empty disables LoRA on all projections
+        self.r = 1 if r is None else r
+        self.lora_alpha = 1.0 if lora_alpha is None else lora_alpha
+        self.target_modules = []
+        self.bias = "none"
+        self.use_rslora = False
+        self.scaling_factor = 1.0
+
+        # Validate minimal settings
+        if not isinstance(self.r, int) or self.r <= 0:
+            raise ValueError(f"r must be a positive integer, got {self.r}")
+        if self.lora_alpha <= 0:
+            raise ValueError(f"lora_alpha must be positive, got {self.lora_alpha}")
+
+
 class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
     """
     Configuration class for multi-LoRA support in RBLN decoder-only models.
@@ -215,10 +258,28 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
             else:
                 raise ValueError(f"Invalid adapter type: {type(adapter)}")
 
-        # Validate unique adapter IDs
+        # Disallow user-provided adapter with id 0: it's reserved for base model
+        if any(ad.lora_int_id == 0 for ad in self.adapters):
+            raise ValueError(
+                "lora_int_id=0 is reserved for base model and cannot be provided. Please renumber your adapters to start from 1."
+            )
+
+        # Inject a reserved zero-weight adapter for base model at id=0
+        base_adapter = RBLNLoRABaseAdapterConfig()
+        self.adapters.insert(0, base_adapter)
+
+        # Sort adapters by ID to make IDs align with indices
+        self.adapters.sort(key=lambda a: a.lora_int_id)
+
+        # Validate unique and contiguous adapter IDs starting from 0
         adapter_ids = [adapter.lora_int_id for adapter in self.adapters]
         if len(adapter_ids) != len(set(adapter_ids)):
             raise ValueError("All adapter IDs must be unique")
+        expected_ids = list(range(len(self.adapters)))
+        if adapter_ids != expected_ids:
+            raise ValueError(
+                f"Adapter IDs must be contiguous and start from 0. Found {adapter_ids}, expected {expected_ids}."
+            )
 
         # Calculate max_lora_rank if not provided
         if max_lora_rank is None:
@@ -260,9 +321,13 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
         validation_results = {}
         for adapter in self.adapters:
             try:
+                # The reserved base adapter (id=0) always validates to True
+                if adapter.lora_int_id == 0:
+                    validation_results[adapter.lora_int_id] = True
+                    continue
                 # Check if adapter path exists and contains expected files
                 adapter_path = adapter.local_adapter_path
-                if adapter_path.is_file():
+                if adapter_path is not None and adapter_path.is_file():
                     # Single file adapter (e.g., safetensors)
                     validation_results[adapter.lora_int_id] = adapter_path.exists()
                 else:
@@ -270,8 +335,10 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
                     expected_files = ["adapter_model.safetensors", "adapter_config.json"]
                     alternative_files = ["pytorch_model.bin", "adapter_model.bin"]
 
-                    has_weights = any((adapter_path / f).exists() for f in expected_files + alternative_files)
-                    has_config = (adapter_path / "adapter_config.json").exists()
+                    has_weights = adapter_path is not None and any(
+                        (adapter_path / f).exists() for f in expected_files + alternative_files
+                    )
+                    has_config = adapter_path is not None and (adapter_path / "adapter_config.json").exists()
 
                     validation_results[adapter.lora_int_id] = has_weights and has_config
             except Exception as e:
@@ -281,8 +348,10 @@ class RBLNLoRAConfig(RBLNSerializableConfigProtocol):
         return validation_results
 
     def _prepare_for_serialization(self) -> Dict[str, Any]:
+        # Do not serialize the reserved base adapter (id=0)
+        serializable_adapters = [adapter for adapter in self.adapters if adapter.lora_int_id != 0]
         serializable_map = {
-            "adapters": [adapter._prepare_for_serialization() for adapter in self.adapters],
+            "adapters": [adapter._prepare_for_serialization() for adapter in serializable_adapters],
             "max_lora_rank": self.max_lora_rank,
         }
         return serializable_map
