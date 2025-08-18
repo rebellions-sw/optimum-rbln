@@ -12,34 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Tuple, Union
-from typing import List, Tuple
-
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import torch
 import torch.nn.functional as F
-from transformers.models.grounding_dino.modeling_grounding_dino import GroundingDinoEncoderOutput, GroundingDinoDecoderOutput, get_sine_pos_embed
+from torch import Tensor
+from transformers.models.grounding_dino.modeling_grounding_dino import (
+    GroundingDinoDecoderOutput,
+    GroundingDinoEncoderOutput,
+    get_sine_pos_embed,
+)
 
-from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
-from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from .configuration_grounding_dino import RBLNGroundingDinoForObjectDetectionConfig, RBLNGroundingDinoEncoderConfig
+
+
 # from transformers.models.grounding_dino.modeling_grounding_dino import generate_masks_with_special_tokens_and_transfer_map
 
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from transformers import (
-        AutoFeatureExtractor,
-        AutoProcessor,
-        AutoTokenizer,
         GroundingDinoModel,
-        PreTrainedModel,
-        GroundingDinoForObjectDetection,
     )
-
-    from ....diffusers.modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 
 
 class _GroundingDinoModel(torch.nn.Module):
@@ -149,6 +143,11 @@ class GroundingDinoEncoder(torch.nn.Module):
         # ]
         self.spatial_shapes = torch.tensor([[167, 167], [84, 84], [42, 42], [21, 21]])
         self.spatial_shapes_list = [(167, 167), (84, 84), (42, 42), (21, 21)]
+        self.text_position_embedding = model.layers[0].get_text_position_embeddings(
+            torch.zeros(1, model.config.max_text_len, model.config.d_model),
+            None,
+            torch.arange(model.config.max_text_len, dtype=torch.int32).unsqueeze(0),
+        )
 
     def forward(
         self,
@@ -162,7 +161,7 @@ class GroundingDinoEncoder(torch.nn.Module):
         text_features: Optional[torch.Tensor] = None,
         text_attention_mask: Optional[torch.Tensor] = None,
         text_self_attention_masks: Optional[torch.Tensor] = None,
-        text_position_ids: Optional[torch.Tensor] = None,
+        # text_position_ids: Optional[torch.Tensor] = None,
         reference_points: Optional[torch.Tensor] = None,
         text_position_embedding: Optional[torch.Tensor] = None,
         output_attentions=None,
@@ -242,9 +241,9 @@ class GroundingDinoEncoder(torch.nn.Module):
                 reference_points=reference_points,
                 text_features=text_features,
                 text_attention_mask=text_attention_mask,
-                text_position_embedding=text_position_embedding,
+                text_position_embedding=self.text_position_embedding,
                 text_self_attention_masks=text_self_attention_masks,
-                text_position_ids=text_position_ids,
+                # text_position_ids=text_position_ids,
             )
             if output_attentions:
                 all_attn_fused_vision += (attentions[0],)
@@ -269,6 +268,7 @@ class GroundingDinoEncoder(torch.nn.Module):
             text_hidden_states=encoder_text_states,
             attentions=all_attns,
         )
+
 
 class GroundingDinoDecoder(torch.nn.Module):
     def __init__(self, model: "GroundingDinoDecoder"):
@@ -392,7 +392,6 @@ class GroundingDinoDecoder(torch.nn.Module):
             if output_hidden_states:
                 all_hidden_states += (self.layer_norm(hidden_states),)
 
-
             layer_outputs = decoder_layer(
                 hidden_states=hidden_states,
                 position_embeddings=query_pos,
@@ -410,16 +409,20 @@ class GroundingDinoDecoder(torch.nn.Module):
 
             hidden_states = layer_outputs[0]
 
+            def custom_logits(x, eps=1e-5):
+                z = torch.clamp(x, eps, 1 - eps)
+                return torch.log(z) - torch.log(1 - z)
+
             # hack implementation for iterative bounding box refinement
             if self.bbox_embed is not None:
                 tmp = self.bbox_embed[idx](hidden_states)
                 num_coordinates = reference_points.shape[-1]
                 if num_coordinates == 4:
-                    new_reference_points = tmp + torch.special.logit(reference_points, eps=1e-5)
+                    new_reference_points = tmp + custom_logits(reference_points, eps=1e-5)
                     new_reference_points = new_reference_points.sigmoid()
                 elif num_coordinates == 2:
                     new_reference_points = tmp
-                    new_reference_points[..., :2] = tmp[..., :2] + torch.special.logit(reference_points, eps=1e-5)
+                    new_reference_points[..., :2] = tmp[..., :2] + custom_logits(reference_points, eps=1e-5)
                     new_reference_points = new_reference_points.sigmoid()
                 else:
                     raise ValueError(
@@ -471,6 +474,7 @@ class GroundingDinoDecoder(torch.nn.Module):
             attentions=all_attns,
         )
 
+
 class _GroundingDinoMultiscaleDeformableAttention(torch.nn.Module):
     """
     Multiscale deformable attention as proposed in Deformable DETR.
@@ -505,9 +509,11 @@ class _GroundingDinoMultiscaleDeformableAttention(torch.nn.Module):
         if attention_mask is not None:
             # we invert the attention_mask
             # value = value.masked_fill(~attention_mask[..., None], float(0))
+
+            # RBLN FIX
             mask = 1.0 - attention_mask[..., None]
             value = mask.float() * value
-            
+
         value = value.view(batch_size, sequence_length, self.n_heads, self.d_model // self.n_heads)
         sampling_offsets = self.sampling_offsets(hidden_states).view(
             batch_size, num_queries, self.n_heads, self.n_levels, self.n_points, 2
@@ -547,6 +553,191 @@ class _GroundingDinoMultiscaleDeformableAttention(torch.nn.Module):
         output = self.output_proj(output)
 
         return output, attention_weights
-    
-from transformers.models.grounding_dino.modeling_grounding_dino import GroundingDinoMultiscaleDeformableAttention
+
+
+class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
+    def forward(
+        self,
+        vision_features: torch.FloatTensor,
+        text_features: torch.FloatTensor,
+        vision_attention_mask: Optional[torch.BoolTensor] = None,
+        text_attention_mask: Optional[torch.BoolTensor] = None,
+    ) -> Tuple[Tuple[torch.FloatTensor, torch.FloatTensor], Tuple[torch.FloatTensor, torch.FloatTensor]]:
+        """Image-to-text and text-to-image cross-attention
+
+        Args:
+            vision_features (`torch.FloatTensor` of shape `(batch_size, vision_sequence_length, hidden_dim)`):
+                Projected flattened image features generated by the vision backbone.
+            text_features (`torch.FloatTensor` of shape `(batch_size, text_sequence_length, hidden_dim)`):
+                Projected text features generated by the text encoder.
+            vision_attention_mask (`torch.BoolTensor`, **optional**):
+                Attention mask for image-to-text cross-attention. False for real tokens and True for padding tokens.
+            text_attention_mask (`torch.BoolTensor`, **optional**):
+                Attention mask for text-to-image cross-attention. False for real tokens and True for padding tokens.
+
+        Returns:
+            `tuple(tuple(torch.FloatTensor), tuple(torch.FloatTensor))` where each inner tuple comprises an attention
+            output and weights:
+            - **vision_attn_output** (`torch.FloatTensor` of shape `(batch_size, vision_sequence_length, hidden_din)`)
+              --
+                Output of the image-to-text cross-attention layer.
+            - **vision_attn_weights** (`torch.FloatTensor` of shape `(batch_size, num_heads, vision_sequence_length,
+              vision_sequence_length)`) --
+                Attention weights of the image-to-text cross-attention layer.
+            - **text_attn_output** (`torch.FloatTensor` of shape `(batch_size, text_sequence_length, hidden_dim)`) --
+                Output of the text-to-image cross-attention layer.
+            - **text_attn_weights** (`torch.FloatTensor` of shape `(batch_size, num_heads, text_sequence_length,
+              text_sequence_length)`) --
+                Attention weights of the text-to-image cross-attention layer.
+        """
+        batch_size, tgt_len, _ = vision_features.size()
+
+        vision_query_states = self.vision_proj(vision_features) * self.scale
+        vision_query_states = self._reshape(vision_query_states, tgt_len, batch_size)
+
+        text_key_states = self.text_proj(text_features)
+        text_key_states = self._reshape(text_key_states, -1, batch_size)
+
+        vision_value_states = self.values_vision_proj(vision_features)
+        vision_value_states = self._reshape(vision_value_states, -1, batch_size)
+
+        text_value_states = self.values_text_proj(text_features)
+        text_value_states = self._reshape(text_value_states, -1, batch_size)
+
+        proj_shape = (batch_size * self.num_heads, -1, self.head_dim)
+
+        vision_query_states = vision_query_states.view(*proj_shape)
+        text_key_states = text_key_states.view(*proj_shape)
+        vision_value_states = vision_value_states.view(*proj_shape)
+        text_value_states = text_value_states.view(*proj_shape)
+
+        src_len = text_key_states.size(1)
+        attn_weights = torch.bmm(vision_query_states, text_key_states.transpose(1, 2))  # bs*nhead, nimg, ntxt
+
+        if attn_weights.size() != (batch_size * self.num_heads, tgt_len, src_len):
+            raise ValueError(
+                f"Attention weights should be of size {(batch_size * self.num_heads, tgt_len, src_len)}, but is {attn_weights.size()}"
+            )
+
+        # RBLN FIX
+        attn_weights = attn_weights - torch.max(attn_weights).reshape(1).repeat(src_len)
+        # # Do not increase -50000/50000, data type half has quite limited range
+        attn_weights = torch.clamp(attn_weights, min=-50000, max=50000)
+
+        attn_weights_transposed = attn_weights.transpose(1, 2)
+        # RBLN FIX
+        text_attn_weights = attn_weights_transposed - torch.max(attn_weights_transposed, dim=-1, keepdim=True)[
+            0
+        ].repeat(1, 1, tgt_len)
+
+        # # Do not increase -50000/50000, data type half has quite limited range
+        text_attn_weights = torch.clamp(text_attn_weights, min=-50000, max=50000)
+
+        # mask vision for language
+        if vision_attention_mask is not None:
+            vision_attention_mask = (
+                vision_attention_mask[:, None, None, :].repeat(1, self.num_heads, 1, 1).flatten(0, 1)
+            )
+            # RBLN FIX
+            text_attn_weights = text_attn_weights + ((1 - vision_attention_mask) * float("-inf"))
+
+        text_attn_weights = text_attn_weights.softmax(dim=-1)
+
+        # mask language for vision
+        if text_attention_mask is not None:
+            text_attention_mask = text_attention_mask[:, None, None, :].repeat(1, self.num_heads, 1, 1).flatten(0, 1)
+            # RBLN FIX
+            attn_weights = attn_weights + ((1 - text_attention_mask) * float("-inf"))
+        vision_attn_weights = attn_weights.softmax(dim=-1)
+
+        vision_attn_probs = F.dropout(vision_attn_weights, p=self.dropout, training=self.training)
+        text_attn_probs = F.dropout(text_attn_weights, p=self.dropout, training=self.training)
+
+        vision_attn_output = torch.bmm(vision_attn_probs, text_value_states)
+        text_attn_output = torch.bmm(text_attn_probs, vision_value_states)
+
+        if vision_attn_output.size() != (batch_size * self.num_heads, tgt_len, self.head_dim):
+            raise ValueError(
+                f"`vision_attn_output` should be of size {(batch_size, self.num_heads, tgt_len, self.head_dim)}, but is {vision_attn_output.size()}"
+            )
+
+        if text_attn_output.size() != (batch_size * self.num_heads, src_len, self.head_dim):
+            raise ValueError(
+                f"`text_attn_output` should be of size {(batch_size, self.num_heads, src_len, self.head_dim)}, but is {text_attn_output.size()}"
+            )
+
+        vision_attn_output = vision_attn_output.view(batch_size, self.num_heads, tgt_len, self.head_dim)
+        vision_attn_output = vision_attn_output.transpose(1, 2)
+        vision_attn_output = vision_attn_output.reshape(batch_size, tgt_len, self.embed_dim)
+
+        text_attn_output = text_attn_output.view(batch_size, self.num_heads, src_len, self.head_dim)
+        text_attn_output = text_attn_output.transpose(1, 2)
+        text_attn_output = text_attn_output.reshape(batch_size, src_len, self.embed_dim)
+
+        vision_attn_output = self.out_vision_proj(vision_attn_output)
+        text_attn_output = self.out_text_proj(text_attn_output)
+
+        return (vision_attn_output, vision_attn_weights), (text_attn_output, text_attn_weights)
+
+
+
+
+class _GroundingDinoEncoderLayer(torch.nn.Module):
+    def forward(
+        self,
+        vision_features: Tensor,
+        vision_position_embedding: Tensor,
+        spatial_shapes: Tensor,
+        spatial_shapes_list: List[Tuple[int, int]],
+        level_start_index: Tensor,
+        key_padding_mask: Tensor,
+        reference_points: Tensor,
+        text_features: Optional[Tensor] = None,
+        text_attention_mask: Optional[Tensor] = None,
+        text_position_embedding: Optional[Tensor] = None,
+        text_self_attention_masks: Optional[Tensor] = None,
+        text_position_ids: Optional[Tensor] = None,
+    ):
+        text_position_embedding = self.get_text_position_embeddings(
+            text_features, text_position_embedding, text_position_ids
+        )
+
+        (vision_features, vision_fused_attn), (text_features, text_fused_attn) = self.fusion_layer(
+            vision_features=vision_features,
+            text_features=text_features,
+            attention_mask_vision=key_padding_mask,
+            attention_mask_text=text_attention_mask,
+        )
+
+        (text_features, text_enhanced_attn) = self.text_enhancer_layer(
+            hidden_states=text_features,
+            attention_masks=(1.0 - text_self_attention_masks),  # note we use ~ for mask here
+            position_embeddings=(text_position_embedding if text_position_embedding is not None else None),
+        )
+
+        (vision_features, vision_deformable_attn) = self.deformable_layer(
+            hidden_states=vision_features,
+            attention_mask=(1.0 - key_padding_mask),
+            position_embeddings=vision_position_embedding,
+            reference_points=reference_points,
+            spatial_shapes=spatial_shapes,
+            spatial_shapes_list=spatial_shapes_list,
+            level_start_index=level_start_index,
+        )
+
+        return (
+            (vision_features, text_features),
+            (vision_fused_attn, text_fused_attn, text_enhanced_attn, vision_deformable_attn),
+        )
+
+
+from transformers.models.grounding_dino.modeling_grounding_dino import (
+    GroundingDinoBiMultiHeadAttention,
+    GroundingDinoEncoderLayer,
+    GroundingDinoMultiscaleDeformableAttention,
+)
+
+
 GroundingDinoMultiscaleDeformableAttention.forward = _GroundingDinoMultiscaleDeformableAttention.forward
+GroundingDinoBiMultiHeadAttention.forward = _GroundingDinoBiMultiHeadAttention.forward
+GroundingDinoEncoderLayer.forward = _GroundingDinoEncoderLayer.forward

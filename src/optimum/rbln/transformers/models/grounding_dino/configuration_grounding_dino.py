@@ -45,5 +45,7 @@ class RBLNGroundingDinoForObjectDetectionConfig(RBLNImageModelConfig):
 
 class RBLNGroundingDinoEncoderConfig(RBLNImageModelConfig):
     pass
+
+
 class RBLNGroundingDinoDecoderConfig(RBLNImageModelConfig):
     pass

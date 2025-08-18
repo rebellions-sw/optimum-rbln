@@ -15,17 +15,16 @@
 from typing import TYPE_CHECKING, Optional, Union
 
 import torch
-from transformers.models.grounding_dino.modeling_grounding_dino import (
-    GroundingDinoDecoderOutput,
-    GroundingDinoEncoderOutput,
-    get_sine_pos_embed,
-)
 
 from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from .configuration_grounding_dino import RBLNGroundingDinoEncoderConfig, RBLNGroundingDinoForObjectDetectionConfig, RBLNGroundingDinoDecoderConfig
-from .grounding_dino_architecture import GroundingDinoEncoder, GroundingDinoDecoder, _GroundingDinoModel
+from .configuration_grounding_dino import (
+    RBLNGroundingDinoDecoderConfig,
+    RBLNGroundingDinoEncoderConfig,
+    RBLNGroundingDinoForObjectDetectionConfig,
+)
+from .grounding_dino_architecture import GroundingDinoDecoder, GroundingDinoEncoder, _GroundingDinoModel
 
 
 # from transformers.models.grounding_dino.modeling_grounding_dino import generate_masks_with_special_tokens_and_transfer_map
@@ -37,11 +36,11 @@ if TYPE_CHECKING:
         AutoFeatureExtractor,
         AutoProcessor,
         AutoTokenizer,
-        GroundingDinoModel,
         PreTrainedModel,
     )
 
     from ....diffusers.modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
+
 
 class RBLNGroundingDinoForObjectDetection(RBLNModel):
     _rbln_submodules = [
@@ -83,7 +82,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model: Optional["PreTrainedModel"] = None,
-        model_config: "GroundingDinoConfig" = None,
+        model_config: RBLNGroundingDinoForObjectDetectionConfig = None,
         rbln_config: Optional[RBLNGroundingDinoForObjectDetectionConfig] = None,
     ) -> RBLNGroundingDinoForObjectDetectionConfig:
         if rbln_config.image_size is None:
@@ -188,7 +187,7 @@ class RBLNGroundingDinoEncoder(RBLNModel):
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model: Optional["PreTrainedModel"] = None,
-        model_config: "GroundingDinoEncoderConfig" = None,
+        model_config: RBLNGroundingDinoEncoderConfig = None,
         rbln_config: Optional[RBLNGroundingDinoEncoderConfig] = None,
     ) -> RBLNGroundingDinoEncoderConfig:
         input_info = [
@@ -232,14 +231,14 @@ class RBLNGroundingDinoEncoder(RBLNModel):
                 ],
                 "float32",
             ),
-            (
-                "text_position_ids",
-                [
-                    rbln_config.batch_size,
-                    model_config.max_text_len,
-                ],
-                "int32",
-            ),
+            # (
+            #     "text_position_ids",
+            #     [
+            #         rbln_config.batch_size,
+            #         model_config.max_text_len,
+            #     ],
+            #     "int32",
+            # ),
             (
                 "reference_points",
                 [rbln_config.batch_size, 37150, 4, 2],
@@ -252,7 +251,7 @@ class RBLNGroundingDinoEncoder(RBLNModel):
 
     def forward(self, *args, return_dict: bool = None, **kwargs) -> torch.FloatTensor:
         # To ignore using attention_mask, we override forward method.
-        output = super().forward(*args, **kwargs, return_dict=return_dict)
+        output = super().forward(*args, **kwargs, return_dict=False)
         return output
 
 
@@ -281,7 +280,7 @@ class RBLNGroundingDinoDecoder(RBLNModel):
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model: Optional["PreTrainedModel"] = None,
-        model_config: "GroundingDinoDecoderConfig" = None,
+        model_config: RBLNGroundingDinoDecoderConfig = None,
         rbln_config: Optional[RBLNGroundingDinoEncoderConfig] = None,
     ) -> RBLNGroundingDinoEncoderConfig:
         input_info = [
