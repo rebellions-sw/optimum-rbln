@@ -231,14 +231,6 @@ class RBLNGroundingDinoEncoder(RBLNModel):
                 ],
                 "float32",
             ),
-            # (
-            #     "text_position_ids",
-            #     [
-            #         rbln_config.batch_size,
-            #         model_config.max_text_len,
-            #     ],
-            #     "int32",
-            # ),
             (
                 "reference_points",
                 [rbln_config.batch_size, 37150, 4, 2],

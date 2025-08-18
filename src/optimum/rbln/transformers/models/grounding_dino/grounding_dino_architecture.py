@@ -512,7 +512,7 @@ class _GroundingDinoMultiscaleDeformableAttention(torch.nn.Module):
 
             # RBLN FIX
             mask = 1.0 - attention_mask[..., None]
-            value = mask.float() * value
+            value = mask * value
 
         value = value.view(batch_size, sequence_length, self.n_heads, self.d_model // self.n_heads)
         sampling_offsets = self.sampling_offsets(hidden_states).view(
