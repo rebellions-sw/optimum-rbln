@@ -8,7 +8,6 @@ from optimum.rbln.transformers import RBLNGroundingDinoForObjectDetection
 
 
 def main(compile: bool = False, native_run: bool = False, rbln_run: bool = False):
-
     model_id = "IDEA-Research/grounding-dino-tiny"
 
     processor = AutoProcessor.from_pretrained(model_id, max_length=256)
@@ -32,7 +31,9 @@ def main(compile: bool = False, native_run: bool = False, rbln_run: bool = False
     )
 
     if compile:
-        rbln_model = RBLNGroundingDinoForObjectDetection.from_pretrained(model_id, export=True, model_save_dir=os.path.basename(model_id))")
+        rbln_model = RBLNGroundingDinoForObjectDetection.from_pretrained(
+            model_id, export=True, model_save_dir=os.path.basename(model_id)
+        )
     else:
         rbln_model = RBLNGroundingDinoForObjectDetection.from_pretrained("rbln_grounding_dino", export=False)
 
@@ -67,3 +68,7 @@ def main(compile: bool = False, native_run: bool = False, rbln_run: bool = False
         print(golden_outputs.last_hidden_state)
         print("CPU Results:")
         print(golden_results)
+
+
+if __name__ == "__main__":
+    fire.Fire(main)
