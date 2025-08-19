@@ -10,21 +10,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from ...configuration_generic import RBLNImageModelConfig
 
 
+if TYPE_CHECKING:
+    from torch import Tensor
+
+
 class RBLNGroundingDinoForObjectDetectionConfig(RBLNImageModelConfig):
     submodules = [
-        "encoder",
+        # "encoder",
         "decoder",
     ]
 
     def __init__(
         self,
         batch_size: Optional[int] = None,
-        encoder: Optional["RBLNGroundingDinoEncoderConfig"] = None,
+        # encoder: Optional["RBLNGroundingDinoEncoderConfig"] = None,
         decoder: Optional["RBLNGroundingDinoDecoderConfig"] = None,
         **kwargs: Any,
     ):
@@ -37,15 +41,35 @@ class RBLNGroundingDinoForObjectDetectionConfig(RBLNImageModelConfig):
             ValueError: If batch_size is not a positive integer.
         """
         super().__init__(**kwargs)
-        self.encoder = encoder
+        # self.encoder = encoder
         self.decoder = decoder
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
 
-class RBLNGroundingDinoEncoderConfig(RBLNImageModelConfig):
+class RBLNGroundingDinoComponentConfig(RBLNImageModelConfig):
+    _spatial_shapes: "Tensor" = None
+
+    @property
+    def spatial_shapes(self):
+        if self._spatial_shapes is None:
+            raise ValueError("Spatial shapes are not defined. Please set them before accessing.")
+        return self._spatial_shapes
+
+    @spatial_shapes.setter
+    def spatial_shapes(self, value):
+        self._spatial_shapes = value
+
+    @property
+    def spatial_shapes_list(self):
+        if self._spatial_shapes is None:
+            raise ValueError("Spatial shapes are not defined. Please set them before accessing.")
+        return [tuple(shape) for shape in self.spatial_shapes.tolist()] if self.spatial_shapes is not None else []
+
+
+class RBLNGroundingDinoEncoderConfig(RBLNGroundingDinoComponentConfig):
     pass
 
 
-class RBLNGroundingDinoDecoderConfig(RBLNImageModelConfig):
+class RBLNGroundingDinoDecoderConfig(RBLNGroundingDinoComponentConfig):
     pass

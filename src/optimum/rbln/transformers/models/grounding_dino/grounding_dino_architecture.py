@@ -24,6 +24,7 @@ from transformers.models.grounding_dino.modeling_grounding_dino import (
 )
 
 from ....utils.logging import get_logger
+from .configuration_grounding_dino import RBLNGroundingDinoDecoderConfig, RBLNGroundingDinoEncoderConfig
 
 
 # from transformers.models.grounding_dino.modeling_grounding_dino import generate_masks_with_special_tokens_and_transfer_map
@@ -125,22 +126,12 @@ class _GroundingDinoModel(torch.nn.Module):
 
 
 class GroundingDinoEncoder(torch.nn.Module):
-    def __init__(self, model: "GroundingDinoEncoder"):
+    def __init__(self, model: "GroundingDinoEncoder", rbln_config: RBLNGroundingDinoEncoderConfig):
         super().__init__()
         self.layers = model.layers
         self.config = model.config
+        self.rbln_config = rbln_config
         # FIXME: define Spatial shapes from config
-        # self.spatial_shapes = torch.tensor([
-        #     [100, 151],
-        #     [ 50,  76],
-        #     [ 25,  38],
-        #     [ 13,  19]])
-        # self.spatial_shapes_list = [
-        #     (100, 151),
-        #     (50, 76),
-        #     (25, 38),
-        #     (13, 19)
-        # ]
         self.spatial_shapes = torch.tensor([[167, 167], [84, 84], [42, 42], [21, 21]])
         self.spatial_shapes_list = [(167, 167), (84, 84), (42, 42), (21, 21)]
         self.text_position_embedding = model.layers[0].get_text_position_embeddings(
@@ -148,6 +139,8 @@ class GroundingDinoEncoder(torch.nn.Module):
             None,
             torch.arange(model.config.max_text_len, dtype=torch.int32).unsqueeze(0),
         )
+
+    # def infer_spatial_shapes(self):
 
     def forward(
         self,
@@ -271,22 +264,11 @@ class GroundingDinoEncoder(torch.nn.Module):
 
 
 class GroundingDinoDecoder(torch.nn.Module):
-    def __init__(self, model: "GroundingDinoDecoder"):
+    def __init__(self, model: "GroundingDinoDecoder", rbln_config: RBLNGroundingDinoDecoderConfig):
         super().__init__()
         self.layers = model.layers
         self.config = model.config
         # FIXME: define Spatial shapes from config
-        # self.spatial_shapes = torch.tensor([
-        #     [100, 151],
-        #     [ 50,  76],
-        #     [ 25,  38],
-        #     [ 13,  19]])
-        # self.spatial_shapes_list = [
-        #     (100, 151),
-        #     (50, 76),
-        #     (25, 38),
-        #     (13, 19)
-        # ]
         self.spatial_shapes = torch.tensor([[167, 167], [84, 84], [42, 42], [21, 21]])
         self.spatial_shapes_list = [(167, 167), (84, 84), (42, 42), (21, 21)]
         self.reference_points_head = model.reference_points_head
@@ -409,21 +391,21 @@ class GroundingDinoDecoder(torch.nn.Module):
 
             hidden_states = layer_outputs[0]
 
-            def custom_logits(x, eps=1e-5):
-                z = torch.clamp(x, eps, 1 - eps)
-                x = torch.clamp(1-z, eps, 1 - eps)
-                return torch.log(z) - torch.log(x)
+            # def custom_logits(x, eps=1e-5):
+            #     z = torch.clamp(x, eps, 1 - eps)
+            #     x = torch.clamp(1-z, eps, 1 - eps)
+            #     return torch.log(z) - torch.log(x)
 
             # hack implementation for iterative bounding box refinement
             if self.bbox_embed is not None:
                 tmp = self.bbox_embed[idx](hidden_states)
                 num_coordinates = reference_points.shape[-1]
                 if num_coordinates == 4:
-                    new_reference_points = tmp + custom_logits(reference_points, eps=1e-5)
+                    new_reference_points = tmp + torch.special.logit(reference_points, eps=1e-5)
                     new_reference_points = new_reference_points.sigmoid()
                 elif num_coordinates == 2:
                     new_reference_points = tmp
-                    new_reference_points[..., :2] = tmp[..., :2] + custom_logits(reference_points, eps=1e-5)
+                    new_reference_points[..., :2] = tmp[..., :2] + torch.special.logit(reference_points, eps=1e-5)
                     new_reference_points = new_reference_points.sigmoid()
                 else:
                     raise ValueError(
@@ -640,7 +622,8 @@ class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
                 vision_attention_mask[:, None, None, :].repeat(1, self.num_heads, 1, 1).flatten(0, 1)
             )
             # RBLN FIX
-            text_attn_weights = text_attn_weights + ((1 - vision_attention_mask) * float("-inf"))
+            mask = (1 - vision_attention_mask) * torch.finfo(torch.float32).min
+            text_attn_weights = text_attn_weights + mask
 
         text_attn_weights = text_attn_weights.softmax(dim=-1)
 
@@ -730,13 +713,36 @@ class _GroundingDinoEncoderLayer(torch.nn.Module):
         )
 
 
-# from transformers.models.grounding_dino.modeling_grounding_dino import (
-#     GroundingDinoBiMultiHeadAttention,
-#     GroundingDinoEncoderLayer,
-#     GroundingDinoMultiscaleDeformableAttention,
-# )
+original_forward = None
+original_bi_multihead_attention_forward = None
+original_encoder_layer_forward = None
 
 
-# GroundingDinoMultiscaleDeformableAttention.forward = _GroundingDinoMultiscaleDeformableAttention.forward
-# GroundingDinoBiMultiHeadAttention.forward = _GroundingDinoBiMultiHeadAttention.forward
-# GroundingDinoEncoderLayer.forward = _GroundingDinoEncoderLayer.forward
+def monkey_patch():
+    from transformers.models.grounding_dino.modeling_grounding_dino import (
+        GroundingDinoBiMultiHeadAttention,
+        GroundingDinoEncoderLayer,
+        GroundingDinoMultiscaleDeformableAttention,
+    )
+
+    original_forward = GroundingDinoMultiscaleDeformableAttention.forward
+    original_bi_multihead_attention_forward = GroundingDinoBiMultiHeadAttention.forward
+    original_encoder_layer_forward = GroundingDinoEncoderLayer.forward
+
+    # Patch the methods with the custom implementations
+    GroundingDinoMultiscaleDeformableAttention.forward = _GroundingDinoMultiscaleDeformableAttention.forward
+    GroundingDinoBiMultiHeadAttention.forward = _GroundingDinoBiMultiHeadAttention.forward
+    GroundingDinoEncoderLayer.forward = _GroundingDinoEncoderLayer.forward
+
+
+def restore_monkey_patch():
+    from transformers.models.grounding_dino.modeling_grounding_dino import (
+        GroundingDinoBiMultiHeadAttention,
+        GroundingDinoEncoderLayer,
+        GroundingDinoMultiscaleDeformableAttention,
+    )
+
+    # Restore the original methods
+    GroundingDinoMultiscaleDeformableAttention.forward = original_forward
+    GroundingDinoBiMultiHeadAttention.forward = original_bi_multihead_attention_forward
+    GroundingDinoEncoderLayer.forward = original_encoder_layer_forward

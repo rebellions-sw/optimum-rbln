@@ -2,75 +2,68 @@ import requests
 import torch
 from PIL import Image
 from transformers import AutoProcessor, GroundingDinoForObjectDetection
+import fire
+import os
+from optimum.rbln.transformers import RBLNGroundingDinoForObjectDetection
 
 
-model_id = "IDEA-Research/grounding-dino-tiny"
-device = "cuda" if torch.cuda.is_available() else "cpu"
+def main(compile: bool = False, native_run: bool = False, rbln_run: bool = False):
 
-processor = AutoProcessor.from_pretrained(model_id, max_length=256)
-model = GroundingDinoForObjectDetection.from_pretrained(model_id).to(device)
+    model_id = "IDEA-Research/grounding-dino-tiny"
 
-url = "http://images.cocodataset.org/val2017/000000039769.jpg"
-url2 = "http://images.cocodataset.org/val2017/000000000139.jpg"
-image = Image.open(requests.get(url, stream=True).raw)
-image2 = Image.open(requests.get(url2, stream=True).raw)
+    processor = AutoProcessor.from_pretrained(model_id, max_length=256)
+    if native_run:
+        model = GroundingDinoForObjectDetection.from_pretrained(model_id)
 
-text = "a cat. a remote control."
-longest_edge = processor.image_processor.size['longest_edge']
-inputs = processor(
-    images=image,
-    text=text,
-    padding="max_length",
-    do_pad=True,
-    pad_size={"height": longest_edge, "width": longest_edge},
-    return_tensors="pt",
-).to(device)
+    url = "http://images.cocodataset.org/val2017/000000039769.jpg"
+    url2 = "http://images.cocodataset.org/val2017/000000000139.jpg"
+    image = Image.open(requests.get(url, stream=True).raw)
+    image2 = Image.open(requests.get(url2, stream=True).raw)
 
-# inputs["pixel_values"] = pad(
-#     inputs["pixel_values"],
-#     (0, 1333 - inputs["pixel_values"].shape[-1], 0, 1333 - inputs["pixel_values"].shape[-2]),
-#     value=0,
-# )
-# inputs["pixel_mask"] = pad(
-#     inputs["pixel_mask"], (0, 1333 - inputs["pixel_mask"].shape[-1], 0, 1333 - inputs["pixel_mask"].shape[-2]), value=0
-# )
-
-def get_rbln_results():
-    from optimum.rbln.transformers import RBLNGroundingDinoForObjectDetection
-
-    # rbln_model = RBLNGroundingDinoForObjectDetection.from_pretrained(model_id, export=True, model_save_dir="rbln_grounding_dino_2")
-    rbln_model = RBLNGroundingDinoForObjectDetection.from_pretrained("rbln_grounding_dino", export=False)
-
-    with torch.no_grad():
-        outputs = rbln_model(**inputs)
-
-    results = processor.post_process_grounded_object_detection(
-        outputs,
-        inputs.input_ids,
-        box_threshold=0.4,
-        text_threshold=0.3,
-        target_sizes=[image.size[::-1]],
+    text = "a cat. a remote control."
+    longest_edge = processor.image_processor.size["longest_edge"]
+    inputs = processor(
+        images=image,
+        text=text,
+        padding="max_length",
+        do_pad=True,
+        pad_size={"height": longest_edge, "width": longest_edge},
+        return_tensors="pt",
     )
-    print(outputs.last_hidden_state)
-    print(results)
-    breakpoint()
 
+    if compile:
+        rbln_model = RBLNGroundingDinoForObjectDetection.from_pretrained(model_id, export=True, model_save_dir=os.path.basename(model_id))")
+    else:
+        rbln_model = RBLNGroundingDinoForObjectDetection.from_pretrained("rbln_grounding_dino", export=False)
 
-def get_cpu_results():
+    if rbln_run:
+        with torch.inference_mode():
+            rbln_outputs = rbln_model(**inputs)
 
-    with torch.no_grad():
-        outputs = model(**inputs)
+        rbln_results = processor.post_process_grounded_object_detection(
+            rbln_outputs,
+            inputs.input_ids,
+            box_threshold=0.4,
+            text_threshold=0.3,
+            target_sizes=[image.size[::-1]],
+        )
+        print("RBLN Model Outputs:")
+        print(rbln_outputs.last_hidden_state)
+        print("RBLN Results:")
+        print(rbln_results)
 
-    results = processor.post_process_grounded_object_detection(
-        outputs,
-        inputs.input_ids,
-        box_threshold=0.4,
-        text_threshold=0.3,
-        target_sizes=[image.size[::-1]],
-    )
-    print(outputs.last_hidden_state)
-    print(results)
-    breakpoint()
+    if native_run:
+        with torch.inference_mode():
+            golden_outputs = model(**inputs)
 
-# get_cpu_results()
-get_rbln_results()
+        golden_results = processor.post_process_grounded_object_detection(
+            golden_outputs,
+            inputs.input_ids,
+            box_threshold=0.4,
+            text_threshold=0.3,
+            target_sizes=[image.size[::-1]],
+        )
+        print("CPU Model Outputs:")
+        print(golden_outputs.last_hidden_state)
+        print("CPU Results:")
+        print(golden_results)

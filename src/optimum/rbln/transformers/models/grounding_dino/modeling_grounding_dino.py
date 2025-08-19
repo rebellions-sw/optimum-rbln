@@ -19,12 +19,12 @@ import torch
 from torch import Tensor, nn
 from transformers import AutoModel
 from transformers.modeling_utils import no_init_weights
-from transformers.pytorch_utils import meshgrid
 from transformers.models.grounding_dino.modeling_grounding_dino import (
     GroundingDinoContrastiveEmbedding,
     GroundingDinoConvEncoder,
     GroundingDinoConvModel,
     GroundingDinoDecoderOutput,
+    GroundingDinoEncoder,
     GroundingDinoEncoderOutput,
     GroundingDinoMLPPredictionHead,
     GroundingDinoModel,
@@ -33,17 +33,22 @@ from transformers.models.grounding_dino.modeling_grounding_dino import (
     build_position_encoding,
     generate_masks_with_special_tokens_and_transfer_map,
 )
+from transformers.pytorch_utils import meshgrid
 
-from ....utils.runtime_utils import RBLNPytorchRuntime
 from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
+from ....utils.runtime_utils import RBLNPytorchRuntime
 from .configuration_grounding_dino import (
     RBLNGroundingDinoDecoderConfig,
     RBLNGroundingDinoEncoderConfig,
     RBLNGroundingDinoForObjectDetectionConfig,
 )
-from .grounding_dino_architecture import GroundingDinoDecoder, GroundingDinoEncoder
+from .grounding_dino_architecture import (
+    GroundingDinoDecoder,
+    monkey_patch,
+    restore_monkey_patch,
+)  # , #GroundingDinoEncoder
 
 
 logger = get_logger(__name__)
@@ -61,7 +66,7 @@ if TYPE_CHECKING:
 
 class RBLNGroundingDinoForObjectDetection(RBLNModel):
     _rbln_submodules = [
-        {"name": "encoder"},
+        # {"name": "encoder"},
         # {"name": "text_backbone"},
         # {"name": "backbone"},
         {"name": "decoder"},
@@ -76,8 +81,8 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
     def __post_init__(self, **kwargs):
         self.setup_cpu_instances()
         self.text_projection = RBLNPytorchRuntime(self.model[0])
-        self.encoder = self.rbln_submodules[0]
-        self.decoder = self.rbln_submodules[1]
+        # self.encoder = self.rbln_submodules[0]
+        self.decoder = self.rbln_submodules[0]
 
     def setup_cpu_instances(self):
         stacte_dict = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
@@ -158,6 +163,10 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
             else:
                 self.reference_points = nn.Embedding(config.num_queries, 4)
 
+            self.encoder = GroundingDinoEncoder(config).eval()
+
+        self.encoder.load_state_dict(stacte_dict["encoder"])
+
         self.backbone.load_state_dict(stacte_dict["backbone"])
         self.text_backbone.load_state_dict(stacte_dict["text_backbone"])
 
@@ -173,8 +182,8 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
             self.encoder_output_bbox_embed.load_state_dict(stacte_dict["encoder_output_bbox_embed"])
         else:
             self.reference_points.load_state_dict(stacte_dict["reference_points"])
-            if self.config.embedding_init_target:
-                self.query_position_embeddings.load_state_dict(stacte_dict["query_position_embeddings"])
+        if self.config.embedding_init_target or not self.config.two_stage:
+            self.query_position_embeddings.load_state_dict(stacte_dict["query_position_embeddings"])
 
     @classmethod
     def save_torch_artifacts(
@@ -198,11 +207,12 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
             save_dict["encoder_output_bbox_embed"] = model.model.encoder_output_bbox_embed.state_dict()
         else:
             save_dict["reference_points"] = model.model.reference_points.state_dict()
-            if model.config.embedding_init_target:
-                save_dict["query_position_embeddings"] = model.model.query_position_embeddings.state_dict()
+        if model.config.embedding_init_target or not model.config.two_stage:
+            save_dict["query_position_embeddings"] = model.model.query_position_embeddings.state_dict()
 
         save_dict["class_embed"] = model.class_embed.state_dict()
         save_dict["bbox_embed"] = model.bbox_embed.state_dict()
+        save_dict["encoder"] = model.model.encoder.state_dict()
 
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
@@ -210,8 +220,8 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
     def get_pytorch_model(cls, *args, **kwargs):
         model = super().get_pytorch_model(*args, **kwargs)
         model.encoder = model.model.encoder
-        model.encoder.config = model.config
         model.decoder = model.model.decoder
+        model.encoder.config = model.config
         model.decoder.config = model.config
         return model
 
@@ -238,7 +248,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         input_info = [
             (
                 "test_features",
-                [rbln_config.batch_size,model_config.max_text_len, model_config.text_config.hidden_size],
+                [rbln_config.batch_size, model_config.max_text_len, model_config.text_config.hidden_size],
                 "float32",
             ),
         ]
@@ -248,7 +258,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
 
     def generate_encoder_output_proposals(self, *args, **kwargs):
         return GroundingDinoModel.generate_encoder_output_proposals(self, *args, **kwargs)
-    
+
     def get_valid_ratio(self, *args, **kwargs):
         return GroundingDinoModel.get_valid_ratio(self, *args, **kwargs)
 
@@ -289,18 +299,11 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
             text_token_mask = text_token_mask[:, :max_text_len]
 
         # Extract text features from text backbone
-
-        text_outputs = self.text_backbone(input_ids, text_self_attention_masks, token_type_ids, position_ids, return_dict=return_dict)
+        text_outputs = self.text_backbone(
+            input_ids, text_self_attention_masks, token_type_ids, position_ids, return_dict=return_dict
+        )
         text_features = text_outputs.last_hidden_state if return_dict else text_outputs[0]
         text_features = self.text_projection(text_features)
-        
-        # #tmp
-        # text_features_list = []
-        # for i in range(text_features.shape[1]):
-        #     text_feature = text_features[:, i, :]
-        #     text_features_list.append(self.text_projection(text_feature))
-        # text_features = torch.stack(text_features_list, dim=1)
-        
 
         batch_size, num_channels, height, width = pixel_values.shape
         device = pixel_values.device
@@ -391,8 +394,6 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
                 text_hidden_states=encoder_outputs[3] if output_hidden_states else None,
                 attentions=encoder_outputs[-1] if output_attentions else None,
             )
-        
-        breakpoint()
 
         # Fifth, prepare decoder inputs
         topk_proposals = None
@@ -440,8 +441,6 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
             target = query_embeds.unsqueeze(0).repeat(batch_size, 1, 1)
             reference_points = self.reference_points.weight.unsqueeze(0).repeat(batch_size, 1, 1).sigmoid()
             init_reference_points = reference_points
-            
-        breakpoint()
 
         decoder_outputs = self.decoder(
             inputs_embeds=target,
@@ -606,7 +605,7 @@ class RBLNGroundingDinoEncoder(RBLNModel):
     This class provides hardware-accelerated inference for CLIP text encoders
     on RBLN devices, supporting text encoding for multimodal tasks.
     """
-    
+
     def __post_init__(self, **kwargs):
         self.encoder_runtime = RBLNPytorchRuntime(self.model[0])
 
@@ -614,13 +613,7 @@ class RBLNGroundingDinoEncoder(RBLNModel):
     def wrap_model_if_needed(
         cls, model: torch.nn.Module, rbln_config: RBLNGroundingDinoForObjectDetectionConfig
     ) -> torch.nn.Module:
-        return GroundingDinoEncoder(model).eval()
-
-    @classmethod
-    def update_rbln_config_using_pipe(
-        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
-    ) -> "RBLNDiffusionMixinConfig":
-        return rbln_config
+        return GroundingDinoEncoder(model, rbln_config).eval()
 
     @classmethod
     def _update_rbln_config(
@@ -630,6 +623,37 @@ class RBLNGroundingDinoEncoder(RBLNModel):
         model_config: RBLNGroundingDinoEncoderConfig = None,
         rbln_config: Optional[RBLNGroundingDinoEncoderConfig] = None,
     ) -> RBLNGroundingDinoEncoderConfig:
+        if rbln_config.image_size is None:
+            longest_edge = None
+            for processor in preprocessors:
+                if hasattr(processor, "image_processor"):
+                    longest_edge = processor.image_processor.size["longest_edge"]
+                    break
+            rbln_config.image_size = longest_edge
+        rbln_config.image_size = 1333
+
+        if rbln_config.image_size is None:
+            raise ValueError("RBLN config must have image_size set for RBLN optimized GroundingDinoDecoder.")
+
+        # def calculate_feature_map_size(x, depth: int = 1):
+        #     if depth == 0:
+        #         return x
+        #     return calculate_feature_map_size((x + 1) // 2, depth=-1)
+
+        # def calculate_num_patches(image_size, patch_size):
+        #     return (image_size + patch_size - 1) // patch_size
+
+        # # update spatial_shapes
+        # spatial_shapes = []
+        # backbone_config = model_config.backbone_config
+        # for i in range(backbone_config.out_indices):
+        #     num_patched_h = (rbln_config.image_height + backbone_config.patch_size - 1) // backbone_config.patch_size
+        #     num_patched_w = (rbln_config.image_width + backbone_config.patch_size - 1) // backbone_config.patch_size
+
+        #     spatial_shapes.append(
+        #         rbln_config.image_height // (2 ** (i + 2)),
+        #     )
+
         input_info = [
             (
                 "vision_features",
@@ -681,7 +705,6 @@ class RBLNGroundingDinoEncoder(RBLNModel):
         rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
 
         return rbln_config
-    
 
     @staticmethod
     def get_reference_points(spatial_shapes, valid_ratios, device):
@@ -769,12 +792,12 @@ class RBLNGroundingDinoDecoder(RBLNModel):
 
     def __post_init__(self, **kwargs):
         self.decoder_runtime = RBLNPytorchRuntime(self.model[0])
-        
+
     @classmethod
     def wrap_model_if_needed(
         cls, model: torch.nn.Module, rbln_config: RBLNGroundingDinoForObjectDetectionConfig
     ) -> torch.nn.Module:
-        return GroundingDinoDecoder(model).eval()
+        return GroundingDinoDecoder(model, rbln_config).eval()
 
     @classmethod
     def update_rbln_config_using_pipe(
@@ -790,6 +813,18 @@ class RBLNGroundingDinoDecoder(RBLNModel):
         model_config: RBLNGroundingDinoDecoderConfig = None,
         rbln_config: Optional[RBLNGroundingDinoEncoderConfig] = None,
     ) -> RBLNGroundingDinoEncoderConfig:
+        if rbln_config.image_size is None:
+            longest_edge = None
+            for processor in preprocessors:
+                if hasattr(processor, "image_processor"):
+                    longest_edge = processor.image_processor.size["longest_edge"]
+                    break
+            rbln_config.image_size = longest_edge
+        rbln_config.image_size = 1333
+
+        if rbln_config.image_size is None:
+            raise ValueError("RBLN config must have image_size set for RBLN optimized GroundingDinoDecoder.")
+
         input_info = [
             (
                 "inputs_embeds",
@@ -845,6 +880,13 @@ class RBLNGroundingDinoDecoder(RBLNModel):
 
         rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
         return rbln_config
+
+    @classmethod
+    def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNGroundingDinoDecoderConfig):
+        monkey_patch()
+        compiled_model = super().get_compiled_model(model, rbln_config)
+        restore_monkey_patch()
+        return compiled_model
 
     def forward(
         self,
