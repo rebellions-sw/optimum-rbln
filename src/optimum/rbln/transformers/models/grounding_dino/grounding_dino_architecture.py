@@ -284,7 +284,7 @@ class GroundingDinoDecoder(torch.nn.Module):
         text_encoder_attention_mask=None,
         reference_points=None,
         valid_ratios=None,
-        output_attentions=False,
+        output_attentions=True,
         output_hidden_states=False,
         return_dict=False,
     ):
@@ -347,20 +347,18 @@ class GroundingDinoDecoder(torch.nn.Module):
 
         if text_encoder_attention_mask is not None:
             dtype = text_encoder_hidden_states.dtype
-
             text_encoder_attention_mask = text_encoder_attention_mask[:, None, None, :]
             text_encoder_attention_mask = text_encoder_attention_mask.repeat(
                 1, self.config.decoder_attention_heads, self.config.num_queries, 1
             )
             text_encoder_attention_mask = text_encoder_attention_mask.to(dtype=dtype)
-            text_encoder_attention_mask = text_encoder_attention_mask * torch.finfo(dtype).min
+            text_encoder_attention_mask = (1.0 - text_encoder_attention_mask) * torch.finfo(dtype).min
 
         for idx, decoder_layer in enumerate(self.layers):
             num_coordinates = reference_points.shape[-1]
             if num_coordinates == 4:
-                reference_points_input = (
-                    reference_points[:, :, None] * torch.cat([valid_ratios, valid_ratios], -1)[:, None]
-                )
+                repeated_valid_ratios = torch.cat([valid_ratios, valid_ratios], -1)[:, None]
+                reference_points_input = reference_points.unsqueeze(2) * repeated_valid_ratios
             elif num_coordinates == 2:
                 reference_points_input = reference_points[:, :, None] * valid_ratios[:, None]
             else:
@@ -390,11 +388,6 @@ class GroundingDinoDecoder(torch.nn.Module):
             )
 
             hidden_states = layer_outputs[0]
-
-            # def custom_logits(x, eps=1e-5):
-            #     z = torch.clamp(x, eps, 1 - eps)
-            #     x = torch.clamp(1-z, eps, 1 - eps)
-            #     return torch.log(z) - torch.log(x)
 
             # hack implementation for iterative bounding box refinement
             if self.bbox_embed is not None:
@@ -443,16 +436,19 @@ class GroundingDinoDecoder(torch.nn.Module):
                 for v in [
                     hidden_states,
                     intermediate,
-                    intermediate_reference_points,
+                    reference_points_input,
                     all_hidden_states,
                     all_attns,
+                    repeated_valid_ratios,
+                    reference_points.unsqueeze(2),
+                    reference_points_input,
                 ]
                 if v is not None
             )
         return GroundingDinoDecoderOutput(
             last_hidden_state=hidden_states,
             intermediate_hidden_states=intermediate,
-            intermediate_reference_points=intermediate_reference_points,
+            intermediate_reference_points=reference_points_input,
             hidden_states=all_hidden_states,
             attentions=all_attns,
         )
@@ -631,7 +627,10 @@ class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
         if text_attention_mask is not None:
             text_attention_mask = text_attention_mask[:, None, None, :].repeat(1, self.num_heads, 1, 1).flatten(0, 1)
             # RBLN FIX
-            attn_weights = attn_weights + ((1 - text_attention_mask) * float("-inf"))
+            mask = (1 - text_attention_mask) * torch.finfo(torch.float32).min
+            attn_weights = attn_weights + mask
+
+        # RBLN FIX
         vision_attn_weights = attn_weights.softmax(dim=-1)
 
         vision_attn_probs = F.dropout(vision_attn_weights, p=self.dropout, training=self.training)
@@ -734,8 +733,10 @@ def monkey_patch():
     GroundingDinoBiMultiHeadAttention.forward = _GroundingDinoBiMultiHeadAttention.forward
     GroundingDinoEncoderLayer.forward = _GroundingDinoEncoderLayer.forward
 
+    return (original_forward, original_bi_multihead_attention_forward, original_encoder_layer_forward)
 
-def restore_monkey_patch():
+
+def restore_monkey_patch(original_forward, original_bi_multihead_attention_forward, original_encoder_layer_forward):
     from transformers.models.grounding_dino.modeling_grounding_dino import (
         GroundingDinoBiMultiHeadAttention,
         GroundingDinoEncoderLayer,

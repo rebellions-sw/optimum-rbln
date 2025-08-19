@@ -12,7 +12,7 @@ def main(compile: bool = False, native_run: bool = False, rbln_run: bool = False
 
     processor = AutoProcessor.from_pretrained(model_id, max_length=256)
     if native_run:
-        model = GroundingDinoForObjectDetection.from_pretrained(model_id)
+        model = GroundingDinoForObjectDetection.from_pretrained(model_id, decoder_layers=1)
 
     url = "http://images.cocodataset.org/val2017/000000039769.jpg"
     url2 = "http://images.cocodataset.org/val2017/000000000139.jpg"
@@ -32,12 +32,13 @@ def main(compile: bool = False, native_run: bool = False, rbln_run: bool = False
 
     if compile:
         rbln_model = RBLNGroundingDinoForObjectDetection.from_pretrained(
-            model_id, export=True, model_save_dir=os.path.basename(model_id)
+            model_id, export=True, decoder_layers=1, model_save_dir=os.path.basename(model_id)
         )
-    else:
-        rbln_model = RBLNGroundingDinoForObjectDetection.from_pretrained("rbln_grounding_dino", export=False)
 
     if rbln_run:
+        if not compile:
+            rbln_model = RBLNGroundingDinoForObjectDetection.from_pretrained(os.path.basename(model_id), export=False)
+
         with torch.inference_mode():
             rbln_outputs = rbln_model(**inputs)
 
@@ -68,6 +69,8 @@ def main(compile: bool = False, native_run: bool = False, rbln_run: bool = False
         print(golden_outputs.last_hidden_state)
         print("CPU Results:")
         print(golden_results)
+
+    breakpoint()
 
 
 if __name__ == "__main__":

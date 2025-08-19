@@ -1,7 +1,6 @@
 from transformers import GroundingDinoForObjectDetection
 
 from optimum.rbln import RBLNGroundingDinoEncoder
-from optimum.rbln.transformers.models.grounding_dino.grounding_dino_architecture import GroundingDinoEncoder
 
 
 model_id = "IDEA-Research/grounding-dino-tiny"

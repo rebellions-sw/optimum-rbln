@@ -80,7 +80,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
 
     def __post_init__(self, **kwargs):
         self.setup_cpu_instances()
-        self.text_projection = RBLNPytorchRuntime(self.model[0])
+        # self.text_projection = RBLNPytorchRuntime(self.model[0])
         # self.encoder = self.rbln_submodules[0]
         self.decoder = self.rbln_submodules[0]
 
@@ -164,8 +164,10 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
                 self.reference_points = nn.Embedding(config.num_queries, 4)
 
             self.encoder = GroundingDinoEncoder(config).eval()
+            self.text_projection = nn.Linear(config.text_config.hidden_size, config.d_model)
 
         self.encoder.load_state_dict(stacte_dict["encoder"])
+        self.text_projection.load_state_dict(stacte_dict["text_projection"])
 
         self.backbone.load_state_dict(stacte_dict["backbone"])
         self.text_backbone.load_state_dict(stacte_dict["text_backbone"])
@@ -200,6 +202,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         save_dict["text_backbone"] = model.model.text_backbone.state_dict()
         save_dict["input_proj_vision"] = model.model.input_proj_vision.state_dict()
         save_dict["level_embed"] = model.model.level_embed
+        save_dict["text_projection"] = model.model.text_projection.state_dict()
         if model.config.two_stage:
             save_dict["enc_output"] = model.model.enc_output.state_dict()
             save_dict["enc_output_norm"] = model.model.enc_output_norm.state_dict()
@@ -447,7 +450,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
             vision_encoder_hidden_states=encoder_outputs[0],
             vision_encoder_attention_mask=mask_flatten,
             text_encoder_hidden_states=encoder_outputs[1],
-            text_encoder_attention_mask=~text_token_mask,
+            text_encoder_attention_mask=text_token_mask,
             reference_points=reference_points,
             spatial_shapes=spatial_shapes,
             spatial_shapes_list=spatial_shapes_list,
@@ -883,9 +886,9 @@ class RBLNGroundingDinoDecoder(RBLNModel):
 
     @classmethod
     def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNGroundingDinoDecoderConfig):
-        monkey_patch()
+        a, b, c = monkey_patch()
         compiled_model = super().get_compiled_model(model, rbln_config)
-        restore_monkey_patch()
+        restore_monkey_patch(a, b, c)
         return compiled_model
 
     def forward(
@@ -926,4 +929,5 @@ class RBLNGroundingDinoDecoder(RBLNModel):
             last_hidden_state=outputs[0],
             intermediate_hidden_states=outputs[1],
             intermediate_reference_points=outputs[2],
+            attentions=tuple(outputs[3:]),
         )
