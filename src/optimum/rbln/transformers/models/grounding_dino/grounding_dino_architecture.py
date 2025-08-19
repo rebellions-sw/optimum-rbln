@@ -163,10 +163,10 @@ class GroundingDinoEncoder(torch.nn.Module):
         text_self_attention_masks: Optional[torch.Tensor] = None,
         # text_position_ids: Optional[torch.Tensor] = None,
         reference_points: Optional[torch.Tensor] = None,
-        text_position_embedding: Optional[torch.Tensor] = None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
+        # text_position_embedding: Optional[torch.Tensor] = None,
+        output_attentions=False,
+        output_hidden_states=False,
+        return_dict=False,
     ):
         r"""
         Args:
@@ -302,9 +302,9 @@ class GroundingDinoDecoder(torch.nn.Module):
         text_encoder_attention_mask=None,
         reference_points=None,
         valid_ratios=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
+        output_attentions=False,
+        output_hidden_states=False,
+        return_dict=False,
     ):
         r"""
         Args:
@@ -411,7 +411,8 @@ class GroundingDinoDecoder(torch.nn.Module):
 
             def custom_logits(x, eps=1e-5):
                 z = torch.clamp(x, eps, 1 - eps)
-                return torch.log(z) - torch.log(1 - z)
+                x = torch.clamp(1-z, eps, 1 - eps)
+                return torch.log(z) - torch.log(x)
 
             # hack implementation for iterative bounding box refinement
             if self.bbox_embed is not None:
@@ -680,8 +681,6 @@ class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
         return (vision_attn_output, vision_attn_weights), (text_attn_output, text_attn_weights)
 
 
-
-
 class _GroundingDinoEncoderLayer(torch.nn.Module):
     def forward(
         self,
@@ -731,13 +730,13 @@ class _GroundingDinoEncoderLayer(torch.nn.Module):
         )
 
 
-from transformers.models.grounding_dino.modeling_grounding_dino import (
-    GroundingDinoBiMultiHeadAttention,
-    GroundingDinoEncoderLayer,
-    GroundingDinoMultiscaleDeformableAttention,
-)
+# from transformers.models.grounding_dino.modeling_grounding_dino import (
+#     GroundingDinoBiMultiHeadAttention,
+#     GroundingDinoEncoderLayer,
+#     GroundingDinoMultiscaleDeformableAttention,
+# )
 
 
-GroundingDinoMultiscaleDeformableAttention.forward = _GroundingDinoMultiscaleDeformableAttention.forward
-GroundingDinoBiMultiHeadAttention.forward = _GroundingDinoBiMultiHeadAttention.forward
-GroundingDinoEncoderLayer.forward = _GroundingDinoEncoderLayer.forward
+# GroundingDinoMultiscaleDeformableAttention.forward = _GroundingDinoMultiscaleDeformableAttention.forward
+# GroundingDinoBiMultiHeadAttention.forward = _GroundingDinoBiMultiHeadAttention.forward
+# GroundingDinoEncoderLayer.forward = _GroundingDinoEncoderLayer.forward
