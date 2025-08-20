@@ -343,13 +343,12 @@ class _GroundingDinoDecoder(torch.nn.Module):
         intermediate_reference_points = ()
 
         if text_encoder_attention_mask is not None:
-            dtype = text_encoder_hidden_states.dtype
             text_encoder_attention_mask = text_encoder_attention_mask[:, None, None, :]
             text_encoder_attention_mask = text_encoder_attention_mask.repeat(
                 1, self.config.decoder_attention_heads, self.config.num_queries, 1
             )
-            text_encoder_attention_mask = text_encoder_attention_mask.to(dtype=dtype)
-            text_encoder_attention_mask = text_encoder_attention_mask * torch.finfo(dtype).min
+            text_encoder_attention_mask = text_encoder_attention_mask
+            text_encoder_attention_mask = text_encoder_attention_mask * torch.finfo(torch.float16).min
 
         for idx, decoder_layer in enumerate(self.layers):
             num_coordinates = reference_points.shape[-1]
@@ -604,11 +603,11 @@ class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
 
         # # Do not increase -50000/50000, data type half has quite limited range
         text_attn_weights = torch.clamp(text_attn_weights, min=-50000, max=50000)
-        
+
         # mask vision for language
         if vision_attention_mask is not None:
             # RBLN FIX
-            mask = vision_attention_mask * torch.finfo(torch.float32).min
+            mask = vision_attention_mask * torch.finfo(torch.float16).min
             text_attn_weights = text_attn_weights.transpose(1, 2) + mask
             text_attn_weights = text_attn_weights.transpose(1, 2)
 
@@ -618,7 +617,7 @@ class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
         if text_attention_mask is not None:
             text_attention_mask = text_attention_mask[:, None, None, :].repeat(1, self.num_heads, 1, 1).flatten(0, 1)
             # RBLN FIX
-            mask = text_attention_mask * torch.finfo(torch.float32).min
+            mask = text_attention_mask * torch.finfo(torch.float16).min
             attn_weights = attn_weights + mask
 
         # RBLN FIX
