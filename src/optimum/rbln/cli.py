@@ -475,14 +475,13 @@ def main():
         epilog=EXAMPLES_TEXT,
     )
 
-    # Standard --version that integrates with argparse (works after full parse)
     parser.add_argument(
-        "--version",
-        action="version",
-        version=f"%(prog)s {__version__}",
-        help="Show version and exit",
+        "--model-id",
+        dest="model_id",
+        type=str,
+        required=True,
+        help="Model ID from HuggingFace Hub or local directory path",
     )
-    parser.add_argument("--no-style", action="store_true", help="Disable ANSI styling in output")
 
     # Optional output directory argument (defaults to ./rbln_out)
     parser.add_argument(
@@ -514,13 +513,15 @@ def main():
         help="Show rbln_config keys for the resolved RBLN class (via --class or inferred from --model-id) and exit",
     )
 
+    # Standard --version that integrates with argparse (works after full parse)
     parser.add_argument(
-        "--model-id",
-        dest="model_id",
-        type=str,
-        required=True,
-        help="Model ID from HuggingFace Hub or local directory path",
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+        help="Show version and exit",
     )
+    parser.add_argument("--no-style", action="store_true", help="Disable ANSI styling in output")
+
     # HuggingFace Hub access options
     parser.add_argument(
         "--hf-token",
