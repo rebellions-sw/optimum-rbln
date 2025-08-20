@@ -12,14 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import torch
 import torch.nn.functional as F
 from torch import Tensor
 from transformers.models.grounding_dino.modeling_grounding_dino import (
+    GroundingDinoDecoder,
     GroundingDinoDecoderOutput,
+    GroundingDinoEncoder,
     GroundingDinoEncoderOutput,
+    GroundingDinoModel,
     get_sine_pos_embed,
 )
 
@@ -30,11 +33,6 @@ from .configuration_grounding_dino import RBLNGroundingDinoDecoderConfig, RBLNGr
 # from transformers.models.grounding_dino.modeling_grounding_dino import generate_masks_with_special_tokens_and_transfer_map
 
 logger = get_logger(__name__)
-
-if TYPE_CHECKING:
-    from transformers import (
-        GroundingDinoModel,
-    )
 
 
 class _GroundingDinoModel(torch.nn.Module):
@@ -364,8 +362,8 @@ class _GroundingDinoDecoder(torch.nn.Module):
                 reference_points_input = reference_points[:, :, None] * valid_ratios[:, None]
             else:
                 raise ValueError("Last dim of reference_points must be 2 or 4, but got {reference_points.shape[-1]}")
-            query_pos = get_sine_pos_embed(reference_points_input[:, :, 0, :], num_pos_feats=self.config.d_model // 2)
-            query_pos = self.reference_points_head(query_pos)
+            _query_pos = get_sine_pos_embed(reference_points_input[:, :, 0, :], num_pos_feats=self.config.d_model // 2)
+            query_pos = self.reference_points_head(_query_pos)
 
             # In original implementation they apply layer norm before outputting intermediate hidden states
             # Though that's not through between layers so the layers use as input the output of the previous layer
@@ -486,10 +484,8 @@ class _GroundingDinoMultiscaleDeformableAttention(torch.nn.Module):
         if attention_mask is not None:
             # we invert the attention_mask
             # value = value.masked_fill(~attention_mask[..., None], float(0))
-
             # RBLN FIX
-            mask = 1.0 - attention_mask
-            value = mask * value
+            value = attention_mask * value
 
         value = value.view(batch_size, sequence_length, self.n_heads, self.d_model // self.n_heads)
         sampling_offsets = self.sampling_offsets(hidden_states).view(

@@ -48,9 +48,10 @@ from .configuration_grounding_dino import (
 from .grounding_dino_architecture import (
     _GroundingDinoDecoder,
     _GroundingDinoEncoder,
-    restore_monkey_patch,
     monkey_patch,
+    restore_monkey_patch,
 )
+
 
 logger = get_logger(__name__)
 
@@ -968,13 +969,15 @@ class RBLNGroundingDinoDecoder(RBLNModel):
             )
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
+        reshaped_vision_encoder_attention_mask = (
+            vision_encoder_attention_mask[:, :, None].repeat(1, 1, self.config.d_model).to(torch.float32)
+        )
+
         # Forward pass through the decoder
         outputs = self.decoder_runtime(
             inputs_embeds=inputs_embeds,
             vision_encoder_hidden_states=vision_encoder_hidden_states,
-            vision_encoder_attention_mask=vision_encoder_attention_mask.to(torch.float32)
-            .unsqueeze(-1)
-            .repeat(1, 1, self.config.d_model),
+            vision_encoder_attention_mask=reshaped_vision_encoder_attention_mask,
             text_encoder_hidden_states=text_encoder_hidden_states,
             text_encoder_attention_mask=text_encoder_attention_mask.to(torch.float32),
             reference_points=reference_points,
