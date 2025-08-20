@@ -3,30 +3,30 @@ import pickle
 import fire
 from transformers import GroundingDinoForObjectDetection
 
-from optimum.rbln import RBLNGroundingDinoDecoder
+from optimum.rbln import RBLNGroundingDinoEncoder
 import scipy
 
 def main(compile: bool = False, layers: int = 6):
 
     model_id = "IDEA-Research/grounding-dino-tiny"
-    model = GroundingDinoForObjectDetection.from_pretrained(model_id, decoder_layers=layers)
+    model = GroundingDinoForObjectDetection.from_pretrained(model_id, encoder_layers=layers)
 
     if compile:
-        rbln_decoder = RBLNGroundingDinoDecoder.from_model(model.model.decoder)
-        rbln_decoder.save_pretrained("decoder")
+        rbln_encoder = RBLNGroundingDinoEncoder.from_model(model.model.encoder)
+        rbln_encoder.save_pretrained("encoder")
     else:
-        rbln_decoder = RBLNGroundingDinoDecoder.from_pretrained("decoder", export=False)
+        rbln_encoder = RBLNGroundingDinoEncoder.from_pretrained("encoder", export=False)
 
-    decoder_kwargs = pickle.load(open("/mnt/shared_data/groups/sw_dev/thkim/grounding_dino/decoder_kwargs.pkl", "rb"))
+    encoder_kwargs = pickle.load(open("/mnt/shared_data/groups/sw_dev/thkim/grounding_dino/encoder_kwargs.pkl", "rb"))
     
     with torch.inference_mode():
-        golden_model = model.model.decoder
+        golden_model = model.model.encoder
         golden_output = golden_model(
-            **decoder_kwargs,
+            **encoder_kwargs,
         )
 
-        rbln_output = rbln_decoder(
-            **decoder_kwargs,
+        rbln_output = rbln_encoder(
+            **encoder_kwargs,
         )
 
     for i, key_name in enumerate(golden_output.keys()):

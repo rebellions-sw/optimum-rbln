@@ -125,7 +125,7 @@ class _GroundingDinoModel(torch.nn.Module):
         return text_features, vision_features[0], feature_maps[0]
 
 
-class GroundingDinoEncoder(torch.nn.Module):
+class _GroundingDinoEncoder(torch.nn.Module):
     def __init__(self, model: "GroundingDinoEncoder", rbln_config: RBLNGroundingDinoEncoderConfig):
         super().__init__()
         self.layers = model.layers
@@ -263,7 +263,7 @@ class GroundingDinoEncoder(torch.nn.Module):
         )
 
 
-class GroundingDinoDecoder(torch.nn.Module):
+class _GroundingDinoDecoder(torch.nn.Module):
     def __init__(self, model: "GroundingDinoDecoder", rbln_config: RBLNGroundingDinoDecoderConfig):
         super().__init__()
         self.layers = model.layers
@@ -352,7 +352,7 @@ class GroundingDinoDecoder(torch.nn.Module):
                 1, self.config.decoder_attention_heads, self.config.num_queries, 1
             )
             text_encoder_attention_mask = text_encoder_attention_mask.to(dtype=dtype)
-            text_encoder_attention_mask = (1.0 - text_encoder_attention_mask) * torch.finfo(dtype).min
+            text_encoder_attention_mask = text_encoder_attention_mask * torch.finfo(dtype).min
 
         for idx, decoder_layer in enumerate(self.layers):
             num_coordinates = reference_points.shape[-1]
@@ -436,19 +436,16 @@ class GroundingDinoDecoder(torch.nn.Module):
                 for v in [
                     hidden_states,
                     intermediate,
-                    reference_points_input,
+                    intermediate_reference_points,
                     all_hidden_states,
                     all_attns,
-                    repeated_valid_ratios,
-                    reference_points.unsqueeze(2),
-                    reference_points_input,
                 ]
                 if v is not None
             )
         return GroundingDinoDecoderOutput(
             last_hidden_state=hidden_states,
             intermediate_hidden_states=intermediate,
-            intermediate_reference_points=reference_points_input,
+            intermediate_reference_points=intermediate_reference_points,
             hidden_states=all_hidden_states,
             attentions=all_attns,
         )
