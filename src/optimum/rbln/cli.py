@@ -153,40 +153,27 @@ def _label(text: str) -> str:
 EXAMPLES_TEXT = r"""
 Quick start examples
   1) Compile a Llama chat model for causal LM
-     optimum-rbln-cli ./compiled_llama \
+     optimum-rbln-cli --output-dir ./compiled_llama \
        --model-id meta-llama/Llama-2-7b-chat-hf \
        --batch-size 2 --tensor-parallel-size 4
 
   2) Compile with explicit class (Auto sequence classification)
-     optimum-rbln-cli ./compiled_bert \
+     optimum-rbln-cli --output-dir ./compiled_bert \
        --class RBLNAutoModelForSequenceClassification \
        --model-id bert-base-uncased \
        --batch-size 8 --max-seq-len 512
 
-  3) Use Auto model class for small GPT-2
-     optimum-rbln-cli ./compiled_gpt2 \
-       --class RBLNAutoModelForCausalLM \
-       --model-id openai-community/gpt2 \
-       --batch-size 1
-
-  4) Pass nested rbln_config with dot-notation (e.g., for diffusion)
-     optimum-rbln-cli ./compiled_sd \
+  3) Pass nested rbln_config with dot-notation (e.g., for diffusion)
+     optimum-rbln-cli --output-dir ./compiled_sd \
        --model-id runwayml/stable-diffusion-v1-5 \
        --unet.batch_size 2 --vae.batch_size 1
 
-  5) Private repo with token and revision
-     optimum-rbln-cli ./compiled_private \
-       --model-id private-org/private-model \
-       --hf-token $HF_TOKEN --hf-revision main
-
 Notes
-  - --class is optional. If omitted, it is inferred from model files (model_index.json/_class_name or
-    config.json/architectures[0]).
   - Any extra --key value pairs not defined above are collected into rbln_config
     and forwarded to from_pretrained(..., rbln_config=...).
-  - Use --hf-token/--hf-revision/--hf-cache-dir/--hf-force-download/--hf-local-files-only for Hub access control.
   - Use --list-classes to see available RBLN classes.
-  - Use --show-rbln-config CLASS to see accepted rbln_config keys for a class.
+  - Use --show-rbln-config to see accepted rbln_config keys for the resolved class
+    (via --class or inferred from --model-id).
   - Show this examples list anytime with:  optimum-rbln-cli --examples
 """
 
@@ -434,13 +421,6 @@ def main():
     # Pre-parse lightweight flags that should work without other required args
     pre_parser = argparse.ArgumentParser(add_help=False)
     pre_parser.add_argument("--list-classes", action="store_true", help="List available RBLN classes and exit")
-    pre_parser.add_argument(
-        "--show-rbln-config",
-        dest="show_rbln_config",
-        metavar="CLASS",
-        type=str,
-        help="Show rbln_config keys for the given RBLN CLASS and exit",
-    )
     pre_parser.add_argument("--examples", action="store_true", help="Show quick start examples and exit")
     pre_parser.add_argument("--version", action="store_true", help="Show version and exit")
     pre_parser.add_argument("--no-style", action="store_true", help="Disable ANSI styling in output")
@@ -484,14 +464,10 @@ def main():
         print(EXAMPLES_TEXT)
         return
 
-    if pre_args.show_rbln_config:
-        _print_rbln_config_options(pre_args.show_rbln_config)
-        return
-
     parser = argparse.ArgumentParser(
         description=(
             "Compile and export HuggingFace models/pipelines for RBLN devices.\n\n"
-            "Required: output_dir, --model-id. --class is optional and will be inferred from the model when omitted.\n"
+            "Required: --model-id.\n"
             "Additional --key value pairs are forwarded to rbln_config.\n"
             "Use dot-notation for nested fields (e.g., --unet.batch_size 2)."
         ),
@@ -508,8 +484,15 @@ def main():
     )
     parser.add_argument("--no-style", action="store_true", help="Disable ANSI styling in output")
 
-    # Required positional argument
-    parser.add_argument("output_dir", type=str, help="Directory where the compiled model will be saved")
+    # Optional output directory argument (defaults to ./rbln_out)
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        dest="output_dir",
+        type=str,
+        default="./rbln_out",
+        help="Directory where the compiled model will be saved (default: ./rbln_out)",
+    )
 
     # Optional class argument (can be inferred)
     parser.add_argument(
@@ -521,6 +504,14 @@ def main():
             "RBLN model class to use for compilation (e.g., RBLNLlamaForCausalLM, RBLNAutoModelForCausalLM). "
             "If omitted, it will be inferred from model_id by reading model_index.json or config.json."
         ),
+    )
+
+    # Optional flag to show rbln_config for the resolved class (no compilation)
+    parser.add_argument(
+        "--show-rbln-config",
+        dest="show_rbln_config",
+        action="store_true",
+        help="Show rbln_config keys for the resolved RBLN class (via --class or inferred from --model-id) and exit",
     )
 
     parser.add_argument(
@@ -569,13 +560,13 @@ def main():
     # Print help with examples when no args were provided
     if len(sys.argv) == 1:
         parser.print_help()
-        return
+        sys.exit(2)
 
     # Parse known args to allow for additional rbln_* arguments
     args, unknown_args = parser.parse_known_args()
 
     try:
-        # Resolve or infer model class
+        # Resolve or infer model class for compilation
         resolved_class_name: Optional[str] = args.model_class
         if not resolved_class_name:
             resolved_class_name = _infer_rbln_class_from_model_id(
@@ -592,6 +583,10 @@ def main():
                     file=sys.stderr,
                 )
                 sys.exit(2)
+
+        if args.show_rbln_config:
+            _print_rbln_config_options(resolved_class_name)
+            return
 
         # Get the model class using the utility function (with helpful error)
         try:

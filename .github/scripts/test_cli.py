@@ -56,6 +56,7 @@ def test_resnet_compilation():
         "python",
         "-m",
         "optimum.rbln.cli",
+        "--output-dir",
         test_output_dir,
         "--model-id",
         "hf-internal-testing/tiny-random-ResNetForImageClassification",
@@ -98,6 +99,7 @@ def test_stable_diffusion_compilation():
         "python",
         "-m",
         "optimum.rbln.cli",
+        "--output-dir",
         test_output_dir,
         "--model-id",
         "hf-internal-testing/tiny-sd-pipe",
@@ -148,10 +150,10 @@ def test_argument_parsing():
     # Test missing required arguments
     print("Testing missing required arguments...")
     result = subprocess.run(["uv", "run", "python", "-m", "optimum.rbln.cli"], capture_output=True, text=True)
-    if result.returncode == 0 or "required" not in result.stderr:
-        print("❌ Expected error for missing arguments")
+    if result.returncode == 0:
+        print("❌ Expected non-zero exit for missing arguments")
         return False
-    print("✅ Correctly failed with missing arguments error")
+    print("✅ Correctly failed with missing arguments (help shown)")
 
     # Test invalid model class
     print("Testing invalid model class...")
@@ -162,6 +164,7 @@ def test_argument_parsing():
             "python",
             "-m",
             "optimum.rbln.cli",
+            "--output-dir",
             "/tmp/test",
             "--class",
             "InvalidClass",
