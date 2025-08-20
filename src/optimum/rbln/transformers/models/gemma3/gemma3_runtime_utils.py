@@ -73,12 +73,22 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         position_embed: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
+        lora_int_ids: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
         """
         Performs chunked prefill for efficient KV-cache updates and memory optimization.
         Instead of processing the entire sequence at once, the input is divided into chunks of size `prefill_chunk_size`,
         and each chunk is processed sequentially. This allows for better memory utilization and compatibility with continuous batching.
         """
+        if self.rbln_config.use_lora and lora_int_ids is None:
+            if self.lora_int_ids is None:
+                raise ValueError(
+                    "lora_int_id is required when using LoRA. "
+                    "You should call set_lora_int_ids() before forward() or pass lora_int_id to forward()."
+                )
+            if batch_idx is not None:
+                lora_int_ids = self.lora_int_ids[batch_idx : batch_idx + 1].clone()
+
         (
             inputs,
             cache_position,
@@ -141,6 +151,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                     query_position,
                     chunked_attention_mask,
                     position_ids_chunk,
+                    lora_int_ids if self.rbln_config.use_lora else None,
                 )
             else:
                 logits = self.prefill(
@@ -151,6 +162,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                     query_position,
                     chunked_attention_mask,
                     position_ids_chunk,
+                    lora_int_ids if self.rbln_config.use_lora else None,
                 )
 
             padded_cache_lengths += current_padded_cache_lengths
@@ -173,7 +185,20 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
         position_embed: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
+        lora_int_ids: Optional[torch.Tensor] = None,
     ) -> torch.FloatTensor:
+        if self.rbln_config.use_lora and lora_int_ids is None:
+            if self.lora_int_ids is None:
+                raise ValueError(
+                    "lora_int_id is required when using LoRA. "
+                    "You should call set_lora_int_ids() before forward() or pass lora_int_id to forward()."
+                )
+
+            lora_int_ids = self.lora_int_ids
+
+        if lora_int_ids is not None and lora_int_ids.shape[0] != self.batch_size:
+            raise ValueError(f"lora_int_ids size mismatch: got {lora_int_ids.shape[0]}, expected {self.batch_size}.")
+
         batch_size = inputs.shape[0]
         if batch_size != self.batch_size:
             raise RuntimeError(
