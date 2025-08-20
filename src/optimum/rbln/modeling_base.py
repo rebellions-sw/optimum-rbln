@@ -523,18 +523,10 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             # First copy everything to a temporary directory
             shutil.copytree(real_save_dir, tmp_dir)
 
-            # If everything succeeded, move files to target directory
+            # If everything succeeded, atomically replace the target directory
             if os.path.exists(save_directory_path):
-                # Move files from tmp_dir to existing directory (overwrite existing files)
-                for item in os.listdir(tmp_dir):
-                    src_path = os.path.join(tmp_dir, item)
-                    dst_path = os.path.join(save_directory_path, item)
-                    shutil.move(src_path, dst_path)
-                # Clean up empty tmp_dir
-                os.rmdir(tmp_dir)
-            else:
-                # If target doesn't exist, just rename tmp_dir to target
-                os.rename(tmp_dir, save_directory_path)
+                shutil.rmtree(save_directory_path)
+            os.rename(tmp_dir, save_directory_path)
 
         except Exception as e:
             # Clean up the temporary directory if anything fails
