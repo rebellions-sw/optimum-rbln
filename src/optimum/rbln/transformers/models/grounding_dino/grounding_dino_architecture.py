@@ -208,8 +208,6 @@ class _GroundingDinoEncoder(torch.nn.Module):
         )
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        # reference_points = self.get_reference_points(spatial_shapes, valid_ratios, device=vision_features.device)
-
         encoder_vision_states = () if output_hidden_states else None
         encoder_text_states = () if output_hidden_states else None
         all_attns = () if output_attentions else None
@@ -252,6 +250,7 @@ class _GroundingDinoEncoder(torch.nn.Module):
         if not return_dict:
             enc_outputs = [vision_features, text_features, encoder_vision_states, encoder_text_states, all_attns]
             return tuple(v for v in enc_outputs if v is not None)
+
         return GroundingDinoEncoderOutput(
             last_hidden_state_vision=vision_features,
             last_hidden_state_text=text_features,
@@ -282,7 +281,7 @@ class _GroundingDinoDecoder(torch.nn.Module):
         text_encoder_attention_mask=None,
         reference_points=None,
         valid_ratios=None,
-        output_attentions=True,
+        output_attentions=None,
         output_hidden_states=False,
         return_dict=False,
     ):
@@ -605,12 +604,11 @@ class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
 
         # # Do not increase -50000/50000, data type half has quite limited range
         text_attn_weights = torch.clamp(text_attn_weights, min=-50000, max=50000)
-
+        
         # mask vision for language
         if vision_attention_mask is not None:
             # RBLN FIX
-            mask = (1 - vision_attention_mask) * torch.finfo(torch.float32).min
-            # rbln_fix
+            mask = vision_attention_mask * torch.finfo(torch.float32).min
             text_attn_weights = text_attn_weights.transpose(1, 2) + mask
             text_attn_weights = text_attn_weights.transpose(1, 2)
 
@@ -620,7 +618,7 @@ class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
         if text_attention_mask is not None:
             text_attention_mask = text_attention_mask[:, None, None, :].repeat(1, self.num_heads, 1, 1).flatten(0, 1)
             # RBLN FIX
-            mask = (1 - text_attention_mask) * torch.finfo(torch.float32).min
+            mask = text_attention_mask * torch.finfo(torch.float32).min
             attn_weights = attn_weights + mask
 
         # RBLN FIX

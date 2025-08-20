@@ -1,9 +1,11 @@
+import os
+
+import fire
 import requests
 import torch
 from PIL import Image
 from transformers import AutoProcessor, GroundingDinoForObjectDetection
-import fire
-import os
+
 from optimum.rbln.transformers import RBLNGroundingDinoForObjectDetection
 
 

@@ -840,6 +840,7 @@ class RBLNGroundingDinoEncoder(RBLNModel):
         return GroundingDinoEncoderOutput(
             last_hidden_state_vision=enc_outputs[0],
             last_hidden_state_text=enc_outputs[1],
+            attentions=tuple(enc_outputs[2:]),
         )
 
 
