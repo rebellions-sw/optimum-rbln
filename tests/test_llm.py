@@ -16,6 +16,7 @@ from optimum.rbln import (
     RBLNAutoModelForVision2Seq,
     RBLNBartForConditionalGeneration,
     RBLNBlip2ForConditionalGeneration,
+    RBLNDecoderOnlyModelForCausalLM,
     RBLNExaoneForCausalLM,
     RBLNGemma3ForCausalLM,
     RBLNGemma3ForConditionalGeneration,
@@ -57,6 +58,13 @@ class LLMTest:
         RBLN_AUTO_CLASS = RBLNAutoModelForCausalLM
         DEVICE = None  # Use device to run
         PROMPT = "Who are you?"
+
+        @classmethod
+        def setUpClass(cls):
+            if issubclass(cls.RBLN_CLASS, RBLNDecoderOnlyModelForCausalLM) and cls.RBLN_CLASS._supports_non_fp32:
+                if cls.RBLN_CLASS != RBLNExaoneForCausalLM:  # FIXME: "auto" is not supported for Exaone
+                    cls.HF_CONFIG_KWARGS["torch_dtype"] = "auto"
+            super().setUpClass()
 
         @classmethod
         def get_tokenizer(cls):

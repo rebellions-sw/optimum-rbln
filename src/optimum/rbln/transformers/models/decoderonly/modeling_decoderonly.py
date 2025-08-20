@@ -72,6 +72,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     auto_model_class = AutoModel
     _decoder_wrapper_cls = DecoderOnlyWrapper
     _use_rotary_emb = True
+    _supports_non_fp32 = True
 
     def __post_init__(self, **kwargs):
         if self.rbln_config.use_inputs_embeds:
@@ -86,10 +87,8 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     def setup_runtime(self):
         # Initialize resources to be used across Runtime instances (prefill and decode phases)
         page_table_manager = RBLNPageTableManager(self.rbln_config)
-        dec_attn_mask = torch.zeros(
-            self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=torch.float32
-        )
-        out_buffers = [torch.empty(self.prefill_output_size, dtype=torch.float32, device="cpu")]
+        dec_attn_mask = torch.zeros(self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=self.dtype)
+        out_buffers = [torch.empty(self.prefill_output_size, dtype=self.dtype)]
 
         common_kwargs = {
             "main_input_name": "inputs_embeds" if self.rbln_config.use_inputs_embeds else "input_ids",
@@ -365,7 +364,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
         input_info = []
         if rbln_config.use_inputs_embeds:
-            input_info.append(("inputs_embeds", [batch_size, query_length, hidden_size], "float32"))
+            input_info.append(("inputs_embeds", [batch_size, query_length, hidden_size], rbln_config.torch_dtype))
         else:
             input_info.append(("input_ids", [batch_size, query_length], "int64"))
 
@@ -384,16 +383,16 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
         if rbln_config.use_attention_mask:
             if rbln_config.use_position_ids:
-                input_info.append(("attention_mask", [batch_size, rbln_config.max_seq_len], "float32"))
+                input_info.append(("attention_mask", [batch_size, rbln_config.max_seq_len], rbln_config.torch_dtype))
             else:
                 input_info.append(
-                    ("attention_mask", [batch_size, 1, query_length, rbln_config.max_seq_len], "float32")
+                    ("attention_mask", [batch_size, 1, query_length, rbln_config.max_seq_len], rbln_config.torch_dtype)
                 )
 
         if rbln_config.use_position_ids:
             input_info.append(("position_ids", [batch_size, query_length], "int32"))
 
-        kvcache_dtype = "float32"
+        kvcache_dtype = rbln_config.torch_dtype
         if rbln_config.quantization and rbln_config.quantization.kv_caches == "fp8":
             kvcache_dtype = "float8_e4m3fn"
 
