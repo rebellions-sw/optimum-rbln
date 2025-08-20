@@ -396,7 +396,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     "You should call set_lora_int_ids() before forward() or pass lora_int_id to forward()."
                 )
 
-            lora_int_ids = self.lora_int_ids[batch_idx : batch_idx + 1].clone()
+            if batch_idx is not None:
+                lora_int_ids = self.lora_int_ids[batch_idx : batch_idx + 1].clone()
 
         (
             inputs,

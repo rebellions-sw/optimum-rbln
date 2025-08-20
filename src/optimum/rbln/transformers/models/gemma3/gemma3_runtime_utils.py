@@ -86,8 +86,8 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                     "lora_int_id is required when using LoRA. "
                     "You should call set_lora_int_ids() before forward() or pass lora_int_id to forward()."
                 )
-
-            lora_int_ids = self.lora_int_ids[batch_idx : batch_idx + 1].clone()
+            if batch_idx is not None:
+                lora_int_ids = self.lora_int_ids[batch_idx : batch_idx + 1].clone()
 
         (
             inputs,
@@ -151,6 +151,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                     query_position,
                     chunked_attention_mask,
                     position_ids_chunk,
+                    lora_int_ids if self.rbln_config.use_lora else None,
                 )
             else:
                 logits = self.prefill(
@@ -161,6 +162,7 @@ class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
                     query_position,
                     chunked_attention_mask,
                     position_ids_chunk,
+                    lora_int_ids if self.rbln_config.use_lora else None,
                 )
 
             padded_cache_lengths += current_padded_cache_lengths
