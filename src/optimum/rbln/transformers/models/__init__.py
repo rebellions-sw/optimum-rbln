@@ -141,6 +141,10 @@ _import_structure = {
         "RBLNSiglipVisionModel",
         "RBLNSiglipVisionModelConfig",
     ],
+    "swin": [
+        "RBLNSwinBackbone",
+        "RBLNSwinBackboneConfig",
+    ],
     "time_series_transformer": [
         "RBLNTimeSeriesTransformerForPrediction",
         "RBLNTimeSeriesTransformerForPredictionConfig",
@@ -266,6 +270,7 @@ if TYPE_CHECKING:
         RBLNRobertaForSequenceClassificationConfig,
     )
     from .siglip import RBLNSiglipVisionModel, RBLNSiglipVisionModelConfig
+    from .swin import RBLNSwinBackbone, RBLNSwinBackboneConfig
     from .t5 import (
         RBLNT5EncoderModel,
         RBLNT5EncoderModelConfig,
