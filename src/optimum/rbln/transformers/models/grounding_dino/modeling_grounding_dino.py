@@ -722,6 +722,7 @@ class RBLNGroundingDinoEncoder(RBLNModel):
                 [
                     rbln_config.batch_size,
                     37150,
+                    model_config.d_model,
                 ],
                 "float32",
             ),
@@ -822,7 +823,9 @@ class RBLNGroundingDinoEncoder(RBLNModel):
 
         enc_outputs = self.encoder_runtime(
             vision_features=vision_features,
-            vision_attention_mask=vision_attention_mask.to(torch.float32),
+            vision_attention_mask=vision_attention_mask.to(torch.float32)
+            .unsqueeze(-1)
+            .repeat(1, 1, self.config.d_model),
             vision_position_embedding=vision_position_embedding,
             text_features=text_features,
             text_attention_mask=text_attention_mask.to(torch.float32),
@@ -899,7 +902,7 @@ class RBLNGroundingDinoDecoder(RBLNModel):
             ),
             (
                 "vision_encoder_attention_mask",
-                [rbln_config.batch_size, 37150],
+                [rbln_config.batch_size, 37150, model_config.d_model],
                 "float32",
             ),
             (
@@ -969,7 +972,9 @@ class RBLNGroundingDinoDecoder(RBLNModel):
         outputs = self.decoder_runtime(
             inputs_embeds=inputs_embeds,
             vision_encoder_hidden_states=vision_encoder_hidden_states,
-            vision_encoder_attention_mask=vision_encoder_attention_mask.to(torch.float32),
+            vision_encoder_attention_mask=vision_encoder_attention_mask.to(torch.float32)
+            .unsqueeze(-1)
+            .repeat(1, 1, self.config.d_model),
             text_encoder_hidden_states=text_encoder_hidden_states,
             text_encoder_attention_mask=text_encoder_attention_mask.to(torch.float32),
             reference_points=reference_points,

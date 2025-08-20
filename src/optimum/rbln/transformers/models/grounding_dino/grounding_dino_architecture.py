@@ -357,8 +357,9 @@ class _GroundingDinoDecoder(torch.nn.Module):
         for idx, decoder_layer in enumerate(self.layers):
             num_coordinates = reference_points.shape[-1]
             if num_coordinates == 4:
-                repeated_valid_ratios = torch.cat([valid_ratios, valid_ratios], -1)[:, None]
-                reference_points_input = reference_points.unsqueeze(2) * repeated_valid_ratios
+                reference_points_input = (
+                    reference_points[:, :, None] * torch.cat([valid_ratios, valid_ratios], -1)[:, None]
+                )
             elif num_coordinates == 2:
                 reference_points_input = reference_points[:, :, None] * valid_ratios[:, None]
             else:
@@ -487,7 +488,7 @@ class _GroundingDinoMultiscaleDeformableAttention(torch.nn.Module):
             # value = value.masked_fill(~attention_mask[..., None], float(0))
 
             # RBLN FIX
-            mask = 1.0 - attention_mask[..., None]
+            mask = 1.0 - attention_mask
             value = mask * value
 
         value = value.view(batch_size, sequence_length, self.n_heads, self.d_model // self.n_heads)
@@ -611,12 +612,11 @@ class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
 
         # mask vision for language
         if vision_attention_mask is not None:
-            vision_attention_mask = (
-                vision_attention_mask[:, None, None, :].repeat(1, self.num_heads, 1, 1).flatten(0, 1)
-            )
             # RBLN FIX
             mask = (1 - vision_attention_mask) * torch.finfo(torch.float32).min
-            text_attn_weights = text_attn_weights + mask
+            # rbln_fix
+            text_attn_weights = text_attn_weights.transpose(1, 2) + mask
+            text_attn_weights = text_attn_weights.transpose(1, 2)
 
         text_attn_weights = text_attn_weights.softmax(dim=-1)
 
