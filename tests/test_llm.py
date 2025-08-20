@@ -66,8 +66,9 @@ class LLMTest:
 
         def get_inputs(self):
             inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt")
-            inputs["max_new_tokens"] = 20
-            inputs["do_sample"] = False
+            if self.model.can_generate():
+                inputs["max_new_tokens"] = 20
+                inputs["do_sample"] = False
             return inputs
 
         def postprocess(self, inputs, output):
@@ -77,15 +78,8 @@ class LLMTest:
             )
             return generated_text
 
-    class TestLLMBase(TestLLM):
+    class TestLLMWithoutLMHead(TestLLM):
         RBLN_AUTO_CLASS = RBLNAutoModel
-        PROMPT = ["Who are you?", "What is the capital of France?"]
-
-        def get_inputs(self):
-            tokenizer = self.get_tokenizer()
-            tokenizer.pad_token = tokenizer.eos_token
-            inputs = tokenizer(self.PROMPT, return_tensors="pt", padding=True)
-            return inputs
 
 
 class TestMistralForCausalLM(LLMTest.TestLLM):
@@ -95,7 +89,7 @@ class TestMistralForCausalLM(LLMTest.TestLLM):
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "sliding_window": 512}
 
 
-class TestMistralModel(LLMTest.TestLLMBase):
+class TestMistralModel(LLMTest.TestLLMWithoutLMHead):
     RBLN_CLASS = RBLNMistralModel
     HF_MODEL_ID = "openaccess-ai-collective/tiny-mistral"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "sliding_window": 512}
@@ -108,7 +102,7 @@ class TestQwen2ForCausalLM(LLMTest.TestLLM):
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
 
 
-class TestQwen2Model(LLMTest.TestLLMBase):
+class TestQwen2Model(LLMTest.TestLLMWithoutLMHead):
     RBLN_CLASS = RBLNQwen2Model
     HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
@@ -124,10 +118,12 @@ class TestQwen3ForCausalLM(LLMTest.TestLLM):
 
 
 class TestQwen3ForCausalLM_UAM(TestQwen3ForCausalLM):
+    RBLN_AUTO_CLASS = RBLNAutoModelForCausalLM
     RBLN_CLASS_KWARGS = {"rbln_config": {"use_attention_mask": True}}
 
 
-class TestQwen3Model(LLMTest.TestLLMBase):
+class TestQwen3Model(LLMTest.TestLLMWithoutLMHead):
+    RBLN_AUTO_CLASS = RBLNAutoModel
     RBLN_CLASS = RBLNQwen3Model
     HF_MODEL_ID = "trl-internal-testing/tiny-Qwen3ForCausalLM"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
@@ -144,7 +140,7 @@ class TestOPTForCausalLM(LLMTest.TestLLM):
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 2048}
 
 
-class TestOPTModel(LLMTest.TestLLMBase):
+class TestOPTModel(LLMTest.TestLLMWithoutLMHead):
     RBLN_CLASS = RBLNOPTModel
     HF_MODEL_ID = "facebook/opt-2.7b"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 2048}
@@ -163,7 +159,7 @@ class TestLlamaForCausalLM(LLMTest.TestLLM):
         return inputs
 
 
-class TestLlamaModel(LLMTest.TestLLMBase):
+class TestLlamaModel(LLMTest.TestLLMWithoutLMHead):
     RBLN_CLASS = RBLNLlamaModel
     HF_MODEL_ID = "afmck/testing-llama-tiny"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
@@ -183,7 +179,7 @@ class TestLlamaForCausalLM_Flash(LLMTest.TestLLM):
         return inputs
 
 
-class TestLlamaModel_Flash(LLMTest.TestLLMBase):
+class TestLlamaModel_Flash(LLMTest.TestLLMWithoutLMHead):
     RBLN_CLASS = RBLNLlamaModel
     HF_MODEL_ID = "afmck/testing-llama-tiny"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 8192}
@@ -224,7 +220,7 @@ class TestGPT2LMHeadModel(LLMTest.TestLLM):
     HF_CONFIG_KWARGS = {"n_layer": 1, "max_position_embeddings": 1024}
 
 
-class TestGPT2Model(LLMTest.TestLLMBase):
+class TestGPT2Model(LLMTest.TestLLMWithoutLMHead):
     RBLN_CLASS = RBLNGPT2Model
     HF_MODEL_ID = "openai-community/gpt2"
     HF_CONFIG_KWARGS = {"n_layer": 1, "max_position_embeddings": 1024}
@@ -239,7 +235,7 @@ class TestPhiForCausalLM(LLMTest.TestLLM):
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "trust_remote_code": True}
 
 
-class TestPhiModel(LLMTest.TestLLMBase):
+class TestPhiModel(LLMTest.TestLLMWithoutLMHead):
     RBLN_CLASS = RBLNPhiModel
     HF_MODEL_ID = "microsoft/phi-2"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "trust_remote_code": True}
@@ -363,12 +359,12 @@ class TestLlavaForConditionalGeneration(LLMTest.TestLLM):
         }
     }
     EXPECTED_OUTPUT = "ambbrow nur Well chimCore rapideraine Йye questaédédates Ken neu Airport din termeächstthread"
-    HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
+    HF_CONFIG_KWARGS = {"revision": "8ab8bfc820a6bb9e0f8de1ac715f4b53db44e684"}
 
     @classmethod
     def get_tokenizer(cls):
         if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
         return cls._tokenizer
 
     def get_inputs(self):
@@ -434,18 +430,18 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
         }
     }
     EXPECTED_OUTPUT = "entricCallbackavidARYails NotesDAPimil coordFeed Boysaml obligation relay迟 войны sexual Definition Eisen patent"
-    HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
+    HF_CONFIG_KWARGS = {"revision": "21948c1af6a0666e341b6403dc1cbbd5c8900e7d"}
 
     @classmethod
     def get_tokenizer(cls):
         if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
         return cls._tokenizer
 
     # override
     @classmethod
     def setUpClass(cls):
-        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
+        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
 
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 1
@@ -617,13 +613,13 @@ class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
     @classmethod
     def get_tokenizer(cls):
         if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
         return cls._tokenizer
 
     # override
     @classmethod
     def setUpClass(cls):
-        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID, revision="e1f4b0516ec80f86ed75c8cb1d45ede72526ad24")
+        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 2
         text_config["sliding_window_pattern"] = 2
@@ -654,6 +650,25 @@ class TestGemma3ForCausalLM(LLMTest.TestLLM):
         "max_position_embeddings": 1024,
         "trust_remote_code": True,
     }
+
+
+class TestLlamaForCausalLM_fp8(LLMTest.TestLLM):
+    RBLN_CLASS = RBLNLlamaForCausalLM
+    HF_MODEL_ID = "RedHatAI/Meta-Llama-3-8B-Instruct-FP8-KV"  # No tiny model yet.
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1}
+    RBLN_CLASS_KWARGS = {
+        "rbln_config": {
+            "quantization": {"weights": "fp8", "kv_caches": "fp8"},
+            "create_runtimes": False,
+            "npu": "RBLN-CR03",
+            "attn_impl": "flash_attn",
+            "kvcache_partition_len": 4096,
+            "max_seq_len": 8192,
+            "tensor_parallel_size": 1,
+        },
+    }
+    EXPECTED_OUTPUT = None  # Cannot generate output with fp8 quantization in ATOM™
+    TEST_LEVEL = TestLevel.DISABLED
 
 
 class TestDisallowedLlama_1(DisallowedTestBase.DisallowedTest):

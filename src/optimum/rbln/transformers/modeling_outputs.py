@@ -12,19 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .modeling_auto import (
-    RBLNAutoModel,
-    RBLNAutoModelForAudioClassification,
-    RBLNAutoModelForCausalLM,
-    RBLNAutoModelForCTC,
-    RBLNAutoModelForDepthEstimation,
-    RBLNAutoModelForImageClassification,
-    RBLNAutoModelForImageTextToText,
-    RBLNAutoModelForMaskedLM,
-    RBLNAutoModelForQuestionAnswering,
-    RBLNAutoModelForSeq2SeqLM,
-    RBLNAutoModelForSequenceClassification,
-    RBLNAutoModelForSpeechSeq2Seq,
-    RBLNAutoModelForTextEncoding,
-    RBLNAutoModelForVision2Seq,
-)
+from dataclasses import dataclass
+from typing import Optional, Tuple
+
+import torch
+from transformers.modeling_outputs import ModelOutput
+
+
+@dataclass
+class RBLNDecoderOnlyOutput(ModelOutput):
+    logits: torch.FloatTensor = None
+    generate_idx: torch.Tensor = None
+    padded_cache_lengths: int = None
+
+
+@dataclass
+class RBLNGemma3ForCausalLMOutput(RBLNDecoderOnlyOutput):
+    attention_mask: Optional[torch.Tensor] = None
+
+
+@dataclass
+class RBLNSeq2SeqTSDecoderOutput(ModelOutput):
+    last_hidden_states: torch.FloatTensor = None
+    params: Tuple[torch.FloatTensor] = None

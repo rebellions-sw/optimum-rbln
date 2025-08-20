@@ -59,6 +59,9 @@ _import_structure = {
         "RBLNVQModelConfig",
     ],
     "pipelines": [
+        "RBLNAutoPipelineForImage2Image",
+        "RBLNAutoPipelineForInpainting",
+        "RBLNAutoPipelineForText2Image",
         "RBLNCosmosTextToWorldPipeline",
         "RBLNCosmosVideoToWorldPipeline",
         "RBLNCosmosSafetyChecker",
@@ -135,6 +138,7 @@ if TYPE_CHECKING:
     from .modeling_diffusers import RBLNDiffusionMixin
     from .models import (
         RBLNAutoencoderKL,
+        RBLNAutoencoderKLCosmos,
         RBLNControlNetModel,
         RBLNCosmosTransformer3DModel,
         RBLNPriorTransformer,
@@ -143,6 +147,9 @@ if TYPE_CHECKING:
         RBLNVQModel,
     )
     from .pipelines import (
+        RBLNAutoPipelineForImage2Image,
+        RBLNAutoPipelineForInpainting,
+        RBLNAutoPipelineForText2Image,
         RBLNCosmosSafetyChecker,
         RBLNCosmosTextToWorldPipeline,
         RBLNCosmosVideoToWorldPipeline,
