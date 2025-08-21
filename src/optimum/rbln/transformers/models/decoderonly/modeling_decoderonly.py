@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 import rebel
 import torch
 from rebel.compile_context import CompileContext
-from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, PretrainedConfig, PreTrainedModel
+from transformers import AutoModel, AutoModelForCausalLM, PretrainedConfig, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPast
 from transformers.modeling_utils import no_init_weights
 
@@ -33,7 +33,7 @@ from ...modeling_attention_utils import (
     validate_sliding_window,
 )
 from ...modeling_outputs import RBLNDecoderOnlyOutput
-from ...utils.rbln_quantization import prepare_model_for_quantization
+from ...utils.rbln_quantization import get_quantized_model
 from .configuration_decoderonly import RBLNDecoderOnlyModelConfig, RBLNDecoderOnlyModelForCausalLMConfig
 from .decoderonly_architecture import DecoderOnlyWrapper
 from .decoderonly_runtime_utils import RBLNPageTableManager, RBLNRuntimeModel
@@ -142,35 +142,17 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     ):
         kwargs = cls.update_kwargs(kwargs)
 
-        if config is None:
-            config = AutoConfig.from_pretrained(
-                model_id,
-                use_auth_token=use_auth_token,
-                revision=revision,
-                force_download=force_download,
-                cache_dir=cache_dir,
-                trust_remote_code=trust_remote_code,
-                **kwargs,
-            )
-            if config.torch_dtype == torch.bfloat16:
-                # FIXME: bfloat16 is not supported by rebel-compiler
-                config.torch_dtype = torch.float32
-
-        with no_init_weights():
-            model = cls.auto_model_class.from_config(config)
-
-        model = prepare_model_for_quantization(
-            model,
+        return get_quantized_model(
+            cls.auto_model_class,
             model_id,
-            kwargs.get("num_hidden_layers"),
             use_auth_token=use_auth_token,
             revision=revision,
             cache_dir=cache_dir,
             force_download=force_download,
             local_files_only=local_files_only,
             rbln_quantization=rbln_config.quantization,
+            **kwargs,
         )
-        return model
 
     def __getattr__(self, __name: str) -> Any:
         # Special method to delegate attribute access to the original Huggingface LM class.

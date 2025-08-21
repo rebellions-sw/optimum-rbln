@@ -16,7 +16,6 @@ from optimum.rbln import (
     RBLNAutoModelForVision2Seq,
     RBLNBartForConditionalGeneration,
     RBLNBlip2ForConditionalGeneration,
-    RBLNDecoderOnlyModelForCausalLM,
     RBLNExaoneForCausalLM,
     RBLNGemma3ForCausalLM,
     RBLNGemma3ForConditionalGeneration,
@@ -61,9 +60,7 @@ class LLMTest:
 
         @classmethod
         def setUpClass(cls):
-            if issubclass(cls.RBLN_CLASS, RBLNDecoderOnlyModelForCausalLM) and cls.RBLN_CLASS._supports_non_fp32:
-                if cls.RBLN_CLASS != RBLNExaoneForCausalLM:  # FIXME: "auto" is not supported for Exaone
-                    cls.HF_CONFIG_KWARGS["torch_dtype"] = "auto"
+            cls.HF_CONFIG_KWARGS["torch_dtype"] = "auto"
             super().setUpClass()
 
         @classmethod
