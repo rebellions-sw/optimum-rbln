@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import types
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import torch
@@ -35,6 +36,41 @@ if TYPE_CHECKING:
         SwinBackbone,
         SwinEncoder,
     )
+
+
+def window_partition(input_feature, window_size):
+    """
+    Partitions the given input into windows.
+    """
+    batch_size, height, width, num_channels = input_feature.shape
+    input_feature = input_feature.view(
+        batch_size, height // window_size, window_size, width // window_size, window_size, num_channels
+    )
+    windows = input_feature.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, window_size, window_size, num_channels)
+    return windows
+
+
+def get_attn_mask(self, height, width, dtype, device):
+    if self.shift_size > 0:
+        # calculate attention mask for SW-MSA
+        h, w = height, width
+
+        y_coords = torch.arange(h, device=device)
+        x_coords = torch.arange(w, device=device)
+
+        h_groups = (y_coords >= h - self.window_size).int() + (y_coords >= h - self.shift_size).int()
+        w_groups = (x_coords >= w - self.window_size).int() + (x_coords >= w - self.shift_size).int()
+
+        img_mask = h_groups.view(h, 1) * 3 + w_groups.view(1, w)
+        img_mask = img_mask.view(1, h, w, 1).to(dtype)
+
+        mask_windows = window_partition(img_mask, self.window_size)
+        mask_windows = mask_windows.view(-1, self.window_size * self.window_size)
+        attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
+        attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-100.0)).masked_fill(attn_mask == 0, float(0.0))
+    else:
+        attn_mask = None
+    return attn_mask
 
 
 class _SwinEncoder(torch.nn.Module):
@@ -154,6 +190,9 @@ class _SwinBackbone(torch.nn.Module):
 class RBLNSwinBackbone(RBLNModel):
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNSwinBackboneConfig) -> torch.nn.Module:
+        for layer in model.encoder.layers:
+            for block in layer.blocks:
+                block.get_attn_mask = types.MethodType(get_attn_mask, block)
         return _SwinBackbone(model).eval()
 
     @classmethod
