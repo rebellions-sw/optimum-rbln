@@ -14,15 +14,16 @@ def main(compile: bool = False, native_run: bool = False, rbln_run: bool = False
 
     processor = AutoProcessor.from_pretrained(model_id, max_length=256)
     if native_run:
-        model = GroundingDinoForObjectDetection.from_pretrained(model_id, decoder_layers=1)
+        model = GroundingDinoForObjectDetection.from_pretrained(model_id, decoder_layers=6)
 
     url = "http://images.cocodataset.org/val2017/000000039769.jpg"
     url2 = "http://images.cocodataset.org/val2017/000000000139.jpg"
-    image = Image.open(requests.get(url, stream=True).raw)
+    image = Image.open(requests.get(url, stream=True).raw).resize((704, 1280))
     image2 = Image.open(requests.get(url2, stream=True).raw)
 
     text = "a cat. a remote control."
     longest_edge = processor.image_processor.size["longest_edge"]
+
     inputs = processor(
         images=image,
         text=text,
@@ -34,7 +35,12 @@ def main(compile: bool = False, native_run: bool = False, rbln_run: bool = False
 
     if compile:
         rbln_model = RBLNGroundingDinoForObjectDetection.from_pretrained(
-            model_id, export=True, decoder_layers=1, model_save_dir=os.path.basename(model_id)
+            model_id, export=True, model_save_dir=os.path.basename(model_id),
+            rbln_config={
+                "text_backbone":{
+                    "max_seq_len": 256,
+                }
+            }
         )
 
     if rbln_run:

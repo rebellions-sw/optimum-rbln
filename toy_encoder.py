@@ -41,13 +41,14 @@ def main(compile: bool = False, layers: int = 6):
             print(f"\tMax L1 Diff: {max_l1_idff}")
             print(f"\tPearson Correlation: {pearsonr.correlation}, p-value: {pearsonr.pvalue}")
         except Exception:
-            breakpoint()
             for r, g in zip(rbln_output[i], golden_output[i]):
                 pearsonr = scipy.stats.pearsonr(
                     torch.clip(r, min=-1e5, max=1e5).flatten().numpy(),
                     torch.clip(g[0], min=-1e5, max=1e5).flatten().numpy(),
                 )
                 print(f"\tPearson Correlation: {pearsonr.correlation}")
+
+    breakpoint()
 
 
 if __name__ == "__main__":

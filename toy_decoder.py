@@ -50,8 +50,6 @@ def main(compile: bool = False, layers: int = 6):
                 )
                 print(f"\tPearson Correlation: {pearsonr.correlation}")
 
-    breakpoint()
-
 
 if __name__ == "__main__":
     fire.Fire(main)

@@ -68,9 +68,9 @@ if TYPE_CHECKING:
 
 class RBLNGroundingDinoForObjectDetection(RBLNModel):
     _rbln_submodules = [
-        # {"name": "encoder"},
-        # {"name": "text_backbone"},
+        {"name": "text_backbone"},
         # {"name": "backbone"},
+        {"name": "encoder"},
         {"name": "decoder"},
     ]
     # FIXME: Update the docstring to reflect the actual model functionality.
@@ -82,9 +82,10 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
 
     def __post_init__(self, **kwargs):
         self.setup_cpu_instances()
-        self.text_projection2 = RBLNPytorchRuntime(self.model[0])
-        # self.encoder = self.rbln_submodules[0]
-        self.decoder = self.rbln_submodules[0]
+        self.text_projection = RBLNPytorchRuntime(self.model[0])
+        self.text_backbone = self.rbln_submodules[0]
+        self.encoder = self.rbln_submodules[1]
+        self.decoder = self.rbln_submodules[2]
 
     def setup_cpu_instances(self):
         stacte_dict = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
@@ -139,8 +140,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
                     ]
                 )
 
-            # Create text backbone
-            self.text_backbone = AutoModel.from_config(config.text_config, add_pooling_layer=False).eval()
+
 
             if config.embedding_init_target or not config.two_stage:
                 self.query_position_embeddings = nn.Embedding(config.num_queries, config.d_model)
@@ -165,17 +165,18 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
             else:
                 self.reference_points = nn.Embedding(config.num_queries, 4)
 
-            self._decoder = GroundingDinoDecoder(config).eval()
-            self._encoder = GroundingDinoEncoder(config).eval()
-            self.text_projection = nn.Linear(config.text_config.hidden_size, config.d_model)
+        # # Create text backbone
+        #     self.text_backbone = AutoModel.from_config(config.text_config, add_pooling_layer=False).eval()
+        #     self._decoder = GroundingDinoDecoder(config).eval()
+        #     self._encoder = GroundingDinoEncoder(config).eval()
+        #     self.text_projection = nn.Linear(config.text_config.hidden_size, config.d_model)
 
-        self._encoder.load_state_dict(stacte_dict["encoder"])
-        # self._decoder.load_state_dict(stacte_dict["decoder"])
-        self.text_projection.load_state_dict(stacte_dict["text_projection"])
+        # self._encoder.load_state_dict(stacte_dict["encoder"])
+        # # self._decoder.load_state_dict(stacte_dict["decoder"])
+        # self.text_projection.load_state_dict(stacte_dict["text_projection"])
+        # self.text_backbone.load_state_dict(stacte_dict["text_backbone"])
 
         self.backbone.load_state_dict(stacte_dict["backbone"])
-        self.text_backbone.load_state_dict(stacte_dict["text_backbone"])
-
         self.bbox_embed.load_state_dict(stacte_dict["bbox_embed"])
         self.class_embed.load_state_dict(stacte_dict["class_embed"])
         self.input_proj_vision.load_state_dict(stacte_dict["input_proj_vision"])
@@ -203,10 +204,8 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         # store the torch tensor, weight, etc. in this function.
         save_dict = {}
         save_dict["backbone"] = model.model.backbone.state_dict()
-        save_dict["text_backbone"] = model.model.text_backbone.state_dict()
         save_dict["input_proj_vision"] = model.model.input_proj_vision.state_dict()
         save_dict["level_embed"] = model.model.level_embed
-        save_dict["text_projection"] = model.model.text_projection.state_dict()
         if model.config.two_stage:
             save_dict["enc_output"] = model.model.enc_output.state_dict()
             save_dict["enc_output_norm"] = model.model.enc_output_norm.state_dict()
@@ -222,6 +221,8 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
 
         save_dict["encoder"] = model.model.encoder.state_dict()
         save_dict["decoder"] = model.model.decoder.state_dict()
+        save_dict["text_projection"] = model.model.text_projection.state_dict()
+        save_dict["text_backbone"] = model.model.text_backbone.state_dict()
 
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
@@ -230,6 +231,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         model = super().get_pytorch_model(*args, **kwargs)
         model.encoder = model.model.encoder
         model.decoder = model.model.decoder
+        model.text_backbone = model.model.text_backbone
         model.encoder.config = model.config
         model.decoder.config = model.config
         return model
@@ -308,8 +310,9 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
             text_token_mask = text_token_mask[:, :max_text_len]
 
         # Extract text features from text backbone
+        breakpoint()
         text_outputs = self.text_backbone(
-            input_ids, text_self_attention_masks, token_type_ids, position_ids, return_dict=return_dict
+            input_ids, text_self_attention_masks.to(torch.long), token_type_ids, position_ids, return_dict=return_dict
         )
         text_features = text_outputs.last_hidden_state if return_dict else text_outputs[0]
         text_features = self.text_projection(text_features)
@@ -377,30 +380,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         # Fourth, sent source_flatten + mask_flatten + lvl_pos_embed_flatten (backbone + proj layer output) through encoder
         # Also provide spatial_shapes, level_start_index and valid_ratios
         if encoder_outputs is None:
-            breakpoint()
-            encoder_kwargs = {
-                "vision_features": source_flatten,
-                "vision_attention_mask": ~mask_flatten,
-                "vision_position_embedding": lvl_pos_embed_flatten,
-                "spatial_shapes": spatial_shapes,
-                "spatial_shapes_list": spatial_shapes_list,
-                "level_start_index": level_start_index,
-                "valid_ratios": valid_ratios,
-                "text_features": text_features,
-                "text_attention_mask": ~text_token_mask,
-                "text_position_embedding": None,
-                "text_self_attention_masks": ~text_self_attention_masks,
-                "text_position_ids": position_ids,
-                "output_attentions": output_attentions,
-                "output_hidden_states": output_hidden_states,
-                "return_dict": return_dict,
-            }
-            import pickle
-
-            with open("encoder_kwargs.pkl", "wb") as f:
-                pickle.dump(encoder_kwargs, f)
-
-            encoder_outputs = self._encoder(
+            encoder_outputs = self.encoder(
                 vision_features=source_flatten,
                 vision_attention_mask=~mask_flatten,
                 vision_position_embedding=lvl_pos_embed_flatten,
@@ -473,24 +453,6 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
             target = query_embeds.unsqueeze(0).repeat(batch_size, 1, 1)
             reference_points = self.reference_points.weight.unsqueeze(0).repeat(batch_size, 1, 1).sigmoid()
             init_reference_points = reference_points
-
-        decoder_kwargs = {
-            "inputs_embeds": target,
-            "vision_encoder_hidden_states": encoder_outputs[0],
-            "vision_encoder_attention_mask": mask_flatten,
-            "text_encoder_hidden_states": encoder_outputs[1],
-            "text_encoder_attention_mask": ~text_token_mask,
-            "reference_points": reference_points,
-            "spatial_shapes": spatial_shapes,
-            "spatial_shapes_list": spatial_shapes_list,
-            "level_start_index": level_start_index,
-            "valid_ratios": valid_ratios,
-            "self_attn_mask": None,  # TODO: implement self attention mask
-            "output_attentions": output_attentions,
-            "output_hidden_states": output_hidden_states,
-            "return_dict": return_dict,
-        }
-        pickle.dump(decoder_kwargs, open("decoder_kwargs.pkl", "wb"))
 
         decoder_outputs = self.decoder(
             inputs_embeds=target,

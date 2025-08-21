@@ -12,7 +12,7 @@
 
 from typing import TYPE_CHECKING, Any, Optional
 
-from ...configuration_generic import RBLNImageModelConfig
+from ...configuration_generic import RBLNImageModelConfig, RBLNModelConfig
 
 
 if TYPE_CHECKING:
@@ -21,15 +21,17 @@ if TYPE_CHECKING:
 
 class RBLNGroundingDinoForObjectDetectionConfig(RBLNImageModelConfig):
     submodules = [
-        # "encoder",
+        "text_backbone",
+        "encoder",
         "decoder",
     ]
 
     def __init__(
         self,
         batch_size: Optional[int] = None,
-        # encoder: Optional["RBLNGroundingDinoEncoderConfig"] = None,
+        encoder: Optional["RBLNGroundingDinoEncoderConfig"] = None,
         decoder: Optional["RBLNGroundingDinoDecoderConfig"] = None,
+        text_backbone: Optional["RBLNModelConfig"] = None,
         **kwargs: Any,
     ):
         """
@@ -41,8 +43,12 @@ class RBLNGroundingDinoForObjectDetectionConfig(RBLNImageModelConfig):
             ValueError: If batch_size is not a positive integer.
         """
         super().__init__(**kwargs)
-        # self.encoder = encoder
+        self.encoder = encoder
         self.decoder = decoder
+        self.text_backbone = text_backbone
+        if self.text_backbone.model_input_names == None:
+            self.text_backbone.model_input_names = ["input_ids", "attention_mask", "token_type_ids", "position_ids"]
+            
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
