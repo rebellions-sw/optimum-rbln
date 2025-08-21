@@ -672,8 +672,10 @@ class TestLlamaForCausalLM_fp8(LLMTest.TestLLM):
             "tensor_parallel_size": 1,
         },
     }
-    EXPECTED_OUTPUT = None  # Cannot generate output with fp8 quantization in ATOM™
-    TEST_LEVEL = TestLevel.DISABLED
+
+    def test_generate(self):
+        # Cannot generate output with fp8 quantization in ATOM™
+        pass
 
 
 class TestDisallowedLlama_1(DisallowedTestBase.DisallowedTest):
