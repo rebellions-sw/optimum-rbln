@@ -14,7 +14,7 @@ def main(compile: bool = False, native_run: bool = False, rbln_run: bool = False
 
     processor = AutoProcessor.from_pretrained(model_id, max_length=256)
     if native_run:
-        model = GroundingDinoForObjectDetection.from_pretrained(model_id, decoder_layers=6)
+        model = GroundingDinoForObjectDetection.from_pretrained(model_id)
 
     url = "http://images.cocodataset.org/val2017/000000039769.jpg"
     url2 = "http://images.cocodataset.org/val2017/000000000139.jpg"
@@ -35,12 +35,15 @@ def main(compile: bool = False, native_run: bool = False, rbln_run: bool = False
 
     if compile:
         rbln_model = RBLNGroundingDinoForObjectDetection.from_pretrained(
-            model_id, export=True, model_save_dir=os.path.basename(model_id),
+            model_id,
+            export=True,
+            model_save_dir=os.path.basename(model_id),
             rbln_config={
-                "text_backbone":{
-                    "max_seq_len": 256,
-                }
-            }
+                "text_backbone": {
+                    "model_input_names": ["input_ids", "attention_mask", "token_type_ids", "position_ids"],
+                    "input_shapes": [(1, 256), (1, 256, 256), (1, 256), (1, 256)],
+                },
+            },
         )
 
     if rbln_run:
