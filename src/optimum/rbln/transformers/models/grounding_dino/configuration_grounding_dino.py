@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union
 
 import torch
 
-from ...configuration_generic import RBLNImageModelConfig
+from ...configuration_generic import RBLNImageModelConfig, RBLNModelConfig
 
 
 if TYPE_CHECKING:
@@ -48,8 +48,6 @@ class RBLNGroundingDinoForObjectDetectionConfig(RBLNImageModelConfig):
         self.encoder = encoder
         self.decoder = decoder
         self.text_backbone = text_backbone
-        if self.text_backbone.model_input_names == None:
-            self.text_backbone.model_input_names = ["input_ids", "attention_mask", "token_type_ids", "position_ids"]
 
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
