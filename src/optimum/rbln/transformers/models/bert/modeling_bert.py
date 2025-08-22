@@ -14,14 +14,14 @@
 
 import torch
 
-from ....utils.logging import get_logger
 from ...modeling_generic import (
     RBLNModelForMaskedLM,
     RBLNModelForQuestionAnswering,
     RBLNTransformerEncoderForFeatureExtraction,
 )
-from .configuration_bert import RBLNBertModelConfig
 from .bert_architecture import BertModelWrapper
+from .configuration_bert import RBLNBertModelConfig
+
 
 class RBLNBertModel(RBLNTransformerEncoderForFeatureExtraction):
     """
@@ -33,7 +33,7 @@ class RBLNBertModel(RBLNTransformerEncoderForFeatureExtraction):
     """
 
     rbln_model_input_names = ["input_ids", "attention_mask"]
-    
+
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNBertModelConfig) -> torch.nn.Module:
         return BertModelWrapper(model, rbln_config)

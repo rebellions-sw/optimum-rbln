@@ -130,8 +130,8 @@ class _GroundingDinoEncoder(torch.nn.Module):
         self.config = model.config
         self.rbln_config = rbln_config
         # FIXME: define Spatial shapes from config
-        self.spatial_shapes = torch.tensor([[167, 167], [84, 84], [42, 42], [21, 21]])
-        self.spatial_shapes_list = [(167, 167), (84, 84), (42, 42), (21, 21)]
+        self.spatial_shapes = self.rbln_config.spatial_shapes
+        self.spatial_shapes_list = self.rbln_config.spatial_shapes
         self.text_position_embedding = model.layers[0].get_text_position_embeddings(
             torch.zeros(1, model.config.max_text_len, model.config.d_model),
             None,
@@ -266,8 +266,8 @@ class _GroundingDinoDecoder(torch.nn.Module):
         self.layers = model.layers
         self.config = model.config
         # FIXME: define Spatial shapes from config
-        self.spatial_shapes = torch.tensor([[167, 167], [84, 84], [42, 42], [21, 21]])
-        self.spatial_shapes_list = [(167, 167), (84, 84), (42, 42), (21, 21)]
+        self.spatial_shapes = rbln_config.spatial_shapes
+        self.spatial_shapes_list = rbln_config.spatial_shapes_list
         self.reference_points_head = model.reference_points_head
         self.bbox_embed = model.bbox_embed
         self.layer_norm = model.layer_norm
@@ -700,11 +700,6 @@ class _GroundingDinoEncoderLayer(torch.nn.Module):
             (vision_features, text_features),
             (vision_fused_attn, text_fused_attn, text_enhanced_attn, vision_deformable_attn),
         )
-
-
-original_forward = None
-original_bi_multihead_attention_forward = None
-original_encoder_layer_forward = None
 
 
 def monkey_patch():

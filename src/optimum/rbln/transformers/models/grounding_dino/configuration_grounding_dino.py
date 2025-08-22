@@ -10,13 +10,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union
 
-from ...configuration_generic import RBLNImageModelConfig, RBLNModelConfig
+import torch
+
+from ...configuration_generic import RBLNImageModelConfig
 
 
 if TYPE_CHECKING:
-    from torch import Tensor
+    pass
 
 
 class RBLNGroundingDinoForObjectDetectionConfig(RBLNImageModelConfig):
@@ -48,29 +50,27 @@ class RBLNGroundingDinoForObjectDetectionConfig(RBLNImageModelConfig):
         self.text_backbone = text_backbone
         if self.text_backbone.model_input_names == None:
             self.text_backbone.model_input_names = ["input_ids", "attention_mask", "token_type_ids", "position_ids"]
-            
+
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
 
 class RBLNGroundingDinoComponentConfig(RBLNImageModelConfig):
-    _spatial_shapes: "Tensor" = None
+    def __init__(
+        self,
+        image_size: Optional[Union[int, Tuple[int, int]]] = None,
+        batch_size: Optional[int] = None,
+        spatial_shapes_list: Optional[List[Tuple[int, int]]] = None,
+        **kwargs: Any,
+    ):
+        super().__init__(image_size=image_size, batch_size=batch_size, **kwargs)
+        spatial_shapes_list = spatial_shapes_list
 
     @property
     def spatial_shapes(self):
-        if self._spatial_shapes is None:
+        if self.spatial_shapes_list is None:
             raise ValueError("Spatial shapes are not defined. Please set them before accessing.")
-        return self._spatial_shapes
-
-    @spatial_shapes.setter
-    def spatial_shapes(self, value):
-        self._spatial_shapes = value
-
-    @property
-    def spatial_shapes_list(self):
-        if self._spatial_shapes is None:
-            raise ValueError("Spatial shapes are not defined. Please set them before accessing.")
-        return [tuple(shape) for shape in self.spatial_shapes.tolist()] if self.spatial_shapes is not None else []
+        return torch.tensor(self.spatial_shapes_list)
 
 
 class RBLNGroundingDinoEncoderConfig(RBLNGroundingDinoComponentConfig):

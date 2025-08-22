@@ -17,15 +17,12 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
 
 import torch
 from torch import Tensor, nn
-from transformers import AutoModel
 from transformers.modeling_utils import no_init_weights
 from transformers.models.grounding_dino.modeling_grounding_dino import (
     GroundingDinoContrastiveEmbedding,
     GroundingDinoConvEncoder,
     GroundingDinoConvModel,
-    GroundingDinoDecoder,
     GroundingDinoDecoderOutput,
-    GroundingDinoEncoder,
     GroundingDinoEncoderOutput,
     GroundingDinoMLPPredictionHead,
     GroundingDinoModel,
@@ -36,7 +33,7 @@ from transformers.models.grounding_dino.modeling_grounding_dino import (
 )
 from transformers.pytorch_utils import meshgrid
 
-from ....configuration_utils import RBLNCompileConfig
+from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
@@ -139,8 +136,6 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
                         )
                     ]
                 )
-
-
 
             if config.embedding_init_target or not config.two_stage:
                 self.query_position_embeddings = nn.Embedding(config.num_queries, config.d_model)
@@ -310,7 +305,6 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
             text_token_mask = text_token_mask[:, :max_text_len]
 
         # Extract text features from text backbone
-        breakpoint()
         text_outputs = self.text_backbone(
             input_ids, text_self_attention_masks.to(torch.long), token_type_ids, position_ids, return_dict=return_dict
         )
@@ -610,6 +604,37 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         )
 
 
+def _update_spatial_shapes(model_config, rbln_config):
+    def down_sampled_size(x, depth: int = 1):
+        if depth == 0:
+            return x
+        return down_sampled_size((x + 1) // 2, depth - 1)
+
+    def num_patches(image_size, patch_size):
+        return (image_size + patch_size - 1) // patch_size
+
+    # update spatial_shapes
+    spatial_shapes = []
+    backbone_config = model_config.backbone_config
+    num_patched_h = num_patches(rbln_config.image_height, backbone_config.patch_size)
+    num_patched_w = num_patches(rbln_config.image_height, backbone_config.patch_size)
+    for out_layer in backbone_config.out_indices:
+        spatial_shapes.append(
+            [down_sampled_size(num_patched_h, out_layer - 1), down_sampled_size(num_patched_w, out_layer - 1)]
+        )
+
+    # Lowest resolution feature maps are obtained via 3x3 stride 2 convolutions on the final stage
+    if model_config.num_feature_levels > len(spatial_shapes):
+        last_h, last_w = spatial_shapes[-1][0], spatial_shapes[-1][1]
+        h_out = (last_h - 1) // 2 + 1
+        w_out = (last_w - 1) // 2 + 1
+        spatial_shapes.append([h_out, w_out])
+
+    rbln_config.spatial_shapes_list = spatial_shapes
+
+    return rbln_config
+
+
 class RBLNGroundingDinoEncoder(RBLNModel):
     """
     RBLN optimized CLIP text encoder model.
@@ -636,6 +661,25 @@ class RBLNGroundingDinoEncoder(RBLNModel):
         return compiled_model
 
     @classmethod
+    def _update_submodule_config(
+        cls,
+        model: "PreTrainedModel",
+        rbln_config: RBLNModelConfig,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+    ):
+        if rbln_config.image_size is None:
+            longest_edge = None
+            for processor in preprocessors:
+                if hasattr(processor, "image_processor"):
+                    longest_edge = processor.image_processor.size["longest_edge"]
+                    break
+            rbln_config.image_size = longest_edge
+
+        rbln_config = _update_spatial_shapes(model.config, rbln_config)
+
+        return rbln_config
+
+    @classmethod
     def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
@@ -644,54 +688,28 @@ class RBLNGroundingDinoEncoder(RBLNModel):
         rbln_config: Optional[RBLNGroundingDinoEncoderConfig] = None,
     ) -> RBLNGroundingDinoEncoderConfig:
         if rbln_config.image_size is None:
-            longest_edge = None
-            for processor in preprocessors:
-                if hasattr(processor, "image_processor"):
-                    longest_edge = processor.image_processor.size["longest_edge"]
-                    break
-            rbln_config.image_size = longest_edge
-        rbln_config.image_size = 1333
-
-        if rbln_config.image_size is None:
             raise ValueError("RBLN config must have image_size set for RBLN optimized GroundingDinoDecoder.")
 
-        # def calculate_feature_map_size(x, depth: int = 1):
-        #     if depth == 0:
-        #         return x
-        #     return calculate_feature_map_size((x + 1) // 2, depth=-1)
-
-        # def calculate_num_patches(image_size, patch_size):
-        #     return (image_size + patch_size - 1) // patch_size
-
-        # # update spatial_shapes
-        # spatial_shapes = []
-        # backbone_config = model_config.backbone_config
-        # for i in range(backbone_config.out_indices):
-        #     num_patched_h = (rbln_config.image_height + backbone_config.patch_size - 1) // backbone_config.patch_size
-        #     num_patched_w = (rbln_config.image_width + backbone_config.patch_size - 1) // backbone_config.patch_size
-
-        #     spatial_shapes.append(
-        #         rbln_config.image_height // (2 ** (i + 2)),
-        #     )
+        vision_seq_len = int((rbln_config.spatial_shapes[:, 0] * rbln_config.spatial_shapes[:, 1]).sum())
 
         input_info = [
             (
                 "vision_features",
-                [rbln_config.batch_size, 37150, model_config.d_model],
+                [rbln_config.batch_size, vision_seq_len, model_config.d_model],
                 "float32",
             ),
             (
                 "vision_attention_mask",
                 [
                     rbln_config.batch_size,
-                    37150,
+                    vision_seq_len,
                     model_config.d_model,
                 ],
                 "float32",
             ),
             (
                 "vision_position_embedding",
-                [rbln_config.batch_size, 37150, model_config.d_model],
+                [rbln_config.batch_size, vision_seq_len, model_config.d_model],
                 "float32",
             ),
             (
@@ -718,7 +736,7 @@ class RBLNGroundingDinoEncoder(RBLNModel):
             ),
             (
                 "reference_points",
-                [rbln_config.batch_size, 37150, 4, 2],
+                [rbln_config.batch_size, vision_seq_len, 4, 2],
                 "float32",
             ),
         ]
@@ -830,6 +848,25 @@ class RBLNGroundingDinoDecoder(RBLNModel):
         return rbln_config
 
     @classmethod
+    def _update_submodule_config(
+        cls,
+        model: "PreTrainedModel",
+        rbln_config: RBLNModelConfig,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+    ):
+        if rbln_config.image_size is None:
+            longest_edge = None
+            for processor in preprocessors:
+                if hasattr(processor, "image_processor"):
+                    longest_edge = processor.image_processor.size["longest_edge"]
+                    break
+            rbln_config.image_size = longest_edge
+
+        rbln_config = _update_spatial_shapes(model.config, rbln_config)
+
+        return rbln_config
+
+    @classmethod
     def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
@@ -838,35 +875,28 @@ class RBLNGroundingDinoDecoder(RBLNModel):
         rbln_config: Optional[RBLNGroundingDinoEncoderConfig] = None,
     ) -> RBLNGroundingDinoEncoderConfig:
         if rbln_config.image_size is None:
-            longest_edge = None
-            for processor in preprocessors:
-                if hasattr(processor, "image_processor"):
-                    longest_edge = processor.image_processor.size["longest_edge"]
-                    break
-            rbln_config.image_size = longest_edge
-        rbln_config.image_size = 1333
-
-        if rbln_config.image_size is None:
             raise ValueError("RBLN config must have image_size set for RBLN optimized GroundingDinoDecoder.")
+
+        vision_seq_len = int((rbln_config.spatial_shapes[:, 0] * rbln_config.spatial_shapes[:, 1]).sum())
 
         input_info = [
             (
                 "inputs_embeds",
-                [rbln_config.batch_size, 900, model_config.d_model],
+                [rbln_config.batch_size, model_config.num_queries, model_config.d_model],
                 "float32",
             ),
             (
                 "vision_encoder_hidden_states",
                 [
                     rbln_config.batch_size,
-                    37150,
+                    vision_seq_len,
                     model_config.d_model,
                 ],
                 "float32",
             ),
             (
                 "vision_encoder_attention_mask",
-                [rbln_config.batch_size, 37150, model_config.d_model],
+                [rbln_config.batch_size, vision_seq_len, model_config.d_model],
                 "float32",
             ),
             (
@@ -886,7 +916,7 @@ class RBLNGroundingDinoDecoder(RBLNModel):
                 "reference_points",
                 [
                     rbln_config.batch_size,
-                    900,
+                    model_config.num_queries,
                     4,
                 ],
                 "float32",

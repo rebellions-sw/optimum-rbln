@@ -18,6 +18,7 @@ from ...configuration_generic import (
     RBLNTransformerEncoderForFeatureExtractionConfig,
 )
 
+
 class RBLNBertModelConfig(RBLNTransformerEncoderForFeatureExtractionConfig):
     """
     Configuration class for RBLNBertModel.
@@ -25,7 +26,6 @@ class RBLNBertModelConfig(RBLNTransformerEncoderForFeatureExtractionConfig):
     This configuration class stores the configuration parameters specific to
     RBLN-optimized BERT models for feature extraction tasks.
     """
-
 
 
 class RBLNBertForMaskedLMConfig(RBLNModelForMaskedLMConfig):
