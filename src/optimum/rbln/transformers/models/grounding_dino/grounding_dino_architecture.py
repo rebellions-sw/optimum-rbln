@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+from functools import wraps
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import torch
@@ -19,9 +19,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from transformers.models.grounding_dino.modeling_grounding_dino import (
     GroundingDinoDecoder,
-    GroundingDinoDecoderOutput,
     GroundingDinoEncoder,
-    GroundingDinoEncoderOutput,
     GroundingDinoModel,
     get_sine_pos_embed,
 )
@@ -29,6 +27,54 @@ from transformers.models.grounding_dino.modeling_grounding_dino import (
 
 if TYPE_CHECKING:
     from .configuration_grounding_dino import RBLNGroundingDinoDecoderConfig, RBLNGroundingDinoEncoderConfig
+
+
+def monkey_patch():
+    from transformers.models.grounding_dino.modeling_grounding_dino import (
+        GroundingDinoBiMultiHeadAttention,
+        GroundingDinoEncoderLayer,
+        GroundingDinoMultiscaleDeformableAttention,
+    )
+
+    original_forward = GroundingDinoMultiscaleDeformableAttention.forward
+    original_bi_multihead_attention_forward = GroundingDinoBiMultiHeadAttention.forward
+    original_encoder_layer_forward = GroundingDinoEncoderLayer.forward
+
+    # Patch the methods with the custom implementations
+    GroundingDinoMultiscaleDeformableAttention.forward = _GroundingDinoMultiscaleDeformableAttention.forward
+    GroundingDinoBiMultiHeadAttention.forward = _GroundingDinoBiMultiHeadAttention.forward
+    GroundingDinoEncoderLayer.forward = _GroundingDinoEncoderLayer.forward
+
+    return (original_forward, original_bi_multihead_attention_forward, original_encoder_layer_forward)
+
+
+def restore_monkey_patch(original_forward, original_bi_multihead_attention_forward, original_encoder_layer_forward):
+    from transformers.models.grounding_dino.modeling_grounding_dino import (
+        GroundingDinoBiMultiHeadAttention,
+        GroundingDinoEncoderLayer,
+        GroundingDinoMultiscaleDeformableAttention,
+    )
+
+    # Restore the original methods
+    GroundingDinoMultiscaleDeformableAttention.forward = original_forward
+    GroundingDinoBiMultiHeadAttention.forward = original_bi_multihead_attention_forward
+    GroundingDinoEncoderLayer.forward = original_encoder_layer_forward
+
+
+def monkey_patch_decorator(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        # Apply monkey patch and capture original methods
+        original_functions = monkey_patch()
+        try:
+            # Call the original function
+            result = func(*args, **kwargs)
+        finally:
+            # Restore original methods
+            restore_monkey_patch(*original_functions)
+        return result
+
+    return wrapper
 
 
 class _GroundingDinoModel(torch.nn.Module):
@@ -43,7 +89,6 @@ class _GroundingDinoModel(torch.nn.Module):
         self.input_proj_vision = model.input_proj_vision
         self.encoder = model.encoder
         self.level_embed = model.level_embed
-        self.get_valid_ratio = model.get_valid_ratio
 
     def forward(
         self,
@@ -133,6 +178,7 @@ class _GroundingDinoEncoder(torch.nn.Module):
             torch.arange(model.config.max_text_len, dtype=torch.int32).unsqueeze(0),
         )
 
+    @monkey_patch_decorator
     def forward(
         self,
         vision_features: torch.Tensor,
@@ -146,12 +192,6 @@ class _GroundingDinoEncoder(torch.nn.Module):
         output_hidden_states=False,
         return_dict=False,
     ):
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
-        )
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-
         encoder_vision_states = () if output_hidden_states else None
         encoder_text_states = () if output_hidden_states else None
         all_attns = () if output_attentions else None
@@ -190,17 +230,9 @@ class _GroundingDinoEncoder(torch.nn.Module):
         if output_attentions:
             all_attns = (all_attn_fused_vision, all_attn_fused_text, all_attn_enhanced_text, all_attn_deformable)
 
-        if not return_dict:
-            enc_outputs = [vision_features, text_features, encoder_vision_states, encoder_text_states, all_attns]
-            return tuple(v for v in enc_outputs if v is not None)
+        enc_outputs = [vision_features, text_features, encoder_vision_states, encoder_text_states, all_attns]
 
-        return GroundingDinoEncoderOutput(
-            last_hidden_state_vision=vision_features,
-            last_hidden_state_text=text_features,
-            vision_hidden_states=encoder_vision_states,
-            text_hidden_states=encoder_text_states,
-            attentions=all_attns,
-        )
+        return tuple(v for v in enc_outputs if v is not None)
 
 
 class _GroundingDinoDecoder(torch.nn.Module):
@@ -214,6 +246,7 @@ class _GroundingDinoDecoder(torch.nn.Module):
         self.bbox_embed = model.bbox_embed
         self.layer_norm = model.layer_norm
 
+    @monkey_patch_decorator
     def forward(
         self,
         inputs_embeds,
@@ -330,24 +363,65 @@ class _GroundingDinoDecoder(torch.nn.Module):
         if output_attentions:
             all_attns += (all_self_attns, all_cross_attns_text, all_cross_attns_vision)
 
-        if not return_dict:
-            return tuple(
-                v
-                for v in [
-                    hidden_states,
-                    intermediate,
-                    intermediate_reference_points,
-                    all_hidden_states,
-                    all_attns,
-                ]
-                if v is not None
-            )
-        return GroundingDinoDecoderOutput(
-            last_hidden_state=hidden_states,
-            intermediate_hidden_states=intermediate,
-            intermediate_reference_points=intermediate_reference_points,
-            hidden_states=all_hidden_states,
-            attentions=all_attns,
+        return tuple(
+            v
+            for v in [
+                hidden_states,
+                intermediate,
+                intermediate_reference_points,
+                all_hidden_states,
+                all_attns,
+            ]
+            if v is not None
+        )
+
+
+class _GroundingDinoEncoderLayer(torch.nn.Module):
+    def forward(
+        self,
+        vision_features: Tensor,
+        vision_position_embedding: Tensor,
+        spatial_shapes: Tensor,
+        spatial_shapes_list: List[Tuple[int, int]],
+        level_start_index: Tensor,
+        key_padding_mask: Tensor,
+        reference_points: Tensor,
+        text_features: Optional[Tensor] = None,
+        text_attention_mask: Optional[Tensor] = None,
+        text_position_embedding: Optional[Tensor] = None,
+        text_self_attention_masks: Optional[Tensor] = None,
+        text_position_ids: Optional[Tensor] = None,
+    ):
+        text_position_embedding = self.get_text_position_embeddings(
+            text_features, text_position_embedding, text_position_ids
+        )
+
+        (vision_features, vision_fused_attn), (text_features, text_fused_attn) = self.fusion_layer(
+            vision_features=vision_features,
+            text_features=text_features,
+            attention_mask_vision=key_padding_mask,
+            attention_mask_text=text_attention_mask,
+        )
+
+        (text_features, text_enhanced_attn) = self.text_enhancer_layer(
+            hidden_states=text_features,
+            attention_masks=(1.0 - text_self_attention_masks),  # note we use ~ for mask here
+            position_embeddings=(text_position_embedding if text_position_embedding is not None else None),
+        )
+
+        (vision_features, vision_deformable_attn) = self.deformable_layer(
+            hidden_states=vision_features,
+            attention_mask=(1.0 - key_padding_mask),
+            position_embeddings=vision_position_embedding,
+            reference_points=reference_points,
+            spatial_shapes=spatial_shapes,
+            spatial_shapes_list=spatial_shapes_list,
+            level_start_index=level_start_index,
+        )
+
+        return (
+            (vision_features, text_features),
+            (vision_fused_attn, text_fused_attn, text_enhanced_attn, vision_deformable_attn),
         )
 
 
@@ -525,84 +599,3 @@ class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
         text_attn_output = self.out_text_proj(text_attn_output)
 
         return (vision_attn_output, vision_attn_weights), (text_attn_output, text_attn_weights)
-
-
-class _GroundingDinoEncoderLayer(torch.nn.Module):
-    def forward(
-        self,
-        vision_features: Tensor,
-        vision_position_embedding: Tensor,
-        spatial_shapes: Tensor,
-        spatial_shapes_list: List[Tuple[int, int]],
-        level_start_index: Tensor,
-        key_padding_mask: Tensor,
-        reference_points: Tensor,
-        text_features: Optional[Tensor] = None,
-        text_attention_mask: Optional[Tensor] = None,
-        text_position_embedding: Optional[Tensor] = None,
-        text_self_attention_masks: Optional[Tensor] = None,
-        text_position_ids: Optional[Tensor] = None,
-    ):
-        text_position_embedding = self.get_text_position_embeddings(
-            text_features, text_position_embedding, text_position_ids
-        )
-
-        (vision_features, vision_fused_attn), (text_features, text_fused_attn) = self.fusion_layer(
-            vision_features=vision_features,
-            text_features=text_features,
-            attention_mask_vision=key_padding_mask,
-            attention_mask_text=text_attention_mask,
-        )
-
-        (text_features, text_enhanced_attn) = self.text_enhancer_layer(
-            hidden_states=text_features,
-            attention_masks=(1.0 - text_self_attention_masks),  # note we use ~ for mask here
-            position_embeddings=(text_position_embedding if text_position_embedding is not None else None),
-        )
-
-        (vision_features, vision_deformable_attn) = self.deformable_layer(
-            hidden_states=vision_features,
-            attention_mask=(1.0 - key_padding_mask),
-            position_embeddings=vision_position_embedding,
-            reference_points=reference_points,
-            spatial_shapes=spatial_shapes,
-            spatial_shapes_list=spatial_shapes_list,
-            level_start_index=level_start_index,
-        )
-
-        return (
-            (vision_features, text_features),
-            (vision_fused_attn, text_fused_attn, text_enhanced_attn, vision_deformable_attn),
-        )
-
-
-def monkey_patch():
-    from transformers.models.grounding_dino.modeling_grounding_dino import (
-        GroundingDinoBiMultiHeadAttention,
-        GroundingDinoEncoderLayer,
-        GroundingDinoMultiscaleDeformableAttention,
-    )
-
-    original_forward = GroundingDinoMultiscaleDeformableAttention.forward
-    original_bi_multihead_attention_forward = GroundingDinoBiMultiHeadAttention.forward
-    original_encoder_layer_forward = GroundingDinoEncoderLayer.forward
-
-    # Patch the methods with the custom implementations
-    GroundingDinoMultiscaleDeformableAttention.forward = _GroundingDinoMultiscaleDeformableAttention.forward
-    GroundingDinoBiMultiHeadAttention.forward = _GroundingDinoBiMultiHeadAttention.forward
-    GroundingDinoEncoderLayer.forward = _GroundingDinoEncoderLayer.forward
-
-    return (original_forward, original_bi_multihead_attention_forward, original_encoder_layer_forward)
-
-
-def restore_monkey_patch(original_forward, original_bi_multihead_attention_forward, original_encoder_layer_forward):
-    from transformers.models.grounding_dino.modeling_grounding_dino import (
-        GroundingDinoBiMultiHeadAttention,
-        GroundingDinoEncoderLayer,
-        GroundingDinoMultiscaleDeformableAttention,
-    )
-
-    # Restore the original methods
-    GroundingDinoMultiscaleDeformableAttention.forward = original_forward
-    GroundingDinoBiMultiHeadAttention.forward = original_bi_multihead_attention_forward
-    GroundingDinoEncoderLayer.forward = original_encoder_layer_forward

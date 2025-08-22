@@ -45,8 +45,6 @@ from .configuration_grounding_dino import (
 from .grounding_dino_architecture import (
     _GroundingDinoDecoder,
     _GroundingDinoEncoder,
-    monkey_patch,
-    restore_monkey_patch,
 )
 
 
@@ -654,13 +652,6 @@ class RBLNGroundingDinoEncoder(RBLNModel):
         return model
 
     @classmethod
-    def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNGroundingDinoDecoderConfig):
-        a, b, c = monkey_patch()
-        compiled_model = super().get_compiled_model(model, rbln_config)
-        restore_monkey_patch(a, b, c)
-        return compiled_model
-
-    @classmethod
     def _update_submodule_config(
         cls,
         model: "PreTrainedModel",
@@ -934,13 +925,6 @@ class RBLNGroundingDinoDecoder(RBLNModel):
 
         rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
         return rbln_config
-
-    @classmethod
-    def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNGroundingDinoDecoderConfig):
-        a, b, c = monkey_patch()
-        compiled_model = super().get_compiled_model(model, rbln_config)
-        restore_monkey_patch(a, b, c)
-        return compiled_model
 
     def forward(
         self,
