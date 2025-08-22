@@ -16,6 +16,7 @@ import types
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import torch
+import torch.nn.functional as F
 from transformers import SwinConfig
 from transformers.models.swin.modeling_swin import BackboneOutput
 
@@ -215,14 +216,24 @@ class RBLNSwinBackbone(RBLNModel):
         model_config: "SwinConfig" = None,
         rbln_config: Optional[RBLNSwinBackboneConfig] = None,
     ) -> RBLNSwinBackboneConfig:
+        if rbln_config.max_image_size is None:
+            for processor in preprocessors:
+                if hasattr(processor, "size"):
+                    if all(required_key in processor.size.keys() for required_key in ["height", "width"]):
+                        rbln_config.max_image_size = (processor.size["height"], processor.size["width"])
+                    elif "shortest_edge" in processor.size.keys() and "longest_edge" in processor.size.keys():
+                        size = max(processor.size["shortest_edge"], processor.size["longest_edge"])
+                        rbln_config.max_image_size = (size, size)
+                    break
+
         input_info = [
             (
                 "pixel_values",
                 [
                     rbln_config.batch_size,
                     3,
-                    224,
-                    224,
+                    rbln_config.max_image_size[0],
+                    rbln_config.max_image_size[1],
                 ],
                 "float32",
             ),
@@ -261,12 +272,18 @@ class RBLNSwinBackbone(RBLNModel):
                 f"Please compile again with the correct argument."
             )
 
-        output = super().forward(pixel_values, return_dict=return_dict)
-        return output
+        _, _, original_h, original_w = pixel_values.shape
+        if original_h > self.rbln_config.max_image_size[0] or original_w > self.rbln_config.max_image_size[1]:
+            raise ValueError(
+                f"Input image size ({original_h}x{original_w}) exceeds the configured maximum size"
+                f" ({self.rbln_config.max_image_size[0]}x{self.rbln_config.max_image_size[1]})."
+            )
 
-    def _prepare_output(self, output, return_dict):
-        # Prepare model output based on return_dict flag.
-        # This method can be overridden by subclasses to provide task-specific output handling.
+        pad_h = self.rbln_config.max_image_size[0] - original_h
+        pad_w = self.rbln_config.max_image_size[1] - original_w
+        padded_pixel_values = F.pad(pixel_values, (0, pad_w, 0, pad_h))
+
+        output = self.model[0](padded_pixel_values)
 
         feature_maps = ()
         for i in range(len(self.config.out_features)):
