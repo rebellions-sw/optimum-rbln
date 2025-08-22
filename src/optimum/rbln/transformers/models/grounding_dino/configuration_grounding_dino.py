@@ -10,15 +10,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import torch
 
 from ...configuration_generic import RBLNImageModelConfig, RBLNModelConfig
-
-
-if TYPE_CHECKING:
-    pass
 
 
 class RBLNGroundingDinoForObjectDetectionConfig(RBLNImageModelConfig):
