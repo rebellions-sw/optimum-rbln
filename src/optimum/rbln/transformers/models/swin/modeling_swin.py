@@ -54,16 +54,22 @@ def window_partition(input_feature, window_size):
 def get_attn_mask(self, height, width, dtype, device):
     if self.shift_size > 0:
         # calculate attention mask for SW-MSA
-        h, w = height, width
-
-        y_coords = torch.arange(h, device=device)
-        x_coords = torch.arange(w, device=device)
-
-        h_groups = (y_coords >= h - self.window_size).int() + (y_coords >= h - self.shift_size).int()
-        w_groups = (x_coords >= w - self.window_size).int() + (x_coords >= w - self.shift_size).int()
-
-        img_mask = h_groups.view(h, 1) * 3 + w_groups.view(1, w)
-        img_mask = img_mask.view(1, h, w, 1).to(dtype)
+        img_mask = torch.zeros((1, height, width, 1), dtype=dtype, device=device)
+        height_slices = (
+            slice(0, -self.window_size),
+            slice(-self.window_size, -self.shift_size),
+            slice(-self.shift_size, None),
+        )
+        width_slices = (
+            slice(0, -self.window_size),
+            slice(-self.window_size, -self.shift_size),
+            slice(-self.shift_size, None),
+        )
+        count = torch.zeros(1)
+        for height_slice in height_slices:
+            for width_slice in width_slices:
+                img_mask[:, height_slice, width_slice, :] = count
+                count += 1
 
         mask_windows = window_partition(img_mask, self.window_size)
         mask_windows = mask_windows.view(-1, self.window_size * self.window_size)
