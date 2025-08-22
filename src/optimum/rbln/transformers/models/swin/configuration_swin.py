@@ -16,7 +16,13 @@ from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNSwinBackboneConfig(RBLNModelConfig):
-    def __init__(self, batch_size: Optional[int] = None, **kwargs: Any):
+    def __init__(
+        self,
+        batch_size: Optional[int] = None,
+        output_hidden_states: Optional[bool] = None,
+        output_attentions: Optional[bool] = None,
+        **kwargs: Any,
+    ):
         """
         Args:
             batch_size (Optional[int]): The batch size for text processing. Defaults to 1.
@@ -29,3 +35,6 @@ class RBLNSwinBackboneConfig(RBLNModelConfig):
         self.batch_size = batch_size or 1
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
+
+        self.output_hidden_states = output_hidden_states
+        self.output_attentions = output_attentions

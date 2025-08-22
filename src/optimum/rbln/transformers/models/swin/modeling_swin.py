@@ -143,7 +143,7 @@ class _SwinEncoder(torch.nn.Module):
 
 
 class _SwinBackbone(torch.nn.Module):
-    def __init__(self, model: "SwinBackbone"):
+    def __init__(self, model: "SwinBackbone", output_hidden_states: bool, output_attentions: bool):
         super().__init__()
         self.model = model
         self.embeddings = model.embeddings
@@ -151,24 +151,23 @@ class _SwinBackbone(torch.nn.Module):
         self.stage_names = model.stage_names
         self.out_features = model.out_features
         self.hidden_states_norms = model.hidden_states_norms
+        self.output_hidden_states = output_hidden_states
+        self.output_attentions = output_attentions
 
     def forward(
         self,
         pixel_values: torch.Tensor,
-        output_hidden_states: Optional[bool] = None,
-        output_attentions: Optional[bool] = False,
-        return_dict: Optional[bool] = False,
     ):
         embedding_output, input_dimensions = self.embeddings(pixel_values)
         outputs = _SwinEncoder(self.encoder)(
             embedding_output,
             input_dimensions,
             head_mask=None,
-            output_attentions=output_attentions,
-            output_hidden_states=True,
+            output_attentions=self.output_attentions,
+            output_hidden_states=self.output_hidden_states,
             output_hidden_states_before_downsampling=True,
             always_partition=True,
-            return_dict=return_dict,
+            return_dict=False,
         )
 
         hidden_states = outputs[-1]
@@ -184,7 +183,15 @@ class _SwinBackbone(torch.nn.Module):
                 hidden_state = hidden_state.permute(0, 3, 1, 2).contiguous()
                 feature_maps += (hidden_state,)
 
-        return feature_maps
+        output = (feature_maps,)
+
+        if self.output_hidden_states:
+            output += (outputs[1],)
+
+        if self.output_attentions:
+            output += (outputs[2],)
+
+        return output
 
 
 class RBLNSwinBackbone(RBLNModel):
@@ -193,7 +200,12 @@ class RBLNSwinBackbone(RBLNModel):
         for layer in model.encoder.layers:
             for block in layer.blocks:
                 block.get_attn_mask = types.MethodType(get_attn_mask, block)
-        return _SwinBackbone(model).eval()
+
+        wrapper_cfg = {
+            "output_hidden_states": rbln_config.output_hidden_states,
+            "output_attentions": rbln_config.output_attentions,
+        }
+        return _SwinBackbone(model, **wrapper_cfg).eval()
 
     @classmethod
     def _update_rbln_config(
@@ -219,13 +231,66 @@ class RBLNSwinBackbone(RBLNModel):
         rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
         return rbln_config
 
+    def forward(
+        self,
+        pixel_values: Optional[torch.FloatTensor] = None,
+        return_dict: bool = True,
+        output_attentions: bool = None,
+        output_hidden_states: bool = None,
+        **kwargs,
+    ) -> Union[Tuple, BackboneOutput]:
+        if len(kwargs) > 0 and any(value is not None for value in kwargs.values()):
+            logger.warning(
+                f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__.__name__}."
+            )
+
+        output_attentions = output_attentions if output_attentions is not None else self.rbln_config.output_attentions
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.rbln_config.output_hidden_states
+        )
+
+        if output_attentions != self.rbln_config.output_attentions:
+            raise ValueError(
+                f"Variable output_attentions {output_attentions} is not equal to rbln_config.output_attentions {self.rbln_config.output_attentions} "
+                f"Please compile again with the correct argument."
+            )
+
+        if output_hidden_states != self.rbln_config.output_hidden_states:
+            raise ValueError(
+                f"Variable output_hidden_states {output_hidden_states} is not equal to rbln_config.output_hidden_states {self.rbln_config.output_hidden_states} "
+                f"Please compile again with the correct argument."
+            )
+
+        output = super().forward(pixel_values, return_dict=return_dict)
+        return output
+
     def _prepare_output(self, output, return_dict):
         # Prepare model output based on return_dict flag.
         # This method can be overridden by subclasses to provide task-specific output handling.
 
+        feature_maps = ()
+        for i in range(len(self.config.out_features)):
+            feature_maps += (output.pop(0),)
+
+        if self.rbln_config.output_hidden_states:
+            hidden_states = ()
+            for i in range(len(self.config.stage_names)):
+                hidden_states += (output.pop(0),)
+        else:
+            hidden_states = None
+
+        if self.rbln_config.output_attentions:
+            attentions = ()
+            for i in range(len(self.config.depths)):
+                attentions += (output.pop(0),)
+        else:
+            attentions = None
+
         if not return_dict:
-            return (output,) if not isinstance(output, (tuple, list)) else output
+            return tuple(item for item in (feature_maps, hidden_states, attentions) if item is not None)
         else:
             return BackboneOutput(
-                feature_maps=tuple(output),
+                feature_maps=feature_maps,
+                hidden_states=hidden_states,
+                attentions=attentions,
             )
