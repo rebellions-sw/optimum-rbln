@@ -711,6 +711,8 @@ class DecoderOnlyAttention(nn.Module):
 
         if cos is not None and sin is not None:
             query_states, key_states = self.apply_rotary_pos_embed(query_states, key_states, cos, sin)
+            query_states = query_states.to(hidden_states.dtype)
+            key_states = key_states.to(hidden_states.dtype)
 
         if batch_size > 1 and "prefill" in self.phase:
             raise NotImplementedError(f"batch size should be 1 if prefill phase, but got {batch_size}.")
@@ -1066,8 +1068,7 @@ class RotaryEmbedding(nn.Module):
             rope_type = "default"
 
         inv_freq, attention_scaling = ROPE_INIT_FUNCTIONS[rope_type](config, max_seq_len_cached)
-        torch_dtype = getattr(config, "torch_dtype", torch.float32)
-        cache_position = torch.arange(0, max_seq_len_cached, dtype=torch_dtype)
+        cache_position = torch.arange(0, max_seq_len_cached)
         cache_position_expanded = cache_position[:, None]
 
         if rope_type == "dynamic":
@@ -1080,16 +1081,14 @@ class RotaryEmbedding(nn.Module):
 
         cos = emb.cos() * attention_scaling
         sin = emb.sin() * attention_scaling
-        cos = cos.to(torch_dtype)
-        sin = sin.to(torch_dtype)
 
         self.register_buffer("_cos_cached", cos, persistent=False)
         self.register_buffer("_sin_cached", sin, persistent=False)
 
     def forward(self, x, seq_len):
         return (
-            self._cos_cached[:seq_len].to(dtype=x.dtype),
-            self._sin_cached[:seq_len].to(dtype=x.dtype),
+            self._cos_cached[:seq_len].to(dtype=torch.float32),
+            self._sin_cached[:seq_len].to(dtype=torch.float32),
         )
 
 
