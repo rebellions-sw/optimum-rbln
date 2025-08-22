@@ -14,17 +14,22 @@
 
 import glob
 import os
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple, Type, Union
 
 import torch
 from huggingface_hub import hf_hub_download, list_repo_files
 from safetensors.torch import load_file
 from torch.nn import Linear, Parameter
 from torch.nn import functional as F
+from transformers import AutoConfig
+from transformers.modeling_utils import get_state_dict_dtype, no_init_weights
 
 from ...configuration_utils import RBLNSerializableConfigProtocol
 from ...utils.logging import get_logger
 
+
+if TYPE_CHECKING:
+    from transformers.models.auto.modeling_auto import _BaseAutoModelClass
 
 logger = get_logger()
 
@@ -138,22 +143,31 @@ class QuantizedLayerFactory:
         return create_fp8linear(layer, self.quantization_config)
 
 
-def prepare_model_for_quantization(
-    model: torch.nn.Module,
+def get_quantized_model(
+    hf_auto_model_class: Type["_BaseAutoModelClass"],
     model_id: str,
-    n_layer: Optional[int] = None,
     use_auth_token: Optional[Union[bool, str]] = None,
     revision: Optional[str] = None,
     cache_dir: Optional[str] = None,
     force_download: bool = False,
     local_files_only: bool = False,
     rbln_quantization: Optional[RBLNQuantizationConfig] = None,
-) -> torch.nn.Module:
+    **kwargs,
+):
     """
-    Prepare the model for quantization by updating specified linear layers to quantized (qlinear) layers.
+    Get a quantized model from a model class and model id.
     """
+    # torch_dtype should not be passed to AutoConfig.from_pretrained
+    # since it doesn't support 'auto'
+    torch_dtype = kwargs.pop("torch_dtype", None)
+    if torch_dtype is not None:
+        logger.warning(
+            "torch_dtype is not supported for quantized models. "
+            "It will be ignored and the dtype of the model will be determined by the weights."
+        )
+        torch_dtype = None
 
-    # 1. Load weight files
+    # get paths of safetensors files in the model repo
     safetensor_files = load_weight_files(
         model_id,
         use_auth_token=use_auth_token,
@@ -163,16 +177,30 @@ def prepare_model_for_quantization(
         local_files_only=local_files_only,
     )
 
-    # 2. Update linear layers based on the quantization config
+    # load safetensors files into memory
+    safetensors = [load_file(safetensor_file) for safetensor_file in safetensor_files]
+
+    # get the dtype of the model from the first safetensor file
+    torch_dtype = get_state_dict_dtype(safetensors[0])
+
+    config = AutoConfig.from_pretrained(
+        model_id,
+        use_auth_token=use_auth_token,
+        revision=revision,
+        cache_dir=cache_dir,
+        force_download=force_download,
+        local_files_only=local_files_only,
+        **kwargs,
+    )
+
+    with no_init_weights():
+        model = hf_auto_model_class.from_config(config, torch_dtype=torch_dtype)
+
+    # Quantize the model
     update_layers_to_quantize(model, rbln_quantization)
 
-    # 3. Load weights into model parameters
-    load_weights_from_files(
-        model,
-        safetensor_files,
-        n_layer,
-        rbln_quantization=rbln_quantization,
-    )
+    # Load weights into the model
+    load_weights_from_files(model, safetensors, rbln_quantization)
 
     return model
 
@@ -372,32 +400,26 @@ def canonicalize_checkpoint_items(
 
 def load_weights_from_files(
     model: torch.nn.Module,
-    safetensor_files: list[str],
-    n_layer: Optional[int] = None,
+    safetensors: List[Dict[str, torch.Tensor]],
     rbln_quantization: Optional[RBLNQuantizationConfig] = None,
 ):
     """
-    Load safetensor file data directly into the model from provided safetensor files,
-    filtering by layer if n_layer is provided.
+    Load safetensor file data directly into the model from provided safetensor files.
     """
 
     model_params = dict(model.named_parameters(recurse=True))
     model_buffers = dict(model.named_buffers(recurse=True))
-
-    target_layers = list(range(n_layer)) if n_layer is not None else None
 
     unloaded_keys = []
     loaded_input_scale = False
     loaded_kv_scale = False
     loaded_weight_scale = False
 
-    for safetensor_file in safetensor_files:
-        file_data = load_file(safetensor_file)
-
+    for safetensor in safetensors:
         # Normalize all (key, tensor) pairs to the internal schema
         normalized_items = canonicalize_checkpoint_items(
             model=model,
-            items=file_data.items(),
+            items=safetensor.items(),
             rbln_quantization=rbln_quantization,
         )
 
@@ -409,12 +431,6 @@ def load_weights_from_files(
                 loaded_weight_scale = True
             if key.endswith("k_scale") or key.endswith("v_scale"):
                 loaded_kv_scale = True
-
-            # Filter by layer index if requested
-            if target_layers is not None:
-                parts = key.split(".")
-                if len(parts) > 2 and parts[2].isdigit() and (int(parts[2]) not in target_layers):
-                    continue
 
             # Copy into parameters or buffers
             if key in model_params:

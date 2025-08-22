@@ -372,6 +372,8 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         ```
     """
 
+    _supports_non_fp32 = False
+
     auto_model_class = AutoModelForVision2Seq
     _rbln_submodules = [
         {"name": "visual"},

@@ -59,6 +59,11 @@ class LLMTest:
         PROMPT = "Who are you?"
 
         @classmethod
+        def setUpClass(cls):
+            cls.HF_CONFIG_KWARGS["torch_dtype"] = "auto"
+            super().setUpClass()
+
+        @classmethod
         def get_tokenizer(cls):
             if cls._tokenizer is None:
                 cls._tokenizer = AutoTokenizer.from_pretrained(cls.HF_MODEL_ID)
@@ -667,8 +672,10 @@ class TestLlamaForCausalLM_fp8(LLMTest.TestLLM):
             "tensor_parallel_size": 1,
         },
     }
-    EXPECTED_OUTPUT = None  # Cannot generate output with fp8 quantization in ATOM™
-    TEST_LEVEL = TestLevel.DISABLED
+
+    def test_generate(self):
+        # Cannot generate output with fp8 quantization in ATOM™
+        pass
 
 
 class TestDisallowedLlama_1(DisallowedTestBase.DisallowedTest):

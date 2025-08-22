@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 import rebel
 import torch
 from rebel.compile_context import CompileContext
-from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, PretrainedConfig, PreTrainedModel
+from transformers import AutoModel, AutoModelForCausalLM, PretrainedConfig, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPast
 from transformers.modeling_utils import no_init_weights
 
@@ -33,7 +33,7 @@ from ...modeling_attention_utils import (
     validate_sliding_window,
 )
 from ...modeling_outputs import RBLNDecoderOnlyOutput
-from ...utils.rbln_quantization import prepare_model_for_quantization
+from ...utils.rbln_quantization import get_quantized_model
 from .configuration_decoderonly import RBLNDecoderOnlyModelConfig, RBLNDecoderOnlyModelForCausalLMConfig
 from .decoderonly_architecture import DecoderOnlyWrapper
 from .decoderonly_runtime_utils import RBLNPageTableManager, RBLNRuntimeModel
@@ -72,6 +72,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     auto_model_class = AutoModel
     _decoder_wrapper_cls = DecoderOnlyWrapper
     _use_rotary_emb = True
+    _supports_non_fp32 = True
 
     def __post_init__(self, **kwargs):
         if self.rbln_config.use_inputs_embeds:
@@ -86,10 +87,8 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     def setup_runtime(self):
         # Initialize resources to be used across Runtime instances (prefill and decode phases)
         page_table_manager = RBLNPageTableManager(self.rbln_config)
-        dec_attn_mask = torch.zeros(
-            self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=torch.float32
-        )
-        out_buffers = [torch.empty(self.prefill_output_size, dtype=torch.float32, device="cpu")]
+        dec_attn_mask = torch.zeros(self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=self.dtype)
+        out_buffers = [torch.empty(self.prefill_output_size, dtype=self.dtype)]
 
         common_kwargs = {
             "main_input_name": "inputs_embeds" if self.rbln_config.use_inputs_embeds else "input_ids",
@@ -143,35 +142,17 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     ):
         kwargs = cls.update_kwargs(kwargs)
 
-        if config is None:
-            config = AutoConfig.from_pretrained(
-                model_id,
-                use_auth_token=use_auth_token,
-                revision=revision,
-                force_download=force_download,
-                cache_dir=cache_dir,
-                trust_remote_code=trust_remote_code,
-                **kwargs,
-            )
-            if config.torch_dtype == torch.bfloat16:
-                # FIXME: bfloat16 is not supported by rebel-compiler
-                config.torch_dtype = torch.float32
-
-        with no_init_weights():
-            model = cls.auto_model_class.from_config(config)
-
-        model = prepare_model_for_quantization(
-            model,
+        return get_quantized_model(
+            cls.auto_model_class,
             model_id,
-            kwargs.get("num_hidden_layers"),
             use_auth_token=use_auth_token,
             revision=revision,
             cache_dir=cache_dir,
             force_download=force_download,
             local_files_only=local_files_only,
             rbln_quantization=rbln_config.quantization,
+            **kwargs,
         )
-        return model
 
     def __getattr__(self, __name: str) -> Any:
         # Special method to delegate attribute access to the original Huggingface LM class.
@@ -365,7 +346,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
         input_info = []
         if rbln_config.use_inputs_embeds:
-            input_info.append(("inputs_embeds", [batch_size, query_length, hidden_size], "float32"))
+            input_info.append(("inputs_embeds", [batch_size, query_length, hidden_size], rbln_config.torch_dtype))
         else:
             input_info.append(("input_ids", [batch_size, query_length], "int64"))
 
@@ -384,16 +365,16 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
         if rbln_config.use_attention_mask:
             if rbln_config.use_position_ids:
-                input_info.append(("attention_mask", [batch_size, rbln_config.max_seq_len], "float32"))
+                input_info.append(("attention_mask", [batch_size, rbln_config.max_seq_len], rbln_config.torch_dtype))
             else:
                 input_info.append(
-                    ("attention_mask", [batch_size, 1, query_length, rbln_config.max_seq_len], "float32")
+                    ("attention_mask", [batch_size, 1, query_length, rbln_config.max_seq_len], rbln_config.torch_dtype)
                 )
 
         if rbln_config.use_position_ids:
             input_info.append(("position_ids", [batch_size, query_length], "int32"))
 
-        kvcache_dtype = "float32"
+        kvcache_dtype = rbln_config.torch_dtype
         if rbln_config.quantization and rbln_config.quantization.kv_caches == "fp8":
             kvcache_dtype = "float8_e4m3fn"
 
