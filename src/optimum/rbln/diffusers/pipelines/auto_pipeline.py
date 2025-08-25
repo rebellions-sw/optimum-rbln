@@ -48,7 +48,7 @@ class RBLNAutoPipelineBase:
             rbln_class_name = convert_hf_to_rbln_model_name(hf_model_class.__name__)
         else:
             rbln_class_name = cls.get_rbln_model_cls_name(pretrained_model_name_or_path, **kwargs)
-            if convert_rbln_to_hf_model_name(rbln_class_name) not in cls._model_mapping_names:
+            if convert_rbln_to_hf_model_name(rbln_class_name) not in cls._model_mapping_names.values():
                 raise ValueError(
                     f"The architecture '{rbln_class_name}' is not supported by the `{cls.__name__}.from_pretrained()` method. "
                     "Please use the `from_pretrained()` method of the appropriate class to load this model, "
