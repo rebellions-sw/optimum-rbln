@@ -90,6 +90,7 @@ _import_structure = {
         "RBLNDecoderOnlyModelForCausalLM",
         "RBLNDecoderOnlyModelForCausalLMConfig",
     ],
+    "depth_anything": ["RBLNDepthAnythingForDepthEstimationConfig", "RBLNDepthAnythingForDepthEstimation"],
     "dpt": [
         "RBLNDPTForDepthEstimation",
         "RBLNDPTForDepthEstimationConfig",
@@ -140,6 +141,10 @@ _import_structure = {
     "siglip": [
         "RBLNSiglipVisionModel",
         "RBLNSiglipVisionModelConfig",
+    ],
+    "swin": [
+        "RBLNSwinBackbone",
+        "RBLNSwinBackboneConfig",
     ],
     "time_series_transformer": [
         "RBLNTimeSeriesTransformerForPrediction",
@@ -227,6 +232,7 @@ if TYPE_CHECKING:
         RBLNDecoderOnlyModelForCausalLM,
         RBLNDecoderOnlyModelForCausalLMConfig,
     )
+    from .depth_anything import RBLNDepthAnythingForDepthEstimation, RBLNDepthAnythingForDepthEstimationConfig
     from .distilbert import RBLNDistilBertForQuestionAnswering, RBLNDistilBertForQuestionAnsweringConfig
     from .dpt import RBLNDPTForDepthEstimation, RBLNDPTForDepthEstimationConfig
     from .exaone import RBLNExaoneForCausalLM, RBLNExaoneForCausalLMConfig
@@ -282,6 +288,7 @@ if TYPE_CHECKING:
         RBLNRobertaForSequenceClassificationConfig,
     )
     from .siglip import RBLNSiglipVisionModel, RBLNSiglipVisionModelConfig
+    from .swin import RBLNSwinBackbone, RBLNSwinBackboneConfig
     from .t5 import (
         RBLNT5EncoderModel,
         RBLNT5EncoderModelConfig,
