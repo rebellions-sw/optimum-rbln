@@ -232,15 +232,9 @@ class RBLNSwinBackbone(RBLNModel):
                     "longest_edge" in processor.image_processor.size
                     and "shortest_edge" in processor.image_processor.size
                 ):
-                    rbln_config.image_size = (
-                        processor.image_processor.size["longest_edge"],
-                        processor.image_processor.size["shortest_edge"],
-                    )
+                    rbln_config.image_size = processor.image_processor.size["longest_edge"]
                 elif "shortest_edge" in processor.image_processor.size:
-                    rbln_config.image_size = (
-                        processor.image_processor.size["shortest_edge"],
-                        processor.image_processor.size["shortest_edge"],
-                    )
+                    rbln_config.image_size = processor.image_processor.size["shortest_edge"]
                 break
 
         return rbln_config
