@@ -130,7 +130,7 @@ class RBLNDiffusionMixin:
         cls,
         model_id: str,
         *,
-        export: bool = False,
+        export: bool = None,
         model_save_dir: Optional[PathLike] = None,
         rbln_config: Dict[str, Any] = {},
         lora_ids: Optional[Union[str, List[str]]] = None,
@@ -180,6 +180,20 @@ class RBLNDiffusionMixin:
                 The returned object is an instance of the class that called this method, inheriting from RBLNDiffusionMixin.
         """
         rbln_config, kwargs = cls.get_rbln_config_class().initialize_from_kwargs(rbln_config, **kwargs)
+
+        if export is None:
+            export = any(
+                not RBLNModel._is_compiled(
+                    model_id,
+                    token=kwargs.get("token"),
+                    revision=kwargs.get("revision"),
+                    force_download=kwargs.get("force_download", False),
+                    cache_dir=kwargs.get("cache_dir"),
+                    subfolder=submodule_name,
+                    local_files_only=kwargs.get("local_files_only", False),
+                )
+                for submodule_name in cls._submodules
+            )
 
         if export:
             # keep submodules if user passed any of them.

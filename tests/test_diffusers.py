@@ -281,11 +281,7 @@ class TestKandinskyV22Model(BaseTest.TestModel):
         rbln_class_kwargs_copy = self.RBLN_CLASS_KWARGS.copy()
         rbln_class_kwargs_copy["rbln_config"] = rbln_config
         with self.subTest():
-            _ = self.RBLN_CLASS.from_pretrained(
-                model_id=self.HF_MODEL_ID,
-                export=True,
-                **rbln_class_kwargs_copy,
-            )
+            _ = self.RBLN_CLASS.from_pretrained(model_id=self.HF_MODEL_ID, **rbln_class_kwargs_copy)
         with self.subTest():
             self.assertEqual(_.prior_text_encoder.rbln_config.batch_size, 2)
             self.assertEqual(_.prior_prior.rbln_config.batch_size, 4)
