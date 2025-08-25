@@ -548,48 +548,48 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
                 return_dict=return_dict,
             )
 
-        idx = 5 + (1 if output_attentions else 0) + (1 if output_hidden_states else 0)
-        enc_text_hidden_state = outputs.encoder_last_hidden_state_text if return_dict else outputs[idx]
-        hidden_states = outputs.intermediate_hidden_states if return_dict else outputs[2]
-        init_reference_points = outputs.init_reference_points if return_dict else outputs[1]
-        inter_references_points = outputs.intermediate_reference_points if return_dict else outputs[3]
+            idx = 5 + (1 if output_attentions else 0) + (1 if output_hidden_states else 0)
+            enc_text_hidden_state = outputs.encoder_last_hidden_state_text if return_dict else outputs[idx]
+            hidden_states = outputs.intermediate_hidden_states if return_dict else outputs[2]
+            init_reference_points = outputs.init_reference_points if return_dict else outputs[1]
+            inter_references_points = outputs.intermediate_reference_points if return_dict else outputs[3]
 
-        # class logits + predicted bounding boxes
-        outputs_classes = []
-        outputs_coords = []
+            # class logits + predicted bounding boxes
+            outputs_classes = []
+            outputs_coords = []
 
-        # hidden_states are of shape (batch_size, num_stages, height, width)
-        # predict class and bounding box deltas for each stage
-        num_levels = hidden_states.shape[1]
-        for level in range(num_levels):
-            if level == 0:
-                reference = init_reference_points
-            else:
-                reference = inter_references_points[:, level - 1]
-            reference = torch.special.logit(reference, eps=1e-5)
-            outputs_class = self.class_embed[level](
-                vision_hidden_state=hidden_states[:, level],
-                text_hidden_state=enc_text_hidden_state,
-                text_token_mask=attention_mask.bool(),
-            )
-            delta_bbox = self.bbox_embed[level](hidden_states[:, level])
+            # hidden_states are of shape (batch_size, num_stages, height, width)
+            # predict class and bounding box deltas for each stage
+            num_levels = hidden_states.shape[1]
+            for level in range(num_levels):
+                if level == 0:
+                    reference = init_reference_points
+                else:
+                    reference = inter_references_points[:, level - 1]
+                reference = torch.special.logit(reference, eps=1e-5)
+                outputs_class = self.class_embed[level](
+                    vision_hidden_state=hidden_states[:, level],
+                    text_hidden_state=enc_text_hidden_state,
+                    text_token_mask=attention_mask.bool(),
+                )
+                delta_bbox = self.bbox_embed[level](hidden_states[:, level])
 
-            reference_coordinates = reference.shape[-1]
-            if reference_coordinates == 4:
-                outputs_coord_logits = delta_bbox + reference
-            elif reference_coordinates == 2:
-                delta_bbox[..., :2] += reference
-                outputs_coord_logits = delta_bbox
-            else:
-                raise ValueError(f"reference.shape[-1] should be 4 or 2, but got {reference.shape[-1]}")
-            outputs_coord = outputs_coord_logits.sigmoid()
-            outputs_classes.append(outputs_class)
-            outputs_coords.append(outputs_coord)
-        outputs_class = torch.stack(outputs_classes)
-        outputs_coord = torch.stack(outputs_coords)
+                reference_coordinates = reference.shape[-1]
+                if reference_coordinates == 4:
+                    outputs_coord_logits = delta_bbox + reference
+                elif reference_coordinates == 2:
+                    delta_bbox[..., :2] += reference
+                    outputs_coord_logits = delta_bbox
+                else:
+                    raise ValueError(f"reference.shape[-1] should be 4 or 2, but got {reference.shape[-1]}")
+                outputs_coord = outputs_coord_logits.sigmoid()
+                outputs_classes.append(outputs_class)
+                outputs_coords.append(outputs_coord)
+            outputs_class = torch.stack(outputs_classes)
+            outputs_coord = torch.stack(outputs_coords)
 
-        logits = outputs_class[-1]
-        pred_boxes = outputs_coord[-1]
+            logits = outputs_class[-1]
+            pred_boxes = outputs_coord[-1]
 
         if not return_dict:
             auxiliary_outputs = []
