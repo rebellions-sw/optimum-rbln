@@ -20,7 +20,7 @@ import torch.nn.functional as F
 from transformers import SwinConfig
 from transformers.models.swin.modeling_swin import BackboneOutput
 
-from ....configuration_utils import RBLNCompileConfig
+from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from .configuration_swin import RBLNSwinBackboneConfig
@@ -215,6 +215,23 @@ class RBLNSwinBackbone(RBLNModel):
         return _SwinBackbone(model, **wrapper_cfg).eval()
 
     @classmethod
+    def _update_submodule_config(
+        cls,
+        model: "PreTrainedModel",
+        rbln_config: RBLNModelConfig,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+    ):
+        if rbln_config.max_image_size is None:
+            longest_edge = None
+            for processor in preprocessors:
+                if hasattr(processor, "image_processor"):
+                    longest_edge = processor.image_processor.size["longest_edge"]
+                    break
+            rbln_config.max_image_size = (longest_edge, longest_edge)
+
+        return rbln_config
+
+    @classmethod
     def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
@@ -227,9 +244,6 @@ class RBLNSwinBackbone(RBLNModel):
                 if hasattr(processor, "size"):
                     if all(required_key in processor.size.keys() for required_key in ["height", "width"]):
                         rbln_config.max_image_size = (processor.size["height"], processor.size["width"])
-                    elif "shortest_edge" in processor.size.keys() and "longest_edge" in processor.size.keys():
-                        size = max(processor.size["shortest_edge"], processor.size["longest_edge"])
-                        rbln_config.max_image_size = (size, size)
                     break
 
         input_info = [
