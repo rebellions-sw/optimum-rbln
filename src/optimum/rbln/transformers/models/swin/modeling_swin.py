@@ -260,8 +260,8 @@ class RBLNSwinBackbone(RBLNModel):
                 [
                     rbln_config.batch_size,
                     3,
-                    rbln_config.image_size[0],
-                    rbln_config.image_size[1],
+                    rbln_config.image_height,
+                    rbln_config.image_width,
                 ],
                 "float32",
             ),
