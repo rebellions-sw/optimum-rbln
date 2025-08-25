@@ -25,7 +25,7 @@ class RBLNTransformerEncoderConfig(RBLNModelConfig):
         max_seq_len: Optional[int] = None,
         batch_size: Optional[int] = None,
         model_input_names: Optional[List[str]] = None,
-        input_shapes: Optional[List[Tuple[int, int]]] = None,
+        model_input_shapes: Optional[List[Tuple[int, int]]] = None,
         **kwargs: Any,
     ):
         """
@@ -46,7 +46,7 @@ class RBLNTransformerEncoderConfig(RBLNModelConfig):
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
         self.model_input_names = model_input_names or self.rbln_model_input_names
-        self.input_shapes = input_shapes
+        self.model_input_shapes = model_input_shapes
 
 
 class RBLNImageModelConfig(RBLNModelConfig):
