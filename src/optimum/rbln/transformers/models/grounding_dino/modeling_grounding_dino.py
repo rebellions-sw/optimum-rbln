@@ -492,7 +492,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
 
     def pad_image_to_rbln_config(self, pixel_values: torch.FloatTensor, pixel_mask: torch.BoolTensor):
         batch_size, _, height, width = pixel_values.shape
-        image_height, image_width = self.rbln_config.encoder.image_size
+        image_height, image_width = self.rbln_config.encoder.image_height, self.rbln_config.encoder.image_width
 
         pad_h = image_height - height
         pad_w = image_width - width
