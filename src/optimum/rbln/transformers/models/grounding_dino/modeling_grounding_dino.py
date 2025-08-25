@@ -69,7 +69,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
     This class provides hardware-accelerated inference for Grounding DINO models
     on RBLN devices, supporting multimodal object detection tasks that combine
     vision and language understanding.
-    
+
     Grounding DINO is a transformer-based architecture consisting of:
     - A backbone for feature extraction from images
     - An encoder-decoder transformer for processing visual and textual features
