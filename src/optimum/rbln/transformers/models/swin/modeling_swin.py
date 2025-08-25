@@ -276,14 +276,14 @@ class RBLNSwinBackbone(RBLNModel):
             )
 
         _, _, original_h, original_w = pixel_values.shape
-        if original_h > self.rbln_config.max_image_size[0] or original_w > self.rbln_config.max_image_size[1]:
+        if original_h > self.rbln_config.image_size[0] or original_w > self.rbln_config.image_size[1]:
             raise ValueError(
                 f"Input image size ({original_h}x{original_w}) exceeds the configured maximum size"
-                f" ({self.rbln_config.max_image_size[0]}x{self.rbln_config.max_image_size[1]})."
+                f" ({self.rbln_config.image_size[0]}x{self.rbln_config.image_size[1]})."
             )
 
-        pad_h = self.rbln_config.max_image_size[0] - original_h
-        pad_w = self.rbln_config.max_image_size[1] - original_w
+        pad_h = self.rbln_config.image_size[0] - original_h
+        pad_w = self.rbln_config.image_size[1] - original_w
         padded_pixel_values = F.pad(pixel_values, (0, pad_w, 0, pad_h))
 
         output = self.model[0](padded_pixel_values)
