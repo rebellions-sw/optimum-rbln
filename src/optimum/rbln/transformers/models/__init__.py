@@ -37,6 +37,7 @@ _import_structure = {
         "RBLNAutoModelForVision2Seq",
         "RBLNAutoModelForImageTextToText",
         "RBLNAutoModelForTextEncoding",
+        "RBLNAutoModelForZeroShotObjectDetection",
     ],
     "bart": [
         "RBLNBartForConditionalGeneration",
@@ -192,6 +193,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForSpeechSeq2Seq,
         RBLNAutoModelForTextEncoding,
         RBLNAutoModelForVision2Seq,
+        RBLNAutoModelForZeroShotObjectDetection,
     )
     from .bart import (
         RBLNBartForConditionalGeneration,

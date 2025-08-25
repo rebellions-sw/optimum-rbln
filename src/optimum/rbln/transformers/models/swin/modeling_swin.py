@@ -221,13 +221,27 @@ class RBLNSwinBackbone(RBLNModel):
         rbln_config: RBLNModelConfig,
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
     ):
-        if rbln_config.image_size is None:
-            longest_edge = None
-            for processor in preprocessors:
-                if hasattr(processor, "image_processor"):
-                    longest_edge = processor.image_processor.size["longest_edge"]
-                    break
-            rbln_config.image_size = (longest_edge, longest_edge)
+        for processor in preprocessors:
+            if rbln_config.image_size is None and hasattr(processor, "image_processor"):
+                if "height" in processor.image_processor.size and "width" in processor.image_processor.size:
+                    rbln_config.image_size = (
+                        processor.image_processor.size["height"],
+                        processor.image_processor.size["width"],
+                    )
+                elif (
+                    "longest_edge" in processor.image_processor.size
+                    and "shortest_edge" in processor.image_processor.size
+                ):
+                    rbln_config.image_size = (
+                        processor.image_processor.size["longest_edge"],
+                        processor.image_processor.size["shortest_edge"],
+                    )
+                elif "shortest_edge" in processor.image_processor.size:
+                    rbln_config.image_size = (
+                        processor.image_processor.size["shortest_edge"],
+                        processor.image_processor.size["shortest_edge"],
+                    )
+                break
 
         return rbln_config
 
