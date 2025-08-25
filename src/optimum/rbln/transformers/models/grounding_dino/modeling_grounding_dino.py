@@ -388,16 +388,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
                 text_position_ids=position_ids,
                 output_attentions=output_attentions,
                 output_hidden_states=output_hidden_states,
-                return_dict=return_dict,
-            )
-        # If the user passed a tuple for encoder_outputs, we wrap it in a GroundingDinoEncoderOutput when return_dict=True
-        elif return_dict and not isinstance(encoder_outputs, GroundingDinoEncoderOutput):
-            encoder_outputs = GroundingDinoEncoderOutput(
-                last_hidden_state_vision=encoder_outputs[0],
-                last_hidden_state_text=encoder_outputs[1],
-                vision_hidden_states=encoder_outputs[2] if output_hidden_states else None,
-                text_hidden_states=encoder_outputs[3] if output_hidden_states else None,
-                attentions=encoder_outputs[-1] if output_attentions else None,
+                return_dict=True,
             )
 
         # Fifth, prepare decoder inputs
@@ -747,7 +738,6 @@ class RBLNGroundingDinoEncoder(RBLNModel):
         reference_points = reference_points[:, :, None] * valid_ratios[:, None]
         return reference_points
 
-    @staticmethod
     def validate_output_config(self, output_attentions, output_hidden_states):
         if output_attentions != self.rbln_config.output_attentions:
             raise ValueError(
@@ -930,7 +920,6 @@ class RBLNGroundingDinoDecoder(RBLNModel):
         rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
         return rbln_config
 
-    @staticmethod
     def validate_output_config(self, output_attentions, output_hidden_states):
         if output_attentions != self.rbln_config.output_attentions:
             raise ValueError(
