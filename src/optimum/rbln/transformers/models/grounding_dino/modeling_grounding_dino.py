@@ -275,12 +275,6 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
 
         text_self_attention_masks, position_ids = generate_masks_with_special_tokens_and_transfer_map(input_ids)
 
-        if attention_mask is None:
-            attention_mask = torch.ones_like(input_ids)
-
-        if token_type_ids is None:
-            token_type_ids = torch.zeros_like(input_ids)
-
         text_token_mask = attention_mask.bool()  # just to avoid renaming everywhere
 
         max_text_len = self.config.max_text_len
@@ -513,6 +507,23 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
 
         return pixel_values, pixel_mask
 
+    def pad_text_to_rbln_config(
+        self,
+        input_ids: torch.LongTensor,
+        token_type_ids: Optional[torch.LongTensor] = None,
+        attention_mask: Optional[torch.LongTensor] = None,
+    ):
+        batch_size, seq_len = input_ids.shape
+        max_text_len = self.rbln_config.max_text_len
+        token_type_ids = token_type_ids if token_type_ids is not None else torch.zeros_like(input_ids)
+        attention_mask = attention_mask if attention_mask is not None else torch.ones_like(input_ids)
+        if seq_len < max_text_len:
+            input_ids = torch.nn.functional.pad(input_ids, (0, max_text_len - seq_len, 0, 0), value=0)
+            token_type_ids = torch.nn.functional.pad(token_type_ids, (0, max_text_len - seq_len, 0, 0), value=0)
+            attention_mask = torch.nn.functional.pad(attention_mask, (0, max_text_len - seq_len, 0, 0), value=0)
+
+        return input_ids, token_type_ids, attention_mask
+
     def forward(
         self,
         pixel_values: torch.FloatTensor,
@@ -530,9 +541,9 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
 
         # Pad image to rbln_config.image_height and rbln_config.image_width
         pixel_values, pixel_mask = self.pad_image_to_rbln_config(pixel_values, pixel_mask)
-
-        if attention_mask is None:
-            attention_mask = torch.ones_like(input_ids)
+        input_ids, token_type_ids, attention_mask = self.pad_text_to_rbln_config(
+            input_ids, token_type_ids, attention_mask
+        )
 
         with torch.inference_mode():
             # First, sent images through Grounding DINO base model to obtain encoder + decoder outputs
