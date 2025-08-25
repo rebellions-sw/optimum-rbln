@@ -514,7 +514,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         attention_mask: Optional[torch.LongTensor] = None,
     ):
         batch_size, seq_len = input_ids.shape
-        max_text_len = self.rbln_config.max_text_len
+        max_text_len = self.config.max_text_len
         token_type_ids = token_type_ids if token_type_ids is not None else torch.zeros_like(input_ids)
         attention_mask = attention_mask if attention_mask is not None else torch.ones_like(input_ids)
         if seq_len < max_text_len:
