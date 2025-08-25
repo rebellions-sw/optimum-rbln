@@ -20,6 +20,7 @@ from ...configuration_generic import RBLNImageModelConfig, RBLNModelConfig
 class RBLNGroundingDinoForObjectDetectionConfig(RBLNImageModelConfig):
     submodules = [
         "text_backbone",
+        "backbone",
         "encoder",
         "decoder",
     ]
@@ -30,6 +31,9 @@ class RBLNGroundingDinoForObjectDetectionConfig(RBLNImageModelConfig):
         encoder: Optional["RBLNGroundingDinoEncoderConfig"] = None,
         decoder: Optional["RBLNGroundingDinoDecoderConfig"] = None,
         text_backbone: Optional["RBLNModelConfig"] = None,
+        backbone: Optional["RBLNModelConfig"] = None,
+        output_attentions: Optional[bool] = False,
+        output_hidden_states: Optional[bool] = False,
         **kwargs: Any,
     ):
         """
@@ -44,6 +48,9 @@ class RBLNGroundingDinoForObjectDetectionConfig(RBLNImageModelConfig):
         self.encoder = encoder
         self.decoder = decoder
         self.text_backbone = text_backbone
+        self.backbone = backbone
+        self.output_attentions = output_attentions
+        self.output_hidden_states = output_hidden_states
 
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
@@ -55,10 +62,14 @@ class RBLNGroundingDinoComponentConfig(RBLNImageModelConfig):
         image_size: Optional[Union[int, Tuple[int, int]]] = None,
         batch_size: Optional[int] = None,
         spatial_shapes_list: Optional[List[Tuple[int, int]]] = None,
+        output_attentions: Optional[bool] = False,
+        output_hidden_states: Optional[bool] = False,
         **kwargs: Any,
     ):
         super().__init__(image_size=image_size, batch_size=batch_size, **kwargs)
         spatial_shapes_list = spatial_shapes_list
+        self.output_attentions = output_attentions
+        self.output_hidden_states = output_hidden_states
 
     @property
     def spatial_shapes(self):

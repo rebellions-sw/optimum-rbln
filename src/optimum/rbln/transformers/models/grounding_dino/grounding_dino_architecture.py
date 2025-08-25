@@ -20,7 +20,6 @@ from torch import Tensor
 from transformers.models.grounding_dino.modeling_grounding_dino import (
     GroundingDinoDecoder,
     GroundingDinoEncoder,
-    GroundingDinoModel,
     get_sine_pos_embed,
 )
 
@@ -77,93 +76,6 @@ def monkey_patch_decorator(func):
     return wrapper
 
 
-class _GroundingDinoModel(torch.nn.Module):
-    def __init__(self, model: "GroundingDinoModel"):
-        super().__init__()
-
-        self.backbone = model.backbone
-        self.config = model.config
-        self.text_backbone = model.text_backbone
-        self.text_projection = model.text_projection
-        self.query_position_embeddings = model.query_position_embeddings
-        self.input_proj_vision = model.input_proj_vision
-        self.encoder = model.encoder
-        self.level_embed = model.level_embed
-
-    def forward(
-        self,
-        pixel_values: torch.tensor,
-        input_ids: torch.tensor,
-        token_type_ids: Optional[torch.tensor] = None,
-        # attention_mask: Optional[torch.tensor] = None,
-        pixel_mask: Optional[torch.tensor] = None,
-        text_self_attention_masks: Optional[torch.tensor] = None,
-        position_ids: Optional[torch.tensor] = None,
-        encoder_outputs=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=False,
-    ):
-        # if attention_mask is None:
-        attention_mask = torch.ones_like(input_ids)
-
-        if token_type_ids is None:
-            token_type_ids = torch.zeros_like(input_ids)
-
-        text_token_mask = attention_mask.bool()  # just to avoid renaming everywhere
-
-        max_text_len = self.config.max_text_len
-        if text_self_attention_masks.shape[1] > max_text_len:
-            text_self_attention_masks = text_self_attention_masks[:, :max_text_len, :max_text_len]
-            position_ids = position_ids[:, :max_text_len]
-            input_ids = input_ids[:, :max_text_len]
-            token_type_ids = token_type_ids[:, :max_text_len]
-            text_token_mask = text_token_mask[:, :max_text_len]
-
-        # Extract text features from text backbone
-        text_outputs = self.text_backbone(
-            input_ids, text_self_attention_masks, token_type_ids, position_ids, return_dict=return_dict
-        )
-        text_features = text_outputs.last_hidden_state if return_dict else text_outputs[0]
-        text_features = self.text_projection(text_features)
-
-        batch_size, num_channels, height, width = pixel_values.shape
-        device = pixel_values.device
-
-        if pixel_mask is None:
-            pixel_mask = torch.ones(((batch_size, height, width)), dtype=torch.long, device=device)
-
-        # Extract multi-scale feature maps of same resolution `config.d_model` (cf Figure 4 in paper)
-        # First, sent pixel_values + pixel_mask through Backbone to obtain the features
-        # which is a list of tuples
-        vision_features, position_embeddings_list = self.backbone(pixel_values, pixel_mask)
-
-        # Then, apply 1x1 convolution to reduce the channel dimension to d_model (256 by default)
-        feature_maps = []
-        masks = []
-        for level, (source, mask) in enumerate(vision_features):
-            feature_maps.append(self.input_proj_vision[level](source))
-            masks.append(mask)
-
-        # Lowest resolution feature maps are obtained via 3x3 stride 2 convolutions on the final stage
-        if self.config.num_feature_levels > len(feature_maps):
-            _len_sources = len(feature_maps)
-            for level in range(_len_sources, self.config.num_feature_levels):
-                if level == _len_sources:
-                    source = self.input_proj_vision[level](vision_features[-1][0])
-                else:
-                    source = self.input_proj_vision[level](feature_maps[-1])
-                mask = torch.nn.functional.interpolate(pixel_mask[None].float(), size=source.shape[-2:]).to(
-                    torch.bool
-                )[0]
-                pos_l = self.backbone.position_embedding(source, mask).to(source.dtype)
-                feature_maps.append(source)
-                masks.append(mask)
-                position_embeddings_list.append(pos_l)
-
-        return text_features, vision_features[0], feature_maps[0]
-
-
 class _GroundingDinoEncoder(torch.nn.Module):
     def __init__(self, model: "GroundingDinoEncoder", rbln_config: "RBLNGroundingDinoEncoderConfig"):
         super().__init__()
@@ -188,10 +100,10 @@ class _GroundingDinoEncoder(torch.nn.Module):
         text_attention_mask: Optional[torch.Tensor] = None,
         text_self_attention_masks: Optional[torch.Tensor] = None,
         reference_points: Optional[torch.Tensor] = None,
-        output_attentions=False,
-        output_hidden_states=False,
-        return_dict=False,
     ):
+        output_attentions = self.rbln_config.output_attentions
+        output_hidden_states = self.rbln_config.output_hidden_states
+
         encoder_vision_states = () if output_hidden_states else None
         encoder_text_states = () if output_hidden_states else None
         all_attns = () if output_attentions else None
@@ -242,6 +154,7 @@ class _GroundingDinoDecoder(torch.nn.Module):
         self.config = model.config
         self.spatial_shapes = rbln_config.spatial_shapes
         self.spatial_shapes_list = rbln_config.spatial_shapes_list
+        self.rbln_config = rbln_config
         self.reference_points_head = model.reference_points_head
         self.bbox_embed = model.bbox_embed
         self.layer_norm = model.layer_norm
@@ -256,15 +169,9 @@ class _GroundingDinoDecoder(torch.nn.Module):
         text_encoder_attention_mask=None,
         reference_points=None,
         valid_ratios=None,
-        output_attentions=None,
-        output_hidden_states=False,
-        return_dict=False,
     ):
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
-        )
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        output_attentions = self.rbln_config.output_attentions
+        output_hidden_states = self.rbln_config.output_hidden_states
 
         if inputs_embeds is not None:
             hidden_states = inputs_embeds
@@ -405,13 +312,13 @@ class _GroundingDinoEncoderLayer(torch.nn.Module):
 
         (text_features, text_enhanced_attn) = self.text_enhancer_layer(
             hidden_states=text_features,
-            attention_masks=(1.0 - text_self_attention_masks),  # note we use ~ for mask here
+            attention_masks=(1.0 - text_self_attention_masks),  # RBLN FIX, change from ~ to 1.0 -
             position_embeddings=(text_position_embedding if text_position_embedding is not None else None),
         )
 
         (vision_features, vision_deformable_attn) = self.deformable_layer(
             hidden_states=vision_features,
-            attention_mask=(1.0 - key_padding_mask),
+            attention_mask=(1.0 - key_padding_mask),  # RBLN FIX, change from ~ to 1.0 -
             position_embeddings=vision_position_embedding,
             reference_points=reference_points,
             spatial_shapes=spatial_shapes,
@@ -568,7 +475,6 @@ class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
             mask = text_attention_mask * torch.finfo(torch.float16).min
             attn_weights = attn_weights + mask
 
-        # RBLN FIX
         vision_attn_weights = attn_weights.softmax(dim=-1)
 
         vision_attn_probs = F.dropout(vision_attn_weights, p=self.dropout, training=self.training)
