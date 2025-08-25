@@ -171,7 +171,7 @@ class _SwinBackbone(torch.nn.Module):
             input_dimensions,
             head_mask=None,
             output_attentions=self.output_attentions,
-            output_hidden_states=self.output_hidden_states,
+            output_hidden_states=True,
             output_hidden_states_before_downsampling=True,
             always_partition=True,
             return_dict=False,
@@ -222,14 +222,11 @@ class RBLNSwinBackbone(RBLNModel):
         model_config: "SwinConfig" = None,
         rbln_config: Optional[RBLNSwinBackboneConfig] = None,
     ) -> RBLNSwinBackboneConfig:
-        if rbln_config.max_image_size is None:
+        if rbln_config.image_size is None:
             for processor in preprocessors:
                 if hasattr(processor, "size"):
                     if all(required_key in processor.size.keys() for required_key in ["height", "width"]):
-                        rbln_config.max_image_size = (processor.size["height"], processor.size["width"])
-                    elif "shortest_edge" in processor.size.keys() and "longest_edge" in processor.size.keys():
-                        size = max(processor.size["shortest_edge"], processor.size["longest_edge"])
-                        rbln_config.max_image_size = (size, size)
+                        rbln_config.image_size = (processor.size["height"], processor.size["width"])
                     break
 
         input_info = [
@@ -238,8 +235,8 @@ class RBLNSwinBackbone(RBLNModel):
                 [
                     rbln_config.batch_size,
                     3,
-                    rbln_config.max_image_size[0],
-                    rbln_config.max_image_size[1],
+                    rbln_config.image_size[0],
+                    rbln_config.image_size[1],
                 ],
                 "float32",
             ),
