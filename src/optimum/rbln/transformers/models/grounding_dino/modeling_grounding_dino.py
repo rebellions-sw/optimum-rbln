@@ -490,6 +490,27 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
             encoder_pred_boxes=encoder_pred_boxes,
         )
 
+    def pad_image_to_rbln_config(self, pixel_values: torch.FloatTensor, pixel_mask: torch.BoolTensor):
+        batch_size, _, height, width = pixel_values.shape
+        pad_h = self.rbln_config.image_height - height
+        pad_w = self.rbln_config.image_width - width
+        pixel_mask = (
+            pixel_mask
+            if pixel_mask is not None
+            else torch.ones(((batch_size, height, width)), dtype=torch.long, device=pixel_values.device)
+        )
+
+        if pad_h < 0 or pad_w < 0:
+            raise ValueError(
+                f"Image size {height}x{width} is larger than rbln_config.image_height {self.rbln_config.image_height}x{self.rbln_config.image_width}"
+            )
+
+        if pad_h > 0 or pad_w > 0:
+            pixel_values = torch.nn.functional.pad(pixel_values, (0, pad_h, 0, pad_w), value=0)
+            pixel_mask = torch.nn.functional.pad(pixel_mask, (0, pad_h, 0, pad_w), value=0)
+
+        return pixel_values, pixel_mask
+
     def forward(
         self,
         pixel_values: torch.FloatTensor,
@@ -504,6 +525,9 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         labels: List[Dict[str, Union[torch.LongTensor, torch.FloatTensor]]] = None,
     ):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
+        # Pad image to rbln_config.image_height and rbln_config.image_width
+        pixel_values, pixel_mask = self.pad_image_to_rbln_config(pixel_values, pixel_mask)
 
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids)
