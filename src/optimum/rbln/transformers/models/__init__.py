@@ -37,6 +37,7 @@ _import_structure = {
         "RBLNAutoModelForVision2Seq",
         "RBLNAutoModelForImageTextToText",
         "RBLNAutoModelForTextEncoding",
+        "RBLNAutoModelForZeroShotObjectDetection",
     ],
     "bart": [
         "RBLNBartForConditionalGeneration",
@@ -165,6 +166,14 @@ _import_structure = {
         "RBLNXLMRobertaForSequenceClassification",
         "RBLNXLMRobertaForSequenceClassificationConfig",
     ],
+    "grounding_dino": [
+        "RBLNGroundingDinoForObjectDetection",
+        "RBLNGroundingDinoForObjectDetectionConfig",
+        "RBLNGroundingDinoEncoder",
+        "RBLNGroundingDinoEncoderConfig",
+        "RBLNGroundingDinoDecoder",
+        "RBLNGroundingDinoDecoderConfig",
+    ],
 }
 
 if TYPE_CHECKING:
@@ -184,6 +193,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForSpeechSeq2Seq,
         RBLNAutoModelForTextEncoding,
         RBLNAutoModelForVision2Seq,
+        RBLNAutoModelForZeroShotObjectDetection,
     )
     from .bart import (
         RBLNBartForConditionalGeneration,
@@ -236,6 +246,14 @@ if TYPE_CHECKING:
         RBLNGemma3ForConditionalGenerationConfig,
     )
     from .gpt2 import RBLNGPT2LMHeadModel, RBLNGPT2LMHeadModelConfig, RBLNGPT2Model, RBLNGPT2ModelConfig
+    from .grounding_dino import (
+        RBLNGroundingDinoDecoder,
+        RBLNGroundingDinoDecoderConfig,
+        RBLNGroundingDinoEncoder,
+        RBLNGroundingDinoEncoderConfig,
+        RBLNGroundingDinoForObjectDetection,
+        RBLNGroundingDinoForObjectDetectionConfig,
+    )
     from .idefics3 import (
         RBLNIdefics3ForConditionalGeneration,
         RBLNIdefics3ForConditionalGenerationConfig,
