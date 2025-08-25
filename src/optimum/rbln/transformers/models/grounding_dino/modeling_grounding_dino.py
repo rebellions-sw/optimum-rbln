@@ -492,8 +492,10 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
 
     def pad_image_to_rbln_config(self, pixel_values: torch.FloatTensor, pixel_mask: torch.BoolTensor):
         batch_size, _, height, width = pixel_values.shape
-        pad_h = self.rbln_config.image_height - height
-        pad_w = self.rbln_config.image_width - width
+        image_height, image_width = self.rbln_config.encoder.image_size
+
+        pad_h = image_height - height
+        pad_w = image_width - width
         pixel_mask = (
             pixel_mask
             if pixel_mask is not None
@@ -502,7 +504,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
 
         if pad_h < 0 or pad_w < 0:
             raise ValueError(
-                f"Image size {height}x{width} is larger than rbln_config.image_height {self.rbln_config.image_height}x{self.rbln_config.image_width}"
+                f"Image size {height}x{width} is larger than encoder's image_size {image_height}x{image_width}"
             )
 
         if pad_h > 0 or pad_w > 0:
