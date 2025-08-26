@@ -20,7 +20,7 @@ import torch.nn.functional as F
 from transformers import SwinConfig
 from transformers.models.swin.modeling_swin import BackboneOutput
 
-from ....configuration_utils import RBLNCompileConfig
+from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from .configuration_swin import RBLNSwinBackboneConfig
@@ -215,6 +215,31 @@ class RBLNSwinBackbone(RBLNModel):
         return _SwinBackbone(model, **wrapper_cfg).eval()
 
     @classmethod
+    def _update_submodule_config(
+        cls,
+        model: "PreTrainedModel",
+        rbln_config: RBLNModelConfig,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+    ):
+        for processor in preprocessors:
+            if rbln_config.image_size is None and hasattr(processor, "image_processor"):
+                if "height" in processor.image_processor.size and "width" in processor.image_processor.size:
+                    rbln_config.image_size = (
+                        processor.image_processor.size["height"],
+                        processor.image_processor.size["width"],
+                    )
+                elif (
+                    "longest_edge" in processor.image_processor.size
+                    and "shortest_edge" in processor.image_processor.size
+                ):
+                    rbln_config.image_size = processor.image_processor.size["longest_edge"]
+                elif "shortest_edge" in processor.image_processor.size:
+                    rbln_config.image_size = processor.image_processor.size["shortest_edge"]
+                break
+
+        return rbln_config
+
+    @classmethod
     def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
@@ -235,8 +260,8 @@ class RBLNSwinBackbone(RBLNModel):
                 [
                     rbln_config.batch_size,
                     3,
-                    rbln_config.image_size[0],
-                    rbln_config.image_size[1],
+                    rbln_config.image_height,
+                    rbln_config.image_width,
                 ],
                 "float32",
             ),
@@ -276,14 +301,14 @@ class RBLNSwinBackbone(RBLNModel):
             )
 
         _, _, original_h, original_w = pixel_values.shape
-        if original_h > self.rbln_config.image_size[0] or original_w > self.rbln_config.image_size[1]:
+        if original_h > self.rbln_config.image_height or original_w > self.rbln_config.image_width:
             raise ValueError(
                 f"Input image size ({original_h}x{original_w}) exceeds the configured maximum size"
-                f" ({self.rbln_config.image_size[0]}x{self.rbln_config.image_size[1]})."
+                f" ({self.rbln_config.image_height}x{self.rbln_config.image_width})."
             )
 
-        pad_h = self.rbln_config.image_size[0] - original_h
-        pad_w = self.rbln_config.image_size[1] - original_w
+        pad_h = self.rbln_config.image_height - original_h
+        pad_w = self.rbln_config.image_width - original_w
         padded_pixel_values = F.pad(pixel_values, (0, pad_w, 0, pad_h))
 
         output = self.model[0](padded_pixel_values)
