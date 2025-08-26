@@ -55,7 +55,6 @@ if TYPE_CHECKING:
     )
 
 
-
 class RBLNGroundingDinoForObjectDetection(RBLNModel):
     _rbln_submodules = [
         {"name": "text_backbone"},
@@ -800,15 +799,15 @@ class RBLNGroundingDinoEncoder(RBLNModel):
         spatial_shapes: Tensor,
         spatial_shapes_list: List[Tuple[int, int]],
         level_start_index: Tensor,
-        valid_ratios=None,
+        valid_ratios: Optional[Tensor] = None,
         text_features: Optional[Tensor] = None,
         text_attention_mask: Optional[Tensor] = None,
         text_position_embedding: Optional[Tensor] = None,
         text_self_attention_masks: Optional[Tensor] = None,
         text_position_ids: Optional[Tensor] = None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
     ):
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
@@ -976,16 +975,16 @@ class RBLNGroundingDinoDecoder(RBLNModel):
 
     def forward(
         self,
-        inputs_embeds,
-        vision_encoder_hidden_states,
-        vision_encoder_attention_mask=None,
-        text_encoder_hidden_states=None,
-        text_encoder_attention_mask=None,
-        reference_points=None,
-        valid_ratios=None,
-        output_attentions=False,
-        output_hidden_states=False,
-        return_dict=False,
+        inputs_embeds: torch.Tensor,
+        vision_encoder_hidden_states: torch.Tensor,
+        vision_encoder_attention_mask: torch.Tensor,
+        text_encoder_hidden_states: torch.Tensor,
+        text_encoder_attention_mask: torch.Tensor,
+        reference_points: torch.Tensor,
+        valid_ratios: torch.Tensor,
+        output_attentions: bool = False,
+        output_hidden_states: bool = False,
+        return_dict: bool = False,
         **kwargs,
     ):
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions

@@ -364,7 +364,7 @@ class _GroundingDinoMultiscaleDeformableAttention(torch.nn.Module):
 
         value = self.value_proj(encoder_hidden_states)
         if attention_mask is not None:
-            # RBLN FIX
+            # RBLN FIX: bool tensor to float tensor
             value = attention_mask * value
 
         value = value.view(batch_size, sequence_length, self.n_heads, self.d_model // self.n_heads)
@@ -445,13 +445,13 @@ class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
                 f"Attention weights should be of size {(batch_size * self.num_heads, tgt_len, src_len)}, but is {attn_weights.size()}"
             )
 
-        # RBLN FIX
+        # RBLN FIX: max_values from scalar to vector
         attn_weights = attn_weights - torch.max(attn_weights).reshape(1).repeat(src_len)
         # # Do not increase -50000/50000, data type half has quite limited range
         attn_weights = torch.clamp(attn_weights, min=-50000, max=50000)
 
         attn_weights_transposed = attn_weights.transpose(1, 2)
-        # RBLN FIX
+        # RBLN FIX: max_values from scalar to vector
         text_attn_weights = attn_weights_transposed - torch.max(attn_weights_transposed, dim=-1, keepdim=True)[
             0
         ].repeat(1, 1, tgt_len)
@@ -461,7 +461,7 @@ class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
 
         # mask vision for language
         if vision_attention_mask is not None:
-            # RBLN FIX
+            # RBLN FIX: bool tensor to float tensor
             mask = vision_attention_mask * torch.finfo(torch.float16).min
             text_attn_weights = text_attn_weights.transpose(1, 2) + mask
             text_attn_weights = text_attn_weights.transpose(1, 2)
@@ -471,7 +471,7 @@ class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
         # mask language for vision
         if text_attention_mask is not None:
             text_attention_mask = text_attention_mask[:, None, None, :].repeat(1, self.num_heads, 1, 1).flatten(0, 1)
-            # RBLN FIX
+            # RBLN FIX: bool tensor to float tensor
             mask = text_attention_mask * torch.finfo(torch.float16).min
             attn_weights = attn_weights + mask
 
