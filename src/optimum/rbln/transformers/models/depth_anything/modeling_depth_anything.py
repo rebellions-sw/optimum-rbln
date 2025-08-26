@@ -20,6 +20,6 @@ class RBLNDepthAnythingForDepthEstimation(RBLNModelForDepthEstimation):
     """
     RBLN optimized DepthAnythingForDepthEstimation model for depth estimation tasks.
 
-    This class provides hardware-accelerated inference for Depth Anything V2 Small
+    This class provides hardware-accelerated inference for Depth Anything V2
     models on RBLN devices, providing the most capable monocular depth estimation (MDE) model.
     """
