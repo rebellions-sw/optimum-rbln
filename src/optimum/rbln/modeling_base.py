@@ -529,7 +529,13 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
                 for item in os.listdir(tmp_dir):
                     src_path = os.path.join(tmp_dir, item)
                     dst_path = os.path.join(save_directory_path, item)
-                    shutil.move(src_path, dst_path)
+                    if os.path.isfile(src_path):
+                        shutil.copy2(src_path, dst_path)
+                        os.remove(src_path)
+                    elif os.path.isdir(src_path):
+                        shutil.copytree(src_path, dst_path, dirs_exist_ok=True)
+                        shutil.rmtree(src_path)
+
                 # Clean up empty tmp_dir
                 os.rmdir(tmp_dir)
             else:
