@@ -502,8 +502,8 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
             )
 
         if pad_h > 0 or pad_w > 0:
-            pixel_values = torch.nn.functional.pad(pixel_values, (0, pad_h, 0, pad_w), value=0)
-            pixel_mask = torch.nn.functional.pad(pixel_mask, (0, pad_h, 0, pad_w), value=0)
+            pixel_values = torch.nn.functional.pad(pixel_values, (0, pad_w, 0, pad_h), value=0)
+            pixel_mask = torch.nn.functional.pad(pixel_mask, (0, pad_w, 0, pad_h), value=0)
 
         return pixel_values, pixel_mask
 
