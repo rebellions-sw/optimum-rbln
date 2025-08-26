@@ -67,7 +67,7 @@ class RBLNGroundingDinoComponentConfig(RBLNImageModelConfig):
         **kwargs: Any,
     ):
         super().__init__(image_size=image_size, batch_size=batch_size, **kwargs)
-        spatial_shapes_list = spatial_shapes_list
+        self.spatial_shapes_list = spatial_shapes_list
         self.output_attentions = output_attentions
         self.output_hidden_states = output_hidden_states
 

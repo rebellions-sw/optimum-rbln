@@ -54,7 +54,6 @@ if TYPE_CHECKING:
         PreTrainedModel,
     )
 
-    from ....diffusers.modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 
 
 class RBLNGroundingDinoForObjectDetection(RBLNModel):
@@ -225,12 +224,6 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         return model.model.text_projection
 
     @classmethod
-    def update_rbln_config_using_pipe(
-        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
-    ) -> "RBLNDiffusionMixinConfig":
-        return rbln_config
-
-    @classmethod
     def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
@@ -266,6 +259,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         output_attentions=None,
         output_hidden_states=None,
         return_dict=None,
+        _init_reference_points=None,
     ):
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
@@ -415,7 +409,9 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
             )
 
             topk_coords_logits = topk_coords_logits.detach()
-            reference_points = topk_coords_logits.sigmoid()
+            reference_points = (
+                topk_coords_logits.sigmoid() if _init_reference_points is None else _init_reference_points
+            )
             init_reference_points = reference_points
             if query_embeds is not None:
                 target = query_embeds.unsqueeze(0).repeat(batch_size, 1, 1)
@@ -536,6 +532,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         labels: List[Dict[str, Union[torch.LongTensor, torch.FloatTensor]]] = None,
+        **kwargs,
     ):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
@@ -557,6 +554,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
                 output_attentions=output_attentions,
                 output_hidden_states=output_hidden_states,
                 return_dict=return_dict,
+                **kwargs,
             )
 
             idx = 5 + (1 if output_attentions else 0) + (1 if output_hidden_states else 0)
@@ -868,12 +866,6 @@ class RBLNGroundingDinoDecoder(RBLNModel):
         cls, model: torch.nn.Module, rbln_config: RBLNGroundingDinoForObjectDetectionConfig
     ) -> torch.nn.Module:
         return _GroundingDinoDecoder(model, rbln_config).eval()
-
-    @classmethod
-    def update_rbln_config_using_pipe(
-        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
-    ) -> "RBLNDiffusionMixinConfig":
-        return rbln_config
 
     @classmethod
     def _update_submodule_config(
