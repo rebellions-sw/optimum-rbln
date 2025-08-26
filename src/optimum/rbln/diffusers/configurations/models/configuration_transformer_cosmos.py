@@ -33,7 +33,7 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
         latent_height: Optional[int] = None,
         latent_width: Optional[int] = None,
         is_v2w: Optional[bool] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         """
         Args:

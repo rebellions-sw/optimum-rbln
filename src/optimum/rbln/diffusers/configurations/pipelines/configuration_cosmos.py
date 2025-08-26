@@ -128,7 +128,7 @@ class RBLNCosmos2PipelineBaseConfig(RBLNModelConfig):
         width: Optional[int] = None,
         num_frames: Optional[int] = None,
         max_seq_len: Optional[int] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs:  Any,
     ):
         """
         Args:

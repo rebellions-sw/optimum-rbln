@@ -70,7 +70,8 @@ class CosmosTransformer3DModelWrapper(torch.nn.Module):
         return_dict: bool = False,
     ):
         image_rotary_emb = [image_rotary_emb_0, image_rotary_emb_1]
-        for block in self.model.transformer_blocks:
+        # TODO: remove num_layers
+        for block in self.model.transformer_blocks[:3]:
             hidden_states = block(
                 hidden_states=hidden_states,
                 encoder_hidden_states=encoder_hidden_states,

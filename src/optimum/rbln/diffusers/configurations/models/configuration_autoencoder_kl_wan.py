@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from ....configuration_utils import RBLNModelConfig
 from ....utils.logging import get_logger
@@ -35,7 +35,7 @@ class RBLNAutoencoderKLWanConfig(RBLNModelConfig):
         vae_scale_factor_temporal: Optional[int] = None,
         vae_scale_factor_spatial: Optional[int] = None,
         use_slicing: Optional[bool] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         """
         Args:
