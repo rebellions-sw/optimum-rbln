@@ -12,20 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .modeling_auto import (
-    RBLNAutoModel,
-    RBLNAutoModelForAudioClassification,
-    RBLNAutoModelForCausalLM,
-    RBLNAutoModelForCTC,
-    RBLNAutoModelForDepthEstimation,
-    RBLNAutoModelForImageClassification,
-    RBLNAutoModelForImageTextToText,
-    RBLNAutoModelForMaskedLM,
-    RBLNAutoModelForQuestionAnswering,
-    RBLNAutoModelForSeq2SeqLM,
-    RBLNAutoModelForSequenceClassification,
-    RBLNAutoModelForSpeechSeq2Seq,
-    RBLNAutoModelForTextEncoding,
-    RBLNAutoModelForVision2Seq,
-    RBLNAutoModelForZeroShotObjectDetection,
-)
+from .configuration_swin import RBLNSwinBackboneConfig
+from .modeling_swin import RBLNSwinBackbone

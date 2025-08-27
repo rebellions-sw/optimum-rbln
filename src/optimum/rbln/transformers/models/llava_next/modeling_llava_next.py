@@ -30,7 +30,7 @@ from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...utils.rbln_runtime_wrapper import LoopProcessor
-from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyForCausalLMOutput
+from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyOutput
 
 
 logger = get_logger(__name__)
@@ -249,6 +249,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         return model_inputs
 
     def _update_model_kwargs_for_generation(self, outputs, model_kwargs, is_encoder_decoder, **kwargs):
+        # update generate_idx
         model_kwargs["generate_idx"] = outputs.generate_idx
         return model_kwargs
 
@@ -430,7 +431,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         generate_idx: Optional[torch.Tensor] = None,
         return_dict: Optional[bool] = None,
         **kwargs,
-    ) -> Union[Tuple, RBLNDecoderOnlyForCausalLMOutput]:
+    ) -> Union[Tuple, RBLNDecoderOnlyOutput]:
         # Prefill
         if cache_position is None:
             inputs_embeds = self._preprocess_prefill(
@@ -464,7 +465,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         if not return_dict:
             return logits, generate_idx
         else:
-            return RBLNDecoderOnlyForCausalLMOutput(
+            return RBLNDecoderOnlyOutput(
                 logits=logits,
                 generate_idx=generate_idx,
             )

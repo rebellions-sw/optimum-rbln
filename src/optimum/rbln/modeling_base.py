@@ -523,10 +523,35 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             # First copy everything to a temporary directory
             shutil.copytree(real_save_dir, tmp_dir)
 
-            # If everything succeeded, atomically replace the target directory
+            # If everything succeeded, move files to target directory
             if os.path.exists(save_directory_path):
-                shutil.rmtree(save_directory_path)
-            os.rename(tmp_dir, save_directory_path)
+                # Merge files from tmp_dir into existing directory
+                def _merge_dir(src_root: str, dst_root: str):
+                    for name in os.listdir(src_root):
+                        src_item = os.path.join(src_root, name)
+                        dst_item = os.path.join(dst_root, name)
+
+                        if os.path.islink(src_item) or os.path.isfile(src_item):
+                            os.makedirs(os.path.dirname(dst_item), exist_ok=True)
+                            if os.path.isdir(dst_item) and not os.path.islink(dst_item):
+                                shutil.rmtree(dst_item)
+                            os.replace(src_item, dst_item)
+                        elif os.path.isdir(src_item):
+                            if os.path.islink(dst_item) or os.path.isfile(dst_item):
+                                os.remove(dst_item)
+                            os.makedirs(dst_item, exist_ok=True)
+                            _merge_dir(src_item, dst_item)
+                        else:
+                            # Fallback for special file types
+                            os.replace(src_item, dst_item)
+
+                _merge_dir(tmp_dir, str(save_directory_path))
+
+                # Remove the temporary directory tree after merge
+                shutil.rmtree(tmp_dir)
+            else:
+                # If target doesn't exist, just rename tmp_dir to target
+                os.rename(tmp_dir, save_directory_path)
 
         except Exception as e:
             # Clean up the temporary directory if anything fails

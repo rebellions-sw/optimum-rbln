@@ -12,25 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ...configuration_generic import RBLNTransformerEncoderForFeatureExtractionConfig
-from ..seq2seq import RBLNModelForSeq2SeqLMConfig
+from ...configuration_generic import RBLNModelForDepthEstimationConfig
 
 
-class RBLNBartModelConfig(RBLNTransformerEncoderForFeatureExtractionConfig):
+class RBLNDepthAnythingForDepthEstimationConfig(RBLNModelForDepthEstimationConfig):
     """
-    Configuration class for RBLNBartModel.
+    Configuration class for DepthAnythingForDepthEstimation.
 
     This configuration class stores the configuration parameters specific to
-    RBLN-optimized BART models for feature extraction tasks.
+    RBLN-optimized Depth Anything V2 Small models for depth estimation tasks.
     """
-
-
-class RBLNBartForConditionalGenerationConfig(RBLNModelForSeq2SeqLMConfig):
-    """
-    Configuration class for RBLNBartForConditionalGeneration.
-
-    This configuration class stores the configuration parameters specific to
-    RBLN-optimized BART models for conditional text generation tasks.
-    """
-
-    support_paged_attention = True

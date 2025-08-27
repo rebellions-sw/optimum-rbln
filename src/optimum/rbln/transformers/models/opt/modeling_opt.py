@@ -70,24 +70,10 @@ class RBLNOPTForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
     @classmethod
     def wrap_model_if_needed(cls, model: PreTrainedModel, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig):
-        wrapper_cfg = {
-            "max_seq_len": rbln_config.max_seq_len,
-            "attn_impl": rbln_config.attn_impl,
-            "kvcache_partition_len": rbln_config.kvcache_partition_len,
-            "kvcache_block_size": rbln_config.kvcache_block_size,
-            "use_rotary_emb": cls._use_rotary_emb,
-            "use_attention_mask": rbln_config.use_attention_mask,
-            "use_position_ids": rbln_config.use_position_ids,
-            "use_inputs_embeds": rbln_config.use_inputs_embeds,
-            "cache_impl": rbln_config.cache_impl,
-            "sliding_window": rbln_config.sliding_window,
-            "sliding_window_layers": rbln_config.sliding_window_layers,
-        }
-
         for i in range(len(model.model.decoder.layers)):
             model.model.decoder.layers[i] = cls.modify_opt_decoder_layer(model.model.decoder.layers[i])
 
-        return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
+        return cls._decoder_wrapper_cls(model, rbln_config=rbln_config, use_rotary_emb=cls._use_rotary_emb).eval()
 
 
 class RBLNOPTModel(RBLNDecoderOnlyModel):
@@ -110,21 +96,7 @@ class RBLNOPTModel(RBLNDecoderOnlyModel):
 
     @classmethod
     def wrap_model_if_needed(cls, model: PreTrainedModel, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig):
-        wrapper_cfg = {
-            "max_seq_len": rbln_config.max_seq_len,
-            "attn_impl": rbln_config.attn_impl,
-            "kvcache_partition_len": rbln_config.kvcache_partition_len,
-            "kvcache_block_size": rbln_config.kvcache_block_size,
-            "use_rotary_emb": cls._use_rotary_emb,
-            "use_attention_mask": rbln_config.use_attention_mask,
-            "use_position_ids": rbln_config.use_position_ids,
-            "use_inputs_embeds": rbln_config.use_inputs_embeds,
-            "cache_impl": rbln_config.cache_impl,
-            "sliding_window": rbln_config.sliding_window,
-            "sliding_window_layers": rbln_config.sliding_window_layers,
-        }
-
         for i in range(len(model.decoder.layers)):
             model.decoder.layers[i] = cls.modify_opt_decoder_layer(model.decoder.layers[i])
 
-        return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
+        return cls._decoder_wrapper_cls(model, rbln_config=rbln_config, use_rotary_emb=cls._use_rotary_emb).eval()

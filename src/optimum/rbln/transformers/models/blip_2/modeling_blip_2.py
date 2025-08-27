@@ -174,7 +174,12 @@ class RBLNBlip2QFormerModel(RBLNModel):
         return Blip2QFormerModelWrapper(model).eval()
 
     @classmethod
-    def _update_submodule_config(cls, model: "PreTrainedModel", rbln_config: "RBLNModelConfig") -> "RBLNModelConfig":
+    def _update_submodule_config(
+        cls,
+        model: "PreTrainedModel",
+        rbln_config: RBLNModelConfig,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+    ):
         if rbln_config.num_query_tokens is None:
             rbln_config.num_query_tokens = model.config.num_query_tokens
 

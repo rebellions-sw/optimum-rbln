@@ -41,7 +41,7 @@ jobs:
 
   optimum-rbln-pytest:
     needs: [load-version, check-compiler]
-    if: ${{ needs.check-compiler.outputs.is_deploy_version == 'true' }}
+    if: ${{ needs.check-compiler.outputs.compiler_version_check == 'true' }}
     uses: ./.github/workflows/rbln_optimum_pytest.yaml
     with:
       ref: main
@@ -53,7 +53,7 @@ jobs:
 
   optimum-rbln-inference-test:
     needs: check-compiler
-    if: ${{ needs.check-compiler.outputs.is_deploy_version == 'true' }}
+    if: ${{ needs.check-compiler.outputs.compiler_version_check == 'true' }}
     uses: ./.github/workflows/rbln_optimum_inference_test.yaml
     with:
       ref: main
