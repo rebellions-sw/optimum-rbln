@@ -98,39 +98,6 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
                     self.bbox_embed = nn.ModuleList([_bbox_embed for _ in range(config.decoder_layers)])
             self.class_embed = nn.ModuleList([_class_embed for _ in range(config.decoder_layers)])
 
-            backbone = GroundingDinoConvEncoder(config)
-            self.backbone_position_embedding = build_position_encoding(self.config)
-            # Create input projection layers
-            if config.num_feature_levels > 1:
-                num_backbone_outs = len(backbone.intermediate_channel_sizes)
-                input_proj_list = []
-                for i in range(num_backbone_outs):
-                    in_channels = backbone.intermediate_channel_sizes[i]
-                    input_proj_list.append(
-                        nn.Sequential(
-                            nn.Conv2d(in_channels, config.d_model, kernel_size=1),
-                            nn.GroupNorm(32, config.d_model),
-                        )
-                    )
-                for _ in range(config.num_feature_levels - num_backbone_outs):
-                    input_proj_list.append(
-                        nn.Sequential(
-                            nn.Conv2d(in_channels, config.d_model, kernel_size=3, stride=2, padding=1),
-                            nn.GroupNorm(32, config.d_model),
-                        )
-                    )
-                    in_channels = config.d_model
-                self.input_proj_vision = nn.ModuleList(input_proj_list)
-            else:
-                self.input_proj_vision = nn.ModuleList(
-                    [
-                        nn.Sequential(
-                            nn.Conv2d(backbone.intermediate_channel_sizes[-1], config.d_model, kernel_size=1),
-                            nn.GroupNorm(32, config.d_model),
-                        )
-                    ]
-                )
-
             if config.embedding_init_target or not config.two_stage:
                 self.query_position_embeddings = nn.Embedding(config.num_queries, config.d_model)
 
@@ -156,7 +123,6 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
 
         self.bbox_embed.load_state_dict(stacte_dict["bbox_embed"])
         self.class_embed.load_state_dict(stacte_dict["class_embed"])
-        self.input_proj_vision.load_state_dict(stacte_dict["input_proj_vision"])
         with torch.no_grad():
             self.level_embed.copy_(stacte_dict["level_embed"])
         if self.config.two_stage:
@@ -183,7 +149,6 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         # If you are unavoidably running on a CPU rather than an RBLN device,
         # store the torch tensor, weight, etc. in this function.
         save_dict = {}
-        save_dict["input_proj_vision"] = model.model.input_proj_vision.state_dict()
         save_dict["level_embed"] = model.model.level_embed
         if model.config.two_stage:
             save_dict["enc_output"] = model.model.enc_output.state_dict()
@@ -477,7 +442,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
 
     def pad_image_to_rbln_config(self, pixel_values: torch.FloatTensor, pixel_mask: torch.BoolTensor):
         batch_size, _, height, width = pixel_values.shape
-        image_height, image_width = self.rbln_config.encoder.image_height, self.rbln_config.encoder.image_width
+        image_height, image_width = self.rbln_config.image_height, self.rbln_config.image_width
 
         pad_h = image_height - height
         pad_w = image_width - width
@@ -532,10 +497,10 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         # Pad image to rbln_config.image_height and rbln_config.image_width
-        # pixel_values, pixel_mask = self.pad_image_to_rbln_config(pixel_values, pixel_mask)
-        # input_ids, token_type_ids, attention_mask = self.pad_text_to_rbln_config(
-        #     input_ids, token_type_ids, attention_mask
-        # )
+        pixel_values, pixel_mask = self.pad_image_to_rbln_config(pixel_values, pixel_mask)
+        input_ids, token_type_ids, attention_mask = self.pad_text_to_rbln_config(
+            input_ids, token_type_ids, attention_mask
+        )
 
         with torch.inference_mode():
             # First, sent images through Grounding DINO base model to obtain encoder + decoder outputs
