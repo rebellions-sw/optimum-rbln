@@ -19,8 +19,8 @@ from ...configuration_generic import RBLNImageModelConfig, RBLNModelConfig
 
 class RBLNGroundingDinoForObjectDetectionConfig(RBLNImageModelConfig):
     submodules = [
-        "text_backbone",
-        "backbone",
+        # "text_backbone",
+        # "backbone",
         "encoder",
         "decoder",
     ]
@@ -30,10 +30,11 @@ class RBLNGroundingDinoForObjectDetectionConfig(RBLNImageModelConfig):
         batch_size: Optional[int] = None,
         encoder: Optional["RBLNGroundingDinoEncoderConfig"] = None,
         decoder: Optional["RBLNGroundingDinoDecoderConfig"] = None,
-        text_backbone: Optional["RBLNModelConfig"] = None,
-        backbone: Optional["RBLNModelConfig"] = None,
+        # text_backbone: Optional["RBLNModelConfig"] = None,
+        # backbone: Optional["RBLNModelConfig"] = None,
         output_attentions: Optional[bool] = False,
         output_hidden_states: Optional[bool] = False,
+        image_size: Optional[Union[int, Tuple[int, int]]] = None,
         **kwargs: Any,
     ):
         """
@@ -47,10 +48,11 @@ class RBLNGroundingDinoForObjectDetectionConfig(RBLNImageModelConfig):
         super().__init__(**kwargs)
         self.encoder = encoder
         self.decoder = decoder
-        self.text_backbone = text_backbone
-        self.backbone = backbone
+        # self.text_backbone = text_backbone
+        # self.backbone = backbone
         self.output_attentions = output_attentions
         self.output_hidden_states = output_hidden_states
+        self.image_size = image_size
 
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")

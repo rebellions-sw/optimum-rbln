@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from functools import wraps
+import types
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import torch
@@ -23,6 +24,7 @@ from transformers.models.grounding_dino.modeling_grounding_dino import (
     get_sine_pos_embed,
 )
 
+from ..swin.modeling_swin import _SwinBackbone, get_attn_mask
 
 if TYPE_CHECKING:
     from .configuration_grounding_dino import RBLNGroundingDinoDecoderConfig, RBLNGroundingDinoEncoderConfig
@@ -75,6 +77,114 @@ def monkey_patch_decorator(func):
 
     return wrapper
 
+
+class _GroundingDinoConvEncoder(torch.nn.Module):
+    def __init__(self, model: "torch.nn.Module"):
+        super().__init__()
+        self.model = _SwinBackbone(model.model, False, False)
+        for layer in self.model.encoder.layers:
+            for block in layer.blocks:
+                block.get_attn_mask = types.MethodType(get_attn_mask, block)
+
+    # Copied from transformers.models.detr.modeling_detr.DetrConvEncoder.forward with Detr->GroundingDino
+    def forward(self, pixel_values: torch.Tensor, pixel_mask: torch.Tensor):
+        # send pixel_values through the model to get list of feature maps
+        features = self.model(pixel_values)[0]
+
+        out = []
+        for feature_map in features:
+            # downsample pixel_mask to match shape of corresponding feature_map
+            mask = torch.nn.functional.interpolate(pixel_mask[None].float(), size=feature_map.shape[-2:]).to(torch.bool)[0]
+            out.append((feature_map, mask))
+        return out
+
+class _GroundingDinoModel(torch.nn.Module):
+    def __init__(self, model: "torch.nn.Module"):
+        super().__init__()
+        self.backbone = model.backbone    
+        self.backbone.conv_encoder = _GroundingDinoConvEncoder(self.backbone.conv_encoder)
+
+        self.config = model.config
+        self.text_backbone = model.text_backbone
+        self.text_projection = model.text_projection
+        self.query_position_embeddings = model.query_position_embeddings
+        self.input_proj_vision = model.input_proj_vision
+        self.encoder = model.encoder
+        self.level_embed = model.level_embed
+        self.get_valid_ratio = model.get_valid_ratio
+
+    def forward(
+        self,
+        pixel_values: torch.tensor,
+        input_ids: torch.tensor,
+        token_type_ids: Optional[torch.tensor] = None,
+        # attention_mask: Optional[torch.tensor] = None,
+        pixel_mask: Optional[torch.tensor] = None,
+        text_self_attention_masks: Optional[torch.tensor] = None,
+        position_ids: Optional[torch.tensor] = None,
+        encoder_outputs=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        return_dict=False,
+    ):
+        # if attention_mask is None:
+        attention_mask = torch.ones_like(input_ids)
+
+        if token_type_ids is None:
+            token_type_ids = torch.zeros_like(input_ids)
+
+        text_token_mask = attention_mask.bool()  # just to avoid renaming everywhere
+
+        max_text_len = self.config.max_text_len
+        if text_self_attention_masks.shape[1] > max_text_len:
+            text_self_attention_masks = text_self_attention_masks[:, :max_text_len, :max_text_len]
+            position_ids = position_ids[:, :max_text_len]
+            input_ids = input_ids[:, :max_text_len]
+            token_type_ids = token_type_ids[:, :max_text_len]
+            text_token_mask = text_token_mask[:, :max_text_len]
+
+        # Extract text features from text backbone
+        text_outputs = self.text_backbone(
+            input_ids, text_self_attention_masks, token_type_ids, position_ids, return_dict=return_dict
+        )
+        text_features = text_outputs.last_hidden_state if return_dict else text_outputs[0]
+        text_features = self.text_projection(text_features)
+
+        batch_size, num_channels, height, width = pixel_values.shape
+        device = pixel_values.device
+
+        if pixel_mask is None:
+            pixel_mask = torch.ones(((batch_size, height, width)), dtype=torch.long, device=device)
+
+        # Extract multi-scale feature maps of same resolution `config.d_model` (cf Figure 4 in paper)
+        # First, sent pixel_values + pixel_mask through Backbone to obtain the features
+        # which is a list of tuples
+        vision_features, position_embeddings_list = self.backbone(pixel_values, pixel_mask)
+
+        # Then, apply 1x1 convolution to reduce the channel dimension to d_model (256 by default)
+        feature_maps = []
+        masks = []
+        for level, (source, mask) in enumerate(vision_features):
+            feature_maps.append(self.input_proj_vision[level](source))
+            masks.append(mask)
+
+        # Lowest resolution feature maps are obtained via 3x3 stride 2 convolutions on the final stage
+        if self.config.num_feature_levels > len(feature_maps):
+            _len_sources = len(feature_maps)
+            for level in range(_len_sources, self.config.num_feature_levels):
+                if level == _len_sources:
+                    source = self.input_proj_vision[level](vision_features[-1][0])
+                else:
+                    source = self.input_proj_vision[level](feature_maps[-1])
+                mask = torch.nn.functional.interpolate(pixel_mask[None].float(), size=source.shape[-2:]).to(
+                    torch.bool
+                )[0]
+                pos_l = self.backbone.position_embedding(source, mask).to(source.dtype)
+                feature_maps.append(source)
+                masks.append(mask)
+                position_embeddings_list.append(pos_l)
+
+        return text_features, *vision_features, *feature_maps, *position_embeddings_list, *masks
 
 class _GroundingDinoEncoder(torch.nn.Module):
     def __init__(self, model: "GroundingDinoEncoder", rbln_config: "RBLNGroundingDinoEncoderConfig"):

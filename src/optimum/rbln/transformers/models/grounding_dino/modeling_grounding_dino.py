@@ -57,8 +57,8 @@ if TYPE_CHECKING:
 
 class RBLNGroundingDinoForObjectDetection(RBLNModel):
     _rbln_submodules = [
-        {"name": "text_backbone"},
-        {"name": "backbone"},
+        # {"name": "text_backbone"},
+        # {"name": "backbone"},
         {"name": "encoder"},
         {"name": "decoder"},
     ]
@@ -76,11 +76,9 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
 
     def __post_init__(self, **kwargs):
         self._setup_cpu_instances()
-        self.text_projection = RBLNPytorchRuntime(self.model[0])
-        self.text_backbone = self.rbln_submodules[0]
-        self.backbone = self.rbln_submodules[1]
-        self.encoder = self.rbln_submodules[2]
-        self.decoder = self.rbln_submodules[3]
+        self.pre_embeddings = RBLNPytorchRuntime(self.model[0])
+        self.encoder = self.rbln_submodules[0]
+        self.decoder = self.rbln_submodules[1]
 
     def _setup_cpu_instances(self):
         stacte_dict = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
@@ -220,7 +218,9 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
     def wrap_model_if_needed(
         cls, model: torch.nn.Module, rbln_config: RBLNGroundingDinoForObjectDetectionConfig
     ) -> torch.nn.Module:
-        return model.model.text_projection
+        from .grounding_dino_architecture import _GroundingDinoModel
+        model = _GroundingDinoModel(model.model)
+        return model
 
     @classmethod
     def _update_rbln_config(
@@ -230,11 +230,57 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         model_config: RBLNGroundingDinoForObjectDetectionConfig = None,
         rbln_config: Optional[RBLNGroundingDinoForObjectDetectionConfig] = None,
     ) -> RBLNGroundingDinoForObjectDetectionConfig:
+        if rbln_config.image_size is None:
+            longest_edge = None
+            for processor in preprocessors:
+                if hasattr(processor, "image_processor"):
+                    longest_edge = processor.image_processor.size["longest_edge"]
+                    break
+            rbln_config.image_size = longest_edge
+
         input_info = [
             (
-                "test_features",
-                [rbln_config.batch_size, model_config.max_text_len, model_config.text_config.hidden_size],
+                "pixel_values",
+                [rbln_config.batch_size, 3, rbln_config.image_height, rbln_config.image_width],  # 800 < h,w<1333
                 "float32",
+            ),
+            (
+                "input_ids",
+                [
+                    rbln_config.batch_size,
+                    model_config.max_text_len,
+                ],
+                "int64",
+            ),
+            (
+                "token_type_ids",
+                [
+                    rbln_config.batch_size,
+                    model_config.max_text_len,
+                ],
+                "int64",
+            ),
+            (
+                "pixel_mask",
+                [rbln_config.batch_size, rbln_config.image_height, rbln_config.image_width],
+                "int16",
+            ),
+            (
+                "text_self_attention_masks",
+                [
+                    rbln_config.batch_size,
+                    model_config.max_text_len,
+                    model_config.max_text_len,
+                ],
+                "int16",
+            ),
+            (
+                "position_ids",
+                [
+                    rbln_config.batch_size,
+                    model_config.max_text_len,
+                ],
+                "int64",
             ),
         ]
 
@@ -267,66 +313,16 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         text_self_attention_masks, position_ids = generate_masks_with_special_tokens_and_transfer_map(input_ids)
-
         text_token_mask = attention_mask.bool()  # just to avoid renaming everywhere
-
-        max_text_len = self.config.max_text_len
-        if text_self_attention_masks.shape[1] > max_text_len:
-            text_self_attention_masks = text_self_attention_masks[:, :max_text_len, :max_text_len]
-            position_ids = position_ids[:, :max_text_len]
-            input_ids = input_ids[:, :max_text_len]
-            token_type_ids = token_type_ids[:, :max_text_len]
-            text_token_mask = text_token_mask[:, :max_text_len]
-
-        # Extract text features from text backbone
-        text_outputs = self.text_backbone(
-            input_ids, text_self_attention_masks.to(torch.long), token_type_ids, position_ids, return_dict=return_dict
-        )
-        text_features = text_outputs.last_hidden_state if return_dict else text_outputs[0]
-        text_features = self.text_projection(text_features)
-
-        batch_size, num_channels, height, width = pixel_values.shape
-        device = pixel_values.device
-
-        if pixel_mask is None:
-            pixel_mask = torch.ones(((batch_size, height, width)), dtype=torch.long, device=device)
-
-        # Extract multi-scale feature maps of same resolution `config.d_model` (cf Figure 4 in paper)
-        # First, sent pixel_values + pixel_mask through Backbone to obtain the features
-        # which is a list of tuples
-        features = self.backbone(pixel_values)[0]
-        vision_features = []
-        for feature_map in features:
-            # downsample pixel_mask to match shape of corresponding feature_map
-            mask = nn.functional.interpolate(pixel_mask[None].float(), size=feature_map.shape[-2:]).to(torch.bool)[0]
-            vision_features.append((feature_map, mask))
-
-        position_embeddings_list = []
-        for feature_map, mask in vision_features:
-            # position encoding
-            position_embeddings_list.append(self.backbone_position_embedding(feature_map, mask).to(feature_map.dtype))
-        vision_features, position_embeddings_list
-
-        # Then, apply 1x1 convolution to reduce the channel dimension to d_model (256 by default)
-        feature_maps = []
-        masks = []
-        for level, (source, mask) in enumerate(vision_features):
-            feature_maps.append(self.input_proj_vision[level](source))
-            masks.append(mask)
-
-        # Lowest resolution feature maps are obtained via 3x3 stride 2 convolutions on the final stage
-        if self.config.num_feature_levels > len(feature_maps):
-            _len_sources = len(feature_maps)
-            for level in range(_len_sources, self.config.num_feature_levels):
-                if level == _len_sources:
-                    source = self.input_proj_vision[level](vision_features[-1][0])
-                else:
-                    source = self.input_proj_vision[level](feature_maps[-1])
-                mask = nn.functional.interpolate(pixel_mask[None].float(), size=source.shape[-2:]).to(torch.bool)[0]
-                pos_l = self.backbone_position_embedding(source, mask).to(source.dtype)
-                feature_maps.append(source)
-                masks.append(mask)
-                position_embeddings_list.append(pos_l)
+        
+        
+        output = self.pre_embeddings(pixel_values, input_ids, token_type_ids, pixel_mask.to(torch.int16), text_self_attention_masks.to(torch.int16), position_ids.to(torch.int64))
+        
+        text_features = output[0]
+        vision_features = output[1:7]
+        feature_maps = output[7:11]
+        position_embeddings_list = output[11:15]
+        masks = output[15:]
 
         # Create queries
         query_embeds = None
@@ -350,7 +346,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
             source_flatten.append(source)
             mask_flatten.append(mask)
         source_flatten = torch.cat(source_flatten, 1)
-        mask_flatten = torch.cat(mask_flatten, 1)
+        mask_flatten = torch.cat(mask_flatten, 1).to(torch.bool)
         lvl_pos_embed_flatten = torch.cat(lvl_pos_embed_flatten, 1)
         spatial_shapes = torch.as_tensor(spatial_shapes_list, dtype=torch.long, device=source_flatten.device)
         level_start_index = torch.cat((spatial_shapes.new_zeros((1,)), spatial_shapes.prod(1).cumsum(0)[:-1]))
@@ -536,10 +532,10 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         # Pad image to rbln_config.image_height and rbln_config.image_width
-        pixel_values, pixel_mask = self.pad_image_to_rbln_config(pixel_values, pixel_mask)
-        input_ids, token_type_ids, attention_mask = self.pad_text_to_rbln_config(
-            input_ids, token_type_ids, attention_mask
-        )
+        # pixel_values, pixel_mask = self.pad_image_to_rbln_config(pixel_values, pixel_mask)
+        # input_ids, token_type_ids, attention_mask = self.pad_text_to_rbln_config(
+        #     input_ids, token_type_ids, attention_mask
+        # )
 
         with torch.inference_mode():
             # First, sent images through Grounding DINO base model to obtain encoder + decoder outputs
