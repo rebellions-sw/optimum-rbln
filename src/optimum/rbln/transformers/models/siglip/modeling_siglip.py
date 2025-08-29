@@ -29,7 +29,6 @@ logger = get_logger(__name__)
 if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PreTrainedModel
 
-    from ....diffusers.modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
 
 
 class _SiglipVisionModel(torch.nn.Module):
@@ -73,12 +72,6 @@ class RBLNSiglipVisionModel(RBLNModel):
             "output_attentions": rbln_config.output_attentions,
         }
         return _SiglipVisionModel(model, **wrapper_cfg).eval()
-
-    @classmethod
-    def update_rbln_config_using_pipe(
-        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
-    ) -> "RBLNDiffusionMixinConfig":
-        return rbln_config
 
     @classmethod
     def _update_rbln_config(
@@ -128,11 +121,6 @@ class RBLNSiglipVisionModel(RBLNModel):
         interpolate_pos_encoding: bool = False,
         **kwargs: Any,
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
-        if len(kwargs) > 0 and any(value is not None for value in kwargs.values()):
-            logger.warning(
-                f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__.__name__}."
-            )
-
         output_attentions = output_attentions if output_attentions is not None else self.rbln_config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.rbln_config.output_hidden_states
@@ -156,7 +144,7 @@ class RBLNSiglipVisionModel(RBLNModel):
                 f"Please compile again with the correct argument."
             )
 
-        output = super().forward(pixel_values, return_dict=return_dict)
+        output = super().forward(pixel_values, return_dict=return_dict, **kwargs)
         return output
 
     def _prepare_output(self, output, return_dict):
