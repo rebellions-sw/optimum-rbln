@@ -539,13 +539,30 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
             # If everything succeeded, move files to target directory
             if os.path.exists(save_directory_path):
-                # Move files from tmp_dir to existing directory (overwrite existing files)
-                for item in os.listdir(tmp_dir):
-                    src_path = os.path.join(tmp_dir, item)
-                    dst_path = os.path.join(save_directory_path, item)
-                    shutil.move(src_path, dst_path)
-                # Clean up empty tmp_dir
-                os.rmdir(tmp_dir)
+                # Merge files from tmp_dir into existing directory
+                def _merge_dir(src_root: str, dst_root: str):
+                    for name in os.listdir(src_root):
+                        src_item = os.path.join(src_root, name)
+                        dst_item = os.path.join(dst_root, name)
+
+                        if os.path.islink(src_item) or os.path.isfile(src_item):
+                            os.makedirs(os.path.dirname(dst_item), exist_ok=True)
+                            if os.path.isdir(dst_item) and not os.path.islink(dst_item):
+                                shutil.rmtree(dst_item)
+                            os.replace(src_item, dst_item)
+                        elif os.path.isdir(src_item):
+                            if os.path.islink(dst_item) or os.path.isfile(dst_item):
+                                os.remove(dst_item)
+                            os.makedirs(dst_item, exist_ok=True)
+                            _merge_dir(src_item, dst_item)
+                        else:
+                            # Fallback for special file types
+                            os.replace(src_item, dst_item)
+
+                _merge_dir(tmp_dir, str(save_directory_path))
+
+                # Remove the temporary directory tree after merge
+                shutil.rmtree(tmp_dir)
             else:
                 # If target doesn't exist, just rename tmp_dir to target
                 os.rename(tmp_dir, save_directory_path)

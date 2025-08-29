@@ -144,6 +144,7 @@ class RBLNModel(RBLNBaseModel):
                 model=model,
                 model_save_dir=save_dir,
                 rbln_config=rbln_config,
+                preprocessors=preprocessors,
                 **kwargs,
             )
         else:

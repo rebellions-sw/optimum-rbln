@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional, Protocol, Tuple, Type, Union, runt
 
 import numpy as np
 import torch
+from packaging.version import Version
 
 from .__version__ import __version__
 from .utils.depreacate_utils import warn_deprecated_npu
@@ -625,6 +626,21 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
             self.set_compile_cfgs([RBLNCompileConfig(**cfg) for cfg in self._compile_cfgs])
 
         if len(kwargs) > 0:
+            if optimum_rbln_version is not None:  # loaded from file
+                if Version(__version__) < Version(optimum_rbln_version):
+                    diff = "newer"
+                elif Version(__version__) > Version(optimum_rbln_version):
+                    diff = "older"
+                else:
+                    diff = None
+                if diff is not None:
+                    raise ValueError(
+                        f"Unexpected arguments: {kwargs.keys()}\n"
+                        f"Maybe you are trying to load a model compiled with {diff} version of optimum-rbln. "
+                        "It is recommended to use the same version to compile and load the model.\n"
+                        f"Current version: {__version__}, Loaded version: {optimum_rbln_version}"
+                    )
+
             raise ValueError(f"Unexpected arguments: {kwargs.keys()}")
 
     @property
