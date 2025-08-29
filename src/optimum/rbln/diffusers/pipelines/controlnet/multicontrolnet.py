@@ -14,7 +14,7 @@
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 from diffusers.pipelines.controlnet.multicontrolnet import MultiControlNetModel
@@ -23,9 +23,6 @@ from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...models.controlnet import RBLNControlNetModel
 
-
-if TYPE_CHECKING:
-    pass
 
 logger = get_logger(__name__)
 
@@ -81,7 +78,7 @@ class RBLNMultiControlNetModel(RBLNModel):
             model.save_pretrained(real_save_path)
 
     @classmethod
-    def _get_rbln_config(cls, **rbln_config_kwargs):
+    def _update_rbln_config(cls, **rbln_config_kwargs):
         pass
 
     def forward(
@@ -100,15 +97,14 @@ class RBLNMultiControlNetModel(RBLNModel):
         return_dict: bool = True,
     ):
         for i, (image, scale, controlnet) in enumerate(zip(controlnet_cond, conditioning_scale, self.nets)):
-            output = controlnet.model[0](
+            down_samples, mid_sample = controlnet(
                 sample=sample.contiguous(),
                 timestep=timestep.float(),
                 encoder_hidden_states=encoder_hidden_states,
                 controlnet_cond=image,
                 conditioning_scale=torch.tensor(scale),
+                return_dict=return_dict,
             )
-
-            down_samples, mid_sample = output[:-1], output[-1]
 
             # merge samples
             if i == 0:

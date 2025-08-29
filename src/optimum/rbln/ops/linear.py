@@ -23,3 +23,10 @@ def linear(input: Tensor, weight: Tensor, bias: Optional[Tensor] = None) -> Tens
     output_shape = list(input.shape[:-1])
     output_shape += [weight.shape[0]]
     return torch.empty(size=output_shape, dtype=input.dtype, device=input.device, requires_grad=input.requires_grad)
+
+
+@linear.register_fake
+def linear_fake(input: Tensor, weight: Tensor, bias: Optional[Tensor] = None) -> Tensor:
+    output_shape = list(input.shape[:-1])
+    output_shape += [weight.shape[0]]
+    return torch.empty(size=output_shape, dtype=input.dtype, device=input.device, requires_grad=input.requires_grad)

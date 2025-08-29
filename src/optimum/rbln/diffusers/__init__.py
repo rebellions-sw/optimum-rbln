@@ -18,12 +18,53 @@ from diffusers.pipelines.pipeline_utils import ALL_IMPORTABLE_CLASSES, LOADABLE_
 from transformers.utils import _LazyModule
 
 
-LOADABLE_CLASSES["optimum.rbln"] = {"RBLNBaseModel": ["save_pretrained", "from_pretrained"]}
+LOADABLE_CLASSES["optimum.rbln"] = {
+    "RBLNBaseModel": ["save_pretrained", "from_pretrained"],
+    "RBLNCosmosSafetyChecker": ["save_pretrained", "from_pretrained"],
+}
 ALL_IMPORTABLE_CLASSES.update(LOADABLE_CLASSES["optimum.rbln"])
 
 
 _import_structure = {
+    "configurations": [
+        "RBLNAutoencoderKLConfig",
+        "RBLNAutoencoderKLCosmosConfig",
+        "RBLNControlNetModelConfig",
+        "RBLNCosmosTextToWorldPipelineConfig",
+        "RBLNCosmosVideoToWorldPipelineConfig",
+        "RBLNCosmosTransformer3DModelConfig",
+        "RBLNKandinskyV22CombinedPipelineConfig",
+        "RBLNKandinskyV22Img2ImgCombinedPipelineConfig",
+        "RBLNKandinskyV22Img2ImgPipelineConfig",
+        "RBLNKandinskyV22InpaintCombinedPipelineConfig",
+        "RBLNKandinskyV22InpaintPipelineConfig",
+        "RBLNKandinskyV22PipelineConfig",
+        "RBLNKandinskyV22PriorPipelineConfig",
+        "RBLNPriorTransformerConfig",
+        "RBLNStableDiffusionControlNetPipelineConfig",
+        "RBLNStableDiffusionControlNetImg2ImgPipelineConfig",
+        "RBLNStableDiffusionImg2ImgPipelineConfig",
+        "RBLNStableDiffusionInpaintPipelineConfig",
+        "RBLNStableDiffusionPipelineConfig",
+        "RBLNStableDiffusionXLControlNetPipelineConfig",
+        "RBLNStableDiffusionXLControlNetImg2ImgPipelineConfig",
+        "RBLNStableDiffusionXLImg2ImgPipelineConfig",
+        "RBLNStableDiffusionXLInpaintPipelineConfig",
+        "RBLNStableDiffusionXLPipelineConfig",
+        "RBLNStableDiffusion3PipelineConfig",
+        "RBLNStableDiffusion3Img2ImgPipelineConfig",
+        "RBLNStableDiffusion3InpaintPipelineConfig",
+        "RBLNSD3Transformer2DModelConfig",
+        "RBLNUNet2DConditionModelConfig",
+        "RBLNVQModelConfig",
+    ],
     "pipelines": [
+        "RBLNAutoPipelineForImage2Image",
+        "RBLNAutoPipelineForInpainting",
+        "RBLNAutoPipelineForText2Image",
+        "RBLNCosmosTextToWorldPipeline",
+        "RBLNCosmosVideoToWorldPipeline",
+        "RBLNCosmosSafetyChecker",
         "RBLNKandinskyV22CombinedPipeline",
         "RBLNKandinskyV22Img2ImgCombinedPipeline",
         "RBLNKandinskyV22InpaintCombinedPipeline",
@@ -48,8 +89,10 @@ _import_structure = {
     ],
     "models": [
         "RBLNAutoencoderKL",
+        "RBLNAutoencoderKLCosmos",
         "RBLNUNet2DConditionModel",
         "RBLNControlNetModel",
+        "RBLNCosmosTransformer3DModel",
         "RBLNSD3Transformer2DModel",
         "RBLNPriorTransformer",
         "RBLNVQModel",
@@ -60,16 +103,56 @@ _import_structure = {
 }
 
 if TYPE_CHECKING:
+    from .configurations import (
+        RBLNAutoencoderKLConfig,
+        RBLNAutoencoderKLCosmosConfig,
+        RBLNControlNetModelConfig,
+        RBLNCosmosTextToWorldPipelineConfig,
+        RBLNCosmosTransformer3DModelConfig,
+        RBLNCosmosVideoToWorldPipelineConfig,
+        RBLNKandinskyV22CombinedPipelineConfig,
+        RBLNKandinskyV22Img2ImgCombinedPipelineConfig,
+        RBLNKandinskyV22Img2ImgPipelineConfig,
+        RBLNKandinskyV22InpaintCombinedPipelineConfig,
+        RBLNKandinskyV22InpaintPipelineConfig,
+        RBLNKandinskyV22PipelineConfig,
+        RBLNKandinskyV22PriorPipelineConfig,
+        RBLNPriorTransformerConfig,
+        RBLNSD3Transformer2DModelConfig,
+        RBLNStableDiffusion3Img2ImgPipelineConfig,
+        RBLNStableDiffusion3InpaintPipelineConfig,
+        RBLNStableDiffusion3PipelineConfig,
+        RBLNStableDiffusionControlNetImg2ImgPipelineConfig,
+        RBLNStableDiffusionControlNetPipelineConfig,
+        RBLNStableDiffusionImg2ImgPipelineConfig,
+        RBLNStableDiffusionInpaintPipelineConfig,
+        RBLNStableDiffusionPipelineConfig,
+        RBLNStableDiffusionXLControlNetImg2ImgPipelineConfig,
+        RBLNStableDiffusionXLControlNetPipelineConfig,
+        RBLNStableDiffusionXLImg2ImgPipelineConfig,
+        RBLNStableDiffusionXLInpaintPipelineConfig,
+        RBLNStableDiffusionXLPipelineConfig,
+        RBLNUNet2DConditionModelConfig,
+        RBLNVQModelConfig,
+    )
     from .modeling_diffusers import RBLNDiffusionMixin
     from .models import (
         RBLNAutoencoderKL,
+        RBLNAutoencoderKLCosmos,
         RBLNControlNetModel,
+        RBLNCosmosTransformer3DModel,
         RBLNPriorTransformer,
         RBLNSD3Transformer2DModel,
         RBLNUNet2DConditionModel,
         RBLNVQModel,
     )
     from .pipelines import (
+        RBLNAutoPipelineForImage2Image,
+        RBLNAutoPipelineForInpainting,
+        RBLNAutoPipelineForText2Image,
+        RBLNCosmosSafetyChecker,
+        RBLNCosmosTextToWorldPipeline,
+        RBLNCosmosVideoToWorldPipeline,
         RBLNKandinskyV22CombinedPipeline,
         RBLNKandinskyV22Img2ImgCombinedPipeline,
         RBLNKandinskyV22Img2ImgPipeline,

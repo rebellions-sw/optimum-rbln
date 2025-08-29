@@ -30,7 +30,7 @@ def main(
         model=model,
         tokenizer=model_id,
         padding="max_length",
-        max_seq_len=model.rbln_config.model_cfg["max_seq_len"],
+        max_seq_len=model.rbln_config.max_seq_len,
     )
     question, text = (
         ["What is Rebellions?"] * batch_size,

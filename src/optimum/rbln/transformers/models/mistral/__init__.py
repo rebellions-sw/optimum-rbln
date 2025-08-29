@@ -12,4 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .modeling_mistral import RBLNMistralForCausalLM
+from .configuration_mistral import RBLNMistralForCausalLMConfig, RBLNMistralModelConfig
+from .modeling_mistral import RBLNMistralForCausalLM, RBLNMistralModel

@@ -12,4 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .configuration_wav2vec2 import RBLNWav2Vec2ForCTCConfig
 from .modeling_wav2vec2 import RBLNWav2Vec2ForCTC

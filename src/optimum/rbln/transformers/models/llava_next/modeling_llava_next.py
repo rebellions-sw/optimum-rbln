@@ -18,16 +18,11 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple, Union
 
 import numpy as np
 import torch
-from transformers import (
-    AutoModelForVision2Seq,
-    LlavaNextForConditionalGeneration,
-    PretrainedConfig,
-    PreTrainedModel,
-)
+from transformers import AutoModelForVision2Seq, LlavaNextForConditionalGeneration, PretrainedConfig, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPooling
 
+from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyOutput
 
@@ -35,12 +30,7 @@ from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyOutput
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import (
-        AutoFeatureExtractor,
-        AutoProcessor,
-        AutoTokenizer,
-        PretrainedConfig,
-    )
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
 
 
 class LoopVisionTower:
@@ -109,6 +99,36 @@ class LoopProjector:
 
 
 class RBLNLlavaNextForConditionalGeneration(RBLNModel):
+    """
+    RBLNLlavaNextForConditionalGeneration is a multi-modal model that combines vision and language processing capabilities,
+    optimized for RBLN NPUs. It is designed for conditional generation tasks that involve both image and text inputs.
+
+    This model inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    Important Note:
+        This model includes a Large Language Model (LLM) as a submodule. For optimal performance, it is highly recommended to use
+        tensor parallelism for the language model. This can be achieved by using the `rbln_config` parameter in the
+        `from_pretrained` method. Refer to the `from_pretrained` documentation and the RBLNLlavaNextForConditionalGenerationConfig class for details.
+
+    Examples:
+        ```python
+        from optimum.rbln import RBLNLlavaNextForConditionalGeneration
+
+        model = RBLNLlavaNextForConditionalGeneration.from_pretrained(
+            "llava-hf/llava-v1.6-mistral-7b-hf",
+            export=True,
+            rbln_config={
+                "language_model": {
+                    "tensor_parallel_size": 4,
+                    "use_inputs_embeds": True,  # In Llava-Next, language model must use inputs_embeds as input.
+                },
+            },
+        )
+
+        model.save_pretrained("compiled-llava-next-mistral-7b-hf")
+        ```
+    """
+
     auto_model_class = AutoModelForVision2Seq
     _rbln_submodules = [
         {"name": "vision_tower"},
@@ -134,12 +154,10 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         model: "LlavaNextForConditionalGeneration",
         save_dir_path: Path,
         subfolder: str,
-        rbln_config: RBLNConfig,
+        rbln_config: RBLNModelConfig,
     ):
-        """
-        If you are unavoidably running on a CPU rather than an RBLN device,
-        store the torch tensor, weight, etc. in this function.
-        """
+        # If you are unavoidably running on a CPU rather than an RBLN device,
+        # store the torch tensor, weight, etc. in this function.
         save_dict = {}
         save_dict["image_newline"] = model.image_newline
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
@@ -157,46 +175,41 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         self._padding_side = "left"  # set it to left by default, user can use setter to change padding_sides
         return super().__post_init__(**kwargs)
 
+    def get_attn_impl(self) -> str:
+        return self.rbln_config.language_model.attn_impl
+
+    def get_kvcache_num_blocks(self) -> int:
+        return self.rbln_config.language_model.kvcache_num_blocks
+
     def get_input_embeddings(self):
         return self.language_model.get_input_embeddings()
 
     @classmethod
-    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNConfig):
+    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
         return model.multi_modal_projector
 
     @classmethod
-    def _get_rbln_config(
+    def _update_rbln_config(
         cls,
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+        model: Optional["PreTrainedModel"] = None,
         model_config: Optional["PretrainedConfig"] = None,
-        rbln_kwargs={},
-    ) -> RBLNConfig:
-        vision_feature_select_strategy = rbln_kwargs.get("vision_feature_select_strategy", None)
-
-        # 1. Multi-modal projection layer
-        batch_size = rbln_kwargs.get("rbln_batch_size", None)
-        if batch_size is None:
-            batch_size = 1
-
+        rbln_config: Optional[RBLNModelConfig] = None,
+    ) -> RBLNModelConfig:
         feature_size = model_config.vision_config.hidden_size
-
-        # See forward function to see more details.
-        vision_feature_select_strategy = (
-            vision_feature_select_strategy
-            if vision_feature_select_strategy is not None
-            else model_config.vision_feature_select_strategy
-        )
 
         # Calculating `num_positions` : See CLIPVisionEmbeddings of transformers for more details.
         num_positions = (model_config.vision_config.image_size // model_config.vision_config.patch_size) ** 2 + 1
-        if vision_feature_select_strategy == "default":
+        if model_config.vision_feature_select_strategy == "default":
             selected_image_feature_dim = num_positions - 1
         else:
             selected_image_feature_dim = num_positions
 
-        input_info = [("image_features", [batch_size, selected_image_feature_dim, feature_size], "float32")]
+        input_info = [
+            ("image_features", [rbln_config.batch_size, selected_image_feature_dim, feature_size], "float32")
+        ]
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
-        rbln_config = RBLNConfig(rbln_cls=cls.__name__, compile_cfgs=[rbln_compile_config], rbln_kwargs=rbln_kwargs)
+        rbln_config.set_compile_cfgs([rbln_compile_config])
         return rbln_config
 
     def prepare_inputs_for_generation(
@@ -377,7 +390,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
             inputs_embeds = [inputs_embeds[i : i + 1, attention_mask[i].bool()] for i in range(batch_size)]
             for batch_idx in range(batch_size):
                 generate_idx[batch_idx] = inputs_embeds[batch_idx].shape[-2]
-                logit = self.language_model.prefill_decoder(
+                output = self.language_model.prefill_decoder(
                     inputs_embeds=inputs_embeds[batch_idx],
                     batch_idx=batch_idx,
                     cache_position=torch.arange(
@@ -387,14 +400,14 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
                     ).unsqueeze(0),
                 )
 
-                logits.append(logit)
+                logits.append(output.logits)
             logits = torch.cat(logits, dim=0)
         else:
-            logits = self.language_model.decoder(
+            output = self.language_model.decoder(
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
             )
-
+            logits = output.logits
         return RBLNDecoderOnlyOutput(logits=logits, generate_idx=generate_idx)
 
     # Almost copied from : https://github.com/huggingface/transformers/blob/6b550462139655d488d4c663086a63e98713c6b9/src/transformers/models/llava_next/modeling_llava_next.py

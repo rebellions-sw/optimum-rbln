@@ -13,14 +13,13 @@
 # limitations under the License.
 
 import math
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Tuple, Union
 
 import torch
 import torch.nn as nn
 
 from ..decoderonly.decoderonly_architecture import (
     DecoderOnlyAttention,
-    DecoderOnlyForCausalLM,
     DecoderOnlyLayer,
     DecoderOnlyModel,
     DecoderOnlyWrapper,
@@ -28,23 +27,27 @@ from ..decoderonly.decoderonly_architecture import (
 
 
 if TYPE_CHECKING:
-    from transformers import GPT2LMHeadModel
+    from transformers import GPT2LMHeadModel, GPT2Model
 
 
 class GPT2Wrapper(DecoderOnlyWrapper):
-    def convert_to_rbln_causal_lm(self, causal_lm: "GPT2LMHeadModel", max_seq_len: int):
-        if self.attn_impl != "eager":
-            raise NotImplementedError(f"flash attention ({self.attn_impl}) is not implemented for {self.__class__}")
-        new_layers = []
-        for layer in causal_lm.transformer.h:
-            new_self_attn = GPT2Attention(
-                layer.attn, self.use_attention_mask, kvcache_block_size=self.kvcache_block_size
-            )
-            new_layer = GPT2Layer(layer, new_self_attn)
-            new_layers.append(new_layer)
-        new_model = GPT2Model(causal_lm.transformer, new_layers, max_seq_len=max_seq_len)
-        new_causal_lm = DecoderOnlyForCausalLM(causal_lm, new_model)
-        return new_causal_lm
+    def get_rbln_attn_class(self):
+        return GPT2Attention
+
+    def get_rbln_layer_class(self):
+        return GPT2Layer
+
+    def get_rbln_model_class(self):
+        return GPT2Model
+
+    def get_attn_layer(self, layer: nn.Module):
+        return layer.attn
+
+    def get_model_layer(self, model: Union["GPT2LMHeadModel", "GPT2Model"]):
+        return model.transformer if self.is_causal_lm else model
+
+    def get_decoder_layers(self, model: Union["GPT2LMHeadModel", "GPT2Model"]):
+        return model.transformer.h if self.is_causal_lm else model.h
 
 
 class GPT2Model(DecoderOnlyModel):

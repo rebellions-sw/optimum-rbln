@@ -12,11 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 from diffusers import StableDiffusionPipeline
 
+from ...configurations import RBLNStableDiffusionPipelineConfig
 from ...modeling_diffusers import RBLNDiffusionMixin
 
 
 class RBLNStableDiffusionPipeline(RBLNDiffusionMixin, StableDiffusionPipeline):
+    """
+    RBLN-accelerated implementation of Stable Diffusion pipeline for text-to-image generation.
+
+    This pipeline compiles Stable Diffusion models to run efficiently on RBLN NPUs, enabling high-performance
+    inference for generating images from text prompts with optimized memory usage and throughput.
+    """
+
     original_class = StableDiffusionPipeline
-    _submodules = ["text_encoder", "unet", "vae"]
+    _rbln_config_class = RBLNStableDiffusionPipelineConfig
+    _submodules = ["vae", "text_encoder", "unet"]

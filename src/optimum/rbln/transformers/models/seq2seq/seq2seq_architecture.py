@@ -105,12 +105,11 @@ class Seq2SeqEncoderWrapper(nn.Module):
 
         # 3. update the cross_attention's past_key_value direct to the device-dram for optimization.
         batch_axis = torch.tensor(0, dtype=torch.int16)
-        cross_key_values = []
+        cross_key_values = list(cross_key_values)
         for i in range(self.n_layer * 2):
-            cross_key_value = torch.ops.rbln_custom_ops.rbln_cache_update(
+            cross_key_values[i] = torch.ops.rbln_custom_ops.rbln_cache_update(
                 cross_key_values[i], cross_kv[i], b_idx[0], batch_axis
             )
-            cross_key_values.append(cross_key_value)
 
         return cross_key_values
 
@@ -149,7 +148,8 @@ class Seq2SeqDecoderWrapper(nn.Module):
         new_layers = []
         for layer in model.get_decoder().layers:
             self_attn = Seq2SeqSelfAttention(layer.self_attn)
-            new_layers.append(Seq2SeqDecoderLayer(layer, self_attn))
+            cross_attn = Seq2SeqCrossAttention(layer.encoder_attn)
+            new_layers.append(Seq2SeqDecoderLayer(layer, self_attn, cross_attn))
 
         decoder_model = Seq2SeqDecoder(model.get_decoder(), new_layers)
         new_model = Seq2SeqForConditionalGeneration(model, decoder_model)
@@ -342,10 +342,11 @@ class Seq2SeqDecoderLayer(torch.nn.Module):
         self_attn (Seq2SeqSelfAttention): Modified self-attention layer optimized for RBLN
     """
 
-    def __init__(self, decoder_layer, self_attn):
+    def __init__(self, decoder_layer, self_attn, cross_attn):
         super().__init__()
         self._original_mod = decoder_layer
         self.self_attn = self_attn
+        self.cross_attn = cross_attn
         self.__post_init__()
 
     def __post_init__(self, **kwargs):
@@ -403,7 +404,8 @@ class Seq2SeqDecoderLayer(torch.nn.Module):
         # Cross-Attention Block
         residual = hidden_states
         hidden_states = self.pre_cross_attn_layer_norm(hidden_states)
-        cross_attn_output = self.encoder_attn(
+
+        cross_attn_output = self.cross_attn(
             hidden_states=hidden_states,
             past_key_value=cross_past_key_value,
             attention_mask=encoder_attention_mask,
@@ -477,6 +479,8 @@ class Seq2SeqSelfAttention(nn.Module):
         ]
         if attention_mask is not None:
             args.insert(3, attention_mask.unsqueeze(2))
+        else:
+            args.append(None)
 
         attn_output = self.attn_decode(*args)
 
@@ -486,3 +490,38 @@ class Seq2SeqSelfAttention(nn.Module):
         attn_output = self.out_proj(attn_output)
 
         return attn_output
+
+
+class Seq2SeqCrossAttention(nn.Module):
+    def __init__(self, attn, **kwargs):
+        super().__init__()
+        self._original_mod = attn
+        self.__post_init__(**kwargs)
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        key_value_states: torch.Tensor = None,
+        past_key_value: Optional[object] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+    ):
+        bsz, tgt_len, _ = hidden_states.size()
+        query_states = self.q_proj(hidden_states).view(bsz, -1, self.num_heads, self.head_dim).transpose(1, 2)
+
+        is_cross_attention = key_value_states is not None
+        if is_cross_attention:
+            key_states = past_key_value[0]
+            value_states = past_key_value[1]
+
+        attn_output = torch.nn.functional.scaled_dot_product_attention(
+            query_states,
+            key_states,
+            value_states,
+            attn_mask=attention_mask,
+        )
+
+        attn_output = attn_output.transpose(1, 2).contiguous()
+        attn_output = attn_output.view(bsz, tgt_len, self.embed_dim)
+        attn_output = self.out_proj(attn_output)
+
+        return attn_output, None, past_key_value

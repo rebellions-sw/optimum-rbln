@@ -39,6 +39,7 @@ from diffusers.utils.torch_utils import is_compiled_module, is_torch_version
 
 from ....utils.decorator_utils import remove_compile_time_kwargs
 from ....utils.logging import get_logger
+from ...configurations import RBLNStableDiffusionControlNetPipelineConfig
 from ...modeling_diffusers import RBLNDiffusionMixin
 from ...models import RBLNControlNetModel
 from ...pipelines.controlnet.multicontrolnet import RBLNMultiControlNetModel
@@ -48,7 +49,15 @@ logger = get_logger(__name__)
 
 
 class RBLNStableDiffusionControlNetPipeline(RBLNDiffusionMixin, StableDiffusionControlNetPipeline):
+    """
+    RBLN-accelerated implementation of Stable Diffusion pipeline with ControlNet for guided text-to-image generation.
+
+    This pipeline compiles Stable Diffusion and ControlNet models to run efficiently on RBLN NPUs, enabling high-performance
+    inference for generating images with precise structural control using conditioning inputs like edges, depth, or poses.
+    """
+
     original_class = StableDiffusionControlNetPipeline
+    _rbln_config_class = RBLNStableDiffusionControlNetPipelineConfig
     _submodules = ["text_encoder", "unet", "vae", "controlnet"]
 
     # Almost copied from diffusers.pipelines.controlnet.pipeline_controlnet.py

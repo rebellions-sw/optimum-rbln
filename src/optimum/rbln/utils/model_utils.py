@@ -12,16 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import importlib
+from typing import TYPE_CHECKING, Type
+
+
+if TYPE_CHECKING:
+    from ..modeling import RBLNModel
+
 # Prefix used for RBLN model class names
 RBLN_PREFIX = "RBLN"
 
 
+MODEL_MAPPING = {}
+
+
 def convert_hf_to_rbln_model_name(hf_model_name: str):
     """
-    Convert Hugging Face model name to RBLN model name.
+    Convert HuggingFace model name to RBLN model name.
 
     Args:
-        hf_model_name (str): The Hugging Face model name.
+        hf_model_name (str): The HuggingFace model name.
 
     Returns:
         str: The corresponding RBLN model name.
@@ -31,13 +41,23 @@ def convert_hf_to_rbln_model_name(hf_model_name: str):
 
 def convert_rbln_to_hf_model_name(rbln_model_name: str):
     """
-    Convert RBLN model name to Hugging Face model name.
+    Convert RBLN model name to HuggingFace model name.
 
     Args:
         rbln_model_name (str): The RBLN model name.
 
     Returns:
-        str: The corresponding Hugging Face model name.
+        str: The corresponding HuggingFace model name.
     """
 
     return rbln_model_name.removeprefix(RBLN_PREFIX)
+
+
+def get_rbln_model_cls(cls_name: str) -> Type["RBLNModel"]:
+    cls = getattr(importlib.import_module("optimum.rbln"), cls_name, None)
+    if cls is None:
+        if cls_name in MODEL_MAPPING:
+            cls = MODEL_MAPPING[cls_name]
+        else:
+            raise AttributeError(f"RBLNModel for {cls_name} not found.")
+    return cls

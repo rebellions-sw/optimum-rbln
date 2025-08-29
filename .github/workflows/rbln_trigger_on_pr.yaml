@@ -24,9 +24,19 @@ jobs:
             echo "No [skip ci] found, continuing with CI"
           fi
 
+  check-code-quality:
+    needs: check-skip-ci
+    if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' }}
+    uses: ./.github/workflows/check_code_quality.yml
+    
+  test-docstrings:
+    needs: check-skip-ci
+    if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' }}
+    uses: ./.github/workflows/test-docstrings.yml
+
   load-version:
     runs-on: rebel-k8s-runner
-    needs: check-skip-ci
+    needs: [check-skip-ci, check-code-quality, test-docstrings]
     if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' }}
     outputs:
       compiler_version: ${{ steps.get_version.outputs.compiler_version }}
@@ -41,7 +51,7 @@ jobs:
           echo "compiler_version=$VERSION" >> $GITHUB_OUTPUT
 
   check-compiler:
-    needs: [check-skip-ci, load-version]
+    needs: [check-skip-ci, check-code-quality, test-docstrings, load-version]
     if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' }}
     uses: ./.github/workflows/rbln_check_compiler.yaml
     with:
@@ -50,8 +60,8 @@ jobs:
 
   check-team-member:
     runs-on: rebel-k8s-runner
-    needs: [check-skip-ci, check-compiler]
-    if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' && needs.check-compiler.outputs.is_deploy_version == 'true' }}
+    needs: [check-skip-ci, check-code-quality, test-docstrings, check-compiler]
+    if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' && needs.check-compiler.outputs.compiler_version_check == 'true' }}
     outputs:
       is_team_member: ${{ steps.check_member.outputs.IS_TEAM_MEMBER }}
     steps:
@@ -75,20 +85,11 @@ jobs:
           fi
 
   optimum-rbln-pytest:
-    needs: [check-skip-ci, check-compiler, check-team-member]
+    needs: [check-skip-ci, check-code-quality, test-docstrings, check-compiler, check-team-member]
     if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' && needs.check-team-member.outputs.is_team_member == 'true' }}
     uses: ./.github/workflows/rbln_optimum_pytest.yaml
     with:
       ref: ${{ github.event.pull_request.head.sha }}
       rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
       test_level: "default"
-    secrets: inherit
-
-  optimum-rbln-inference-test:
-    needs: [check-skip-ci, check-compiler, check-team-member]
-    if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' && needs.check-team-member.outputs.is_team_member == 'true' }}
-    uses: ./.github/workflows/rbln_optimum_inference_test.yaml
-    with:
-      ref: ${{ github.event.pull_request.head.sha }}
-      rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
     secrets: inherit

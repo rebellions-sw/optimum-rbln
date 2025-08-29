@@ -13,28 +13,31 @@
 # limitations under the License.
 
 import inspect
-import math
-from collections import deque
-from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Deque, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 
 import rebel
 import torch
 from rebel.compile_context import CompileContext
-from transformers import AutoConfig, AutoModelForCausalLM, PretrainedConfig, PreTrainedModel
+from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, PretrainedConfig, PreTrainedModel
+from transformers.modeling_outputs import BaseModelOutputWithPast
 from transformers.modeling_utils import no_init_weights
-from transformers.utils import ModelOutput
 
+from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
-from ....utils.runtime_utils import RBLNPytorchRuntime
-from ...utils.rbln_quantization import QuantizationManager
-from .decoderonly_architecture import (
-    DecoderOnlyWrapper,
+from ...modeling_attention_utils import (
+    RBLNDecoderOnlyFlashAttentionMixin,
+    set_default_values,
     validate_attention_method,
+    validate_sliding_window,
 )
+from ...modeling_outputs import RBLNDecoderOnlyOutput
+from ...utils.rbln_quantization import prepare_model_for_quantization
+from .configuration_decoderonly import RBLNDecoderOnlyModelConfig, RBLNDecoderOnlyModelForCausalLMConfig
+from .decoderonly_architecture import DecoderOnlyWrapper
+from .decoderonly_runtime_utils import RBLNPageTableManager, RBLNRuntimeModel
+from .generation_decoderonly import RBLNDecoderOnlyGenerationMixin
 
 
 logger = get_logger()
@@ -43,299 +46,618 @@ if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
 
 
-class RBLNRuntimeModel(RBLNPytorchRuntime):
-    mandatory_members = ["main_input_name", "embed_tokens"]
+class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
+    """
+    A base class for decoder-only transformer models outputting raw hidden-states without any specific head on top.
+    This class is used for RBLN-optimized models that are not causal language models.
+    This class serves as the foundation for various decoder-only architectures like GPT, LLaMA, etc.
 
-    def __init__(
-        self,
-        runtime: rebel.Runtime,
-        phase: str,
-        batch_size: int,
-        dec_attn_mask: torch.Tensor,
-        block_tables: torch.Tensor,
-        free_block_pool: Deque,
-        kvcache_block_size: int,
-        use_attention_mask: bool,
-        attn_impl: str,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(runtime, **kwargs)
-        self.phase = phase
-        self.batch_size = batch_size
+    The class provides core functionality for:
 
-        # shared data structures between prefill and decode phase
-        self.use_attention_mask = use_attention_mask
+    1. Converting pre-trained transformer models to RBLN-optimized format
+    2. Handling the compilation process for RBLN devices
+    3. Managing inference operations for decoder-only architectures
 
-        # shared tensor between prefill and decode phase
-        self.dec_attn_mask = dec_attn_mask
-        self.block_tables = block_tables
-        self.free_block_pool = free_block_pool
+    This class inherits from RBLNModel and implements specific methods required for
+    decoder-only architectures.
 
-        self.kvcache_block_size = kvcache_block_size
-        self.empty_block = -1
-        self.attn_impl = attn_impl
+    Note:
+        - This class is designed to be subclassed by specific model implementations
+          (e.g., RBLNLlamaModel, RBLNQwen2Model)
+        - Subclasses should implement model-specific conversion logic.
+        - The class handles RBLN-specific optimizations automatically during compilation
+    """
 
-        if self.phase == "prefill":
-            vocab_size = kwargs.pop("vocab_size")
-            self.max_seq_len = kwargs.pop("max_seq_len")
-            self.prefill_chunk_size = kwargs.pop("prefill_chunk_size")
-            self.output_size = [1, 1, vocab_size]
-            self.causal_mask = 1 - torch.triu(
-                torch.ones(1, 1, self.prefill_chunk_size, self.prefill_chunk_size), diagonal=1
-            )
+    main_input_name = "input_ids"
+    auto_model_class = AutoModel
+    _decoder_wrapper_cls = DecoderOnlyWrapper
+    _use_rotary_emb = True
 
-    def get_block_tables(self, cache_position: torch.Tensor, batch_idx: int = None):
-        """
-        Manages and returns the KV cache block tables.
-        Updates the block tables based on the given cache_position, allocating new blocks or reusing existing ones as needed.
+    def __post_init__(self, **kwargs):
+        if self.rbln_config.use_inputs_embeds:
+            artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
+            self.embed_tokens = self._create_embedding_layer()
+            self.embed_tokens.load_state_dict(artifacts["embed_tokens"])
+        else:
+            self.embed_tokens = None
 
-        Args:
-            cache_position (torch.Tensor): Tensor containing cache position information, indicating positions within the cache for each batch item.
-            batch_idx (int, optional): Specific batch index, used when phase is 'prefill'.
+        self.setup_runtime()
 
-        Returns:
-            torch.Tensor: Updated block tables.
-        """
+    def setup_runtime(self):
+        # Initialize resources to be used across Runtime instances (prefill and decode phases)
+        page_table_manager = RBLNPageTableManager(self.rbln_config)
+        dec_attn_mask = torch.zeros(
+            self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=torch.float32
+        )
+        out_buffers = [torch.empty(self.prefill_output_size, dtype=torch.float32, device="cpu")]
 
-        NO_BLOCKS_ERROR = (
-            "No memory blocks are available for allocation. "
-            "The generate() API cannot complete this inference task because Paged Attention is not fully supported by optimum-rbln. "
-            "This is supported by vllm-rbln (see: https://docs.rbln.ai/software/model_serving/vllm_support/vllm-rbln.html). "
-            "Using vllm-rbln should fix this issue and enhance inference performance."
+        common_kwargs = {
+            "main_input_name": "inputs_embeds" if self.rbln_config.use_inputs_embeds else "input_ids",
+            "embed_tokens": self.embed_tokens,
+            "dec_attn_mask": dec_attn_mask,
+            "page_table_manager": page_table_manager,
+            "rbln_config": self.rbln_config,
+        }
+        self.prefill_decoder = RBLNRuntimeModel(
+            runtime=self.model[0],
+            phase="prefill",
+            batch_size=self.rbln_config.batch_size,
+            out_buffers=out_buffers,
+            **common_kwargs,
+        )
+        if self.can_generate():
+            self.decoders = {}
+            for i, batch_size in enumerate(self.rbln_config.decoder_batch_sizes):
+                self.decoders[batch_size] = RBLNRuntimeModel(
+                    runtime=self.model[i + 1],
+                    phase="decode",
+                    batch_size=batch_size,
+                    **common_kwargs,
+                )
+
+            # NOTE(eunji): Use a decoder whose batch size matches the model's main batch size for compatibility.
+            self.decoder = self.decoders[self.rbln_config.batch_size]
+
+    @property
+    def prefill_output_size(self):
+        return (
+            1,
+            self.rbln_config.prefill_chunk_size if self.rbln_config.logits_to_keep == 0 else 1,
+            self.config.hidden_size,
         )
 
-        def update_block(batch_idx: int, block_idx: int):
-            """
-            If the block is empty (empty_block), allocates a block from the free_block_pool.
-            """
-            if self.block_tables[batch_idx][block_idx] == self.empty_block:
-                if self.free_block_pool:
-                    block = self.free_block_pool.popleft()
-                    self.block_tables[batch_idx][block_idx] = block
-                else:
-                    raise RuntimeError(NO_BLOCKS_ERROR)
+    @classmethod
+    def get_quantized_model(
+        cls,
+        model_id: str,
+        config: Optional[PretrainedConfig] = None,
+        use_auth_token: Optional[Union[bool, str]] = None,
+        revision: Optional[str] = None,
+        force_download: bool = False,
+        cache_dir: Optional[str] = None,
+        subfolder: str = "",
+        local_files_only: bool = False,
+        trust_remote_code: bool = False,
+        rbln_config: Optional[RBLNDecoderOnlyModelConfig] = None,
+        **kwargs,
+    ):
+        kwargs = cls.update_kwargs(kwargs)
 
-        def replace_empty_block(block_tables: torch.Tensor):
-            """
-            Replaces all occurrences of `self.empty_block` in `block_tables` with a dummy block from `self.free_block_pool`.
-            """
-            if not torch.any(block_tables == self.empty_block):
-                return block_tables.clone()
-            elif self.free_block_pool:
-                _free_block = self.free_block_pool[0]
-                return torch.where(block_tables == self.empty_block, _free_block, block_tables)
-            else:
-                raise RuntimeError(NO_BLOCKS_ERROR)
+        if config is None:
+            config = AutoConfig.from_pretrained(
+                model_id,
+                use_auth_token=use_auth_token,
+                revision=revision,
+                force_download=force_download,
+                cache_dir=cache_dir,
+                trust_remote_code=trust_remote_code,
+                **kwargs,
+            )
+            if config.torch_dtype == torch.bfloat16:
+                # FIXME: bfloat16 is not supported by rebel-compiler
+                config.torch_dtype = torch.float32
 
-        if self.phase == "prefill":
-            # Track previously used blocks and return them to the free_block_pool and
-            # reset the current batch's block table to empty blocks
-            prev_blocks = self.block_tables[batch_idx][self.block_tables[batch_idx] != self.empty_block].tolist()
-            self.free_block_pool.extend(prev_blocks)
-            self.block_tables[batch_idx].fill_(self.empty_block)
+        with no_init_weights():
+            model = cls.auto_model_class.from_config(config)
 
-            # Get the start (s) and end (e) positions from cache_position and
-            # iterate over the cache positions to allocate necessary blocks
-            s, e = cache_position[0][0].item(), cache_position[0][-1].item()
-            for position in range(s, e + 1, self.kvcache_block_size):
-                block_idx = position // self.kvcache_block_size
-                if batch_idx >= len(self.block_tables) or block_idx >= len(self.block_tables[batch_idx]):
-                    raise IndexError(f"Invalid index: batch_idx={batch_idx}, block_idx={block_idx}")
-                update_block(batch_idx, block_idx)
+        model = prepare_model_for_quantization(
+            model,
+            model_id,
+            kwargs.get("num_hidden_layers"),
+            use_auth_token=use_auth_token,
+            revision=revision,
+            cache_dir=cache_dir,
+            force_download=force_download,
+            local_files_only=local_files_only,
+            rbln_quantization=rbln_config.quantization,
+        )
+        return model
 
-            return replace_empty_block(self.block_tables[batch_idx])
-        # Case for 'decoder' phase, iterate over the cache positions to allocate necessary blocks
+    def __getattr__(self, __name: str) -> Any:
+        # Special method to delegate attribute access to the original Huggingface LM class.
+        # This method is called when an attribute is not found in the current instance's dictionary.
+        # It enables transparent access to the original model's attributes and methods while maintaining
+        # proper method binding.
+
+        # The method implements a delegation pattern that:
+
+        # 1. For methods: Creates a wrapper that properly binds 'self' to method calls
+        # 2. For other attributes: Returns them directly from the original class
+
+        def redirect(func):
+            return lambda *pargs, **kwargs: func(self, *pargs, **kwargs)
+
+        val = getattr(self.get_hf_class(), __name, None) or getattr(PreTrainedModel, __name)
+        if isinstance(val, Callable) and "self" in set(inspect.signature(val).parameters):
+            return redirect(val)
+        return val
+
+    @classmethod
+    def save_torch_artifacts(
+        cls,
+        model: PreTrainedModel,
+        save_dir_path: Path,
+        subfolder: str,
+        rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
+    ):
+        # If you are unavoidably running on a CPU rather than an RBLN device,
+        # store the torch tensor, weight, etc. in this function.
+        if rbln_config.use_inputs_embeds:
+            save_dict = {}
+            save_dict["embed_tokens"] = model.get_input_embeddings().state_dict()
+            torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
+
+    def _create_embedding_layer(self):
+        with no_init_weights():
+            embed_tokens = torch.nn.Embedding(
+                self.config.vocab_size,
+                self.config.hidden_size,
+                self.config.pad_token_id,
+            )
+        return embed_tokens
+
+    def get_decoder(self):
+        if not self.can_generate():
+            raise ValueError("Decode stage is not supported in this model.")
+        return self.decoder
+
+    def can_generate(self):
+        return self.rbln_config.can_generate
+
+    def get_input_embeddings(self):
+        return self.embed_tokens
+
+    def get_attn_impl(self) -> str:
+        return self.rbln_config.attn_impl
+
+    def get_kvcache_num_blocks(self) -> int:
+        return self.rbln_config.kvcache_num_blocks
+
+    @classmethod
+    def wrap_model_if_needed(cls, model: PreTrainedModel, rbln_config: "RBLNDecoderOnlyModelConfig"):
+        return cls._decoder_wrapper_cls(model, rbln_config, cls._use_rotary_emb).eval()
+
+    @classmethod
+    def _compile_model(
+        cls,
+        wrapped_model,
+        compile_config,
+        example_inputs,
+        compile_context,
+        rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
+        quantization=None,
+        phase: str = "prefill",
+    ):
+        try:
+            wrapped_model.phase = phase
+            if quantization:
+                quantization.maybe_set_quantization_env()
+            original_linear = torch.nn.functional.linear
+            torch.nn.functional.linear = torch.ops.rbln_custom_ops.linear
+            compiled_model = cls.compile(
+                wrapped_model,
+                compile_config,
+                create_runtimes=rbln_config.create_runtimes,
+                device=rbln_config.device,
+                example_inputs=example_inputs,
+                compile_context=compile_context,
+            )
+            return compiled_model
+        finally:
+            torch.nn.functional.linear = original_linear
+            if quantization:
+                quantization.maybe_reset_quantization_env()
+
+    @classmethod
+    def _get_compile_context(
+        cls,
+        compile_config: RBLNCompileConfig,
+        example_inputs: List[torch.Tensor],
+    ):
+        context = CompileContext(use_weight_sharing=True)
+
+        # Mark static tensors (self kv states)
+        static_tensors = {}
+        for (name, _, _), tensor in zip(compile_config.input_info, example_inputs):
+            if "past_key_values" in name:
+                static_tensors[name] = tensor
+                context.mark_static_address(tensor)
+
+        return context, static_tensors
+
+    @classmethod
+    @torch.inference_mode()
+    def get_compiled_model(cls, model: PreTrainedModel, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig):
+        wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
+        prefill_compile_config = rbln_config.compile_cfgs[0]
+
+        # Here we use meta tensor, for the memory efficiency.
+        meta_tensor_names = [name for name, _, _ in prefill_compile_config.input_info if "past_key_values" in name]
+        prefill_example_inputs = prefill_compile_config.get_dummy_inputs(fill=0, meta_tensor_names=meta_tensor_names)
+        context, static_tensors = cls._get_compile_context(prefill_compile_config, prefill_example_inputs)
+
+        compiled_models = {}
+        compiled_models["prefill"] = cls._compile_model(
+            wrapped_model,
+            prefill_compile_config,
+            prefill_example_inputs,
+            context,
+            rbln_config,
+            rbln_config.quantization,
+            phase="prefill",
+        )
+
+        if rbln_config.can_generate:
+            wrapped_model.phase = "decode"
+            for batch_size, dec_compile_config in zip(rbln_config.decoder_batch_sizes, rbln_config.compile_cfgs[1:]):
+                dec_example_inputs = dec_compile_config.get_dummy_inputs(fill=0, static_tensors=static_tensors)
+                compiled_decoder = cls._compile_model(
+                    wrapped_model,
+                    dec_compile_config,
+                    dec_example_inputs,
+                    context,
+                    rbln_config,
+                    rbln_config.quantization,
+                    phase="decode",
+                )
+                compiled_models[f"decoder_batch_{batch_size}"] = compiled_decoder
+
+            # check if the memory is enough to have additional blocks
+            required_num_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
+            if rbln_config.kvcache_num_blocks < required_num_blocks:
+                cls.maybe_suggest_kvcache_num_blocks(
+                    compiled_models=compiled_models,
+                    model_config=model.config,
+                    rbln_config=rbln_config,
+                )
+
+        return compiled_models
+
+    @classmethod
+    def get_pytorch_model(
+        cls, *args, rbln_config: Optional[RBLNDecoderOnlyModelConfig] = None, **kwargs
+    ) -> PreTrainedModel:
+        if rbln_config and rbln_config.quantization:
+            model = cls.get_quantized_model(*args, rbln_config=rbln_config, **kwargs)
         else:
-            for b_idx in range(self.batch_size):
-                position = cache_position[b_idx][0].item()
-                block_idx = position // self.kvcache_block_size
-                update_block(b_idx, block_idx)
+            model = super().get_pytorch_model(*args, **kwargs)
 
-            return replace_empty_block(self.block_tables)
+        return model
+
+    @classmethod
+    def use_query_position(cls, use_local_attention: bool, is_prefill: bool = True):
+        return use_local_attention
+
+    @classmethod
+    def get_input_info(
+        cls,
+        batch_size: int,
+        query_length: int,
+        rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
+        model_config: PretrainedConfig,
+    ):
+        num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
+        num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
+        num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
+        hidden_size = getattr(model_config, "n_embd", None) or getattr(model_config, "hidden_size")
+        head_dim = getattr(model_config, "head_dim", None) or hidden_size // num_attention_heads
+        is_prefill = query_length > 1
+
+        input_info = []
+        if rbln_config.use_inputs_embeds:
+            input_info.append(("inputs_embeds", [batch_size, query_length, hidden_size], "float32"))
+        else:
+            input_info.append(("input_ids", [batch_size, query_length], "int64"))
+
+        input_info.append(("cache_position", [batch_size, query_length], "int32"))
+
+        if rbln_config.use_global_attention:
+            max_block_cnt = rbln_config.max_seq_len // rbln_config.kvcache_block_size
+            input_info.append(
+                ("block_tables", [max_block_cnt] if is_prefill else [batch_size, max_block_cnt], "int16")
+            )
+        if rbln_config.use_local_attention:
+            input_info.append(("local_block_tables", [1] if is_prefill else [batch_size, 1], "int16"))
+
+        if cls.use_query_position(rbln_config.use_local_attention, is_prefill):
+            input_info.append(("query_position", [], "int16"))
+
+        if rbln_config.use_attention_mask:
+            if rbln_config.use_position_ids:
+                input_info.append(("attention_mask", [batch_size, rbln_config.max_seq_len], "float32"))
+            else:
+                input_info.append(
+                    ("attention_mask", [batch_size, 1, query_length, rbln_config.max_seq_len], "float32")
+                )
+
+        if rbln_config.use_position_ids:
+            input_info.append(("position_ids", [batch_size, query_length], "int32"))
+
+        kvcache_dtype = "float32"
+        if rbln_config.quantization and rbln_config.quantization.kv_caches == "fp8":
+            kvcache_dtype = "float8_e4m3fn"
+
+        global_kvcache_shape = [
+            rbln_config.kvcache_num_blocks,
+            num_key_value_heads,
+            rbln_config.kvcache_block_size,
+            head_dim,
+        ]
+        local_kvcache_shape = [rbln_config.batch_size, num_key_value_heads, rbln_config.sliding_window, head_dim]
+        input_info.extend(
+            [
+                (
+                    f"past_key_values_{i}",
+                    local_kvcache_shape
+                    if rbln_config.sliding_window is not None and ((i // 2) in rbln_config.sliding_window_layers)
+                    else global_kvcache_shape,
+                    kvcache_dtype,
+                )
+                for i in range(num_hidden_layers * 2)
+            ]
+        )
+
+        return input_info
+
+    @classmethod
+    def _update_sliding_window_config(
+        cls, model_config: PretrainedConfig, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig
+    ):
+        # Update the sliding window configuration for the RBLN model.
+
+        # This method must be implemented by subclasses to handle their specific sliding window configurations,
+        # as Hugging Face models use different configuration keys to represent sliding window layers.
+
+        # Args:
+        #     model_config (PretrainedConfig): The model configuration from Hugging Face.
+        #     rbln_config (RBLNDecoderOnlyModelForCausalLMConfig): The RBLN model configuration.
+
+        # Notes:
+        #     Required configuration settings:
+        #     - `cache_impl`: Must be one of:
+        #         - "static": All layers use global attention (no sliding window)
+        #         - "sliding_window": All layers use sliding window attention
+        #         - "hybrid": A mix of global and sliding window attention layers
+        #     - `sliding_window`: Width of the sliding window (required if cache_impl is "sliding_window" or "hybrid")
+        #     - `sliding_window_layers`: List of layer indices using sliding window attention (required if cache_impl is "hybrid")
+
+        #     Example implementation for a 'sliding_window' model:
+        #     ```python
+        #     rbln_config.cache_impl = "sliding_window"
+        #     rbln_config.sliding_window = model_config.sliding_window
+        #     rbln_config.sliding_window_layers = [i for i in range(model_config.num_hidden_layers)]
+        #     return rbln_config
+        #     ```
+
+        # Returns:
+        #     RBLNDecoderOnlyModelConfig: The updated RBLN model configuration.
+
+        raise NotImplementedError(
+            "Subclasses must implement _update_sliding_window_config to configure sliding window attention settings. "
+            "See method docstring for required configuration details."
+        )
+
+    @classmethod
+    def _update_attention_config(
+        cls, model: PreTrainedModel, model_config: PretrainedConfig, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig
+    ):
+        rbln_config.attn_impl, rbln_config.kvcache_partition_len, rbln_config.kvcache_block_size = set_default_values(
+            attn_impl=rbln_config.attn_impl,
+            kvcache_partition_len=rbln_config.kvcache_partition_len,
+            kvcache_block_size=rbln_config.kvcache_block_size,
+            max_seq_len=rbln_config.max_seq_len,
+        )
+
+        validate_attention_method(
+            attn_impl=rbln_config.attn_impl,
+            kvcache_partition_len=rbln_config.kvcache_partition_len,
+            kvcache_block_size=rbln_config.kvcache_block_size,
+            max_seq_len=rbln_config.max_seq_len,
+        )
+
+        num_full_blocks = (rbln_config.max_seq_len // rbln_config.kvcache_block_size) * rbln_config.batch_size
+
+        # Update kvcache_num_blocks based on the attention implementation.
+        if rbln_config.attn_impl == "flash_attn":
+            estimated_max_num_blocks = cls.get_maximum_num_blocks(
+                config=model_config,
+                tensor_parallel_size=rbln_config.tensor_parallel_size or 1,
+                kvcache_block_size=rbln_config.kvcache_block_size,
+                nbits_per_param=16 if not rbln_config.quantization else 4,  # TODO(jongho): FIX Ad-hoc
+                n_model_params=sum(p.numel() for p in model.parameters()),
+                num_runtimes=1 if not rbln_config.can_generate else 1 + len(rbln_config.decoder_batch_sizes),
+            )
+
+            if rbln_config.kvcache_num_blocks is None:
+                if estimated_max_num_blocks < num_full_blocks:
+                    # lower bound of the number of blocks for flash attention.
+                    min_blocks_for_flash = min(
+                        rbln_config.max_seq_len // rbln_config.kvcache_block_size + 1, num_full_blocks
+                    )
+                    if min_blocks_for_flash > estimated_max_num_blocks:
+                        # NOTE: Just try to compile with lower bound of blocks for flash attention.
+                        # Even if it's larger than the estimated maximum number of blocks.
+                        rbln_config.kvcache_num_blocks = min_blocks_for_flash
+                    else:
+                        logger.info(f"[KVCache] Compiling with num_blocks: {rbln_config.kvcache_num_blocks}")
+                        rbln_config.kvcache_num_blocks = estimated_max_num_blocks
+
+                    if rbln_config.kvcache_num_blocks < rbln_config.batch_size:
+                        raise RuntimeError(
+                            f"Batch size ({rbln_config.batch_size}) exceeds num_blocks ({rbln_config.kvcache_num_blocks}). "
+                            "Ensure the number of blocks is at least equal to the batch size."
+                        )
+                else:
+                    rbln_config.kvcache_num_blocks = num_full_blocks
+            elif rbln_config.kvcache_num_blocks > estimated_max_num_blocks:
+                logger.warning(
+                    f"The set `kvcache_num_blocks` ({rbln_config.kvcache_num_blocks}) is greater"
+                    f" than the estimated maximum number of blocks ({estimated_max_num_blocks})."
+                    "This can cause a failure during model compilation."
+                )
+        else:
+            if rbln_config.kvcache_num_blocks is None:
+                rbln_config.kvcache_num_blocks = num_full_blocks
+            elif rbln_config.kvcache_num_blocks > num_full_blocks:
+                logger.warning(
+                    f"The set `kvcache_num_blocks` ({rbln_config.kvcache_num_blocks}) is greater"
+                    f" than the required number of blocks ({num_full_blocks})."
+                    "This can cause a failure during model compilation."
+                )
+
+        logger.info(f"[KVCache] Compiling with num_blocks: {rbln_config.kvcache_num_blocks}")
+
+        return rbln_config
+
+    @classmethod
+    def _update_rbln_config(
+        cls,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
+        model: Optional[PreTrainedModel] = None,
+        model_config: Optional[PretrainedConfig] = None,
+        rbln_config: Optional[RBLNDecoderOnlyModelForCausalLMConfig] = None,
+    ) -> RBLNDecoderOnlyModelForCausalLMConfig:
+        if rbln_config.max_seq_len is None:
+            rbln_config.max_seq_len = getattr(model_config, "max_position_embeddings", None) or getattr(
+                model_config, "n_positions", None
+            )
+        if rbln_config.max_seq_len is None:
+            raise ValueError("`max_seq_len` should be specified.")
+
+        if getattr(model_config, "sliding_window", None) is not None and getattr(
+            model_config, "use_sliding_window", True
+        ):
+            rbln_config = cls._update_sliding_window_config(model_config, rbln_config)
+            if rbln_config.sliding_window is not None:
+                validate_sliding_window(rbln_config)
+
+        rbln_config = cls._update_attention_config(model, model_config, rbln_config)
+
+        prefill_input_info = cls.get_input_info(
+            batch_size=1,
+            query_length=rbln_config.prefill_chunk_size,
+            rbln_config=rbln_config,
+            model_config=model_config,
+        )
+
+        prefill_compile_config = RBLNCompileConfig(compiled_model_name="prefill", input_info=prefill_input_info)
+        compile_cfgs = [prefill_compile_config]
+
+        if rbln_config.can_generate:
+            for batch_size in rbln_config.decoder_batch_sizes:
+                dec_input_info = cls.get_input_info(
+                    batch_size=batch_size,
+                    query_length=1,
+                    rbln_config=rbln_config,
+                    model_config=model_config,
+                )
+                compile_cfgs.append(
+                    RBLNCompileConfig(compiled_model_name=f"decoder_batch_{batch_size}", input_info=dec_input_info)
+                )
+        rbln_config.set_compile_cfgs(compile_cfgs)
+
+        return rbln_config
+
+    @classmethod
+    def _create_runtimes(
+        cls,
+        compiled_models: List[rebel.RBLNCompiledModel],
+        rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
+    ) -> List[rebel.Runtime]:
+        expected_model_names = ["prefill"]
+        if rbln_config.can_generate:
+            expected_model_names.extend(
+                [f"decoder_batch_{batch_size}" for batch_size in rbln_config.decoder_batch_sizes]
+            )
+        if any(model_name not in rbln_config.device_map for model_name in expected_model_names):
+            cls._raise_missing_compiled_file_error(expected_model_names)
+
+        ret_val = [
+            rebel.Runtime(
+                compiled_models[0],
+                tensor_type="pt",
+                device=rbln_config.device_map["prefill"],
+                activate_profiler=rbln_config.activate_profiler,
+                timeout=rbln_config.timeout,
+            )
+        ]
+        if rbln_config.can_generate:
+            ret_val.extend(
+                [
+                    rebel.Runtime(
+                        compiled_models[i + 1],
+                        tensor_type="pt",
+                        device=rbln_config.device_map[f"decoder_batch_{batch_size}"],
+                        activate_profiler=rbln_config.activate_profiler,
+                        timeout=rbln_config.timeout,
+                    )
+                    for i, batch_size in enumerate(rbln_config.decoder_batch_sizes)
+                ]
+            )
+        return ret_val
 
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
-        cache_position: torch.Tensor = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        batch_idx: Optional[int] = None,
-        block_tables: Optional[torch.Tensor] = None,
-    ):
-        if input_ids is None and inputs_embeds is None:
-            raise ValueError("Either `input_ids` or `inputs_embeds` must be provided.")
-
-        if inputs_embeds is None:
-            inputs = input_ids
-            if self.embed_tokens is not None:
-                inputs = self.embed_tokens(inputs)
-        else:
-            inputs = inputs_embeds
-
-        if block_tables is None:
-            block_tables = self.get_block_tables(cache_position, batch_idx=batch_idx)
-            is_external_block_tables = False
-        else:
-            is_external_block_tables = True
-
-        if self.phase == "decode":
-            return self.decode_forward(
-                inputs,
-                cache_position,
-                block_tables,
-                is_external_block_tables,
-                attention_mask=attention_mask,
-            )
-        else:
-            return self.prefill_forward(inputs, cache_position, attention_mask, batch_idx, block_tables)
-
-    def decode_forward(
-        self,
-        inputs: torch.Tensor,
-        cache_position: torch.Tensor = None,
-        block_tables: torch.Tensor = None,
-        is_external_block_tables: bool = None,
-        attention_mask: Optional[torch.Tensor] = None,
-    ) -> torch.FloatTensor:
+        attention_mask: Optional[torch.LongTensor] = None,
+        position_embed: Optional[torch.Tensor] = None,
+        **kwargs,
+    ) -> Tuple[torch.FloatTensor]:
+        inputs = inputs_embeds if inputs_embeds is not None else input_ids
         batch_size = inputs.shape[0]
-        if batch_size != self.batch_size:
-            raise RuntimeError(
-                f"Batch size mismatch: got {batch_size}, expected {self.batch_size} (compiled batch size)."
-            )
 
-        if batch_size != cache_position.shape[0]:
-            raise RuntimeError(f"Cache position size mismatch: got {cache_position.shape[0]}, expected {batch_size}.")
-
-        if self.use_attention_mask and attention_mask is None:
-            for b_idx in range(batch_size):
-                decoding_step = cache_position[b_idx].item()
-                if not (0 <= decoding_step < self.dec_attn_mask.shape[-1]):
-                    raise ValueError(
-                        f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
-                    )
-
-                if is_external_block_tables:
-                    self.dec_attn_mask[b_idx].fill_(0)
-                    self.dec_attn_mask[b_idx, :, :, : decoding_step + 1] = 1
-                else:
-                    self.dec_attn_mask[b_idx, :, :, decoding_step] = 1
-
-            attention_mask = self.dec_attn_mask
-
-        logits = super().forward(
-            inputs,
-            cache_position,
-            attention_mask if self.use_attention_mask else None,
-            block_tables,
-        )
-
-        return logits
-
-    def prefill_forward(
-        self,
-        inputs: torch.Tensor,
-        cache_position: torch.Tensor = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        batch_idx: int = None,
-        block_tables: torch.Tensor = None,
-        is_external_block_tables: bool = None,
-    ) -> torch.FloatTensor:
-        """
-        Performs chunked prefill for efficient KV-cache updates and memory optimization.
-        Instead of processing the entire sequence at once, the input is divided into chunks of size `prefill_chunk_size`,
-        and each chunk is processed sequentially. This allows for better memory utilization and compatibility with continuous batching.
-        """
-
-        # Handle continuous batching in a compiled graph by extracting valid inputs
-        # If an attention mask is provided, select only the valid (non-masked) inputs
-        inputs = inputs[:, attention_mask.bool()] if attention_mask is not None else inputs
-
-        query_length = inputs.shape[1]
-        if query_length > self.max_seq_len:
+        if batch_size != self.rbln_config.batch_size:
             raise ValueError(
-                f"Input length ({query_length}) exceeds the maximum allowed sequence length ({self.max_seq_len})."
+                f"Batch size ({batch_size}) must be equal to the batch size of the model ({self.rbln_config.batch_size})."
             )
 
-        # Initialize attention mask for chunked processing
-        if self.use_attention_mask:
-            chunked_attention_mask = torch.zeros(1, 1, self.prefill_chunk_size, self.max_seq_len, dtype=torch.float32)
-
-        # Buffer for storing output logits
-        out_buffers = [
-            torch.empty(
-                size=self.output_size,
-                dtype=torch.float32,
-                device="cpu",
+        all_last_hidden_states = []
+        for b_idx in range(self.rbln_config.batch_size):
+            query_length = (
+                attention_mask[b_idx].sum(dim=-1).int().item() if attention_mask is not None else inputs.shape[1]
             )
-        ]
+            cache_position = torch.arange(query_length, dtype=torch.int32).unsqueeze(0)
+            last_hidden_states = self.prefill_decoder(
+                inputs[b_idx : b_idx + 1],
+                attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
+                position_embed=position_embed[b_idx : b_idx + 1] if position_embed is not None else None,
+                cache_position=cache_position,
+                batch_idx=b_idx,
+            ).logits
+            all_last_hidden_states.append(last_hidden_states)
 
-        # Process input in chunks of size `prefill_chunk_size`
-        for step in range(0, query_length, self.prefill_chunk_size):
-            # Pad input and cache_position if the last chunk is smaller than `prefill_chunk_size`
-            if (step + self.prefill_chunk_size) > query_length:
-                padding_size = step + self.prefill_chunk_size - query_length
-                # inputs_embeds
-                if inputs.dim() == 3:
-                    inputs = torch.nn.functional.pad(inputs, (0, 0, 0, padding_size))
-                # inputs_ids
-                else:
-                    inputs = torch.nn.functional.pad(inputs, (0, padding_size))
-
-                cache_position = torch.cat(
-                    [
-                        cache_position,
-                        torch.arange(
-                            query_length,
-                            step + self.prefill_chunk_size,
-                            dtype=torch.int32,
-                        ).unsqueeze(0),
-                    ],
-                    dim=-1,
-                )
-
-            # Extract the current chunk of inputs and cache positions
-            input_chunk = inputs[:, step : step + self.prefill_chunk_size]
-            cache_pos_chunk = cache_position[:, step : step + self.prefill_chunk_size]
-
-            if self.use_attention_mask:
-                # Update attention mask to ensure proper causal behavior
-                if step >= self.prefill_chunk_size:
-                    chunked_attention_mask[:, :, :, step - self.prefill_chunk_size : step] = 1
-                chunked_attention_mask[:, :, :, step : step + self.prefill_chunk_size] = self.causal_mask
-
-            # Define query position
-            query_position = torch.tensor((query_length - 1) % self.prefill_chunk_size, dtype=torch.int16)
-
-            # Forward pass for the current chunk
-            logits = super().forward(
-                input_chunk,
-                cache_pos_chunk,
-                chunked_attention_mask if self.use_attention_mask else None,
-                query_position,
-                block_tables,
-                out=out_buffers,
-            )
-
-        # Update decoder attention mask with processed KV-cache length from prefill phase
-        if not is_external_block_tables and self.use_attention_mask:
-            self.dec_attn_mask[batch_idx].fill_(0)
-            self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
-
-        return logits
+        last_hidden_states = torch.concat(all_last_hidden_states, dim=0)
+        return BaseModelOutputWithPast(last_hidden_state=last_hidden_states)
 
 
-@dataclass
-class RBLNDecoderOnlyOutput(ModelOutput):
-    logits: torch.FloatTensor = None
-    generate_idx: torch.Tensor = None
-
-
-class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
+class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGenerationMixin):
     """
     A base class for decoder-only transformer models optimized for causal language modeling tasks on RBLN devices.
     This class serves as the foundation for various decoder-only architectures like GPT, LLaMA, etc.
 
     The class provides core functionality for:
+
     1. Converting pre-trained transformer models to RBLN-optimized format
     2. Handling the compilation process for RBLN devices
     3. Managing inference operations for causal language modeling
@@ -350,572 +672,19 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         - The class handles RBLN-specific optimizations automatically during compilation
     """
 
-    main_input_name = "input_ids"
     auto_model_class = AutoModelForCausalLM
-    _decoder_wrapper_cls = DecoderOnlyWrapper
-    _use_rotary_emb = True
 
-    def __post_init__(self, **kwargs):
-        self.batch_size = self.rbln_config.model_cfg["batch_size"]
-        self.max_seq_len = self.rbln_config.model_cfg["max_seq_len"]
-        self.prefill_chunk_size = self.rbln_config.model_cfg["prefill_chunk_size"]
-        self.kvcache_block_size = self.rbln_config.model_cfg["kvcache_block_size"]
-        # FIXME get kvcache_num_blocks from compiled results.
-        self.kvcache_num_blocks = self.rbln_config.model_cfg["kvcache_num_blocks"]
-        self.use_attention_mask = self.rbln_config.model_cfg["use_attention_mask"]
-        attn_impl = self.rbln_config.model_cfg["attn_impl"]
-        main_input_name = self.main_input_name
-
-        if self.rbln_config.model_cfg["use_inputs_embeds"]:
-            main_input_name = "inputs_embeds"
-            artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
-            with no_init_weights():
-                self.embed_tokens = torch.nn.Embedding(
-                    self.config.vocab_size,
-                    self.config.hidden_size,
-                    self.config.pad_token_id,
-                )
-            self.embed_tokens.load_state_dict(artifacts["embed_tokens"])
-        else:
-            self.embed_tokens = None
-
-        # Initialize shared resources to be used across Runtime instances (prefill and decode phases)
-        dec_attn_mask = torch.zeros(self.batch_size, 1, 1, self.max_seq_len, dtype=torch.float32)
-        block_tables = torch.zeros(
-            self.batch_size, self.max_seq_len // self.kvcache_block_size, dtype=torch.int16
-        ).fill_(-1)
-        free_block_pool = deque(x for x in range(self.kvcache_num_blocks))
-
-        self.prefill_decoder = RBLNRuntimeModel(
-            runtime=self.model[0],
-            main_input_name=main_input_name,
-            embed_tokens=self.embed_tokens,
-            phase="prefill",
-            batch_size=self.batch_size,
-            dec_attn_mask=dec_attn_mask,
-            block_tables=block_tables,
-            free_block_pool=free_block_pool,
-            kvcache_block_size=self.kvcache_block_size,
-            vocab_size=self.config.vocab_size,
-            prefill_chunk_size=self.prefill_chunk_size,
-            max_seq_len=self.max_seq_len,
-            use_attention_mask=self.use_attention_mask,
-            attn_impl=attn_impl,
-        )
-        self.decoder = RBLNRuntimeModel(
-            runtime=self.model[1],
-            main_input_name=main_input_name,
-            embed_tokens=self.embed_tokens,
-            phase="decode",
-            batch_size=self.batch_size,
-            dec_attn_mask=dec_attn_mask,
-            block_tables=block_tables,
-            free_block_pool=free_block_pool,
-            kvcache_block_size=self.kvcache_block_size,
-            use_attention_mask=self.use_attention_mask,
-            attn_impl=attn_impl,
+    @property
+    def prefill_output_size(self):
+        return (
+            1,
+            self.rbln_config.prefill_chunk_size if self.rbln_config.logits_to_keep == 0 else 1,
+            self.config.vocab_size,
         )
 
     @classmethod
-    def save_torch_artifacts(
-        cls,
-        model: "PreTrainedModel",
-        save_dir_path: Path,
-        subfolder: str,
-        rbln_config: RBLNConfig,
-    ):
-        """
-        If you are unavoidably running on a CPU rather than an RBLN device,
-        store the torch tensor, weight, etc. in this function.
-        """
-        if rbln_config.model_cfg["use_inputs_embeds"]:
-            save_dict = {}
-            save_dict["embed_tokens"] = model.get_input_embeddings().state_dict()
-            torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
-
-    def get_input_embeddings(self):
-        return self.embed_tokens
-
-    @classmethod
-    def get_quantized_model(
-        cls,
-        model_id: str,
-        config: Optional["PretrainedConfig"] = None,
-        use_auth_token: Optional[Union[bool, str]] = None,
-        revision: Optional[str] = None,
-        force_download: bool = False,
-        cache_dir: Optional[str] = None,
-        subfolder: str = "",
-        local_files_only: bool = False,
-        trust_remote_code: bool = False,
-        **kwargs,
-    ):
-        from ...utils.rbln_quantization import prepare_model_for_quantization
-
-        kwargs = cls.update_kwargs(kwargs)
-
-        if config is None:
-            config = AutoConfig.from_pretrained(
-                model_id,
-                use_auth_token=use_auth_token,
-                revision=revision,
-                force_download=force_download,
-                cache_dir=cache_dir,
-                trust_remote_code=trust_remote_code,
-                **kwargs,
-            )
-
-        with no_init_weights():
-            model = AutoModelForCausalLM.from_config(config)
-
-        prepare_model_for_quantization(model, model_id, kwargs.get("num_hidden_layers"))
-
-        return model
-
-    def __getattr__(self, __name: str) -> Any:
-        """
-        Special method to delegate attribute access to the original Huggingface LM class.
-        This method is called when an attribute is not found in the current instance's dictionary.
-        It enables transparent access to the original model's attributes and methods while maintaining
-        proper method binding.
-
-        The method implements a delegation pattern that:
-        1. For methods: Creates a wrapper that properly binds 'self' to method calls
-        2. For other attributes: Returns them directly from the original class
-        """
-
-        def redirect(func):
-            return lambda *pargs, **kwargs: func(self, *pargs, **kwargs)
-
-        val = getattr(self.get_hf_class(), __name, None) or getattr(PreTrainedModel, __name)
-        if isinstance(val, Callable) and "self" in set(inspect.signature(val).parameters):
-            return redirect(val)
-        return val
-
-    @classmethod
-    def get_pytorch_model(cls, *args, **kwargs) -> "PreTrainedModel":
-        logger.debug("Loading the LLM model to the CPU.")  # TODO(jongho): Remove.
-
-        rbln_kwargs = kwargs.get("rbln_kwargs", {})
-        rbln_quantization = rbln_kwargs.get("quantization", None)
-        if rbln_quantization is not None and rbln_quantization["format"] == "rbln":
-            model = cls.get_quantized_model(*args, **kwargs)
-        else:
-            model = super().get_pytorch_model(*args, **kwargs)
-
-        logger.debug("Loaded the LLM model to the CPU.")
-        return model
-
-    @classmethod
-    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: "RBLNConfig"):
-        wrapper_cfg = {"max_seq_len": rbln_config.model_cfg["max_seq_len"]}
-        wrapper_cfg["attn_impl"] = rbln_config.model_cfg.get("attn_impl")
-        wrapper_cfg["kvcache_partition_len"] = rbln_config.model_cfg.get("kvcache_partition_len")
-        wrapper_cfg["kvcache_block_size"] = rbln_config.model_cfg.get("kvcache_block_size")
-        wrapper_cfg["use_rotary_emb"] = cls._use_rotary_emb
-        wrapper_cfg["use_attention_mask"] = rbln_config.model_cfg.get("use_attention_mask")
-
-        return cls._decoder_wrapper_cls(model, **wrapper_cfg).eval()
-
-    @classmethod
-    @torch.inference_mode()
-    def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNConfig):
-        wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
-
-        rbln_compile_configs = rbln_config.compile_cfgs
-        prefill_compile_config = rbln_compile_configs[0]
-        dec_compile_config = rbln_compile_configs[1]
-
-        context = CompileContext(use_weight_sharing=True)
-
-        # Here we use meta tensor, for the memory efficiency.
-        meta_tensor_names = [name for name, _, _ in prefill_compile_config.input_info if "past_key_values" in name]
-        prefill_example_inputs = prefill_compile_config.get_dummy_inputs(fill=0, meta_tensor_names=meta_tensor_names)
-
-        # Mark static tensors (self kv states)
-        static_tensors = {}
-        for (name, _, _), tensor in zip(prefill_compile_config.input_info, prefill_example_inputs):
-            if "past_key_values" in name:
-                static_tensors[name] = tensor
-                context.mark_static_address(tensor)
-
-        dec_example_inputs = dec_compile_config.get_dummy_inputs(fill=0, static_tensors=static_tensors)
-
-        quantize_config = rbln_config.model_cfg.get("quantization", None)
-
-        @QuantizationManager.with_quantization_env
-        def compile_model(*args, **kwargs):
-            try:
-                original_linear = torch.nn.functional.linear
-                torch.nn.functional.linear = torch.ops.rbln_custom_ops.linear
-                wrapped_model.phase = "prefill"
-                compiled_prefill = RBLNModel.compile(
-                    wrapped_model,
-                    prefill_compile_config,
-                    example_inputs=prefill_example_inputs,
-                    compile_context=context,
-                )
-
-                wrapped_model.phase = "decode"
-                compiled_decoder = RBLNModel.compile(
-                    wrapped_model,
-                    dec_compile_config,
-                    example_inputs=dec_example_inputs,
-                    compile_context=context,
-                )
-                return {"prefill": compiled_prefill, "decoder": compiled_decoder}
-            finally:
-                torch.nn.functional.linear = original_linear
-
-        return compile_model(quantize_config=quantize_config)
-
-    @classmethod
-    def get_maximum_num_blocks(
-        cls,
-        config: PretrainedConfig,
-        tensor_parallel_size: int,
-        kvcache_block_size: int,
-        nbits_per_param: int,
-        n_model_params: int,
-    ) -> int:
-        """
-        We are finding max_n_blocks(x) that satisfies the following equation:
-
-        available_dram - kernel_size - buffer
-            - num_layers * 2 * tensor_parallel_size
-            * align_2MB(
-                x
-                * block_size
-                * align_64(head_dim)
-                * math.ceil(num_key_value_heads / tensor_parallel_size)
-                * 2
-            ) > 0
-
-        This inequality can be rewritten as follows:
-
-        a - c * align_2MB(b * x) > 0
-        where
-           a = available_dram - kernel_size - buffer
-           b = block_size * align_64(head_dim) * math.ceil(num_key_value_heads / tensor_parallel_size) * 2
-           c = num_layers * 2 * tensor_parallel_size
-
-        We can rewrite the inequality as follows:
-        k > align_2MB(b*x)
-        where
-           k = a / c
-
-        After that, we can derive the following equation:
-        x = floor(2**21 / b * floor((k - 1) / 2**21))
-        """
-
-        def align(x: int, nbytes: int) -> int:
-            return int(math.ceil(x / nbytes) * nbytes)
-
-        def align_2MB(x: int) -> int:
-            return align(x, 2**21)
-
-        num_attention_heads = getattr(config, "n_head", None) or getattr(config, "num_attention_heads")
-        num_layers = getattr(config, "n_layer", None) or getattr(config, "num_hidden_layers")
-        head_dim = getattr(config, "head_dim", None) or config.hidden_size // num_attention_heads
-        vocab_size = config.vocab_size
-        hidden_size = getattr(config, "n_embd", None) or getattr(config, "hidden_size")
-        num_key_value_heads = getattr(config, "num_key_value_heads", None) or num_attention_heads
-
-        # TODO(jongho): Update if target npu is REBEL.
-        ATOM_DRAM_NBYTES = 16 * 2**30
-        ATOM_SYS_DRAM_NBYTES = 288 * 2**20
-        available_dram = tensor_parallel_size * (ATOM_DRAM_NBYTES - ATOM_SYS_DRAM_NBYTES)
-
-        # Get estimated kernel size (approximated)
-        lm_heads_params = align(vocab_size, 64) * hidden_size
-        lm_heads_nbytes = (
-            align_2MB(lm_heads_params * nbits_per_param // 8 / tensor_parallel_size) * tensor_parallel_size
-        )
-        params = n_model_params - lm_heads_params
-        layer_nbytes = (
-            align_2MB(params * nbits_per_param // 8 / num_layers / tensor_parallel_size)
-            * num_layers
-            * tensor_parallel_size
-        )
-        kernel_size = layer_nbytes + lm_heads_nbytes
-
-        available_dram -= kernel_size
-
-        # TODO: Accurate buffer estimation
-        buffer_per_core = 2**29  # 500MB per npu
-        buffer = buffer_per_core * tensor_parallel_size
-        available_dram -= buffer
-
-        b = kvcache_block_size * align(head_dim, 64) * math.ceil(num_key_value_heads / tensor_parallel_size) * 2
-        c = num_layers * 2 * tensor_parallel_size
-        k = available_dram / c
-        max_n_blocks = math.floor(2**21 / b * math.floor((k - 1) / 2**21))
-
-        return max_n_blocks
-
-    @classmethod
-    def _get_rbln_config(
-        cls,
-        preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
-        model_config: "PretrainedConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
-        rbln_max_seq_len = rbln_kwargs.get("max_seq_len", None)
-        rbln_batch_size = rbln_kwargs.get("batch_size", None)
-        rbln_use_inputs_embeds = rbln_kwargs.get("use_inputs_embeds", None)
-        rbln_use_attention_mask = rbln_kwargs.get("use_attention_mask", None)
-        rbln_attn_impl = rbln_kwargs.get("attn_impl", None)
-        rbln_kvcache_partition_len = rbln_kwargs.get("kvcache_partition_len", None)
-        rbln_kvcache_block_size = rbln_kwargs.get("kvcache_block_size", None)
-        rbln_quantization = QuantizationManager.validate_quantization_config(rbln_kwargs.get("quantization", None))
-        rbln_prefill_chunk_size = rbln_kwargs.get("prefill_chunk_size", None)
-
-        if rbln_use_attention_mask is None:
-            rbln_use_attention_mask = False
-            rbln_npu = rbln_kwargs.get("npu", None) or rebel.get_npu_name()
-            if rbln_npu == "RBLN-CA02":
-                rbln_use_attention_mask = True
-
-        if rbln_prefill_chunk_size is None:
-            rbln_prefill_chunk_size = 128
-        elif rbln_prefill_chunk_size % 64 != 0 or rbln_prefill_chunk_size == 0:
-            raise ValueError(
-                f"Invalid rbln_prefill_chunk_size: {rbln_prefill_chunk_size}. It must be a nonzero multiple of 64."
-            )
-
-        if rbln_max_seq_len is None:
-            rbln_max_seq_len = getattr(model_config, "max_position_embeddings", None) or getattr(
-                model_config, "n_positions", None
-            )
-        if rbln_max_seq_len is None:
-            raise ValueError("`rbln_max_seq_len` should be specified.")
-
-        rbln_batch_size = 1 if rbln_batch_size is None else rbln_batch_size
-        rbln_use_inputs_embeds = False if rbln_use_inputs_embeds is None else rbln_use_inputs_embeds
-
-        rbln_attn_impl, rbln_kvcache_partition_len, rbln_kvcache_block_size = validate_attention_method(
-            rbln_attn_impl=rbln_attn_impl,
-            rbln_kvcache_partition_len=rbln_kvcache_partition_len,
-            rbln_kvcache_block_size=rbln_kvcache_block_size,
-            rbln_max_seq_len=rbln_max_seq_len,
-        )
-
-        if rbln_kvcache_block_size is None:
-            if rbln_attn_impl == "eager":
-                rbln_kvcache_block_size = rbln_max_seq_len
-            else:
-                rbln_kvcache_block_size = rbln_kvcache_partition_len
-
-        rbln_kvcache_num_blocks = (rbln_max_seq_len // rbln_kvcache_block_size) * rbln_batch_size
-        if rbln_attn_impl == "flash_attn":
-            max_num_blocks = cls.get_maximum_num_blocks(
-                config=model_config,
-                tensor_parallel_size=rbln_kwargs.get("tensor_parallel_size", 1),
-                kvcache_block_size=rbln_kvcache_block_size,
-                nbits_per_param=16 if rbln_quantization is None else 4,  # TODO(jongho): FIX Ad-hoc
-                n_model_params=rbln_kwargs["n_model_params"],
-            )
-            rbln_kvcache_num_blocks = min(rbln_kvcache_num_blocks, max_num_blocks)
-
-            required_blocks = rbln_max_seq_len // rbln_kvcache_block_size + 1
-            if rbln_kvcache_num_blocks < required_blocks:
-                rbln_kvcache_num_blocks = required_blocks
-
-            logger.info(f"[KVCache] Compiling with num_blocks: {rbln_kvcache_num_blocks}")
-
-            if rbln_kvcache_num_blocks < rbln_batch_size:
-                raise RuntimeError(
-                    f"Batch size ({rbln_batch_size}) exceeds available KV cache blocks ({rbln_kvcache_num_blocks}). "
-                    "Ensure the number of blocks is at least equal to the batch size."
-                )
-
-        num_attention_heads = getattr(model_config, "n_head", None) or getattr(model_config, "num_attention_heads")
-        num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
-        num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
-        head_dim = getattr(model_config, "head_dim", None) or model_config.hidden_size // num_attention_heads
-        hidden_size = getattr(model_config, "n_embd", None) or getattr(model_config, "hidden_size")
-
-        def get_input_info(
-            batch_size,
-            query_length,
-            use_inputs_embeds,
-            hidden_size,
-        ):
-            if use_inputs_embeds:
-                main_input = ("inputs_embeds", [batch_size, query_length, hidden_size], "float32")
-            else:
-                main_input = ("input_ids", [batch_size, query_length], "int64")
-
-            input_info = [
-                main_input,
-                (
-                    "cache_position",
-                    [batch_size, query_length],
-                    "int32",
-                ),
-            ]
-
-            if rbln_use_attention_mask:
-                input_info.extend(
-                    [
-                        ("attention_mask", [batch_size, 1, query_length, rbln_max_seq_len], "float32"),
-                    ]
-                )
-
-            if query_length > 1:
-                input_info.extend(
-                    [
-                        ("query_position", [], "int16"),
-                    ]
-                )
-
-            max_block_cnt = rbln_max_seq_len // rbln_kvcache_block_size
-
-            if query_length > 1:
-                input_info.extend([("block_tables", [max_block_cnt], "int16")])
-            else:
-                input_info.extend([("block_tables", [batch_size, max_block_cnt], "int16")])
-
-            input_info.extend(
-                [
-                    (
-                        f"past_key_values_{i}",
-                        [
-                            rbln_kvcache_num_blocks,
-                            num_key_value_heads,
-                            rbln_kvcache_block_size,
-                            head_dim,
-                        ],
-                        "float32",
-                    )
-                    for i in range(num_hidden_layers * 2)
-                ]
-            )
-
-            return input_info
-
-        prefill_input_info = get_input_info(
-            batch_size=1,
-            query_length=rbln_prefill_chunk_size,
-            use_inputs_embeds=rbln_use_inputs_embeds,
-            hidden_size=hidden_size,
-        )
-        dec_input_info = get_input_info(
-            batch_size=rbln_batch_size,
-            query_length=1,
-            use_inputs_embeds=rbln_use_inputs_embeds,
-            hidden_size=hidden_size,
-        )
-
-        prefill_compile_config = RBLNCompileConfig(compiled_model_name="prefill", input_info=prefill_input_info)
-        dec_compile_config = RBLNCompileConfig(compiled_model_name="decoder", input_info=dec_input_info)
-
-        rbln_config = RBLNConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[prefill_compile_config, dec_compile_config],
-            rbln_kwargs=rbln_kwargs,
-        )
-
-        rbln_config.model_cfg.update(
-            {
-                "max_seq_len": rbln_max_seq_len,
-                "batch_size": rbln_batch_size,
-                "prefill_chunk_size": rbln_prefill_chunk_size,
-                "use_attention_mask": rbln_use_attention_mask,
-                "use_inputs_embeds": rbln_use_inputs_embeds,
-                "kvcache_partition_len": rbln_kvcache_partition_len,
-                "kvcache_block_size": rbln_kvcache_block_size,
-                "attn_impl": rbln_attn_impl,
-                "kvcache_num_blocks": rbln_kvcache_num_blocks,
-            }
-        )
-
-        if rbln_quantization is not None:
-            rbln_config.model_cfg.update({"quantization": rbln_quantization})
-
-        return rbln_config
-
-    @classmethod
-    def _create_runtimes(
-        cls,
-        compiled_models: List[rebel.RBLNCompiledModel],
-        rbln_device_map: Dict[str, int],
-        activate_profiler: Optional[bool] = None,
-    ) -> List[rebel.Runtime]:
-        if any(model_name not in rbln_device_map for model_name in ["prefill", "decoder"]):
-            cls._raise_missing_compiled_file_error(["prefill", "decoder"])
-
-        return [
-            compiled_models[0].create_runtime(
-                tensor_type="pt", device=rbln_device_map["prefill"], activate_profiler=activate_profiler
-            ),
-            compiled_models[1].create_runtime(
-                tensor_type="pt", device=rbln_device_map["decoder"], activate_profiler=activate_profiler
-            ),
-        ]
-
-    def get_decoder(self):
-        return self.decoder
-
-    def can_generate(self):
-        return True
-
-    def _reorder_cache(self, past_key_values, beam_idx):
-        raise NotImplementedError
-
-    def prepare_inputs_for_generation(
-        self,
-        input_ids: torch.LongTensor,
-        generate_idx: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.LongTensor] = None,
-        inputs_embeds: Optional[torch.Tensor] = None,
-        **kwargs,
-    ):
-        model_inputs = {}
-        is_prefill_phase = generate_idx is None
-
-        if is_prefill_phase:
-            generate_idx = attention_mask.sum(dim=-1, keepdim=True).int()
-            cache_position = None
-        else:
-            if inputs_embeds is not None:
-                raise NotImplementedError("Specifying inputs_embeds in decoder phase is not supported.")
-
-            input_ids = input_ids[:, -1:]
-            cache_position = generate_idx
-            generate_idx = generate_idx + 1
-            model_inputs.update({"input_ids": input_ids})
-
-        if inputs_embeds is not None:
-            if self.rbln_config.model_cfg["use_inputs_embeds"]:
-                model_inputs.update({"inputs_embeds": inputs_embeds})
-            else:
-                raise ValueError(
-                    "The specifying inputs_embedst is only supported when using a compiled RBLN model with 'rbln_use_inputs_embeds' set to True."
-                )
-        else:
-            model_inputs.update({"input_ids": input_ids})
-
-        model_inputs.update(
-            {
-                "attention_mask": attention_mask,
-                "cache_position": cache_position,
-                "generate_idx": generate_idx,
-            }
-        )
-
-        return model_inputs
-
-    def _update_model_kwargs_for_generation(
-        self,
-        outputs: RBLNDecoderOnlyOutput,
-        model_kwargs: Dict[str, Any],
-        **kwargs,
-    ) -> Dict[str, Any]:
-        # update generate_idx
-        model_kwargs["generate_idx"] = outputs.generate_idx
-
-        return model_kwargs
+    def use_query_position(cls, use_local_attention: bool, is_prefill: bool = True):
+        return is_prefill
 
     def forward(
         self,
@@ -924,41 +693,64 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNModel):
         cache_position: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.LongTensor] = None,
         generate_idx: Optional[torch.Tensor] = None,
+        padded_cache_lengths: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
+        token_type_ids: Optional[torch.Tensor] = None,
+        return_dict: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
-        """
-        Forward method for the RBLN-optimized model, designed for integration with the HuggingFace generate API.
-        For continuous batching, the prefill stage processes one batch at a time and updates the KV cache using batch_idx.
-        A for-loop ensures synchronization with the HuggingFace generate API.
-        The decoder stage operates as usual, processing inputs in batch mode.
-        """
-        # Prefll
+        # Forward method for the RBLN-optimized model, designed for integration with the HuggingFace generate API.
+        # For continuous batching, the prefill stage processes one batch at a time and updates the KV cache using batch_idx.
+        # A for-loop ensures synchronization with the HuggingFace generate API.
+        # The decoder stage operates as usual, processing inputs in batch mode.
+
+        # for only use forward
+        if generate_idx is None:
+            generate_idx = (
+                attention_mask.sum(dim=-1, keepdim=True).int()
+                if attention_mask is not None
+                else torch.full((input_ids.shape[0], 1), input_ids.shape[1], dtype=torch.int32)
+            )
+            padded_cache_lengths = torch.zeros_like(generate_idx)
+
+        # Prefill
         if cache_position is None:
             logits = []
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
             batch_size = inputs.shape[0]
-
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
-                logit = self.prefill_decoder(
+                output = self.prefill_decoder(
                     input_ids=inputs[b_idx : b_idx + 1] if inputs_embeds is None else None,
                     inputs_embeds=inputs[b_idx : b_idx + 1] if inputs_embeds is not None else None,
                     attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                     cache_position=cache_position,
                     batch_idx=b_idx,
+                    token_type_ids=token_type_ids[b_idx : b_idx + 1] if token_type_ids is not None else None,
                 )
-                logits.append(logit)
-
+                padded_cache_lengths[b_idx] += output.padded_cache_lengths
+                logits.append(output.logits)
             logits = torch.cat(logits, dim=0)
         # Decoder
         else:
-            logits = self.decoder(
+            inputs = inputs_embeds if inputs_embeds is not None else input_ids
+            batch_size = inputs.shape[0]
+            if batch_size not in self.decoders:
+                raise ValueError(
+                    f"No decoder runtime available for batch size {batch_size}. "
+                    f"Available batch sizes are: {list(self.decoders.keys())}. "
+                    f"Please run your model with one of these batch sizes or add support for batch size {batch_size}."
+                )
+            logits = self.decoders[batch_size](
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
-            )
+                position_ids=position_ids if self.rbln_config.use_position_ids else None,
+            ).logits
 
-        return RBLNDecoderOnlyOutput(
-            logits=logits,
-            generate_idx=generate_idx,
-        )
+        if not return_dict:
+            return logits, generate_idx, padded_cache_lengths
+        else:
+            return RBLNDecoderOnlyOutput(
+                logits=logits, generate_idx=generate_idx, padded_cache_lengths=padded_cache_lengths
+            )

@@ -10,6 +10,14 @@ env:
   HF_AUTH_TOKEN: ${{ secrets.HF_AUTH_TOKEN }}
 
 jobs:
+  check-code-quality:
+    uses: ./.github/workflows/check_code_quality.yml
+    
+  test-docstrings:
+    uses: ./.github/workflows/test-docstrings.yml
+    with:
+      test_all_files: true
+
   load-version:
     runs-on: rebel-k8s-runner
     outputs:
@@ -33,17 +41,19 @@ jobs:
 
   optimum-rbln-pytest:
     needs: [load-version, check-compiler]
-    if: ${{ needs.check-compiler.outputs.is_deploy_version == 'true' }}
+    if: ${{ needs.check-compiler.outputs.compiler_version_check == 'true' }}
     uses: ./.github/workflows/rbln_optimum_pytest.yaml
     with:
       ref: main
       rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
       test_level: "full"
+      enable_hf_hub_tests: true
+      fail_fast: false
     secrets: inherit
 
   optimum-rbln-inference-test:
     needs: check-compiler
-    if: ${{ needs.check-compiler.outputs.is_deploy_version == 'true' }}
+    if: ${{ needs.check-compiler.outputs.compiler_version_check == 'true' }}
     uses: ./.github/workflows/rbln_optimum_inference_test.yaml
     with:
       ref: main

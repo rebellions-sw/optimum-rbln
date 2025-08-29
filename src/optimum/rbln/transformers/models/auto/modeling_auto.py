@@ -23,6 +23,8 @@ from transformers.models.auto.modeling_auto import (
     MODEL_FOR_DEPTH_ESTIMATION_MAPPING_NAMES,
     MODEL_FOR_IMAGE_CLASSIFICATION_MAPPING,
     MODEL_FOR_IMAGE_CLASSIFICATION_MAPPING_NAMES,
+    MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING,
+    MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING_NAMES,
     MODEL_FOR_MASKED_LM_MAPPING,
     MODEL_FOR_MASKED_LM_MAPPING_NAMES,
     MODEL_FOR_OBJECT_DETECTION_MAPPING,
@@ -35,8 +37,12 @@ from transformers.models.auto.modeling_auto import (
     MODEL_FOR_SEQUENCE_CLASSIFICATION_MAPPING_NAMES,
     MODEL_FOR_SPEECH_SEQ_2_SEQ_MAPPING,
     MODEL_FOR_SPEECH_SEQ_2_SEQ_MAPPING_NAMES,
+    MODEL_FOR_TEXT_ENCODING_MAPPING,
+    MODEL_FOR_TEXT_ENCODING_MAPPING_NAMES,
     MODEL_FOR_VISION_2_SEQ_MAPPING,
     MODEL_FOR_VISION_2_SEQ_MAPPING_NAMES,
+    MODEL_FOR_ZERO_SHOT_OBJECT_DETECTION_MAPPING,
+    MODEL_FOR_ZERO_SHOT_OBJECT_DETECTION_MAPPING_NAMES,
     MODEL_MAPPING,
     MODEL_MAPPING_NAMES,
 )
@@ -92,6 +98,11 @@ class RBLNAutoModelForVision2Seq(_BaseAutoModelClass):
     _model_mapping_names = MODEL_FOR_VISION_2_SEQ_MAPPING_NAMES
 
 
+class RBLNAutoModelForImageTextToText(_BaseAutoModelClass):
+    _model_mapping = MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING
+    _model_mapping_names = MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING_NAMES
+
+
 class RBLNAutoModelForMaskedLM(_BaseAutoModelClass):
     _model_mapping = MODEL_FOR_MASKED_LM_MAPPING
     _model_mapping_names = MODEL_FOR_MASKED_LM_MAPPING_NAMES
@@ -115,3 +126,13 @@ class RBLNAutoModelForQuestionAnswering(_BaseAutoModelClass):
 class RBLNAutoModelForObjectDetection(_BaseAutoModelClass):
     _model_mapping = MODEL_FOR_OBJECT_DETECTION_MAPPING
     _model_mapping_names = MODEL_FOR_OBJECT_DETECTION_MAPPING_NAMES
+
+
+class RBLNAutoModelForTextEncoding(_BaseAutoModelClass):
+    _model_mapping = MODEL_FOR_TEXT_ENCODING_MAPPING
+    _model_mapping_names = MODEL_FOR_TEXT_ENCODING_MAPPING_NAMES
+
+
+class RBLNAutoModelForZeroShotObjectDetection(_BaseAutoModelClass):
+    _model_mapping = MODEL_FOR_ZERO_SHOT_OBJECT_DETECTION_MAPPING
+    _model_mapping_names = MODEL_FOR_ZERO_SHOT_OBJECT_DETECTION_MAPPING_NAMES

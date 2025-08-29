@@ -22,10 +22,11 @@ from rebel.compile_context import CompileContext
 from transformers import AutoModelForSeq2SeqLM, PretrainedConfig, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutput, Seq2SeqLMOutput
 
+from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
-from ....modeling_config import RBLNCompileConfig, RBLNConfig
 from ....utils.logging import get_logger
 from ....utils.runtime_utils import RBLNPytorchRuntime
+from .configuration_seq2seq import RBLNModelForSeq2SeqLMConfig
 
 
 logger = get_logger(__name__)
@@ -37,7 +38,7 @@ if TYPE_CHECKING:
 class RBLNRuntimeEncoder(RBLNPytorchRuntime):
     mandatory_members = ["main_input_name"]
 
-    def forward(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
+    def forward(self, *args: List[torch.Tensor], **kwargs: torch.Tensor):
         output = super().forward(*args, **kwargs)
         return BaseModelOutput(last_hidden_state=output)
 
@@ -118,9 +119,9 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
     support_causal_attn = None
 
     def __post_init__(self, **kwargs):
-        batch_size = self.rbln_config.model_cfg["batch_size"]
-        dec_max_seq_len = self.rbln_config.model_cfg["dec_max_seq_len"]
-        self.use_attention_mask = self.rbln_config.model_cfg.get("use_attention_mask", None)
+        batch_size = self.rbln_config.batch_size
+        dec_max_seq_len = self.rbln_config.dec_max_seq_len
+        self.use_attention_mask = self.rbln_config.use_attention_mask
 
         self.encoder = RBLNRuntimeEncoder(
             runtime=self.model[0],
@@ -136,7 +137,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
 
     @classmethod
     @torch.inference_mode()
-    def get_compiled_model(cls, model: PreTrainedModel, rbln_config: RBLNConfig):
+    def get_compiled_model(cls, model: PreTrainedModel, rbln_config: RBLNModelForSeq2SeqLMConfig):
         wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
 
         enc_compile_config = rbln_config.compile_cfgs[0]
@@ -160,16 +161,20 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
             if "key_value_states" in name:
                 context.mark_static_address(tensor)
 
-        compiled_encoder = super().compile(
+        compiled_encoder = cls.compile(
             wrapped_model.encoder,
             enc_compile_config,
+            create_runtimes=rbln_config.create_runtimes,
+            device=rbln_config.device,
             example_inputs=enc_example_inputs,
             compile_context=context,
         )
 
-        compiled_decoder = super().compile(
+        compiled_decoder = cls.compile(
             wrapped_model.decoder,
             dec_compile_config,
+            create_runtimes=rbln_config.create_runtimes,
+            device=rbln_config.device,
             example_inputs=dec_example_inputs,
             compile_context=context,
         )
@@ -177,26 +182,30 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
         return {"encoder": compiled_encoder, "decoder": compiled_decoder}
 
     @classmethod
-    def _get_rbln_config(
+    def _update_paged_attention_config(cls, model_config: PretrainedConfig, rbln_config: RBLNModelForSeq2SeqLMConfig):
+        rbln_config.kvcache_num_blocks = rbln_config.kvcache_num_blocks or rbln_config.batch_size
+        rbln_config.kvcache_block_size = rbln_config.kvcache_block_size or rbln_config.dec_max_seq_len
+
+        if rbln_config.kvcache_num_blocks != rbln_config.batch_size:
+            raise NotImplementedError(
+                f"kvcache_num_blocks ({rbln_config.kvcache_num_blocks}) must be equal to batch_size ({rbln_config.batch_size}) as flash attention is not supported yet."
+            )
+
+        if rbln_config.kvcache_block_size != rbln_config.dec_max_seq_len:
+            raise NotImplementedError(
+                f"kvcache_block_size ({rbln_config.kvcache_block_size}) must be equal to dec_max_seq_len ({rbln_config.dec_max_seq_len}) as flash attention is not supported yet."
+            )
+
+    @classmethod
+    def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
-        model_config: "PretrainedConfig",
-        rbln_kwargs: Dict[str, Any] = {},
-    ) -> RBLNConfig:
-        rbln_enc_max_seq_len = rbln_kwargs.get("enc_max_seq_len", None)
-        rbln_dec_max_seq_len = rbln_kwargs.get("dec_max_seq_len", None)
-        rbln_batch_size = rbln_kwargs.get("batch_size", None)
-        rbln_batch_size = 1 if rbln_batch_size is None else rbln_batch_size
-
-        if cls.support_causal_attn:
-            rbln_use_attention_mask = rbln_kwargs.get("use_attention_mask", None)
-            if rbln_use_attention_mask is None:
-                rbln_use_attention_mask = False
-                rbln_npu = rbln_kwargs.get("npu", None) or rebel.get_npu_name()
-                if rbln_npu == "RBLN-CA02":
-                    rbln_use_attention_mask = True
-        else:
-            rbln_use_attention_mask = True
+        model: Optional["PreTrainedModel"] = None,
+        model_config: Optional["PretrainedConfig"] = None,
+        rbln_config: Optional[RBLNModelForSeq2SeqLMConfig] = None,
+    ) -> RBLNModelForSeq2SeqLMConfig:
+        if not cls.support_causal_attn:
+            rbln_config.use_attention_mask = True
 
         n_layer = getattr(model_config, "decoder_layers", None) or getattr(model_config, "num_layers")
         n_head = getattr(model_config, "decoder_attention_heads", None) or getattr(model_config, "num_heads")
@@ -210,43 +219,47 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
             model_config, "max_position_embeddings", None
         )
 
-        rbln_pad_token_id = getattr(model_config, "pad_token_id", None)
-        if rbln_pad_token_id is None:
-            rbln_pad_token_id = getattr(model_config, "bos_token_id", None)
-            if rbln_pad_token_id is None:
-                rbln_pad_token_id = getattr(model_config, "eos_token_id", None)
-                if rbln_pad_token_id is None:
-                    rbln_pad_token_id = -1
+        pad_token_id = getattr(model_config, "pad_token_id", None)
+        pad_token_id = pad_token_id or getattr(model_config, "bos_token_id", None)
+        pad_token_id = pad_token_id or getattr(model_config, "eos_token_id", None)
+        pad_token_id = pad_token_id or -1
+        rbln_config.pad_token_id = pad_token_id
 
-        if rbln_enc_max_seq_len is None:
-            rbln_enc_max_seq_len = max_position_embeddings
-            if rbln_enc_max_seq_len is None:
-                for tokenizer in preprocessors:
-                    if hasattr(tokenizer, "model_max_length"):
-                        rbln_enc_max_seq_len = tokenizer.model_max_length
-                        break
-                if rbln_enc_max_seq_len is None:
-                    raise ValueError("`rbln_enc_max_seq_len` should be specified!")
-        if max_position_embeddings is not None and rbln_enc_max_seq_len > max_position_embeddings:
-            raise ValueError("`rbln_enc_max_seq_len` should be less or equal than max_position_embeddings!")
+        if rbln_config.enc_max_seq_len is None:
+            enc_max_seq_len = max_position_embeddings
+            for tokenizer in preprocessors:
+                if hasattr(tokenizer, "model_max_length"):
+                    enc_max_seq_len = enc_max_seq_len or tokenizer.model_max_length
+                    break
 
-        if rbln_dec_max_seq_len is None:
-            rbln_dec_max_seq_len = max_position_embeddings
-            if rbln_dec_max_seq_len is None:
-                for tokenizer in preprocessors:
-                    if hasattr(tokenizer, "model_max_length"):
-                        rbln_dec_max_seq_len = tokenizer.model_max_length
-                        break
-                if rbln_dec_max_seq_len is None:
-                    raise ValueError("`rbln_dec_max_seq_len` should be specified!")
+            if enc_max_seq_len is None:
+                raise ValueError("`enc_max_seq_len` should be specified!")
+            rbln_config.enc_max_seq_len = enc_max_seq_len
 
-        if max_position_embeddings is not None and rbln_dec_max_seq_len > max_position_embeddings:
-            raise ValueError("`rbln_dec_max_seq_len` should be less or equal than max_position_embeddings!")
+        if max_position_embeddings is not None and rbln_config.enc_max_seq_len > max_position_embeddings:
+            raise ValueError("`enc_max_seq_len` should be less or equal than max_position_embeddings!")
+
+        if rbln_config.dec_max_seq_len is None:
+            dec_max_seq_len = max_position_embeddings
+            for tokenizer in preprocessors:
+                if hasattr(tokenizer, "model_max_length"):
+                    dec_max_seq_len = dec_max_seq_len or tokenizer.model_max_length
+                    break
+
+            if dec_max_seq_len is None:
+                raise ValueError("`dec_max_seq_len` should be specified!")
+            rbln_config.dec_max_seq_len = dec_max_seq_len
+
+        if max_position_embeddings is not None and rbln_config.dec_max_seq_len > max_position_embeddings:
+            raise ValueError("`dec_max_seq_len` should be less or equal than max_position_embeddings!")
+
+        if rbln_config.support_paged_attention:
+            cls._update_paged_attention_config(model_config, rbln_config)
 
         # model input info
         enc_input_info = [
-            ("input_ids", [1, rbln_enc_max_seq_len], "int64"),
-            ("attention_mask", [1, rbln_enc_max_seq_len], "float32"),
+            ("input_ids", [1, rbln_config.enc_max_seq_len], "int64"),
+            ("attention_mask", [1, rbln_config.enc_max_seq_len], "float32"),
             ("block_tables", [1], "int16"),
         ]
         enc_input_info.extend(
@@ -254,9 +267,9 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
                 (
                     f"cross_key_value_states_{i}",
                     [
-                        rbln_batch_size,
+                        rbln_config.batch_size,
                         n_head,
-                        rbln_enc_max_seq_len,
+                        rbln_config.enc_max_seq_len,
                         d_kv,
                     ],
                     "float32",
@@ -266,23 +279,23 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
         )
 
         dec_input_info = [
-            ("input_ids", [rbln_batch_size, 1], "int64"),
-            ("encoder_attention_mask", [rbln_batch_size, rbln_enc_max_seq_len], "float32"),
+            ("input_ids", [rbln_config.batch_size, 1], "int64"),
+            ("encoder_attention_mask", [rbln_config.batch_size, rbln_config.enc_max_seq_len], "float32"),
             (
                 "cache_position",
-                [rbln_batch_size, 1],
+                [rbln_config.batch_size, 1],
                 "int32",
             ),
-            ("block_tables", [rbln_batch_size, 1], "int16"),
+            ("block_tables", [rbln_config.batch_size, 1], "int16"),
         ]
         dec_input_info.extend(
             [
                 (
                     f"cross_key_value_states_{i}",
                     [
-                        rbln_batch_size,
+                        rbln_config.batch_size,
                         n_head,
-                        rbln_enc_max_seq_len,
+                        rbln_config.enc_max_seq_len,
                         d_kv,
                     ],
                     "float32",
@@ -295,9 +308,9 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
                 (
                     f"self_key_value_states_{i}",
                     [
-                        rbln_batch_size,
+                        rbln_config.batch_size,
                         n_head,
-                        rbln_dec_max_seq_len,
+                        rbln_config.dec_max_seq_len,
                         d_kv,
                     ],
                     "float32",
@@ -306,27 +319,15 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
             ]
         )
 
-        if rbln_use_attention_mask:
-            dec_input_info.insert(1, ("attention_mask", [rbln_batch_size, rbln_dec_max_seq_len], "float32"))
+        if rbln_config.use_attention_mask:
+            dec_input_info.insert(
+                1, ("attention_mask", [rbln_config.batch_size, rbln_config.dec_max_seq_len], "float32")
+            )
 
         enc_compile_config = RBLNCompileConfig(compiled_model_name="encoder", input_info=enc_input_info)
         dec_compile_config = RBLNCompileConfig(compiled_model_name="decoder", input_info=dec_input_info)
 
-        rbln_config = RBLNConfig(
-            rbln_cls=cls.__name__,
-            compile_cfgs=[enc_compile_config, dec_compile_config],
-            rbln_kwargs=rbln_kwargs,
-        )
-
-        rbln_config.model_cfg.update(
-            {
-                "enc_max_seq_len": rbln_enc_max_seq_len,
-                "dec_max_seq_len": rbln_dec_max_seq_len,
-                "batch_size": rbln_batch_size,
-                "pad_token_id": rbln_pad_token_id,
-                "use_attention_mask": rbln_use_attention_mask,
-            }
-        )
+        rbln_config.set_compile_cfgs([enc_compile_config, dec_compile_config])
 
         return rbln_config
 
@@ -334,18 +335,25 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
     def _create_runtimes(
         cls,
         compiled_models: List[rebel.RBLNCompiledModel],
-        rbln_device_map: Dict[str, int],
-        activate_profiler: Optional[bool] = None,
+        rbln_config: RBLNModelForSeq2SeqLMConfig,
     ) -> List[rebel.Runtime]:
-        if any(model_name not in rbln_device_map for model_name in ["encoder", "decoder"]):
+        if any(model_name not in rbln_config.device_map for model_name in ["encoder", "decoder"]):
             cls._raise_missing_compiled_file_error(["encoder", "decoder"])
 
         return [
-            compiled_models[0].create_runtime(
-                tensor_type="pt", device=rbln_device_map["encoder"], activate_profiler=activate_profiler
+            rebel.Runtime(
+                compiled_models[0],
+                tensor_type="pt",
+                device=rbln_config.device_map["encoder"],
+                activate_profiler=rbln_config.activate_profiler,
+                timeout=rbln_config.timeout,
             ),
-            compiled_models[1].create_runtime(
-                tensor_type="pt", device=rbln_device_map["decoder"], activate_profiler=activate_profiler
+            rebel.Runtime(
+                compiled_models[1],
+                tensor_type="pt",
+                device=rbln_config.device_map["decoder"],
+                activate_profiler=rbln_config.activate_profiler,
+                timeout=rbln_config.timeout,
             ),
         ]
 
@@ -367,7 +375,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
     ):
         cur_seq_len = input_ids.shape[-1]
         cache_position = cur_seq_len - 1
-        max_seq_len = self.rbln_config.model_cfg["dec_max_seq_len"]
+        max_seq_len = self.rbln_config.dec_max_seq_len
         decoder_batch_size = input_ids.shape[0]
         input_ids = input_ids[:, cur_seq_len - 1 : cur_seq_len].contiguous()
         decoder_attention_mask = torch.zeros(decoder_batch_size, max_seq_len, dtype=torch.float32)
@@ -387,7 +395,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
         # common decoder
-        cache_position = torch.full((self.rbln_config.model_cfg["batch_size"], 1), cache_position, dtype=torch.int32)
+        cache_position = torch.full((self.rbln_config.batch_size, 1), cache_position, dtype=torch.int32)
         logits = self.decoder(decoder_input_ids=decoder_input_ids, cache_position=cache_position, **kwargs).logits
 
         return Seq2SeqLMOutput(
@@ -421,11 +429,11 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
         batch_size, input_len = inputs_tensor.shape
         inputs_tensor = torch.nn.functional.pad(
             inputs_tensor,
-            (0, self.rbln_config.model_cfg["enc_max_seq_len"] - input_len),
-            value=self.rbln_config.model_cfg["pad_token_id"],
+            (0, self.rbln_config.enc_max_seq_len - input_len),
+            value=self.rbln_config.pad_token_id,
         )
         model_kwargs["attention_mask"] = torch.nn.functional.pad(
-            model_kwargs["attention_mask"], (0, self.rbln_config.model_cfg["enc_max_seq_len"] - input_len)
+            model_kwargs["attention_mask"], (0, self.rbln_config.enc_max_seq_len - input_len)
         )
 
         # 3. make sure that encoder returns `ModelOutput`

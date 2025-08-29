@@ -12,4 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .modeling_phi import RBLNPhiForCausalLM
+from .configuration_phi import RBLNPhiForCausalLMConfig, RBLNPhiModelConfig
+from .modeling_phi import RBLNPhiForCausalLM, RBLNPhiModel

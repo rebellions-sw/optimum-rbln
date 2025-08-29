@@ -14,9 +14,18 @@
 
 from diffusers import StableDiffusion3Pipeline
 
+from ...configurations import RBLNStableDiffusion3PipelineConfig
 from ...modeling_diffusers import RBLNDiffusionMixin
 
 
 class RBLNStableDiffusion3Pipeline(RBLNDiffusionMixin, StableDiffusion3Pipeline):
+    """
+    RBLN-accelerated implementation of Stable Diffusion 3 pipeline for advanced text-to-image generation.
+
+    This pipeline compiles Stable Diffusion 3 models to run efficiently on RBLN NPUs, enabling high-performance
+    inference with improved text understanding, enhanced image quality, and superior prompt adherence.
+    """
+
     original_class = StableDiffusion3Pipeline
+    _rbln_config_class = RBLNStableDiffusion3PipelineConfig
     _submodules = ["transformer", "text_encoder_3", "text_encoder", "text_encoder_2", "vae"]

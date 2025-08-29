@@ -13,4 +13,5 @@
 # limitations under the License.
 
 from ....ops import paged_add_softmax_attn_decode
+from .configuration_t5 import RBLNT5EncoderModelConfig, RBLNT5ForConditionalGenerationConfig
 from .modeling_t5 import RBLNT5EncoderModel, RBLNT5ForConditionalGeneration

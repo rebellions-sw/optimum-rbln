@@ -12,59 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 from pathlib import Path
 from typing import List, Optional, Union
 
-from huggingface_hub import HfApi, HfFolder, hf_hub_download
-
-
-class PushToHubMixin:
-    def push_to_hub(
-        self,
-        save_directory: str,
-        repository_id: str,
-        private: Optional[bool] = None,
-        use_auth_token: Union[bool, str] = True,
-    ) -> str:
-        huggingface_token = _get_huggingface_token(use_auth_token)
-        api = HfApi()
-
-        api.create_repo(
-            token=huggingface_token,
-            repo_id=repository_id,
-            exist_ok=True,
-            private=private,
-        )
-        for path, subdirs, files in os.walk(save_directory):
-            for name in files:
-                local_file_path = os.path.join(path, name)
-                _, hub_file_path = os.path.split(local_file_path)
-                # FIXME: when huggingface_hub fixes the return of upload_file
-                try:
-                    api.upload_file(
-                        token=huggingface_token,
-                        repo_id=f"{repository_id}",
-                        path_or_fileobj=os.path.join(os.getcwd(), local_file_path),
-                        path_in_repo=hub_file_path,
-                    )
-                except KeyError:
-                    pass
-                except NameError:
-                    pass
+from huggingface_hub import HfApi, get_token, hf_hub_download
 
 
 def pull_compiled_model_from_hub(
     model_id: Union[str, Path],
     subfolder: str,
-    use_auth_token: Optional[Union[bool, str]],
+    token: Union[bool, str],
     revision: Optional[str],
     cache_dir: Optional[str],
     force_download: bool,
     local_files_only: bool,
 ) -> Path:
-    """Pull model files from the Hugging Face Hub."""
-    huggingface_token = _get_huggingface_token(use_auth_token)
+    """Pull model files from the HuggingFace Hub."""
+    huggingface_token = _get_huggingface_token(token)
     repo_files = list(
         map(
             Path,
@@ -87,7 +51,7 @@ def pull_compiled_model_from_hub(
             repo_id=model_id,
             filename=filename,
             subfolder=subfolder,
-            use_auth_token=use_auth_token,
+            token=token,
             revision=revision,
             cache_dir=cache_dir,
             force_download=force_download,
@@ -113,10 +77,7 @@ def validate_files(
         raise FileExistsError(f"Multiple rbln_config.json files found in {location}. This is not expected.")
 
 
-def _get_huggingface_token(use_auth_token: Union[bool, str]) -> str:
-    if isinstance(use_auth_token, str):
-        return use_auth_token
-    elif use_auth_token:
-        return HfFolder.get_token()
-    else:
-        raise ValueError("`use_auth_token` must be provided to interact with the Hugging Face Hub.")
+def _get_huggingface_token(token: Union[bool, str]) -> str:
+    if isinstance(token, str):
+        return token
+    return get_token()

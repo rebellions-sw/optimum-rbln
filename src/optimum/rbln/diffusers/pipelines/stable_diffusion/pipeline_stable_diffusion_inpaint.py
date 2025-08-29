@@ -14,9 +14,18 @@
 
 from diffusers import StableDiffusionInpaintPipeline
 
+from ...configurations import RBLNStableDiffusionInpaintPipelineConfig
 from ...modeling_diffusers import RBLNDiffusionMixin
 
 
 class RBLNStableDiffusionInpaintPipeline(RBLNDiffusionMixin, StableDiffusionInpaintPipeline):
+    """
+    RBLN-accelerated implementation of Stable Diffusion pipeline for image inpainting.
+
+    This pipeline compiles Stable Diffusion models to run efficiently on RBLN NPUs, enabling high-performance
+    inference for filling masked regions of images based on text prompts with seamless integration.
+    """
+
     original_class = StableDiffusionInpaintPipeline
+    _rbln_config_class = RBLNStableDiffusionInpaintPipelineConfig
     _submodules = ["text_encoder", "unet", "vae"]
