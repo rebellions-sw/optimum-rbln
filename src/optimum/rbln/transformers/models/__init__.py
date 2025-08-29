@@ -175,21 +175,6 @@ _import_structure = {
         "RBLNGroundingDinoDecoder",
         "RBLNGroundingDinoDecoderConfig",
     ],
-    "dpt": ["RBLNDPTForDepthEstimation"],
-    "exaone": ["RBLNExaoneForCausalLM"],
-    "gemma": ["RBLNGemmaForCausalLM"],
-    "gpt2": ["RBLNGPT2LMHeadModel"],
-    "llama": ["RBLNLlamaForCausalLM"],
-    "llava_next": ["RBLNLlavaNextForConditionalGeneration"],
-    "midm": ["RBLNMidmLMHeadModel"],
-    "mistral": ["RBLNMistralForCausalLM"],
-    "phi": ["RBLNPhiForCausalLM"],
-    "qwen2": ["RBLNQwen2ForCausalLM"],
-    "time_series_transformers": ["RBLNTimeSeriesTransformerForPrediction"],
-    "t5": ["RBLNT5EncoderModel", "RBLNT5ForConditionalGeneration"],
-    "wav2vec2": ["RBLNWav2Vec2ForCTC"],
-    "whisper": ["RBLNWhisperForConditionalGeneration"],
-    "xlm_roberta": ["RBLNXLMRobertaModel"],
     "detr": ["RBLNDetrForObjectDetection"],
 }
 
@@ -253,6 +238,7 @@ if TYPE_CHECKING:
         RBLNDecoderOnlyModelForCausalLMConfig,
     )
     from .depth_anything import RBLNDepthAnythingForDepthEstimation, RBLNDepthAnythingForDepthEstimationConfig
+    from .detr import RBLNDetrForObjectDetection
     from .distilbert import RBLNDistilBertForQuestionAnswering, RBLNDistilBertForQuestionAnsweringConfig
     from .dpt import RBLNDPTForDepthEstimation, RBLNDPTForDepthEstimationConfig
     from .exaone import RBLNExaoneForCausalLM, RBLNExaoneForCausalLMConfig
@@ -319,6 +305,7 @@ if TYPE_CHECKING:
         RBLNTimeSeriesTransformerForPrediction,
         RBLNTimeSeriesTransformerForPredictionConfig,
     )
+    from .time_series_transformers import RBLNTimeSeriesTransformerForPrediction
     from .vit import RBLNViTForImageClassification, RBLNViTForImageClassificationConfig
     from .wav2vec2 import RBLNWav2Vec2ForCTC, RBLNWav2Vec2ForCTCConfig
     from .whisper import RBLNWhisperForConditionalGeneration, RBLNWhisperForConditionalGenerationConfig
@@ -328,22 +315,6 @@ if TYPE_CHECKING:
         RBLNXLMRobertaModel,
         RBLNXLMRobertaModelConfig,
     )
-    from .detr import RBLNDetrForObjectDetection
-    from .dpt import RBLNDPTForDepthEstimation
-    from .exaone import RBLNExaoneForCausalLM
-    from .gemma import RBLNGemmaForCausalLM
-    from .gpt2 import RBLNGPT2LMHeadModel
-    from .llama import RBLNLlamaForCausalLM
-    from .llava_next import RBLNLlavaNextForConditionalGeneration
-    from .midm import RBLNMidmLMHeadModel
-    from .mistral import RBLNMistralForCausalLM
-    from .phi import RBLNPhiForCausalLM
-    from .qwen2 import RBLNQwen2ForCausalLM
-    from .t5 import RBLNT5EncoderModel, RBLNT5ForConditionalGeneration
-    from .time_series_transformers import RBLNTimeSeriesTransformerForPrediction
-    from .wav2vec2 import RBLNWav2Vec2ForCTC
-    from .whisper import RBLNWhisperForConditionalGeneration
-    from .xlm_roberta import RBLNXLMRobertaModel
 
 else:
     import sys
