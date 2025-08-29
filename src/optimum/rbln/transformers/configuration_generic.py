@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 from ..configuration_utils import RBLNModelConfig
 
@@ -25,7 +25,8 @@ class RBLNTransformerEncoderConfig(RBLNModelConfig):
         max_seq_len: Optional[int] = None,
         batch_size: Optional[int] = None,
         model_input_names: Optional[List[str]] = None,
-        **kwargs: Dict[str, Any],
+        model_input_shapes: Optional[List[Tuple[int, int]]] = None,
+        **kwargs: Any,
     ):
         """
         Args:
@@ -45,6 +46,7 @@ class RBLNTransformerEncoderConfig(RBLNModelConfig):
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
         self.model_input_names = model_input_names or self.rbln_model_input_names
+        self.model_input_shapes = model_input_shapes
 
 
 class RBLNImageModelConfig(RBLNModelConfig):
@@ -52,7 +54,7 @@ class RBLNImageModelConfig(RBLNModelConfig):
         self,
         image_size: Optional[Union[int, Tuple[int, int]]] = None,
         batch_size: Optional[int] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         """
         Args:
@@ -124,7 +126,7 @@ class RBLNModelForAudioClassificationConfig(RBLNModelConfig):
         batch_size: Optional[int] = None,
         max_length: Optional[int] = None,
         num_mel_bins: Optional[int] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         """
         Args:

@@ -18,29 +18,19 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple, Union
 
 import numpy as np
 import torch
-from transformers import (
-    AutoModelForVision2Seq,
-    LlavaNextForConditionalGeneration,
-    PretrainedConfig,
-    PreTrainedModel,
-)
+from transformers import AutoModelForVision2Seq, LlavaNextForConditionalGeneration, PretrainedConfig, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPooling
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyForCausalLMOutput
+from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyOutput
 
 
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import (
-        AutoFeatureExtractor,
-        AutoProcessor,
-        AutoTokenizer,
-        PretrainedConfig,
-    )
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
 
 
 class LoopVisionTower:
@@ -258,7 +248,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
 
     def _update_model_kwargs_for_generation(
         self,
-        outputs: RBLNDecoderOnlyForCausalLMOutput,
+        outputs: RBLNDecoderOnlyOutput,
         model_kwargs: Dict[str, Any],
         **kwargs,
     ) -> Dict[str, Any]:
@@ -359,7 +349,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         generate_idx: Optional[torch.Tensor] = None,
         batch_idx: Optional[int] = None,
         **kwargs,
-    ) -> Union[Tuple, RBLNDecoderOnlyForCausalLMOutput]:
+    ) -> Union[Tuple, RBLNDecoderOnlyOutput]:
         vision_feature_layer = (
             vision_feature_layer if vision_feature_layer is not None else self.config.vision_feature_layer
         )
@@ -418,7 +408,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
                 cache_position=cache_position,
             )
             logits = output.logits
-        return RBLNDecoderOnlyForCausalLMOutput(logits=logits, generate_idx=generate_idx)
+        return RBLNDecoderOnlyOutput(logits=logits, generate_idx=generate_idx)
 
     # Almost copied from : https://github.com/huggingface/transformers/blob/6b550462139655d488d4c663086a63e98713c6b9/src/transformers/models/llava_next/modeling_llava_next.py
     def pack_image_features(self, image_features, image_sizes, vision_feature_select_strategy, image_newline=None):

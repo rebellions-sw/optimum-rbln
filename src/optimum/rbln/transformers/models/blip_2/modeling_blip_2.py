@@ -35,11 +35,7 @@ from ....modeling import RBLNModel
 logger = logging.get_logger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import (
-        AutoFeatureExtractor,
-        AutoProcessor,
-        AutoTokenizer,
-    )
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
 
 
 class LoopProjector:
@@ -178,7 +174,12 @@ class RBLNBlip2QFormerModel(RBLNModel):
         return Blip2QFormerModelWrapper(model).eval()
 
     @classmethod
-    def _update_submodule_config(cls, model: "PreTrainedModel", rbln_config: "RBLNModelConfig") -> "RBLNModelConfig":
+    def _update_submodule_config(
+        cls,
+        model: "PreTrainedModel",
+        rbln_config: RBLNModelConfig,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+    ):
         if rbln_config.num_query_tokens is None:
             rbln_config.num_query_tokens = model.config.num_query_tokens
 

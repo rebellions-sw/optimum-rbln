@@ -16,40 +16,27 @@ import inspect
 from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 
 import torch
-from transformers import (
-    AutoModelForImageTextToText,
-    LlavaForConditionalGeneration,
-    PretrainedConfig,
-    PreTrainedModel,
-)
+from transformers import AutoModelForImageTextToText, LlavaForConditionalGeneration, PretrainedConfig, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPooling
 from transformers.models.llava.modeling_llava import LlavaCausalLMOutputWithPast
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyForCausalLMOutput
+from ...modeling_outputs import RBLNDecoderOnlyOutput
 
 
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import (
-        AutoFeatureExtractor,
-        AutoProcessor,
-        AutoTokenizer,
-        PretrainedConfig,
-    )
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
 
 
 class LoopVisionTower:
     def __init__(self, vision_tower: RBLNModel) -> None:
         self.vision_tower = vision_tower
 
-    def forward(self, *args, **kwargs):
-        pixel_values = args[0]
-        image_sizes = kwargs.pop("image_sizes", None)
-
+    def forward(self, pixel_values, image_sizes: Optional[torch.Tensor] = None, **kwargs):
         outputs = []
         for i in range(pixel_values.shape[0]):
             outputs.append(
@@ -114,6 +101,55 @@ class LoopProjector:
 
 
 class RBLNLlavaForConditionalGeneration(RBLNModel):
+    """
+    RBLNLlavaForConditionalGeneration is a multi-modal model that combines vision and language processing capabilities,
+    optimized for RBLN NPUs. It is designed for conditional generation tasks that involve both image and text inputs.
+    This model inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
+    Important Note:
+        This model includes a Large Language Model (LLM) as a submodule. For optimal performance, it is highly recommended to use
+        tensor parallelism for the language model. This can be achieved by using the `rbln_config` parameter in the
+        `from_pretrained` method. Refer to the `from_pretrained` documentation and the RBLNLlavaForConditionalGeneration class for details.
+    Examples:
+        ```python
+        from optimum.rbln import RBLNLlavaForConditionalGeneration
+        model = RBLNLlavaForConditionalGeneration.from_pretrained(
+            "llava-hf/llava-1.5-7b-hf",
+            export=True,
+            rbln_config={
+                "vision_tower": {"output_hidden_states": True},
+                "language_model": {
+                    "tensor_parallel_size": 4,
+                    "use_inputs_embeds": True,  # In Llava, language model must use inputs_embeds as input.
+                },
+            },
+        )
+        model.save_pretrained("compiled-llava-1.5-7b-hf")
+
+        # Using a RBLNLlavaForConditionalGenerationConfig instance (recommended for type checking)
+        from optimum.rbln import RBLNLlavaForConditionalGenerationConfig
+        vision_config = RBLNCLIPVisionModelConfig(
+            batch_size=1,
+            output_hidden_states=True
+        )
+        language_model_config = RBLNLlamaForCausalLMConfig(
+            batch_size=1,
+            max_seq_len=4096,
+            use_inputs_embeds=True,
+            tensor_parallel_size=4
+        )
+        llava_config = RBLNLlavaForConditionalGenerationConfig(
+            batch_size=1,
+            vision_tower=vision_config,
+            language_model=language_model_config
+        )
+        model = RBLNLlavaForConditionalGeneration.from_pretrained(
+            "llava-hf/llava-1.5-7b-hf",
+            export=True,
+            rbln_config=llava_config
+        )
+        ```
+    """
+
     auto_model_class = AutoModelForImageTextToText
     _rbln_submodules = [
         {"name": "vision_tower"},
@@ -161,6 +197,7 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
         model_config: Optional["PretrainedConfig"] = None,
         rbln_config: Optional[RBLNModelConfig] = None,
     ) -> RBLNModelConfig:
+        # support for pixtral that needs padding
         if hasattr(rbln_config.vision_tower, "max_image_size"):
             num_positions = (
                 rbln_config.vision_tower.batch_size
@@ -171,7 +208,10 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
 
         else:
             num_positions = (model_config.vision_config.image_size // model_config.vision_config.patch_size) ** 2 + 1
-            selected_image_feature_dim = num_positions - 1
+            if model_config.vision_feature_select_strategy == "default":
+                selected_image_feature_dim = num_positions - 1
+            else:
+                selected_image_feature_dim = num_positions
 
         input_info = [
             (
@@ -373,7 +413,7 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
         if not return_dict:
             return logits, generate_idx
         else:
-            return RBLNDecoderOnlyForCausalLMOutput(
+            return RBLNDecoderOnlyOutput(
                 logits=logits,
                 generate_idx=generate_idx,
             )

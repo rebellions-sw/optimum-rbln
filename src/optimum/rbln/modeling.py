@@ -78,7 +78,7 @@ class RBLNModel(RBLNBaseModel):
         rbln_config: Optional[Union[RBLNModelConfig, Dict]] = None,
         model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
         subfolder: str = "",
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ) -> "RBLNModel":
         """
         Converts and compiles a pre-trained HuggingFace library model into a RBLN model.
@@ -147,6 +147,7 @@ class RBLNModel(RBLNBaseModel):
                 model=model,
                 model_save_dir=save_dir,
                 rbln_config=rbln_config,
+                preprocessors=preprocessors,
                 **kwargs,
             )
         else:
@@ -241,7 +242,7 @@ class RBLNModel(RBLNBaseModel):
             for compiled_model in compiled_models
         ]
 
-    def forward(self, *args: Any, return_dict: Optional[bool] = None, **kwargs: Dict[str, Any]) -> Any:
+    def forward(self, *args: Any, return_dict: Optional[bool] = None, **kwargs: Any) -> Any:
         """
         Defines the forward pass of the RBLN model, providing a drop-in replacement for HuggingFace PreTrainedModel.
 

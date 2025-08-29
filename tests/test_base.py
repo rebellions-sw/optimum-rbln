@@ -5,6 +5,7 @@ import shutil
 import tempfile
 import unittest
 from enum import Enum
+from typing import Iterable
 
 import transformers
 from diffusers import DiffusionPipeline
@@ -22,6 +23,7 @@ class TestLevel(Enum):
     ESSENTIAL = 1
     DEFAULT = 2
     FULL = 3
+    DISABLED = 999
     UNKNOWN = -1
 
 
@@ -200,8 +202,13 @@ class BaseTest:
             if self.EXPECTED_OUTPUT:
                 from simphile import jaccard_similarity
 
-                similarity = jaccard_similarity(output, self.EXPECTED_OUTPUT)
-                self.assertGreater(similarity, 0.9)
+                if isinstance(self.EXPECTED_OUTPUT, str):
+                    similarity = jaccard_similarity(output, self.EXPECTED_OUTPUT)
+                    self.assertGreater(similarity, 0.9)
+                else:
+                    for o, e_o in zip(output, self.EXPECTED_OUTPUT):
+                        similarity = jaccard_similarity(o, e_o)
+                        self.assertGreater(similarity, 0.9)
 
         def _inner_test_save_load(self, tmpdir):
             with ContextRblnConfig(create_runtimes=False):
@@ -245,11 +252,20 @@ class BaseTest:
         def test_automap(self):
             if self.RBLN_AUTO_CLASS is None:
                 self.skipTest("Skipping test because RBLN_AUTO_CLASS is None")
-            assert self.RBLN_CLASS == self.RBLN_AUTO_CLASS.get_rbln_cls(
-                self.HF_MODEL_ID,
-                **self.RBLN_CLASS_KWARGS,
-                **self.HF_CONFIG_KWARGS,
-            )
+
+            if isinstance(self.RBLN_AUTO_CLASS, Iterable):
+                for auto_class in self.RBLN_AUTO_CLASS:
+                    assert self.RBLN_CLASS == auto_class.get_rbln_cls(
+                        self.HF_MODEL_ID,
+                        **self.RBLN_CLASS_KWARGS,
+                        **self.HF_CONFIG_KWARGS,
+                    )
+            else:
+                assert self.RBLN_CLASS == self.RBLN_AUTO_CLASS.get_rbln_cls(
+                    self.HF_MODEL_ID,
+                    **self.RBLN_CLASS_KWARGS,
+                    **self.HF_CONFIG_KWARGS,
+                )
 
         # check if this use a pipeline
         def test_infer_framework(self):
