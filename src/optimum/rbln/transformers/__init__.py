@@ -80,7 +80,7 @@ _import_structure = {
         "RBLNXLMRobertaModel",
         "RBLNMistralForCausalLM",
         "RBLNDetrForObjectDetection",
-        "RBLNDetrForObjectDetectionConfig"
+        "RBLNDetrForObjectDetectionConfig",
     ],
     "modeling_alias": [
         "RBLNASTForAudioClassification",
