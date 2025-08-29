@@ -305,7 +305,6 @@ if TYPE_CHECKING:
         RBLNTimeSeriesTransformerForPrediction,
         RBLNTimeSeriesTransformerForPredictionConfig,
     )
-    from .time_series_transformers import RBLNTimeSeriesTransformerForPrediction
     from .vit import RBLNViTForImageClassification, RBLNViTForImageClassificationConfig
     from .wav2vec2 import RBLNWav2Vec2ForCTC, RBLNWav2Vec2ForCTCConfig
     from .whisper import RBLNWhisperForConditionalGeneration, RBLNWhisperForConditionalGenerationConfig
