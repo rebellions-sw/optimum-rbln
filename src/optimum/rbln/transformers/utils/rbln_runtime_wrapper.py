@@ -44,12 +44,6 @@ class LoopProcessor(Module, ABC):
         if not isinstance(batch_size, int) or batch_size == 0:
             return self._process_outputs([])
 
-        if "out" in kwargs:
-            for i in range(batch_size):
-                item_args, item_kwargs = self._prepare_inputs_for_iteration(i, *args, **kwargs)
-                self.model(*item_args, **item_kwargs)
-            return self._process_outputs([], **kwargs)
-
         outputs = []
         for i in range(batch_size):
             item_args, item_kwargs = self._prepare_inputs_for_iteration(i, *args, **kwargs)

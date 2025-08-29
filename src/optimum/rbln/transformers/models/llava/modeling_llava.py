@@ -24,6 +24,7 @@ from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...modeling_outputs import RBLNDecoderOnlyOutput
+from ...utils.rbln_runtime_wrapper import LoopProcessor
 
 
 logger = get_logger(__name__)
@@ -32,20 +33,32 @@ if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
 
 
-class LoopVisionTower:
-    def __init__(self, vision_tower: RBLNModel) -> None:
-        self.vision_tower = vision_tower
+class LoopVisionTower(LoopProcessor):
+    def __init__(self, vision_tower):
+        # FIXME: need to know RBLNModel or RuntimeWrapper
+        if hasattr(vision_tower.model, "runtime"):
+            super().__init__(model=vision_tower)
+        else:
+            super().__init__(model=vision_tower.model[0])
 
-    def forward(self, pixel_values, image_sizes: Optional[torch.Tensor] = None, **kwargs):
-        outputs = []
-        for i in range(pixel_values.shape[0]):
-            outputs.append(
-                self.vision_tower(
-                    pixel_values[i : i + 1], image_sizes[i : i + 1] if image_sizes is not None else None, **kwargs
-                )
-            )
+        self.rbln_config = vision_tower.rbln_config
 
-        if hasattr(self.vision_tower.rbln_config, "max_image_size"):
+    def _get_batch_size(self, pixel_values, **kwargs):
+        return pixel_values.shape[0]
+
+    def _prepare_inputs_for_iteration(self, index, pixel_values, **kwargs):
+        pixel_values_item = pixel_values[index : index + 1]
+        if "image_sizes" in kwargs and kwargs["image_sizes"] is not None:
+            ret_val = [pixel_values_item, kwargs["image_sizes"][index : index + 1]]
+        else:
+            ret_val = [pixel_values_item]
+
+        out_buffer = [tensor[index : index + 1] for tensor in kwargs["out"]] if "out" in kwargs else None
+        return (ret_val, {"out": out_buffer})
+
+    def _process_outputs(self, outputs: list, **kwargs) -> "BaseModelOutputWithPooling":
+        # when use another Wrapper
+        if hasattr(self.rbln_config, "max_image_size"):
             last_hidden_states = [output.last_hidden_state for output in outputs]
             last_hidden_states = torch.cat(last_hidden_states, dim=1)
             hidden_states = tuple(
@@ -55,49 +68,37 @@ class LoopVisionTower:
                 )
                 for layer_idx in range(len(outputs[0].hidden_states))
             )
-
         else:
-            last_hidden_states = [output.last_hidden_state for output in outputs]
-            last_hidden_states = torch.cat(last_hidden_states, dim=0)
-            hidden_states = [output.hidden_states for output in outputs]
-            hidden_states = tuple(
-                torch.cat(tuple((hidden_states[n][i] for n in range(pixel_values.shape[0]))), dim=0)
-                for i in range(len(hidden_states[0]))
-            )
+            output = kwargs["out"]
+            last_hidden_states = output[0]
+
+            if not output[2:]:
+                hidden_states = None
+            else:
+                hidden_states = tuple(output[2:])
 
         return BaseModelOutputWithPooling(
             last_hidden_state=last_hidden_states,
+            pooler_output=None,
             hidden_states=hidden_states,
         )
 
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
-        return self.forward(*args, **kwds)
 
-    def __repr__(self) -> str:
-        return repr(self.vision_tower)
+class LoopProjector(LoopProcessor):
+    def __init__(self, multi_modal_projector: "RBLNModel"):
+        super().__init__(model=multi_modal_projector)
 
+    def _get_batch_size(self, image_feature, **kwargs):
+        return image_feature.shape[0]
 
-class LoopProjector:
-    def __init__(self, multi_modal_projector) -> None:
-        self.multi_modal_projector = multi_modal_projector
+    def _prepare_inputs_for_iteration(self, index, image_feature, **kwargs):
+        image_feature_item = image_feature[index : index + 1]
+        out_buffer = [tensor[index : index + 1] for tensor in kwargs["out"]]
+        return ([image_feature_item], {"out": out_buffer})
 
-    def forward(self, *args, **kwargs):
-        # Loop instead of batch
-        image_feature = args[0]
-
-        outputs = []
-        for i in range(image_feature.shape[0]):
-            outputs.append(self.multi_modal_projector(image_feature[i : i + 1]))
-
-        # FIXME:: This can be optimized using out= API of rbln runtime.
-        outputs = torch.cat(outputs, dim=0)
-        return outputs
-
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
-        return self.forward(*args, **kwds)
-
-    def __repr__(self) -> str:
-        return repr(self.multi_modal_projector)
+    def _process_outputs(self, outputs: list, **kwargs):
+        output = kwargs["out"]
+        return torch.cat(output, dim=0)
 
 
 class RBLNLlavaForConditionalGeneration(RBLNModel):
@@ -289,7 +290,31 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
             raise ValueError(f"Unexpected select feature strategy: {self.config.vision_feature_select_strategy}")
 
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
-        image_outputs = self.vision_tower(pixel_values, output_hidden_states=True, **kwargs)
+
+        # prepare out buffer for pre-allocation
+        if hasattr(self.rbln_config.vision_tower, "max_image_size"):
+            vision_out_size = [
+                pixel_values.shape[0],
+                (self.rbln_config.vision_tower.max_image_size[0] // self.config.vision_config.patch_size)
+                * (self.rbln_config.vision_tower.max_image_size[1] // self.config.vision_config.patch_size),
+                self.config.vision_config.hidden_size,
+            ]
+            pooler_out_size = None
+        else:
+            vision_out_size = [
+                pixel_values.shape[0],
+                (self.config.vision_config.image_size // self.config.vision_config.patch_size) ** 2 + 1,
+                self.config.vision_config.hidden_size,
+            ]
+            pooler_out_size = [pixel_values.shape[0], self.config.vision_config.hidden_size]
+
+        vision_out_buffer = []
+        for i in range(self.config.vision_config.num_hidden_layers + 2):
+            vision_out_buffer.append(torch.empty(size=vision_out_size, dtype=torch.float32, device="cpu"))
+        if pooler_out_size is not None:
+            vision_out_buffer.insert(1, torch.empty(size=pooler_out_size, dtype=torch.float32, device="cpu"))
+
+        image_outputs = self.vision_tower(pixel_values, output_hidden_states=True, out=vision_out_buffer, **kwargs)
 
         if isinstance(vision_feature_layer, int):
             selected_image_feature = image_outputs.hidden_states[vision_feature_layer]
@@ -302,6 +327,15 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
             selected_image_feature = torch.cat(hs_pool, dim=-1)
 
         if hasattr(self.rbln_config.vision_tower, "max_image_size"):
+            projector_out_size = [
+                pixel_values.shape[0],
+                (self.rbln_config.vision_tower.max_image_size[0] // self.config.vision_config.patch_size)
+                * (self.rbln_config.vision_tower.max_image_size[1] // self.config.vision_config.patch_size)
+                * pixel_values.shape[0],
+                self.config.text_config.hidden_size,
+            ]
+            projector_out_buffer = [torch.empty(size=projector_out_size, dtype=torch.float32, device="cpu")]
+
             num_real_patches = selected_image_feature.shape[1]
             max_patches = (
                 (self.rbln_config.vision_tower.max_image_size[0] // self.config.vision_config.patch_size)
@@ -315,10 +349,16 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
                 dtype=selected_image_feature.dtype,
             )
             padded_feature = torch.cat([selected_image_feature, padding_tensor], dim=1)
-            padded_projected_feature = self.multi_modal_projector(padded_feature)
+            padded_projected_feature = self.multi_modal_projector(padded_feature, out=projector_out_buffer)
             image_features = padded_projected_feature[:, :num_real_patches, :]
         else:
-            image_features = self.multi_modal_projector(selected_image_feature)
+            projector_out_size = [
+                pixel_values.shape[0] * pixel_values.shape[1],
+                (self.config.vision_config.image_size // self.config.vision_config.patch_size) ** 2,
+                self.config.vision_config.intermediate_size,
+            ]
+            projector_out_buffer = [torch.empty(size=projector_out_size, dtype=torch.float32, device="cpu")]
+            image_features = self.multi_modal_projector(selected_image_feature, out=projector_out_buffer)
 
         return image_features
 
