@@ -175,7 +175,7 @@ _import_structure = {
         "RBLNGroundingDinoDecoder",
         "RBLNGroundingDinoDecoderConfig",
     ],
-    "detr": ["RBLNDetrForObjectDetection"],
+    "detr": ["RBLNDetrForObjectDetection", "RBLNDetrForObjectDetectionConfig"],
 }
 
 if TYPE_CHECKING:
@@ -238,7 +238,7 @@ if TYPE_CHECKING:
         RBLNDecoderOnlyModelForCausalLMConfig,
     )
     from .depth_anything import RBLNDepthAnythingForDepthEstimation, RBLNDepthAnythingForDepthEstimationConfig
-    from .detr import RBLNDetrForObjectDetection
+    from .detr import RBLNDetrForObjectDetection, RBLNDetrForObjectDetectionConfig
     from .distilbert import RBLNDistilBertForQuestionAnswering, RBLNDistilBertForQuestionAnsweringConfig
     from .dpt import RBLNDPTForDepthEstimation, RBLNDPTForDepthEstimationConfig
     from .exaone import RBLNExaoneForCausalLM, RBLNExaoneForCausalLMConfig

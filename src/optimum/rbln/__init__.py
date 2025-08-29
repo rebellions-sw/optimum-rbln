@@ -55,6 +55,7 @@ _import_structure = {
         "RBLNBartModelConfig",
         "RBLNBertForMaskedLM",
         "RBLNDetrForObjectDetection",
+        "RBLNDetrForObjectDetectionConfig",
         "RBLNBertForMaskedLMConfig",
         "RBLNBertForQuestionAnswering",
         "RBLNBertForQuestionAnsweringConfig",
@@ -463,6 +464,8 @@ if TYPE_CHECKING:
         RBLNXLMRobertaForSequenceClassificationConfig,
         RBLNXLMRobertaModel,
         RBLNXLMRobertaModelConfig,
+        RBLNDetrForObjectDetection,
+        RBLNDetrForObjectDetectionConfig,
     )
 
 else:

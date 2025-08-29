@@ -27,6 +27,8 @@ _import_structure = {
         "RBLNAutoModelForCTC",
         "RBLNAutoModelForDepthEstimation",
         "RBLNAutoModelForImageClassification",
+        "RBLNAutoModelForObjectDetection",
+        "RBLNAutoModelForObjectDetectionConfig",
         "RBLNAutoModelForImageTextToText",
         "RBLNAutoModelForMaskedLM",
         "RBLNAutoModelForQuestionAnswering",
@@ -78,6 +80,7 @@ _import_structure = {
         "RBLNXLMRobertaModel",
         "RBLNMistralForCausalLM",
         "RBLNDetrForObjectDetection",
+        "RBLNDetrForObjectDetectionConfig"
     ],
     "modeling_alias": [
         "RBLNASTForAudioClassification",
@@ -240,6 +243,7 @@ if TYPE_CHECKING:
         RBLNDepthAnythingForDepthEstimation,
         RBLNDepthAnythingForDepthEstimationConfig,
         RBLNDetrForObjectDetection,
+        RBLNDetrForObjectDetectionConfig,
         RBLNDistilBertForQuestionAnswering,
         RBLNDistilBertForQuestionAnsweringConfig,
         RBLNDPTForDepthEstimation,
