@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, get_args, ge
 import rebel
 import torch
 from huggingface_hub.constants import HUGGINGFACE_HUB_CACHE
-from transformers import AutoConfig, PretrainedConfig
+from transformers import PretrainedConfig
 from transformers.modeling_outputs import BaseModelOutput
 
 from .configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNModelConfig
@@ -119,9 +119,6 @@ class RBLNModel(RBLNBaseModel):
         # Save configs
         if config is None:
             config = model.config
-            # remote_config
-            if hasattr(config, "auto_map") and "AutoConfig" in config.auto_map:
-                config = AutoConfig.from_pretrained(config._name_or_path, **kwargs)
 
         if hasattr(model, "can_generate") and model.can_generate():
             import json
