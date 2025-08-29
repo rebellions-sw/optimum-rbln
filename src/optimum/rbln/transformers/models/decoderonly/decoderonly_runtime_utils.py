@@ -398,6 +398,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
             if batch_idx is not None:
                 lora_int_ids = self.lora_int_ids[batch_idx : batch_idx + 1].clone()
+            else:
+                lora_int_ids = self.lora_int_ids.clone()
 
         (
             inputs,
