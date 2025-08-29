@@ -29,6 +29,7 @@ from transformers import (
     AutoModelForDepthEstimation,
     AutoModelForImageClassification,
     AutoModelForMaskedLM,
+    AutoModelForObjectDetection,
     AutoModelForQuestionAnswering,
     AutoModelForSequenceClassification,
     AutoModelForTextEncoding,
@@ -240,6 +241,10 @@ class RBLNTransformerEncoderForFeatureExtraction(RBLNTransformerEncoder):
 
 class RBLNModelForImageClassification(RBLNImageModel):
     auto_model_class = AutoModelForImageClassification
+
+
+class RBLNModelForObjectDetection(RBLNImageModel):
+    auto_model_class = AutoModelForObjectDetection
 
 
 class RBLNModelForDepthEstimation(RBLNImageModel):

@@ -120,6 +120,10 @@ class RBLNModelForDepthEstimationConfig(RBLNImageModelConfig):
     pass
 
 
+class RBLNModelForObjectDetectionConfig(RBLNImageModelConfig):
+    pass
+
+
 class RBLNModelForAudioClassificationConfig(RBLNModelConfig):
     def __init__(
         self,
