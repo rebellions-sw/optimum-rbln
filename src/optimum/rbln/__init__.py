@@ -370,6 +370,8 @@ if TYPE_CHECKING:
         RBLNDecoderOnlyModelForCausalLMConfig,
         RBLNDepthAnythingForDepthEstimation,
         RBLNDepthAnythingForDepthEstimationConfig,
+        RBLNDetrForObjectDetection,
+        RBLNDetrForObjectDetectionConfig,
         RBLNDistilBertForQuestionAnswering,
         RBLNDistilBertForQuestionAnsweringConfig,
         RBLNDPTForDepthEstimation,
@@ -464,8 +466,6 @@ if TYPE_CHECKING:
         RBLNXLMRobertaForSequenceClassificationConfig,
         RBLNXLMRobertaModel,
         RBLNXLMRobertaModelConfig,
-        RBLNDetrForObjectDetection,
-        RBLNDetrForObjectDetectionConfig,
     )
 
 else:
