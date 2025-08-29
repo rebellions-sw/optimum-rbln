@@ -16,6 +16,7 @@ from optimum.rbln import (
     RBLNAutoModelForVision2Seq,
     RBLNBartForConditionalGeneration,
     RBLNBlip2ForConditionalGeneration,
+    RBLNDecoderOnlyModel,
     RBLNExaoneForCausalLM,
     RBLNGemma3ForCausalLM,
     RBLNGemma3ForConditionalGeneration,
@@ -28,6 +29,7 @@ from optimum.rbln import (
     RBLNLlavaNextForConditionalGeneration,
     RBLNMistralForCausalLM,
     RBLNMistralModel,
+    RBLNModel,
     RBLNOPTForCausalLM,
     RBLNOPTModel,
     RBLNPegasusForConditionalGeneration,
@@ -60,7 +62,8 @@ class LLMTest:
 
         @classmethod
         def setUpClass(cls):
-            cls.HF_CONFIG_KWARGS["torch_dtype"] = "auto"
+            if issubclass(cls.RBLN_CLASS, RBLNModel) and cls.RBLN_CLASS._supports_non_fp32:
+                cls.HF_CONFIG_KWARGS["torch_dtype"] = "auto"
             super().setUpClass()
 
         @classmethod

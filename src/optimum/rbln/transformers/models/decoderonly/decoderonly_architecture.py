@@ -711,8 +711,6 @@ class DecoderOnlyAttention(nn.Module):
 
         if cos is not None and sin is not None:
             query_states, key_states = self.apply_rotary_pos_embed(query_states, key_states, cos, sin)
-            query_states = query_states.to(hidden_states.dtype)
-            key_states = key_states.to(hidden_states.dtype)
 
         if batch_size > 1 and "prefill" in self.phase:
             raise NotImplementedError(f"batch size should be 1 if prefill phase, but got {batch_size}.")
@@ -1118,8 +1116,11 @@ def rotate_half(x):
 
 def apply_rotary_pos_emb(q, k, cos, sin):
     """Applies Rotary Position Embedding to the query and key tensors."""
+    dtype = q.dtype
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
+    q_embed = q_embed.to(dtype)
+    k_embed = k_embed.to(dtype)
     return q_embed, k_embed
 
 
