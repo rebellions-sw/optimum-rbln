@@ -126,7 +126,14 @@ class T5Decoder(Seq2SeqDecoder):
         b_size = attention_mask.shape[0]
         batch_decoder_position_bias = []
         for i in range(b_size):
-            batch_position_bias = self._dec_position_bias[:, :, cache_position[i][0]].unsqueeze(2)
+            if torch.compiler.is_exporting():
+                cache_pos = cache_position[i][0].item()
+                torch._check_is_size(cache_pos)
+                torch._check(cache_pos >= 0)
+                torch._check(cache_pos < self._dec_position_bias.shape[2])
+            else:
+                cache_pos = cache_position[i][0]
+            batch_position_bias = torch.select(self._dec_position_bias, dim=2, index=cache_pos).unsqueeze(2)
             batch_decoder_position_bias.append(batch_position_bias)
         position_bias = torch.cat(batch_decoder_position_bias, dim=0)
 

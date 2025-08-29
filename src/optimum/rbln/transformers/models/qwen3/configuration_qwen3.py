@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
+from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelConfig, RBLNDecoderOnlyModelForCausalLMConfig
 
 
 class RBLNQwen3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
@@ -43,7 +43,7 @@ class RBLNQwen3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
     """
 
 
-class RBLNQwen3ModelConfig(RBLNDecoderOnlyModelForCausalLMConfig):
+class RBLNQwen3ModelConfig(RBLNDecoderOnlyModelConfig):
     """
     Configuration class for RBLN Qwen3 models.
 

@@ -12,37 +12,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import inspect
-from collections import deque
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
 import rebel
 import torch
 from rebel.compile_context import CompileContext
-from transformers import (
-    AutoModelForImageTextToText,
-    Gemma3ForConditionalGeneration,
-    PretrainedConfig,
-    PreTrainedModel,
-)
+from transformers import AutoModelForImageTextToText, Gemma3ForConditionalGeneration, PretrainedConfig, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPooling
 from transformers.modeling_utils import no_init_weights
 from transformers.models.gemma3.modeling_gemma3 import Gemma3TextScaledWordEmbedding
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
-from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyOutput, RBLNRuntimeModel
+from ...modeling_outputs import RBLNDecoderOnlyOutput
+from ..decoderonly.decoderonly_runtime_utils import RBLNPageTableManager
+from ..decoderonly.modeling_decoderonly import (
+    RBLNDecoderOnlyModelForCausalLM,
+)
 from .configuration_gemma3 import RBLNGemma3ForCausalLMConfig
 from .gemma3_architecture import Gemma3ForCausalLMWrapper
+from .gemma3_runtime_utils import RBLNGemma3RuntimeModel
 
 
 if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, Gemma3ForConditionalGeneration
-
-
-@dataclass
-class RBLNGemma3ForCausalLMOutput(RBLNDecoderOnlyOutput):
-    attention_mask: Optional[torch.Tensor] = None
 
 
 class LoopVisionTower:
@@ -254,17 +247,45 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
 
         return inputs_embeds
 
+    def get_padded_cache_position(
+        self,
+        cache_position: torch.Tensor,  # shape: [1, seq_len]
+        token_type_ids: torch.Tensor,  # shape: [1, seq_len]
+    ) -> torch.Tensor:
+        seq_len = cache_position[0][-1].item() + 1
+
+        # Find image start positions
+        image_starts = [
+            s
+            for s in torch.where(token_type_ids == 1)[1]
+            if torch.all(token_type_ids[:, s : s + self.rbln_config.image_prefill_chunk_size] == 1)
+        ]
+
+        # Initialize padded tensors
+        padded_input_len = seq_len
+        for image_start in image_starts:
+            pad_needed = (
+                self.rbln_config.image_prefill_chunk_size
+                - (image_start + padded_input_len - seq_len) % self.rbln_config.image_prefill_chunk_size
+            ) % self.rbln_config.image_prefill_chunk_size
+            padded_input_len += pad_needed
+
+        return torch.cat(
+            [cache_position, torch.arange(seq_len, padded_input_len, dtype=torch.int32).unsqueeze(0)],
+            dim=1,
+        )
+
     def forward(
         self,
         input_ids: torch.LongTensor = None,
+        attention_mask: torch.Tensor = None,
+        token_type_ids: torch.Tensor = None,
         pixel_values: torch.FloatTensor = None,
-        attention_mask: Optional[torch.Tensor] = None,
         cache_position: Optional[torch.LongTensor] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
         generate_idx: Optional[torch.Tensor] = None,
         padded_cache_lengths: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
-        token_type_ids: Optional[torch.Tensor] = None,
         **lm_kwargs: Dict[str, Any],
     ) -> Union[Tuple, RBLNDecoderOnlyOutput]:
         # prefill
@@ -275,12 +296,15 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
 
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
+                token_type_id = token_type_ids[b_idx : b_idx + 1, attention_mask[b_idx].bool()]
+                cache_position = self.get_padded_cache_position(cache_position, token_type_id)
+
                 output = self.language_model.prefill_decoder(
                     inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
                     attention_mask=attention_mask[b_idx],
                     cache_position=cache_position,
                     batch_idx=b_idx,
-                    token_type_ids=token_type_ids[b_idx : b_idx + 1] if token_type_ids is not None else None,
+                    token_type_ids=token_type_ids[b_idx : b_idx + 1],  # do not pass token_type_id
                 )
                 padded_cache_lengths[b_idx] += output.padded_cache_lengths
                 logits.append(output.logits)
@@ -309,209 +333,6 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         )
 
 
-class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
-    def __init__(self, *args, image_prefill: Optional[rebel.Runtime] = None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.image_prefill = image_prefill  # FIXME(taehoon)
-        self.prefill = self.runtime if self.phase == "prefill" else None  # FIXME
-        self.decode = self.runtime if self.phase == "decode" else None
-
-    def _prepare_prefill_inputs(self, *args, **kwargs):
-        (
-            inputs,
-            cache_position,
-            chunked_attention_mask,
-            out_buffers,
-            position_ids,
-            position_embed,
-            padded_cache_lengths,
-            query_length,
-            token_type_ids,
-        ) = super()._prepare_prefill_inputs(*args, **kwargs)
-
-        # chunked_attention_mask shape
-        chunked_attention_mask = torch.zeros(1, chunked_attention_mask.shape[-1], dtype=torch.float32)
-
-        # as gemma3 has different prefill chunk size for image and text, we need to pad the inputs to the max of the two.
-        padding_size = max(self.rbln_config.prefill_chunk_size, self.rbln_config.image_prefill_chunk_size)
-        inputs = torch.nn.functional.pad(inputs, (0, 0, 0, padding_size))
-        cache_position = torch.nn.functional.pad(cache_position, (0, padding_size))
-        position_ids = torch.nn.functional.pad(position_ids, (0, padding_size))
-        token_type_ids = torch.nn.functional.pad(token_type_ids, (0, padding_size), value=-1)
-
-        return (
-            inputs,
-            cache_position,
-            chunked_attention_mask,
-            out_buffers,
-            position_ids,
-            position_embed,
-            padded_cache_lengths,
-            query_length,
-            token_type_ids,
-        )
-
-    def prefill_forward(
-        self,
-        inputs: torch.Tensor,
-        cache_position: torch.Tensor = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        batch_idx: int = None,
-        block_tables: torch.Tensor = None,
-        is_external_block_tables: bool = None,
-        position_embed: Optional[torch.Tensor] = None,
-        token_type_ids: Optional[torch.Tensor] = None,
-        local_block_tables: Optional[torch.Tensor] = None,
-    ) -> torch.FloatTensor:
-        """
-        Performs chunked prefill for efficient KV-cache updates and memory optimization.
-        Instead of processing the entire sequence at once, the input is divided into chunks of size `prefill_chunk_size`,
-        and each chunk is processed sequentially. This allows for better memory utilization and compatibility with continuous batching.
-        """
-        (
-            inputs,
-            cache_position,
-            chunked_attention_mask,
-            out_buffers,
-            position_ids,
-            position_embed,
-            padded_cache_lengths,
-            query_length,
-            token_type_ids,
-        ) = self._prepare_prefill_inputs(
-            inputs, cache_position, attention_mask, position_embed, token_type_ids=token_type_ids
-        )
-
-        step = 0
-        while step < query_length:
-            # Check if the prefill chunk is an image prefill
-            is_image_prefill = torch.all(
-                token_type_ids[:, step : step + self.rbln_config.image_prefill_chunk_size] == 1
-            )
-            prefill_chunk_size = (
-                self.rbln_config.image_prefill_chunk_size if is_image_prefill else self.rbln_config.prefill_chunk_size
-            )
-
-            # Check if the prefill chunk is a text prefill which have image_tokens in it.
-            is_text_prefill_with_image_tokens = not is_image_prefill and torch.any(
-                token_type_ids[:, step : step + prefill_chunk_size] == 1
-            )
-
-            # Check if the prefill chunk crosses a block boundary, requiring padding to align with block boundaries
-            is_cross_block_boundary = (
-                step // self.rbln_config.kvcache_block_size
-                != (step + prefill_chunk_size) // self.rbln_config.kvcache_block_size
-            )
-
-            # Check if the prefill chunk is the last chunk
-            is_last_chunk = step + prefill_chunk_size >= query_length
-
-            if is_cross_block_boundary:
-                padding_size = prefill_chunk_size - (step + prefill_chunk_size) % self.rbln_config.kvcache_block_size
-                padded_cache_lengths += padding_size
-
-            # if text_prefill end with image_tokens, we only treat the text part.
-            num_processed_tokens = prefill_chunk_size
-            if is_text_prefill_with_image_tokens:
-                first_image_token_idx = torch.where(token_type_ids[:, step : step + prefill_chunk_size] == 1)[1][0]
-                num_processed_tokens = first_image_token_idx
-            if is_last_chunk:
-                num_processed_tokens = query_length - step
-
-            input_chunk = inputs[:, step : step + prefill_chunk_size]
-            cache_pos_chunk = cache_position[:, step : step + prefill_chunk_size].clone() + padded_cache_lengths
-            position_ids_chunk = position_ids[:, step : step + prefill_chunk_size].clone()
-            chunked_attention_mask[
-                :, step + padded_cache_lengths : step + num_processed_tokens + padded_cache_lengths
-            ] = 1
-            query_position = torch.tensor(num_processed_tokens - 1, dtype=torch.int16)
-
-            if is_image_prefill:
-                logits = self.image_prefill(
-                    input_chunk,
-                    cache_pos_chunk,
-                    block_tables,
-                    local_block_tables,
-                    query_position,
-                    chunked_attention_mask,
-                    position_ids_chunk,
-                    out=out_buffers,
-                )
-            else:
-                logits = self.prefill(
-                    input_chunk,
-                    cache_pos_chunk,
-                    block_tables,
-                    local_block_tables,
-                    query_position,
-                    chunked_attention_mask,
-                    position_ids_chunk,
-                    out=out_buffers,
-                )
-
-            step += num_processed_tokens
-
-        if not is_external_block_tables:
-            self.dec_attn_mask[batch_idx : batch_idx + 1] = chunked_attention_mask
-
-        return RBLNGemma3ForCausalLMOutput(
-            logits=logits, padded_cache_lengths=padded_cache_lengths, attention_mask=chunked_attention_mask
-        )
-
-    def decode_forward(
-        self,
-        inputs: torch.Tensor,
-        cache_position: torch.Tensor = None,
-        block_tables: torch.Tensor = None,
-        is_external_block_tables: bool = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_embed: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.Tensor] = None,
-        local_block_tables: Optional[torch.Tensor] = None,
-    ) -> torch.FloatTensor:
-        batch_size = inputs.shape[0]
-        if batch_size != self.batch_size:
-            raise RuntimeError(
-                f"Batch size mismatch: got {batch_size}, expected {self.batch_size} (compiled batch size)."
-            )
-
-        if batch_size != cache_position.shape[0]:
-            raise RuntimeError(f"Cache position size mismatch: got {cache_position.shape[0]}, expected {batch_size}.")
-
-        # FIXME(taehoon): how to handle pos_attn_mask with external block tables
-        if is_external_block_tables:
-            if attention_mask is None:
-                raise ValueError("attention_mask should be provided with external block tables.")
-            if local_block_tables is None:
-                raise ValueError("local_block_tables should be provided with external block tables.")
-        else:
-            local_block_tables = (
-                local_block_tables
-                if local_block_tables is not None
-                else torch.arange(0, self.batch_size, dtype=torch.int16).view(self.batch_size, -1)
-            )
-            if self.rbln_config.use_attention_mask and attention_mask is None:
-                for b_idx in range(batch_size):
-                    decoding_step = cache_position[b_idx].item()
-                    if not (0 <= decoding_step < self.dec_attn_mask.shape[-1]):
-                        raise ValueError(
-                            f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
-                        )
-                    self.dec_attn_mask[b_idx, decoding_step] = 1
-
-                attention_mask = self.dec_attn_mask
-
-        if self.batch_size < block_tables.shape[0]:
-            block_tables = block_tables[: self.batch_size]
-
-        if attention_mask is not None and self.batch_size < attention_mask.shape[0]:
-            attention_mask = attention_mask[: self.batch_size]
-
-        logits = self.decode(inputs, cache_position, block_tables, local_block_tables, attention_mask, position_ids)
-
-        return RBLNDecoderOnlyOutput(logits=logits)
-
-
 class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     """
     The Gemma3 Model transformer with a language modeling head (linear layer) on top.
@@ -525,51 +346,34 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
     _decoder_wrapper_cls = Gemma3ForCausalLMWrapper
 
-    def __post_init__(self, **kwargs):
-        main_input_name = self.main_input_name
-
-        if self.rbln_config.use_inputs_embeds:
-            main_input_name = "inputs_embeds"
-            artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
-            self.embed_tokens = self._create_embedding_layer()
-            self.embed_tokens.load_state_dict(artifacts["embed_tokens"])
-        else:
-            self.embed_tokens = None
-
+    def setup_runtime(self):
         # Initialize shared resources to be used across Runtime instances (prefill and decode phases)
         dec_attn_mask = torch.zeros(self.rbln_config.batch_size, self.rbln_config.max_seq_len, dtype=torch.float32)
-        block_tables = torch.zeros(
-            self.rbln_config.batch_size,
-            self.rbln_config.max_seq_len // self.rbln_config.kvcache_block_size,
-            dtype=torch.int16,
-        ).fill_(-1)
-        free_block_pool = deque(x for x in range(self.rbln_config.kvcache_num_blocks))
+        page_table_manager = RBLNPageTableManager(self.rbln_config)
+
+        common_kwargs = {
+            "main_input_name": "inputs_embeds" if self.rbln_config.use_inputs_embeds else "input_ids",
+            "embed_tokens": self.embed_tokens,
+            "dec_attn_mask": dec_attn_mask,
+            "page_table_manager": page_table_manager,
+            "rbln_config": self.rbln_config,
+        }
+
         self.prefill_decoder = RBLNGemma3RuntimeModel(
             runtime=self.model[0],
-            image_prefill=self.model[1],
-            main_input_name=main_input_name,
-            embed_tokens=self.embed_tokens,
+            image_prefill=self.model[1] if self.rbln_config.use_image_prefill else None,
             phase="prefill",
             batch_size=self.rbln_config.batch_size,
-            dec_attn_mask=dec_attn_mask,
-            block_tables=block_tables,
-            vocab_size=self.config.vocab_size,
-            free_block_pool=free_block_pool,
-            rbln_config=self.rbln_config,
+            **common_kwargs,
         )
 
         self.decoders = {}
         for i, batch_size in enumerate(self.rbln_config.decoder_batch_sizes):
             self.decoders[batch_size] = RBLNGemma3RuntimeModel(
-                runtime=self.model[i + 2],
-                main_input_name=main_input_name,
-                embed_tokens=self.embed_tokens,
+                runtime=self.model[i + self.rbln_config.decoder_runtime_idx],
                 phase="decode",
                 batch_size=batch_size,
-                dec_attn_mask=dec_attn_mask,
-                block_tables=block_tables,
-                free_block_pool=free_block_pool,
-                rbln_config=self.rbln_config,
+                **common_kwargs,
             )
 
         # NOTE(eunji): Use a decoder whose batch size matches the model's main batch size for compatibility.
@@ -599,7 +403,12 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         return rbln_config
 
     @classmethod
-    def _update_submodule_config(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
+    def _update_submodule_config(
+        cls,
+        model: "PreTrainedModel",
+        rbln_config: RBLNModelConfig,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+    ):
         if rbln_config.image_prefill_chunk_size is None:
             rbln_config.image_prefill_chunk_size = model.config.mm_tokens_per_image
 
@@ -624,20 +433,26 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         if not (rbln_config.use_attention_mask and rbln_config.use_position_ids):
             raise ValueError("use_attention_mask and use_position_ids must be True for RBLNGemma3ForCausalLM")
 
-        # Update image prefill compile config
-        img_prefill_input_info = cls.get_input_info(
-            batch_size=1,
-            query_length=rbln_config.image_prefill_chunk_size,
-            rbln_config=rbln_config,
-            model_config=model_config,
-        )
-        image_prefill_compile_config = RBLNCompileConfig(
-            compiled_model_name="image_prefill", input_info=img_prefill_input_info
-        )
-        # Insert image_prefill compile config at index 1
-        compile_cfgs = rbln_config.compile_cfgs
-        compile_cfgs.insert(1, image_prefill_compile_config)
-        rbln_config.set_compile_cfgs(compile_cfgs)
+        if rbln_config.use_image_prefill:
+            if rbln_config.prefill_chunk_size != rbln_config.image_prefill_chunk_size:
+                raise NotImplementedError(
+                    "Not implemented for different prefill chunk sizes between text and image prefill."
+                )
+
+            # Update image prefill compile config
+            img_prefill_input_info = cls.get_input_info(
+                batch_size=1,
+                query_length=rbln_config.image_prefill_chunk_size,
+                rbln_config=rbln_config,
+                model_config=model_config,
+            )
+            image_prefill_compile_config = RBLNCompileConfig(
+                compiled_model_name="image_prefill", input_info=img_prefill_input_info
+            )
+            # Insert image_prefill compile config at index 1
+            compile_cfgs = rbln_config.compile_cfgs
+            compile_cfgs.insert(1, image_prefill_compile_config)
+            rbln_config.set_compile_cfgs(compile_cfgs)
 
         return rbln_config
 
@@ -690,23 +505,27 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             context,
             rbln_config.quantization,
         )
+        compiled_models = {"prefill": compiled_prefill}
 
-        image_prefill_compile_config = rbln_compile_configs[1]
-        image_prefill_example_inputs = image_prefill_compile_config.get_dummy_inputs(
-            fill=0, static_tensors=static_tensors
-        )
-        wrapped_model.phase = "image_prefill"
-        compiled_image_prefill = compile_model(
-            wrapped_model,
-            image_prefill_compile_config,
-            image_prefill_example_inputs,
-            context,
-            rbln_config.quantization,
-        )
+        if rbln_config.use_image_prefill:
+            image_prefill_compile_config = rbln_compile_configs[1]
+            image_prefill_example_inputs = image_prefill_compile_config.get_dummy_inputs(
+                fill=0, static_tensors=static_tensors
+            )
+            wrapped_model.phase = "image_prefill"
+            compiled_image_prefill = compile_model(
+                wrapped_model,
+                image_prefill_compile_config,
+                image_prefill_example_inputs,
+                context,
+                rbln_config.quantization,
+            )
+            compiled_models["image_prefill"] = compiled_image_prefill
 
-        compiled_models = {"prefill": compiled_prefill, "image_prefill": compiled_image_prefill}
         wrapped_model.phase = "decode"
-        for batch_size, dec_compile_config in zip(rbln_config.decoder_batch_sizes, rbln_compile_configs[2:]):
+        for batch_size, dec_compile_config in zip(
+            rbln_config.decoder_batch_sizes, rbln_compile_configs[rbln_config.decoder_runtime_idx :]
+        ):
             dec_example_inputs = dec_compile_config.get_dummy_inputs(fill=0, static_tensors=static_tensors)
             compiled_decoder = compile_model(
                 wrapped_model,
@@ -727,35 +546,45 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     ) -> List[rebel.Runtime]:
         expected_model_names = [
             "prefill",
-            "image_prefill",
             *[f"decoder_batch_{batch_size}" for batch_size in rbln_config.decoder_batch_sizes],
         ]
+        if rbln_config.use_image_prefill:
+            expected_model_names.insert(1, "image_prefill")
+
         if any(model_name not in rbln_config.device_map for model_name in expected_model_names):
             cls._raise_missing_compiled_file_error(expected_model_names)
 
-        return [
+        ret_val = [
             rebel.Runtime(
                 compiled_models[0],
                 tensor_type="pt",
                 device=rbln_config.device_map["prefill"],
                 activate_profiler=rbln_config.activate_profiler,
                 timeout=rbln_config.timeout,
-            ),
-            rebel.Runtime(
-                compiled_models[1],
-                tensor_type="pt",
-                device=rbln_config.device_map["image_prefill"],
-                activate_profiler=rbln_config.activate_profiler,
-                timeout=rbln_config.timeout,
-            ),
-            *[
+            )
+        ]
+        if rbln_config.use_image_prefill:
+            ret_val.append(
                 rebel.Runtime(
-                    compiled_models[i + 2],
+                    compiled_models[1],
+                    tensor_type="pt",
+                    device=rbln_config.device_map["image_prefill"],
+                    activate_profiler=rbln_config.activate_profiler,
+                    timeout=rbln_config.timeout,
+                ),
+            )
+
+        ret_val.extend(
+            [
+                rebel.Runtime(
+                    compiled_models[i + rbln_config.decoder_runtime_idx],
                     tensor_type="pt",
                     device=rbln_config.device_map[f"decoder_batch_{batch_size}"],
                     activate_profiler=rbln_config.activate_profiler,
                     timeout=rbln_config.timeout,
                 )
                 for i, batch_size in enumerate(rbln_config.decoder_batch_sizes)
-            ],
-        ]
+            ]
+        )
+
+        return ret_val

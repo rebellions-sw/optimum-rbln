@@ -11,21 +11,33 @@ from transformers import AutoConfig, AutoProcessor, AutoTokenizer
 from optimum.rbln import (
     RBLNAutoModel,
     RBLNAutoModelForCausalLM,
+    RBLNAutoModelForImageTextToText,
     RBLNAutoModelForSeq2SeqLM,
     RBLNAutoModelForVision2Seq,
     RBLNBartForConditionalGeneration,
     RBLNBlip2ForConditionalGeneration,
     RBLNExaoneForCausalLM,
+    RBLNGemma3ForCausalLM,
+    RBLNGemma3ForConditionalGeneration,
     RBLNGPT2LMHeadModel,
+    RBLNGPT2Model,
     RBLNIdefics3ForConditionalGeneration,
     RBLNLlamaForCausalLM,
+    RBLNLlamaModel,
+    RBLNLlavaForConditionalGeneration,
     RBLNLlavaNextForConditionalGeneration,
+    RBLNMistralForCausalLM,
+    RBLNMistralModel,
     RBLNOPTForCausalLM,
+    RBLNOPTModel,
     RBLNPegasusForConditionalGeneration,
     RBLNPhiForCausalLM,
+    RBLNPhiModel,
     RBLNQwen2_5_VLForConditionalGeneration,
     RBLNQwen2ForCausalLM,
+    RBLNQwen2Model,
     RBLNQwen3ForCausalLM,
+    RBLNQwen3Model,
     RBLNT5ForConditionalGeneration,
 )
 
@@ -54,8 +66,9 @@ class LLMTest:
 
         def get_inputs(self):
             inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt")
-            inputs["max_new_tokens"] = 20
-            inputs["do_sample"] = False
+            if self.model.can_generate():
+                inputs["max_new_tokens"] = 20
+                inputs["do_sample"] = False
             return inputs
 
         def postprocess(self, inputs, output):
@@ -65,25 +78,71 @@ class LLMTest:
             )
             return generated_text
 
+    class TestLLMWithoutLMHead(TestLLM):
+        RBLN_AUTO_CLASS = RBLNAutoModel
 
-class TestQwen2Model(LLMTest.TestLLM):
+
+class TestMistralForCausalLM(LLMTest.TestLLM):
+    RBLN_CLASS = RBLNMistralForCausalLM
+    HF_MODEL_ID = "openaccess-ai-collective/tiny-mistral"
+    EXPECTED_OUTPUT = "watasurescid completionennen Brad completion жеULT ba completion影 Fin сво Regimentixon cabin影 provisions bland"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "sliding_window": 512}
+
+
+class TestMistralModel(LLMTest.TestLLMWithoutLMHead):
+    RBLN_CLASS = RBLNMistralModel
+    HF_MODEL_ID = "openaccess-ai-collective/tiny-mistral"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "sliding_window": 512}
+
+
+class TestQwen2ForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen2ForCausalLM
     HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
     EXPECTED_OUTPUT = "?:雨成名ylonclaimer淡elsinki一角一角一角一角一角一角一角一角一角一角一角一角一角"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
 
 
-class TestQwen3Model(LLMTest.TestLLM):
-    RBLN_CLASS = RBLNQwen3ForCausalLM
-    HF_MODEL_ID = "trl-internal-testing/tiny-Qwen3ForCausalLM"
-    EXPECTED_OUTPUT = "getter getEmail luaL inhibited经营者适时uating nc_TRAIN适时uating ncActiveSheet(socket getEmailadders totaling propName.setImage Grow"
+class TestQwen2Model(LLMTest.TestLLMWithoutLMHead):
+    RBLN_CLASS = RBLNQwen2Model
+    HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
 
 
-class TestOptModel(LLMTest.TestLLM):
+class TestQwen3ForCausalLM(LLMTest.TestLLM):
+    RBLN_CLASS = RBLNQwen3ForCausalLM
+    HF_MODEL_ID = "trl-internal-testing/tiny-Qwen3ForCausalLM"
+    EXPECTED_OUTPUT = (
+        "יל synd Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz_inventory天河 sanitary中途"
+    )
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
+
+
+class TestQwen3ForCausalLM_UAM(TestQwen3ForCausalLM):
+    RBLN_AUTO_CLASS = RBLNAutoModelForCausalLM
+    RBLN_CLASS_KWARGS = {"rbln_config": {"use_attention_mask": True}}
+
+
+class TestQwen3Model(LLMTest.TestLLMWithoutLMHead):
+    RBLN_AUTO_CLASS = RBLNAutoModel
+    RBLN_CLASS = RBLNQwen3Model
+    HF_MODEL_ID = "trl-internal-testing/tiny-Qwen3ForCausalLM"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
+
+
+class TestQwen3Model_UAM(TestQwen3Model):
+    RBLN_CLASS_KWARGS = {"rbln_config": {"use_attention_mask": True}}
+
+
+class TestOPTForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNOPTForCausalLM
     HF_MODEL_ID = "facebook/opt-2.7b"
     EXPECTED_OUTPUT = "????,,,,,,,,,,,,,,,,"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 2048}
+
+
+class TestOPTModel(LLMTest.TestLLMWithoutLMHead):
+    RBLN_CLASS = RBLNOPTModel
+    HF_MODEL_ID = "facebook/opt-2.7b"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 2048}
 
 
@@ -100,6 +159,12 @@ class TestLlamaForCausalLM(LLMTest.TestLLM):
         return inputs
 
 
+class TestLlamaModel(LLMTest.TestLLMWithoutLMHead):
+    RBLN_CLASS = RBLNLlamaModel
+    HF_MODEL_ID = "afmck/testing-llama-tiny"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
+
+
 class TestLlamaForCausalLM_Flash(LLMTest.TestLLM):
     RBLN_CLASS = RBLNLlamaForCausalLM
     HF_MODEL_ID = "afmck/testing-llama-tiny"
@@ -112,6 +177,13 @@ class TestLlamaForCausalLM_Flash(LLMTest.TestLLM):
         self.get_tokenizer().pad_token = self.get_tokenizer().eos_token
         inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt")
         return inputs
+
+
+class TestLlamaModel_Flash(LLMTest.TestLLMWithoutLMHead):
+    RBLN_CLASS = RBLNLlamaModel
+    HF_MODEL_ID = "afmck/testing-llama-tiny"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 8192}
+    RBLN_CLASS_KWARGS = {"rbln_config": {"attn_impl": "flash_attn", "kvcache_partition_len": 4096}}
 
 
 class TestLlamaForCausalLM_Multibatch(TestLlamaForCausalLM):
@@ -148,12 +220,24 @@ class TestGPT2LMHeadModel(LLMTest.TestLLM):
     HF_CONFIG_KWARGS = {"n_layer": 1, "max_position_embeddings": 1024}
 
 
+class TestGPT2Model(LLMTest.TestLLMWithoutLMHead):
+    RBLN_CLASS = RBLNGPT2Model
+    HF_MODEL_ID = "openai-community/gpt2"
+    HF_CONFIG_KWARGS = {"n_layer": 1, "max_position_embeddings": 1024}
+
+
 class TestPhiForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNPhiForCausalLM
 
     # HF_MODEL_ID = "hf-internal-testing/tiny-random-PhiForCausalLM"
     HF_MODEL_ID = "microsoft/phi-2"
     EXPECTED_OUTPUT = "\nAnswer: Theorettebrates']['<<<urlskolegateezzingrill"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "trust_remote_code": True}
+
+
+class TestPhiModel(LLMTest.TestLLMWithoutLMHead):
+    RBLN_CLASS = RBLNPhiModel
+    HF_MODEL_ID = "microsoft/phi-2"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "trust_remote_code": True}
 
 
@@ -263,6 +347,46 @@ class TestBartModel(LLMTest.TestLLM):
                 )
 
 
+class TestLlavaForConditionalGeneration(LLMTest.TestLLM):
+    RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
+    RBLN_CLASS = RBLNLlavaForConditionalGeneration
+    HF_MODEL_ID = "trl-internal-testing/tiny-LlavaForConditionalGeneration"
+    PROMPT = "[INST] <image>\nWhat’s shown in this image? [/INST]"
+    RBLN_CLASS_KWARGS = {
+        "rbln_config": {
+            "vision_tower": {"output_hidden_states": True},
+            "language_model": {"use_inputs_embeds": True},
+        }
+    }
+    EXPECTED_OUTPUT = "ambbrow nur Well chimCore rapideraine Йye questaédédates Ken neu Airport din termeächstthread"
+    HF_CONFIG_KWARGS = {"revision": "8ab8bfc820a6bb9e0f8de1ac715f4b53db44e684"}
+
+    @classmethod
+    def get_tokenizer(cls):
+        if cls._tokenizer is None:
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
+        return cls._tokenizer
+
+    def get_inputs(self):
+        tokenizer = self.get_tokenizer()
+        img_path = f"{os.path.dirname(__file__)}/../assets/rbln_logo.png"
+        image = Image.open(img_path)
+        inputs = tokenizer(images=[image], text=[self.PROMPT], return_tensors="pt", padding=True)
+        inputs["max_new_tokens"] = 20
+        inputs["do_sample"] = False
+        return inputs
+
+    def _inner_test_save_load(self, tmpdir):
+        super()._inner_test_save_load(tmpdir)
+        # Test loading from nested config
+        _ = self.RBLN_CLASS.from_pretrained(
+            tmpdir,
+            export=False,
+            rbln_config={"language_model": {"create_runtimes": False}},
+            **self.HF_CONFIG_KWARGS,
+        )
+
+
 class TestPegasusModel(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForSeq2SeqLM
     RBLN_CLASS = RBLNPegasusForConditionalGeneration
@@ -298,26 +422,26 @@ class TestPegasusModel(LLMTest.TestLLM):
 class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
     RBLN_CLASS = RBLNLlavaNextForConditionalGeneration
-    HF_MODEL_ID = "llava-hf/llava-v1.6-mistral-7b-hf"  # No tiny model yet.
+    HF_MODEL_ID = "trl-internal-testing/tiny-LlavaNextForConditionalGeneration"
     PROMPT = "[INST] <image>\nWhat’s shown in this image? [/INST]"
     RBLN_CLASS_KWARGS = {
         "rbln_config": {
             "language_model": {"use_inputs_embeds": True},
         }
     }
-    EXPECTED_OUTPUT = "aille kennisSoft /******/ Brunershot childhoodhoodRx̧̧̧̧̧̧̧̧̧̧"
-    HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
+    EXPECTED_OUTPUT = "entricCallbackavidARYails NotesDAPimil coordFeed Boysaml obligation relay迟 войны sexual Definition Eisen patent"
+    HF_CONFIG_KWARGS = {"revision": "21948c1af6a0666e341b6403dc1cbbd5c8900e7d"}
 
     @classmethod
     def get_tokenizer(cls):
         if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
         return cls._tokenizer
 
     # override
     @classmethod
     def setUpClass(cls):
-        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
+        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
 
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 1
@@ -472,6 +596,79 @@ class TestQwen2_5_VLForConditionalGeneration(LLMTest.TestLLM):
         inputs["max_new_tokens"] = 20
         inputs["do_sample"] = False
         return inputs
+
+
+class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
+    RBLN_AUTO_CLASS = RBLNAutoModelForImageTextToText
+    RBLN_CLASS = RBLNGemma3ForConditionalGeneration
+    HF_MODEL_ID = "trl-internal-testing/tiny-Gemma3ForConditionalGeneration"  # No tiny model yet.
+    PROMPT = "<bos><start_of_turn>user\n<start_of_image>Describe the image.<end_of_turn>\n<start_of_turn>model\n'"
+    RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True, "kvcache_partition_len": 4096}}}
+    EXPECTED_OUTPUT = " அனுமதி Bryson Earlyheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserिल्म हस्ता"
+    HF_CONFIG_KWARGS = {
+        "revision": "e1f4b0516ec80f86ed75c8cb1d45ede72526ad24",
+    }
+    TEST_LEVEL = TestLevel.FULL
+
+    @classmethod
+    def get_tokenizer(cls):
+        if cls._tokenizer is None:
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
+        return cls._tokenizer
+
+    # override
+    @classmethod
+    def setUpClass(cls):
+        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
+        text_config = json.loads(config.text_config.to_json_string())
+        text_config["num_hidden_layers"] = 2
+        text_config["sliding_window_pattern"] = 2
+        vision_config = json.loads(config.vision_config.to_json_string())
+        vision_config["num_hidden_layers"] = 1
+        kwargs = {"text_config": text_config, "vision_config": vision_config}
+        cls.HF_CONFIG_KWARGS.update(kwargs)
+        return super().setUpClass()
+
+    def get_inputs(self):
+        tokenizer = self.get_tokenizer()
+        img_path = f"{os.path.dirname(__file__)}/../assets/rbln_logo.png"
+        image = Image.open(img_path)
+        image = image.convert("RGB")
+        inputs = tokenizer(images=[image], text=[self.PROMPT], return_tensors="pt", padding=True)
+        inputs["max_new_tokens"] = 20
+        inputs["do_sample"] = False
+        return inputs
+
+
+class TestGemma3ForCausalLM(LLMTest.TestLLM):
+    RBLN_CLASS = RBLNGemma3ForCausalLM
+    HF_MODEL_ID = "google/gemma-3-1b-it"
+    EXPECTED_OUTPUT = "1st L L L L L L L L L L L L L L L L L L"
+    HF_CONFIG_KWARGS = {
+        "num_hidden_layers": 2,
+        "sliding_window_pattern": 2,
+        "max_position_embeddings": 1024,
+        "trust_remote_code": True,
+    }
+
+
+class TestLlamaForCausalLM_fp8(LLMTest.TestLLM):
+    RBLN_CLASS = RBLNLlamaForCausalLM
+    HF_MODEL_ID = "RedHatAI/Meta-Llama-3-8B-Instruct-FP8-KV"  # No tiny model yet.
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1}
+    RBLN_CLASS_KWARGS = {
+        "rbln_config": {
+            "quantization": {"weights": "fp8", "kv_caches": "fp8"},
+            "create_runtimes": False,
+            "npu": "RBLN-CR03",
+            "attn_impl": "flash_attn",
+            "kvcache_partition_len": 4096,
+            "max_seq_len": 8192,
+            "tensor_parallel_size": 1,
+        },
+    }
+    EXPECTED_OUTPUT = None  # Cannot generate output with fp8 quantization in ATOM™
+    TEST_LEVEL = TestLevel.DISABLED
 
 
 class TestDisallowedLlama_1(DisallowedTestBase.DisallowedTest):

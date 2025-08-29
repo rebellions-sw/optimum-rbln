@@ -25,6 +25,11 @@ on:
         required: false
         type: boolean
         default: false
+      fail_fast:
+        description: "Whether to fail fast when one matrix job fails"
+        required: false
+        type: boolean
+        default: true
 
 env:
   REBEL_PYPI_ENDPOINT: ${{ vars.REBEL_PYPI_INTERNAL_ENDPOINT }}
@@ -39,6 +44,7 @@ jobs:
     name: Pytest (${{ matrix.test_type }})
     runs-on: vm-ci-0
     strategy:
+      fail-fast: ${{ inputs.fail_fast }}
       matrix:
         test_type: [config, transformers, diffusers, llm]
     steps:
