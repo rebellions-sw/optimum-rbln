@@ -34,7 +34,7 @@ from .utils.submodule import SubModulesMixin
 
 
 if TYPE_CHECKING:
-    from transformers import PreTrainedModel
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PreTrainedModel
 
 logger = get_logger(__name__)
 
@@ -53,6 +53,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     config_class = AutoConfig
     config_name = "config.json"
     hf_library_name = "transformers"
+    _supports_non_fp32 = False
 
     def __init__(
         self,
@@ -91,7 +92,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
         self.device = torch.device("cpu")
         self.training = False
-        self.dtype = torch.float32
+        self.dtype = rbln_config.torch_dtype
 
         # FIXME :: model_save_dir is not used after initialized. (This can be used when save/load)
         # This attribute is needed to keep one reference on the temporary directory, since garbage collecting it
@@ -400,8 +401,21 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         return compiled_model
 
     @classmethod
-    def update_rbln_config(cls, **others) -> RBLNModelConfig:
-        rbln_config = cls._update_rbln_config(**others)
+    def update_rbln_config(
+        cls,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+        model: "PreTrainedModel",
+        model_config: "PretrainedConfig",
+        rbln_config: RBLNModelConfig,
+    ) -> RBLNModelConfig:
+        rbln_config.torch_dtype = model.dtype
+        if not cls._supports_non_fp32 and rbln_config.torch_dtype != torch.float32:
+            raise NotImplementedError(
+                f"Currently, {cls.__name__} does not support non-fp32 dtype. Please use float32 dtype."
+            )
+        rbln_config = cls._update_rbln_config(
+            preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
+        )
         rbln_config.freeze()
         if rbln_config.rbln_model_cls_name != cls.__name__:
             raise NameError(
@@ -444,12 +458,12 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
         # This method mimics the interface of torch.nn.Module.parameters()
         # specifically for code that uses `next(model.parameters())` to infer
-        # the device or dtype. It yields a single dummy tensor on CPU with float32 dtype.
+        # the device or dtype. It yields a single dummy tensor on CPU with model dtype.
 
         # Warning:
         #     This does NOT yield the actual model parameters used by the RBLN runtime.
         #     Code relying on iterating through all model parameters will not work as expected.
-        yield torch.tensor([1.0], dtype=torch.float32, device=torch.device("cpu"))
+        yield torch.tensor([1.0], dtype=self.dtype, device=torch.device("cpu"))
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
@@ -525,13 +539,30 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
             # If everything succeeded, move files to target directory
             if os.path.exists(save_directory_path):
-                # Move files from tmp_dir to existing directory (overwrite existing files)
-                for item in os.listdir(tmp_dir):
-                    src_path = os.path.join(tmp_dir, item)
-                    dst_path = os.path.join(save_directory_path, item)
-                    shutil.move(src_path, dst_path)
-                # Clean up empty tmp_dir
-                os.rmdir(tmp_dir)
+                # Merge files from tmp_dir into existing directory
+                def _merge_dir(src_root: str, dst_root: str):
+                    for name in os.listdir(src_root):
+                        src_item = os.path.join(src_root, name)
+                        dst_item = os.path.join(dst_root, name)
+
+                        if os.path.islink(src_item) or os.path.isfile(src_item):
+                            os.makedirs(os.path.dirname(dst_item), exist_ok=True)
+                            if os.path.isdir(dst_item) and not os.path.islink(dst_item):
+                                shutil.rmtree(dst_item)
+                            os.replace(src_item, dst_item)
+                        elif os.path.isdir(src_item):
+                            if os.path.islink(dst_item) or os.path.isfile(dst_item):
+                                os.remove(dst_item)
+                            os.makedirs(dst_item, exist_ok=True)
+                            _merge_dir(src_item, dst_item)
+                        else:
+                            # Fallback for special file types
+                            os.replace(src_item, dst_item)
+
+                _merge_dir(tmp_dir, str(save_directory_path))
+
+                # Remove the temporary directory tree after merge
+                shutil.rmtree(tmp_dir)
             else:
                 # If target doesn't exist, just rename tmp_dir to target
                 os.rename(tmp_dir, save_directory_path)

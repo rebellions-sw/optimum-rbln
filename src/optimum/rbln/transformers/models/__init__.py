@@ -37,6 +37,7 @@ _import_structure = {
         "RBLNAutoModelForVision2Seq",
         "RBLNAutoModelForImageTextToText",
         "RBLNAutoModelForTextEncoding",
+        "RBLNAutoModelForZeroShotObjectDetection",
     ],
     "bart": [
         "RBLNBartForConditionalGeneration",
@@ -90,6 +91,7 @@ _import_structure = {
         "RBLNDecoderOnlyModelForCausalLM",
         "RBLNDecoderOnlyModelForCausalLMConfig",
     ],
+    "depth_anything": ["RBLNDepthAnythingForDepthEstimationConfig", "RBLNDepthAnythingForDepthEstimation"],
     "dpt": [
         "RBLNDPTForDepthEstimation",
         "RBLNDPTForDepthEstimationConfig",
@@ -141,6 +143,10 @@ _import_structure = {
         "RBLNSiglipVisionModel",
         "RBLNSiglipVisionModelConfig",
     ],
+    "swin": [
+        "RBLNSwinBackbone",
+        "RBLNSwinBackboneConfig",
+    ],
     "time_series_transformer": [
         "RBLNTimeSeriesTransformerForPrediction",
         "RBLNTimeSeriesTransformerForPredictionConfig",
@@ -159,6 +165,14 @@ _import_structure = {
         "RBLNXLMRobertaModelConfig",
         "RBLNXLMRobertaForSequenceClassification",
         "RBLNXLMRobertaForSequenceClassificationConfig",
+    ],
+    "grounding_dino": [
+        "RBLNGroundingDinoForObjectDetection",
+        "RBLNGroundingDinoForObjectDetectionConfig",
+        "RBLNGroundingDinoEncoder",
+        "RBLNGroundingDinoEncoderConfig",
+        "RBLNGroundingDinoDecoder",
+        "RBLNGroundingDinoDecoderConfig",
     ],
 }
 
@@ -179,6 +193,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForSpeechSeq2Seq,
         RBLNAutoModelForTextEncoding,
         RBLNAutoModelForVision2Seq,
+        RBLNAutoModelForZeroShotObjectDetection,
     )
     from .bart import (
         RBLNBartForConditionalGeneration,
@@ -219,6 +234,7 @@ if TYPE_CHECKING:
         RBLNDecoderOnlyModelForCausalLM,
         RBLNDecoderOnlyModelForCausalLMConfig,
     )
+    from .depth_anything import RBLNDepthAnythingForDepthEstimation, RBLNDepthAnythingForDepthEstimationConfig
     from .distilbert import RBLNDistilBertForQuestionAnswering, RBLNDistilBertForQuestionAnsweringConfig
     from .dpt import RBLNDPTForDepthEstimation, RBLNDPTForDepthEstimationConfig
     from .exaone import RBLNExaoneForCausalLM, RBLNExaoneForCausalLMConfig
@@ -230,6 +246,14 @@ if TYPE_CHECKING:
         RBLNGemma3ForConditionalGenerationConfig,
     )
     from .gpt2 import RBLNGPT2LMHeadModel, RBLNGPT2LMHeadModelConfig, RBLNGPT2Model, RBLNGPT2ModelConfig
+    from .grounding_dino import (
+        RBLNGroundingDinoDecoder,
+        RBLNGroundingDinoDecoderConfig,
+        RBLNGroundingDinoEncoder,
+        RBLNGroundingDinoEncoderConfig,
+        RBLNGroundingDinoForObjectDetection,
+        RBLNGroundingDinoForObjectDetectionConfig,
+    )
     from .idefics3 import (
         RBLNIdefics3ForConditionalGeneration,
         RBLNIdefics3ForConditionalGenerationConfig,
@@ -266,6 +290,7 @@ if TYPE_CHECKING:
         RBLNRobertaForSequenceClassificationConfig,
     )
     from .siglip import RBLNSiglipVisionModel, RBLNSiglipVisionModelConfig
+    from .swin import RBLNSwinBackbone, RBLNSwinBackboneConfig
     from .t5 import (
         RBLNT5EncoderModel,
         RBLNT5EncoderModelConfig,

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Type
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
 
 from transformers import PretrainedConfig
 
@@ -22,7 +22,7 @@ from ..utils.model_utils import get_rbln_model_cls
 
 
 if TYPE_CHECKING:
-    from transformers import PreTrainedModel
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PreTrainedModel
 
     from ..modeling import RBLNModel
 
@@ -42,7 +42,12 @@ class SubModulesMixin:
             setattr(self, submodule_meta["name"], submodule)
 
     @classmethod
-    def _update_submodule_config(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
+    def _update_submodule_config(
+        cls,
+        model: "PreTrainedModel",
+        rbln_config: RBLNModelConfig,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+    ):
         return rbln_config
 
     @classmethod
@@ -51,6 +56,7 @@ class SubModulesMixin:
     ) -> List["RBLNModel"]:
         rbln_submodules = []
         submodule_prefix = getattr(cls, "_rbln_submodule_prefix", None)
+        preprocessors = kwargs.pop("preprocessors", [])
 
         for submodule in cls._rbln_submodules:
             submodule_name = submodule["name"]
@@ -69,7 +75,7 @@ class SubModulesMixin:
                 submodule_rbln_config = submodule_rbln_config_class(**submodule_rbln_config)
                 setattr(rbln_config, submodule_name, submodule_rbln_config)
 
-            submodule_rbln_config = submodule_cls._update_submodule_config(model, submodule_rbln_config)
+            submodule_rbln_config = submodule_cls._update_submodule_config(model, submodule_rbln_config, preprocessors)
 
             rbln_submodule = submodule_cls.from_model(
                 model=torch_submodule,
