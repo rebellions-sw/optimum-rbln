@@ -184,6 +184,14 @@ def get_quantized_model(
     # get the dtype of the model from the first safetensor file
     torch_dtype = get_state_dict_dtype(safetensors[0])
 
+    # remove n_layer_keys from kwargs if they are None.
+    # otherwise AutoConfig.from_pretrained will raise an error.
+    n_layer_keys = ["num_hidden_layers", "n_layers"]
+    for n_layer_key in n_layer_keys:
+        if n_layer_key in kwargs:
+            if kwargs[n_layer_key] is None:
+                kwargs.pop(n_layer_key)
+
     config = AutoConfig.from_pretrained(
         model_id,
         use_auth_token=use_auth_token,
