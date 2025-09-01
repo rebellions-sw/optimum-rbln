@@ -476,6 +476,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
     non_save_attributes = [
         "_frozen",
         "_runtime_options",
+        "torch_dtype",
         "npu",
         "tensor_parallel_size",
         "create_runtimes",
@@ -566,6 +567,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         tensor_parallel_size: Optional[int] = None,
         timeout: Optional[int] = None,
         optimum_rbln_version: Optional[str] = None,
+        _torch_dtype: Optional[str] = None,
         _compile_cfgs: List[RBLNCompileConfig] = [],
         **kwargs: Any,
     ):
@@ -583,6 +585,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
             tensor_parallel_size (Optional[int]): Size for tensor parallelism to distribute the model across devices.
             timeout (Optional[int]): The timeout for the runtime in seconds. If it isn't provided, it will be set to 60 by default.
             optimum_rbln_version (Optional[str]): The optimum-rbln version used for this configuration.
+            _torch_dtype (Optional[str]): The data type to use for the model.
             _compile_cfgs (List[RBLNCompileConfig]): List of compilation configurations for the model.
             **kwargs: Additional keyword arguments.
 
@@ -610,6 +613,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         self.npu = npu
         self.tensor_parallel_size = tensor_parallel_size
 
+        self._torch_dtype = _torch_dtype or "float32"
         self.optimum_rbln_version = optimum_rbln_version
         if self.optimum_rbln_version is None:
             self.optimum_rbln_version = __version__
@@ -638,6 +642,17 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
                     )
 
             raise ValueError(f"Unexpected arguments: {kwargs.keys()}")
+
+    @property
+    def torch_dtype(self):
+        return getattr(torch, self._torch_dtype)
+
+    @torch_dtype.setter
+    def torch_dtype(self, torch_dtype: Union[str, torch.dtype]):
+        if isinstance(torch_dtype, torch.dtype):
+            torch_dtype = RBLNCompileConfig.normalize_dtype(torch_dtype)
+
+        self._torch_dtype = torch_dtype
 
     @property
     def rbln_model_cls_name(self) -> str:
