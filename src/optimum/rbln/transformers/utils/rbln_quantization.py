@@ -20,7 +20,6 @@ import torch
 from huggingface_hub import hf_hub_download, list_repo_files
 from safetensors.torch import load_file
 from torch.nn import Linear, Parameter
-from torch.nn import functional as F
 from transformers import AutoConfig
 from transformers.modeling_utils import get_state_dict_dtype, no_init_weights
 
