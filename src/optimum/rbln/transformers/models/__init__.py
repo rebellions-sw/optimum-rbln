@@ -35,6 +35,7 @@ _import_structure = {
         "RBLNAutoModelForSequenceClassification",
         "RBLNAutoModelForSpeechSeq2Seq",
         "RBLNAutoModelForVision2Seq",
+        "RBLNAutoModelForObjectDetection",
         "RBLNAutoModelForImageTextToText",
         "RBLNAutoModelForTextEncoding",
         "RBLNAutoModelForZeroShotObjectDetection",
@@ -174,6 +175,7 @@ _import_structure = {
         "RBLNGroundingDinoDecoder",
         "RBLNGroundingDinoDecoderConfig",
     ],
+    "detr": ["RBLNDetrForObjectDetection", "RBLNDetrForObjectDetectionConfig"],
 }
 
 if TYPE_CHECKING:
@@ -187,6 +189,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForImageClassification,
         RBLNAutoModelForImageTextToText,
         RBLNAutoModelForMaskedLM,
+        RBLNAutoModelForObjectDetection,
         RBLNAutoModelForQuestionAnswering,
         RBLNAutoModelForSeq2SeqLM,
         RBLNAutoModelForSequenceClassification,
@@ -235,6 +238,7 @@ if TYPE_CHECKING:
         RBLNDecoderOnlyModelForCausalLMConfig,
     )
     from .depth_anything import RBLNDepthAnythingForDepthEstimation, RBLNDepthAnythingForDepthEstimationConfig
+    from .detr import RBLNDetrForObjectDetection, RBLNDetrForObjectDetectionConfig
     from .distilbert import RBLNDistilBertForQuestionAnswering, RBLNDistilBertForQuestionAnsweringConfig
     from .dpt import RBLNDPTForDepthEstimation, RBLNDPTForDepthEstimationConfig
     from .exaone import RBLNExaoneForCausalLM, RBLNExaoneForCausalLMConfig
