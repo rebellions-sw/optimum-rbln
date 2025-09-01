@@ -17,15 +17,16 @@ import rebel
 import torch
 
 from ...modeling_outputs import RBLNDecoderOnlyOutput, RBLNGemma3ForCausalLMOutput
+from ..decoderonly.decoderonly_runtime_utils import RBLNPytorchRuntime
 from ..decoderonly.modeling_decoderonly import RBLNRuntimeModel
 
 
 class RBLNGemma3RuntimeModel(RBLNRuntimeModel):
     def __init__(self, *args, image_prefill: Optional[rebel.Runtime] = None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.image_prefill = image_prefill  # FIXME(taehoon)
-        self.prefill = self.runtime if self.phase == "prefill" else None  # FIXME
-        self.decode = self.runtime if self.phase == "decode" else None
+        self.image_prefill = RBLNPytorchRuntime(image_prefill)  # FIXME(taehoon)
+        self.prefill = RBLNPytorchRuntime(self.runtime) if self.phase == "prefill" else None  # FIXME
+        self.decode = RBLNPytorchRuntime(self.runtime) if self.phase == "decode" else None
 
     def _prepare_prefill_inputs(self, *args, **kwargs):
         (
