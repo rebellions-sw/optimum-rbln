@@ -29,6 +29,7 @@ from optimum.rbln import (
     RBLNLoRAAdapterConfig,
     RBLNMistralForCausalLM,
     RBLNMistralModel,
+    RBLNModel,
     RBLNOPTForCausalLM,
     RBLNOPTModel,
     RBLNPegasusForConditionalGeneration,
@@ -58,6 +59,12 @@ class LLMTest:
         RBLN_AUTO_CLASS = RBLNAutoModelForCausalLM
         DEVICE = None  # Use device to run
         PROMPT = "Who are you?"
+
+        @classmethod
+        def setUpClass(cls):
+            if issubclass(cls.RBLN_CLASS, RBLNModel) and cls.RBLN_CLASS._supports_non_fp32:
+                cls.HF_CONFIG_KWARGS["torch_dtype"] = "auto"
+            super().setUpClass()
 
         @classmethod
         def get_tokenizer(cls):
@@ -668,8 +675,10 @@ class TestLlamaForCausalLM_fp8(LLMTest.TestLLM):
             "tensor_parallel_size": 1,
         },
     }
-    EXPECTED_OUTPUT = None  # Cannot generate output with fp8 quantization in ATOM™
-    TEST_LEVEL = TestLevel.DISABLED
+
+    def test_generate(self):
+        # Cannot generate output with fp8 quantization in ATOM™
+        pass
 
 
 class TestMultiLora(LLMTest.TestLLM):

@@ -34,7 +34,7 @@ from .utils.submodule import SubModulesMixin
 
 
 if TYPE_CHECKING:
-    from transformers import PreTrainedModel
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PreTrainedModel
 
 logger = get_logger(__name__)
 
@@ -53,6 +53,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     config_class = AutoConfig
     config_name = "config.json"
     hf_library_name = "transformers"
+    _supports_non_fp32 = False
 
     def __init__(
         self,
@@ -91,7 +92,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
         self.device = torch.device("cpu")
         self.training = False
-        self.dtype = torch.float32
+        self.dtype = rbln_config.torch_dtype
 
         # FIXME :: model_save_dir is not used after initialized. (This can be used when save/load)
         # This attribute is needed to keep one reference on the temporary directory, since garbage collecting it
@@ -400,8 +401,21 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         return compiled_model
 
     @classmethod
-    def update_rbln_config(cls, **others) -> RBLNModelConfig:
-        rbln_config = cls._update_rbln_config(**others)
+    def update_rbln_config(
+        cls,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+        model: "PreTrainedModel",
+        model_config: "PretrainedConfig",
+        rbln_config: RBLNModelConfig,
+    ) -> RBLNModelConfig:
+        rbln_config.torch_dtype = model.dtype
+        if not cls._supports_non_fp32 and rbln_config.torch_dtype != torch.float32:
+            raise NotImplementedError(
+                f"Currently, {cls.__name__} does not support non-fp32 dtype. Please use float32 dtype."
+            )
+        rbln_config = cls._update_rbln_config(
+            preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
+        )
         rbln_config.freeze()
         if rbln_config.rbln_model_cls_name != cls.__name__:
             raise NameError(
@@ -444,12 +458,12 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
         # This method mimics the interface of torch.nn.Module.parameters()
         # specifically for code that uses `next(model.parameters())` to infer
-        # the device or dtype. It yields a single dummy tensor on CPU with float32 dtype.
+        # the device or dtype. It yields a single dummy tensor on CPU with model dtype.
 
         # Warning:
         #     This does NOT yield the actual model parameters used by the RBLN runtime.
         #     Code relying on iterating through all model parameters will not work as expected.
-        yield torch.tensor([1.0], dtype=torch.float32, device=torch.device("cpu"))
+        yield torch.tensor([1.0], dtype=self.dtype, device=torch.device("cpu"))
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)

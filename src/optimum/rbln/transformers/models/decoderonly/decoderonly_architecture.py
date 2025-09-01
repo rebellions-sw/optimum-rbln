@@ -1146,7 +1146,7 @@ class RotaryEmbedding(nn.Module):
             rope_type = "default"
 
         inv_freq, attention_scaling = ROPE_INIT_FUNCTIONS[rope_type](config, max_seq_len_cached)
-        cache_position = torch.arange(0, max_seq_len_cached, dtype=torch.float32)
+        cache_position = torch.arange(0, max_seq_len_cached)
         cache_position_expanded = cache_position[:, None]
 
         if rope_type == "dynamic":
@@ -1165,8 +1165,8 @@ class RotaryEmbedding(nn.Module):
 
     def forward(self, x, seq_len):
         return (
-            self._cos_cached[:seq_len].to(dtype=x.dtype),
-            self._sin_cached[:seq_len].to(dtype=x.dtype),
+            self._cos_cached[:seq_len].to(dtype=torch.float32),
+            self._sin_cached[:seq_len].to(dtype=torch.float32),
         )
 
 
@@ -1196,8 +1196,11 @@ def rotate_half(x):
 
 def apply_rotary_pos_emb(q, k, cos, sin):
     """Applies Rotary Position Embedding to the query and key tensors."""
+    dtype = q.dtype
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
+    q_embed = q_embed.to(dtype)
+    k_embed = k_embed.to(dtype)
     return q_embed, k_embed
 
 
