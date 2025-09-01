@@ -19,28 +19,41 @@ from transformers.activations import ACT2FN
 from ..decoderonly.decoderonly_architecture import DecoderOnlyAttention, DecoderOnlyLayer, DecoderOnlyWrapper
 
 
-class QWEN2MoeWrapper(DecoderOnlyWrapper):
+class QWEN3MoeWrapper(DecoderOnlyWrapper):
     def get_rbln_layer_class(self):
-        return Qwen2MoeLayer
+        return Qwen3MoeLayer
+    
+    
+    def get_rbln_attn_class(self):
+        return Qwen3MoeAttention
+
+class Qwen3MoeAttention(DecoderOnlyAttention):
+    def __post_init__(self):
+        self.q_proj = self._original_mod.q_proj
+        self.k_proj = self._original_mod.k_proj
+        self.v_proj = self._original_mod.v_proj
+        self.o_proj = self._original_mod.o_proj
+        self.q_norm = self._original_mod.q_norm
+        self.k_norm = self._original_mod.k_norm
 
 
-class Qwen2MoeLayer(DecoderOnlyLayer):
+class Qwen3MoeLayer(DecoderOnlyLayer):
     def __init__(self, layer, self_attn: "DecoderOnlyAttention"):
         super().__init__(layer, self_attn)
-        if self.mlp.__class__.__name__ == "Qwen2MoeSparseMoeBlock":
-            self.mlp = Qwen2MoeSparseMoeBlock(self.mlp)
+        if self.mlp.__class__.__name__ == "Qwen3MoeSparseMoeBlock":
+            self.mlp = Qwen3MoeSparseMoeBlock(self.mlp)
 
 
-class Qwen2MoeSparseMoeBlock(nn.Module):
+class Qwen3MoeSparseMoeBlock(nn.Module):
     def __init__(self, model: nn.Module):
         super().__init__()
         self.num_experts = model.num_experts
         self.top_k = model.top_k
-        self.num_topk_prob = model.norm_topk_prob
+        self.norm_topk_prob = model.norm_topk_prob
         self.gate = model.gate
-        self.shared_expert = model.shared_expert
-        self.shared_expert_gate = model.shared_expert_gate
-        self.experts = Qwen2MoeMLP(model.experts)
+        # self.shared_expert = model.shared_expert
+        # self.shared_expert_gate = model.shared_expert_gate
+        self.experts = Qwen3MoeMLP(model.experts)
 
     def get_masked_routing_weights(self, router_logits):
         # routing_weights: (batch * sequence_length, n_experts)
@@ -51,6 +64,9 @@ class Qwen2MoeSparseMoeBlock(nn.Module):
         mask = torch.zeros_like(routing_weights, dtype=torch.float32)
         un_mask = torch.ones_like(selected_experts, dtype=torch.float32)
         mask.scatter_(1, selected_experts, un_mask)
+        
+        if self.norm_topk_prob:  # only diff with mixtral sparse moe block!
+            routing_weights /= routing_weights.sum(dim=-1, keepdim=True)
 
         masked_routing_weights = routing_weights * mask
 
@@ -66,18 +82,18 @@ class Qwen2MoeSparseMoeBlock(nn.Module):
         masked_routing_weights = self.get_masked_routing_weights(router_logits)
         final_hidden_states = self.experts(hidden_states, masked_routing_weights)
 
-        shared_expert_output = self.shared_expert(hidden_states)
-        shared_expert_output = (
-            torch.nn.functional.sigmoid(self.shared_expert_gate(hidden_states)) * shared_expert_output
-        )
+        # shared_expert_output = self.shared_expert(hidden_states)
+        # shared_expert_output = (
+        #     torch.nn.functional.sigmoid(self.shared_expert_gate(hidden_states)) * shared_expert_output
+        # )
 
-        final_hidden_states = final_hidden_states + shared_expert_output
+        # final_hidden_states = final_hidden_states + shared_expert_output
 
         final_hidden_states = final_hidden_states.reshape(batch_size, sequence_length, hidden_dim)
         return final_hidden_states
 
 
-class Qwen2MoeMLP(nn.Module):
+class Qwen3MoeMLP(nn.Module):
     def __init__(self, expert_list):
         super().__init__()
         self.config = expert_list[0].config

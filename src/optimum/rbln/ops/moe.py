@@ -52,7 +52,7 @@ def custom_moe_glu(
     up_proj_weight: Tensor,
     down_proj_weight: Tensor,
     masked_routing_weight: Tensor,
-    act_fn: ACT_TYPES,
+    act_fn: str,
     gate_proj_bias: Optional[Tensor] = None,
     up_proj_bias: Optional[Tensor] = None,
     down_proj_bias: Optional[Tensor] = None,
@@ -97,7 +97,7 @@ def custom_moe_ff(
     gate_proj_weight: Tensor,
     down_proj_weight: Tensor,
     masked_routing_weight: Tensor,
-    act_fn: ACT_TYPES,
+    act_fn: str,
     gate_proj_bias: Optional[Tensor] = None,
     down_proj_bias: Optional[Tensor] = None,
 ) -> Tensor:
@@ -122,7 +122,7 @@ def custom_moe_ff_fake(
     gate_proj_weight: Tensor,
     down_proj_weight: Tensor,
     masked_routing_weight: Tensor,
-    act_fn: ACT_TYPES,
+    act_fn: str,
     gate_proj_bias: Optional[Tensor] = None,
     down_proj_bias: Optional[Tensor] = None,
 ) -> Tensor:
