@@ -61,7 +61,7 @@ jobs:
   check-team-member:
     runs-on: rebel-k8s-runner
     needs: [check-skip-ci, check-code-quality, test-docstrings, check-compiler]
-    if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' && needs.check-compiler.outputs.is_deploy_version == 'true' }}
+    if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' && needs.check-compiler.outputs.compiler_version_check == 'true' }}
     outputs:
       is_team_member: ${{ steps.check_member.outputs.IS_TEAM_MEMBER }}
     steps:

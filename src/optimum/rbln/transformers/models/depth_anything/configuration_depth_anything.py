@@ -12,20 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .modeling_auto import (
-    RBLNAutoModel,
-    RBLNAutoModelForAudioClassification,
-    RBLNAutoModelForCausalLM,
-    RBLNAutoModelForCTC,
-    RBLNAutoModelForDepthEstimation,
-    RBLNAutoModelForImageClassification,
-    RBLNAutoModelForImageTextToText,
-    RBLNAutoModelForMaskedLM,
-    RBLNAutoModelForQuestionAnswering,
-    RBLNAutoModelForSeq2SeqLM,
-    RBLNAutoModelForSequenceClassification,
-    RBLNAutoModelForSpeechSeq2Seq,
-    RBLNAutoModelForTextEncoding,
-    RBLNAutoModelForVision2Seq,
-    RBLNAutoModelForZeroShotObjectDetection,
-)
+from ...configuration_generic import RBLNModelForDepthEstimationConfig
+
+
+class RBLNDepthAnythingForDepthEstimationConfig(RBLNModelForDepthEstimationConfig):
+    """
+    Configuration class for DepthAnythingForDepthEstimation.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized Depth Anything V2 Small models for depth estimation tasks.
+    """

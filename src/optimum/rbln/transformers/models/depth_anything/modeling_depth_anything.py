@@ -12,20 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .modeling_auto import (
-    RBLNAutoModel,
-    RBLNAutoModelForAudioClassification,
-    RBLNAutoModelForCausalLM,
-    RBLNAutoModelForCTC,
-    RBLNAutoModelForDepthEstimation,
-    RBLNAutoModelForImageClassification,
-    RBLNAutoModelForImageTextToText,
-    RBLNAutoModelForMaskedLM,
-    RBLNAutoModelForQuestionAnswering,
-    RBLNAutoModelForSeq2SeqLM,
-    RBLNAutoModelForSequenceClassification,
-    RBLNAutoModelForSpeechSeq2Seq,
-    RBLNAutoModelForTextEncoding,
-    RBLNAutoModelForVision2Seq,
-    RBLNAutoModelForZeroShotObjectDetection,
-)
+
+from ...modeling_generic import RBLNModelForDepthEstimation
+
+
+class RBLNDepthAnythingForDepthEstimation(RBLNModelForDepthEstimation):
+    """
+    RBLN optimized DepthAnythingForDepthEstimation model for depth estimation tasks.
+
+    This class provides hardware-accelerated inference for Depth Anything V2
+    models on RBLN devices, providing the most capable monocular depth estimation (MDE) model.
+    """

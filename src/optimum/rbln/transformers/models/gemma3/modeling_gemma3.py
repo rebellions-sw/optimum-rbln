@@ -345,6 +345,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     """
 
     _decoder_wrapper_cls = Gemma3ForCausalLMWrapper
+    _supports_non_fp32 = False
 
     def setup_runtime(self):
         # Initialize shared resources to be used across Runtime instances (prefill and decode phases)
@@ -403,7 +404,12 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         return rbln_config
 
     @classmethod
-    def _update_submodule_config(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
+    def _update_submodule_config(
+        cls,
+        model: "PreTrainedModel",
+        rbln_config: RBLNModelConfig,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+    ):
         if rbln_config.image_prefill_chunk_size is None:
             rbln_config.image_prefill_chunk_size = model.config.mm_tokens_per_image
 
