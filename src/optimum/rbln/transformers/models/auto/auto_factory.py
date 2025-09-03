@@ -14,7 +14,8 @@
 import importlib
 import inspect
 import warnings
-from typing import Type
+from pathlib import Path
+from typing import Any, Type
 
 from transformers import AutoConfig, PretrainedConfig
 from transformers.dynamic_module_utils import get_class_from_dynamic_module
@@ -43,10 +44,10 @@ class _BaseAutoModelClass:
     @classmethod
     def get_rbln_cls(
         cls,
-        pretrained_model_name_or_path,
-        *args,
-        export=True,
-        **kwargs,
+        pretrained_model_name_or_path: str,
+        *args: Any,
+        export: bool = None,
+        **kwargs: Any,
     ):
         """
         Determine the appropriate RBLN model class based on the given model ID and configuration.
@@ -59,6 +60,20 @@ class _BaseAutoModelClass:
         Returns:
             RBLNBaseModel: The corresponding RBLN model class.
         """
+        if isinstance(pretrained_model_name_or_path, Path):
+            pretrained_model_name_or_path = pretrained_model_name_or_path.as_posix()
+
+        if export is None:
+            export = not RBLNBaseModel._is_compiled(
+                model_id=pretrained_model_name_or_path,
+                token=kwargs.get("token"),
+                revision=kwargs.get("revision"),
+                force_download=kwargs.get("force_download", False),
+                cache_dir=kwargs.get("cache_dir"),
+                subfolder=kwargs.get("subfolder", ""),
+                local_files_only=kwargs.get("local_files_only", False),
+            )
+
         if export:
             hf_model_class = cls.infer_hf_model_class(pretrained_model_name_or_path, **kwargs)
             rbln_class_name = convert_hf_to_rbln_model_name(hf_model_class.__name__)
@@ -85,9 +100,9 @@ class _BaseAutoModelClass:
     @classmethod
     def infer_hf_model_class(
         cls,
-        pretrained_model_name_or_path,
-        *args,
-        **kwargs,
+        pretrained_model_name_or_path: str,
+        *args: Any,
+        **kwargs: Any,
     ):
         """
         Infer the HuggingFace model class based on the configuration or model name.
