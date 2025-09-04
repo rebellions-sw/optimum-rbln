@@ -12,9 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .configuration_siglip import (
-    RBLNSiglipVisionModelConfig,
-)
-from .modeling_siglip import (
-    RBLNSiglipVisionModel,
-)
+from .configuration_siglip import RBLNSiglipVisionModelConfig
+from .modeling_siglip import RBLNSiglipVisionModel

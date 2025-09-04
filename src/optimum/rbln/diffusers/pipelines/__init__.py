@@ -18,6 +18,11 @@ from transformers.utils import _LazyModule
 
 
 _import_structure = {
+    "auto_pipeline": [
+        "RBLNAutoPipelineForImage2Image",
+        "RBLNAutoPipelineForInpainting",
+        "RBLNAutoPipelineForText2Image",
+    ],
     "controlnet": [
         "RBLNMultiControlNetModel",
         "RBLNStableDiffusionControlNetImg2ImgPipeline",
@@ -60,6 +65,11 @@ _import_structure = {
     ],
 }
 if TYPE_CHECKING:
+    from .auto_pipeline import (
+        RBLNAutoPipelineForImage2Image,
+        RBLNAutoPipelineForInpainting,
+        RBLNAutoPipelineForText2Image,
+    )
     from .controlnet import (
         RBLNMultiControlNetModel,
         RBLNStableDiffusionControlNetImg2ImgPipeline,
@@ -67,11 +77,7 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLControlNetImg2ImgPipeline,
         RBLNStableDiffusionXLControlNetPipeline,
     )
-    from .cosmos import (
-        RBLNCosmosSafetyChecker,
-        RBLNCosmosTextToWorldPipeline,
-        RBLNCosmosVideoToWorldPipeline,
-    )
+    from .cosmos import RBLNCosmosSafetyChecker, RBLNCosmosTextToWorldPipeline, RBLNCosmosVideoToWorldPipeline
     from .kandinsky2_2 import (
         RBLNKandinskyV22CombinedPipeline,
         RBLNKandinskyV22Img2ImgCombinedPipeline,

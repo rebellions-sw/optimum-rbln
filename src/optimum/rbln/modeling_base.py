@@ -23,9 +23,10 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 import rebel
 import torch
 from transformers import AutoConfig, AutoModel, GenerationConfig, PretrainedConfig
+from transformers.utils.hub import PushToHubMixin
 
 from .configuration_utils import RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig, get_rbln_config_class
-from .utils.hub import PushToHubMixin, pull_compiled_model_from_hub, validate_files
+from .utils.hub import pull_compiled_model_from_hub, validate_files
 from .utils.logging import get_logger
 from .utils.runtime_utils import UnavailableRuntime, tp_and_devices_are_ok
 from .utils.save_utils import maybe_load_preprocessors
@@ -33,7 +34,7 @@ from .utils.submodule import SubModulesMixin
 
 
 if TYPE_CHECKING:
-    from transformers import PreTrainedModel
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PreTrainedModel
 
 logger = get_logger(__name__)
 
@@ -50,11 +51,9 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     model_type = "rbln_model"
     auto_model_class = AutoModel
     config_class = AutoConfig
-
     config_name = "config.json"
     hf_library_name = "transformers"
-    _hf_class = None
-    _rbln_config_class = None
+    _supports_non_fp32 = False
 
     def __init__(
         self,
@@ -93,7 +92,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
         self.device = torch.device("cpu")
         self.training = False
-        self.dtype = torch.float32
+        self.dtype = rbln_config.torch_dtype
 
         # FIXME :: model_save_dir is not used after initialized. (This can be used when save/load)
         # This attribute is needed to keep one reference on the temporary directory, since garbage collecting it
@@ -115,7 +114,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     def _load_compiled_model_dir(
         cls,
         model_id: Union[str, Path],
-        use_auth_token: Optional[Union[bool, str]] = None,
+        token: Optional[Union[bool, str]] = None,
         revision: Optional[str] = None,
         force_download: bool = False,
         cache_dir: Optional[str] = None,
@@ -134,7 +133,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             model_path = pull_compiled_model_from_hub(
                 model_id=model_id,
                 subfolder=subfolder,
-                use_auth_token=use_auth_token,
+                token=token,
                 revision=revision,
                 cache_dir=cache_dir,
                 force_download=force_download,
@@ -172,7 +171,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         cls,
         model_id: Union[str, Path],
         config: Optional["PretrainedConfig"] = None,
-        use_auth_token: Optional[Union[bool, str]] = None,
+        token: Optional[Union[bool, str]] = None,
         revision: Optional[str] = None,
         force_download: bool = False,
         cache_dir: Optional[str] = None,
@@ -189,7 +188,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         if rbln_compiled_models is None:
             model_path_subfolder = cls._load_compiled_model_dir(
                 model_id=model_id,
-                use_auth_token=use_auth_token,
+                token=token,
                 revision=revision,
                 force_download=force_download,
                 cache_dir=cache_dir,
@@ -232,7 +231,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
                         cache_dir=cache_dir,
                         force_download=force_download,
                         revision=revision,
-                        token=use_auth_token,
+                        token=token,
                         trust_remote_code=trust_remote_code,
                     )
                 elif cls.hf_library_name == "diffusers":
@@ -250,7 +249,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
                         force_download=force_download,
                         local_files_only=local_files_only,
                         revision=revision,
-                        token=use_auth_token,
+                        token=token,
                         subfolder=subfolder,
                     )
                     config = PretrainedConfig(**config)
@@ -350,7 +349,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         model_id: Union[str, Path],
         export: bool = False,
         rbln_config: Optional[Union[Dict, RBLNModelConfig]] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ) -> "RBLNBaseModel":
         """
         The `from_pretrained()` function is utilized in its standard form as in the HuggingFace transformers library.
@@ -402,8 +401,21 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         return compiled_model
 
     @classmethod
-    def update_rbln_config(cls, **others) -> RBLNModelConfig:
-        rbln_config = cls._update_rbln_config(**others)
+    def update_rbln_config(
+        cls,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+        model: "PreTrainedModel",
+        model_config: "PretrainedConfig",
+        rbln_config: RBLNModelConfig,
+    ) -> RBLNModelConfig:
+        rbln_config.torch_dtype = model.dtype
+        if not cls._supports_non_fp32 and rbln_config.torch_dtype != torch.float32:
+            raise NotImplementedError(
+                f"Currently, {cls.__name__} does not support non-fp32 dtype. Please use float32 dtype."
+            )
+        rbln_config = cls._update_rbln_config(
+            preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
+        )
         rbln_config.freeze()
         if rbln_config.rbln_model_cls_name != cls.__name__:
             raise NameError(
@@ -421,7 +433,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
         # Returns:
         #     type: The original HuggingFace model class
-        if cls._hf_class is None:
+        if "_hf_class" not in cls.__dict__ or cls._hf_class is None:
             hf_cls_name = cls.__name__[4:]
             library = importlib.import_module(cls.hf_library_name)
             cls._hf_class = getattr(library, hf_cls_name, None)
@@ -430,7 +442,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     @classmethod
     def get_rbln_config_class(cls) -> Type[RBLNModelConfig]:
         # Lazily loads and caches the corresponding RBLN model config class.
-        if cls._rbln_config_class is None:
+        if "_rbln_config_class" not in cls.__dict__ or cls._rbln_config_class is None:
             rbln_config_class_name = cls.__name__ + "Config"
             cls._rbln_config_class = get_rbln_config_class(rbln_config_class_name)
         return cls._rbln_config_class
@@ -446,12 +458,12 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
         # This method mimics the interface of torch.nn.Module.parameters()
         # specifically for code that uses `next(model.parameters())` to infer
-        # the device or dtype. It yields a single dummy tensor on CPU with float32 dtype.
+        # the device or dtype. It yields a single dummy tensor on CPU with model dtype.
 
         # Warning:
         #     This does NOT yield the actual model parameters used by the RBLN runtime.
         #     Code relying on iterating through all model parameters will not work as expected.
-        yield torch.tensor([1.0], dtype=torch.float32, device=torch.device("cpu"))
+        yield torch.tensor([1.0], dtype=self.dtype, device=torch.device("cpu"))
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
@@ -507,6 +519,9 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
                 f"Please ensure the model directory exists and you have the necessary permissions to access it."
             )
 
+        if isinstance(self.config, PretrainedConfig):
+            self.config.save_pretrained(real_save_dir)
+
         if save_directory_path == real_save_dir:
             raise FileExistsError(
                 f"Cannot save model to '{save_directory}'. This directory already exists and contains the model files."
@@ -522,10 +537,35 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             # First copy everything to a temporary directory
             shutil.copytree(real_save_dir, tmp_dir)
 
-            # If everything succeeded, atomically replace the target directory
+            # If everything succeeded, move files to target directory
             if os.path.exists(save_directory_path):
-                shutil.rmtree(save_directory_path)
-            os.rename(tmp_dir, save_directory_path)
+                # Merge files from tmp_dir into existing directory
+                def _merge_dir(src_root: str, dst_root: str):
+                    for name in os.listdir(src_root):
+                        src_item = os.path.join(src_root, name)
+                        dst_item = os.path.join(dst_root, name)
+
+                        if os.path.islink(src_item) or os.path.isfile(src_item):
+                            os.makedirs(os.path.dirname(dst_item), exist_ok=True)
+                            if os.path.isdir(dst_item) and not os.path.islink(dst_item):
+                                shutil.rmtree(dst_item)
+                            os.replace(src_item, dst_item)
+                        elif os.path.isdir(src_item):
+                            if os.path.islink(dst_item) or os.path.isfile(dst_item):
+                                os.remove(dst_item)
+                            os.makedirs(dst_item, exist_ok=True)
+                            _merge_dir(src_item, dst_item)
+                        else:
+                            # Fallback for special file types
+                            os.replace(src_item, dst_item)
+
+                _merge_dir(tmp_dir, str(save_directory_path))
+
+                # Remove the temporary directory tree after merge
+                shutil.rmtree(tmp_dir)
+            else:
+                # If target doesn't exist, just rename tmp_dir to target
+                os.rename(tmp_dir, save_directory_path)
 
         except Exception as e:
             # Clean up the temporary directory if anything fails
@@ -534,7 +574,10 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             raise e  # Re-raise the exception after cleanup
 
         if push_to_hub:
-            return super().push_to_hub(str(save_directory_path), **kwargs)
+            repo_id = kwargs.pop("repo_id", None)
+            if repo_id is None:
+                raise ValueError("`repo_id` must be provided to push the model to the HuggingFace model hub.")
+            return super().push_to_hub(repo_id=repo_id, **kwargs)
 
     @staticmethod
     def _raise_missing_compiled_file_error(missing_files: List[str]):

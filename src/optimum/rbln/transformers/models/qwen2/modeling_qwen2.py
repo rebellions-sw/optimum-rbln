@@ -15,7 +15,11 @@
 from transformers import PretrainedConfig
 
 from ....utils import logging
-from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyModelForCausalLMConfig
+from ...models.decoderonly import (
+    RBLNDecoderOnlyModel,
+    RBLNDecoderOnlyModelForCausalLM,
+    RBLNDecoderOnlyModelForCausalLMConfig,
+)
 from .qwen2_architecture import QWEN2Wrapper
 
 
@@ -79,6 +83,28 @@ class RBLNQwen2ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             rbln_config=config
         )
         ```
+    """
+
+    _decoder_wrapper_cls = QWEN2Wrapper
+
+    @classmethod
+    def _update_sliding_window_config(
+        cls, model_config: PretrainedConfig, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig
+    ):
+        # https://github.com/huggingface/transformers/issues/35896
+        # There seems to be a bug in transformers(v4.52.4). Therefore, similar to when attn_implementation is eager,
+        # we set all layers to use sliding window in this version. This should be updated once the bug is fixed.
+
+        rbln_config.cache_impl = "sliding_window"
+        rbln_config.sliding_window = model_config.sliding_window
+        rbln_config.sliding_window_layers = list(range(model_config.num_hidden_layers))
+        return rbln_config
+
+
+class RBLNQwen2Model(RBLNDecoderOnlyModel):
+    """
+    The Qwen2 Model transformer without a language modeling head.
+    This model inherits from [`RBLNDecoderOnlyModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
     """
 
     _decoder_wrapper_cls = QWEN2Wrapper

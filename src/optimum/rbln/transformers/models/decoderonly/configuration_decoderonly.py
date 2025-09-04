@@ -12,9 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, List, Literal, Optional, Union
-
-import rebel
+from typing import Any, Dict, List, Literal, Optional, Union, get_args
 
 from ....configuration_utils import RBLNModelConfig
 from ....utils.logging import get_logger
@@ -24,16 +22,20 @@ from ...utils.rbln_quantization import RBLNQuantizationConfig
 logger = get_logger()
 
 CacheImplType = Literal["static", "sliding_window", "hybrid"]
+PhaseType = Literal["prefill", "image_prefill", "decode"]
 
 
-class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
+class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
     """
-    Configuration class for RBLN decoder-only models for Causal Language Modeling.
+    Configuration class for RBLN decoder-only models.
 
     This class extends RBLNModelConfig with parameters specific to decoder-only transformer
     architectures optimized for RBLN devices. It controls aspects like attention implementation,
     KV cache management, and batching for inference.
     """
+
+    _default_phases = ["prefill"]
+    _default_logits_to_keep = 0
 
     def __init__(
         self,
@@ -52,6 +54,8 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         cache_impl: Optional[CacheImplType] = None,
         sliding_window: Optional[int] = None,
         sliding_window_layers: Optional[List[int]] = None,
+        phases: Optional[List[PhaseType]] = None,
+        logits_to_keep: Optional[int] = None,
         **kwargs,
     ):
         """
@@ -76,8 +80,6 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
             kvcache_block_size (Optional[int]): Sets the size (in number of tokens) of each block
                 in the PagedAttention KV cache. See the "KV Cache Block Size (`kvcache_block_size`)"
                 section below for details.
-            quantization (Optional[Dict[str, Any]]): Configuration dictionary for applying model
-                quantization. Specifies format, etc.
             prefill_chunk_size (Optional[int]): The chunk size used during the prefill phase for
                 processing input sequences. Defaults to 128. Must be a positive integer
                 divisible by 64. Affects prefill performance and memory usage.
@@ -98,6 +100,10 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
                 you must specify the `sliding_window` size and optionally `sliding_window_layers` for hybrid mode.
             sliding_window (Optional[int]): The size of the sliding window. Defaults to None.
             sliding_window_layers (Optional[List[int]]): The layers to use for the sliding window used in the hybrid model. Defaults to None.
+            phases (Optional[List[PhaseType]]): The phases to compile the model for. Defaults to ["prefill"] if DecoderOnlyModel is used,
+                ["prefill", "decode"] if DecoderOnlyModelForCausalLM is used.
+            logits_to_keep (Optional[int]): The number of logits to keep for the decoder.  If set to 0, the decoder will keep all logits.
+                Defaults to 0 if DecoderOnlyModel is used, 1 if DecoderOnlyModelForCausalLM is used.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -170,54 +176,86 @@ class RBLNDecoderOnlyModelForCausalLMConfig(RBLNModelConfig):
         self.max_seq_len = max_seq_len
         self.use_inputs_embeds = use_inputs_embeds or False
         self.use_position_ids = use_position_ids or False
-        self.use_attention_mask = use_attention_mask
-
-        npu = self.npu or rebel.get_npu_name()
-        if npu == "RBLN-CA02":
-            if self.use_attention_mask is False:
-                logger.warning("Attention mask should be used with RBLN-CA02. Setting use_attention_mask to True.")
-            self.use_attention_mask = True
-        else:
-            self.use_attention_mask = self.use_attention_mask or False
+        self.use_attention_mask = use_attention_mask or False
 
         if self.use_position_ids and not self.use_attention_mask:
             raise ValueError("Position IDs should be used with attention mask.")
 
-        self.attn_impl = attn_impl
-        self.kvcache_partition_len = kvcache_partition_len
-        self.kvcache_block_size = kvcache_block_size
         self.quantization = quantization or {}
         if self.quantization and isinstance(self.quantization, dict):
             self.quantization = RBLNQuantizationConfig(**self.quantization)
 
+        self.attn_impl = attn_impl
+        self.kvcache_partition_len = kvcache_partition_len
+        self.kvcache_block_size = kvcache_block_size
         self.prefill_chunk_size = prefill_chunk_size or 128
         if self.prefill_chunk_size % 64 != 0 or self.prefill_chunk_size <= 0:
             raise ValueError("`prefill_chunk_size` must be a positive integer divisible by 64.")
 
         self.kvcache_num_blocks = kvcache_num_blocks
-        self.decoder_batch_sizes = decoder_batch_sizes
-        if self.decoder_batch_sizes is None:
-            self.decoder_batch_sizes = [self.batch_size]
-
-        if self.use_multiple_decoder:
-            if max(self.decoder_batch_sizes) > self.batch_size:
-                raise ValueError(
-                    f"Decoder batch size ({max(self.decoder_batch_sizes)}) must be less than or equal to the runtime batch size ({self.batch_size})."
-                )
-            if max(self.decoder_batch_sizes) < self.batch_size:
-                logger.warning(
-                    f"Maximum decoder batch size ({max(self.decoder_batch_sizes)}) is less than the model's batch size ({self.batch_size}). "
-                    "Appending the model's batch size to the decoder batch size."
-                )
-                self.decoder_batch_sizes.append(self.batch_size)
-
-            # Larger batch size should be at the beginning of the list.
-            self.decoder_batch_sizes.sort(reverse=True)
-
         self.cache_impl = cache_impl or "static"
         self.sliding_window = sliding_window
         self.sliding_window_layers = sliding_window_layers or []
 
+        if phases is not None:
+            self.validate_phases_type(phases)
+        self.phases = phases or self._default_phases
+        self.logits_to_keep = logits_to_keep or self._default_logits_to_keep
+        if self.logits_to_keep is not None and self.logits_to_keep > 1:
+            raise NotImplementedError("`logits_to_keep` > 1 is currently not supported for RBLN models.")
+
+        if "decode" in self.phases:
+            self.decoder_batch_sizes = decoder_batch_sizes
+            if self.decoder_batch_sizes is None:
+                self.decoder_batch_sizes = [self.batch_size]
+
+            if self.use_multiple_decoder:
+                if max(self.decoder_batch_sizes) > self.batch_size:
+                    raise ValueError(
+                        f"Decoder batch size ({max(self.decoder_batch_sizes)}) must be less than or equal to the runtime batch size ({self.batch_size})."
+                    )
+                if max(self.decoder_batch_sizes) < self.batch_size:
+                    logger.warning(
+                        f"Maximum decoder batch size ({max(self.decoder_batch_sizes)}) is less than the model's batch size ({self.batch_size}). "
+                        "Appending the model's batch size to the decoder batch size."
+                    )
+                    self.decoder_batch_sizes.append(self.batch_size)
+
+                # Larger batch size should be at the beginning of the list.
+                self.decoder_batch_sizes.sort(reverse=True)
+
+    @staticmethod
+    def validate_phases_type(phases: List[PhaseType]):
+        if not isinstance(phases, list):
+            raise ValueError("`phases` must be a list.")
+        if not all(phase in get_args(PhaseType) for phase in phases):
+            raise ValueError(f"All elements in `phases` must be of type `PhaseType`({get_args(PhaseType)}).")
+
     @property
-    def use_multiple_decoder(self):
+    def use_global_attention(self) -> bool:
+        return self.cache_impl in ["static", "hybrid"]
+
+    @property
+    def use_local_attention(self) -> bool:
+        return self.cache_impl in ["sliding_window", "hybrid"]
+
+    @property
+    def use_multiple_decoder(self) -> bool:
         return isinstance(self.decoder_batch_sizes, list) and len(self.decoder_batch_sizes) > 1
+
+    @property
+    def can_generate(self) -> bool:
+        return "decode" in self.phases
+
+
+class RBLNDecoderOnlyModelForCausalLMConfig(RBLNDecoderOnlyModelConfig):
+    """
+    Configuration class for RBLN decoder-only models for Causal Language Modeling.
+
+    This class extends RBLNModelConfig with parameters specific to decoder-only transformer
+    architectures optimized for RBLN devices. It controls aspects like attention implementation,
+    KV cache management, and batching for inference.
+    """
+
+    _default_phases = ["prefill", "decode"]
+    _default_logits_to_keep = 1

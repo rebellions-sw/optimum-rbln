@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, get_args, ge
 import rebel
 import torch
 from huggingface_hub.constants import HUGGINGFACE_HUB_CACHE
-from transformers import AutoConfig, PretrainedConfig
+from transformers import PretrainedConfig
 from transformers.modeling_outputs import BaseModelOutput
 
 from .configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNModelConfig
@@ -35,8 +35,6 @@ logger = get_logger(__name__)
 
 
 class RBLNModel(RBLNBaseModel):
-    _output_class = None
-
     @classmethod
     def update_kwargs(cls, kwargs):
         # Update user-given kwargs to get proper pytorch model.
@@ -80,7 +78,7 @@ class RBLNModel(RBLNBaseModel):
         rbln_config: Optional[Union[RBLNModelConfig, Dict]] = None,
         model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
         subfolder: str = "",
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ) -> "RBLNModel":
         """
         Converts and compiles a pre-trained HuggingFace library model into a RBLN model.
@@ -121,9 +119,6 @@ class RBLNModel(RBLNBaseModel):
         # Save configs
         if config is None:
             config = model.config
-            # remote_config
-            if hasattr(config, "auto_map") and "AutoConfig" in config.auto_map:
-                config = AutoConfig.from_pretrained(config._name_or_path, **kwargs)
 
         if hasattr(model, "can_generate") and model.can_generate():
             import json
@@ -149,6 +144,7 @@ class RBLNModel(RBLNBaseModel):
                 model=model,
                 model_save_dir=save_dir,
                 rbln_config=rbln_config,
+                preprocessors=preprocessors,
                 **kwargs,
             )
         else:
@@ -243,7 +239,7 @@ class RBLNModel(RBLNBaseModel):
             for compiled_model in compiled_models
         ]
 
-    def forward(self, *args: Any, return_dict: Optional[bool] = None, **kwargs: Dict[str, Any]) -> Any:
+    def forward(self, *args: Any, return_dict: Optional[bool] = None, **kwargs: Any) -> Any:
         """
         Defines the forward pass of the RBLN model, providing a drop-in replacement for HuggingFace PreTrainedModel.
 
@@ -289,7 +285,7 @@ class RBLNModel(RBLNBaseModel):
     @classmethod
     def get_hf_output_class(cls):
         # Dynamically gets the output class from the corresponding HuggingFace model class.
-        if cls._output_class:
+        if "_output_class" in cls.__dict__ and cls._output_class is not None:
             return cls._output_class
 
         hf_class = cls.get_hf_class()

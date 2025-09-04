@@ -21,8 +21,10 @@ from typing import Any, Dict, List, Optional, Protocol, Tuple, Type, Union, runt
 
 import numpy as np
 import torch
+from packaging.version import Version
 
 from .__version__ import __version__
+from .utils.depreacate_utils import warn_deprecated_npu
 from .utils.logging import get_logger
 from .utils.runtime_utils import ContextRblnConfig
 
@@ -474,6 +476,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
     non_save_attributes = [
         "_frozen",
         "_runtime_options",
+        "torch_dtype",
         "npu",
         "tensor_parallel_size",
         "create_runtimes",
@@ -490,7 +493,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         self,
         submodule_config_cls: Type["RBLNModelConfig"],
         submodule_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ) -> "RBLNModelConfig":
         # Initialize a submodule config from a dict or a RBLNModelConfig.
         # kwargs is specified from the predecessor config.
@@ -564,8 +567,9 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         tensor_parallel_size: Optional[int] = None,
         timeout: Optional[int] = None,
         optimum_rbln_version: Optional[str] = None,
+        _torch_dtype: Optional[str] = None,
         _compile_cfgs: List[RBLNCompileConfig] = [],
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ):
         """
         Initialize a RBLN model configuration with runtime options and compile configurations.
@@ -581,6 +585,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
             tensor_parallel_size (Optional[int]): Size for tensor parallelism to distribute the model across devices.
             timeout (Optional[int]): The timeout for the runtime in seconds. If it isn't provided, it will be set to 60 by default.
             optimum_rbln_version (Optional[str]): The optimum-rbln version used for this configuration.
+            _torch_dtype (Optional[str]): The data type to use for the model.
             _compile_cfgs (List[RBLNCompileConfig]): List of compilation configurations for the model.
             **kwargs: Additional keyword arguments.
 
@@ -608,6 +613,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         self.npu = npu
         self.tensor_parallel_size = tensor_parallel_size
 
+        self._torch_dtype = _torch_dtype or "float32"
         self.optimum_rbln_version = optimum_rbln_version
         if self.optimum_rbln_version is None:
             self.optimum_rbln_version = __version__
@@ -620,7 +626,33 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
             self.set_compile_cfgs([RBLNCompileConfig(**cfg) for cfg in self._compile_cfgs])
 
         if len(kwargs) > 0:
+            if optimum_rbln_version is not None:  # loaded from file
+                if Version(__version__) < Version(optimum_rbln_version):
+                    diff = "newer"
+                elif Version(__version__) > Version(optimum_rbln_version):
+                    diff = "older"
+                else:
+                    diff = None
+                if diff is not None:
+                    raise ValueError(
+                        f"Unexpected arguments: {kwargs.keys()}\n"
+                        f"Maybe you are trying to load a model compiled with {diff} version of optimum-rbln. "
+                        "It is recommended to use the same version to compile and load the model.\n"
+                        f"Current version: {__version__}, Loaded version: {optimum_rbln_version}"
+                    )
+
             raise ValueError(f"Unexpected arguments: {kwargs.keys()}")
+
+    @property
+    def torch_dtype(self):
+        return getattr(torch, self._torch_dtype)
+
+    @torch_dtype.setter
+    def torch_dtype(self, torch_dtype: Union[str, torch.dtype]):
+        if isinstance(torch_dtype, torch.dtype):
+            torch_dtype = RBLNCompileConfig.normalize_dtype(torch_dtype)
+
+        self._torch_dtype = torch_dtype
 
     @property
     def rbln_model_cls_name(self) -> str:
@@ -675,6 +707,9 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
             compile_cfg.npu = self.npu
             compile_cfg.tensor_parallel_size = self.tensor_parallel_size
 
+        target_npu = self.npu or next((cfg.npu for cfg in self._compile_cfgs if cfg.npu is not None), None)
+        warn_deprecated_npu(target_npu)
+
     def freeze(self):
         if self._frozen:
             raise RuntimeError(f"`{self.__class__.__name__}` is already frozen.")
@@ -713,7 +748,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
             json.dump(serializable_data, jsonf, indent=2)
 
     @classmethod
-    def load(cls, path: str, **kwargs: Dict[str, Any]) -> "RBLNModelConfig":
+    def load(cls, path: str, **kwargs: Any) -> "RBLNModelConfig":
         """
         Load a RBLNModelConfig from a path.
 
@@ -746,7 +781,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
     def initialize_from_kwargs(
         cls: Type["RBLNModelConfig"],
         rbln_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ) -> Tuple["RBLNModelConfig", Dict[str, Any]]:
         # Initialize RBLNModelConfig from kwargs.
         kwargs_keys = list(kwargs.keys())

@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 class RBLNRuntimeEncoder(RBLNPytorchRuntime):
     mandatory_members = ["main_input_name"]
 
-    def forward(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
+    def forward(self, *args: List[torch.Tensor], **kwargs: torch.Tensor):
         output = super().forward(*args, **kwargs)
         return BaseModelOutput(last_hidden_state=output)
 
@@ -182,6 +182,21 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
         return {"encoder": compiled_encoder, "decoder": compiled_decoder}
 
     @classmethod
+    def _update_paged_attention_config(cls, model_config: PretrainedConfig, rbln_config: RBLNModelForSeq2SeqLMConfig):
+        rbln_config.kvcache_num_blocks = rbln_config.kvcache_num_blocks or rbln_config.batch_size
+        rbln_config.kvcache_block_size = rbln_config.kvcache_block_size or rbln_config.dec_max_seq_len
+
+        if rbln_config.kvcache_num_blocks != rbln_config.batch_size:
+            raise NotImplementedError(
+                f"kvcache_num_blocks ({rbln_config.kvcache_num_blocks}) must be equal to batch_size ({rbln_config.batch_size}) as flash attention is not supported yet."
+            )
+
+        if rbln_config.kvcache_block_size != rbln_config.dec_max_seq_len:
+            raise NotImplementedError(
+                f"kvcache_block_size ({rbln_config.kvcache_block_size}) must be equal to dec_max_seq_len ({rbln_config.dec_max_seq_len}) as flash attention is not supported yet."
+            )
+
+    @classmethod
     def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
@@ -237,6 +252,9 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
 
         if max_position_embeddings is not None and rbln_config.dec_max_seq_len > max_position_embeddings:
             raise ValueError("`dec_max_seq_len` should be less or equal than max_position_embeddings!")
+
+        if rbln_config.support_paged_attention:
+            cls._update_paged_attention_config(model_config, rbln_config)
 
         # model input info
         enc_input_info = [
@@ -310,6 +328,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
         dec_compile_config = RBLNCompileConfig(compiled_model_name="decoder", input_info=dec_input_info)
 
         rbln_config.set_compile_cfgs([enc_compile_config, dec_compile_config])
+
         return rbln_config
 
     @classmethod

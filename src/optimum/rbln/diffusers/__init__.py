@@ -62,6 +62,9 @@ _import_structure = {
         "RBLNAutoencoderKLTemporalDecoderConfig",
     ],
     "pipelines": [
+        "RBLNAutoPipelineForImage2Image",
+        "RBLNAutoPipelineForInpainting",
+        "RBLNAutoPipelineForText2Image",
         "RBLNCosmosTextToWorldPipeline",
         "RBLNCosmosVideoToWorldPipeline",
         "RBLNCosmosSafetyChecker",
@@ -146,6 +149,7 @@ if TYPE_CHECKING:
     from .models import (
         RBLNAutoencoderKL,
         RBLNAutoencoderKLTemporalDecoder,
+        RBLNAutoencoderKLCosmos,
         RBLNControlNetModel,
         RBLNCosmosTransformer3DModel,
         RBLNPriorTransformer,
@@ -155,6 +159,9 @@ if TYPE_CHECKING:
         RBLNVQModel,
     )
     from .pipelines import (
+        RBLNAutoPipelineForImage2Image,
+        RBLNAutoPipelineForInpainting,
+        RBLNAutoPipelineForText2Image,
         RBLNCosmosSafetyChecker,
         RBLNCosmosTextToWorldPipeline,
         RBLNCosmosVideoToWorldPipeline,

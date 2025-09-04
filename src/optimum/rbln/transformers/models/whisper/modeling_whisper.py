@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 class RBLNRuntimeEncoder(RBLNPytorchRuntime):
     mandatory_members = ["main_input_name"]
 
-    def forward(self, *args: List[torch.Tensor], **kwargs: Dict[str, torch.Tensor]):
+    def forward(self, *args: List[torch.Tensor], **kwargs: torch.Tensor):
         output = super().forward(*args, **kwargs)
         return BaseModelOutput(last_hidden_state=output)
 
@@ -73,6 +73,7 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         decoder_input_ids: torch.Tensor = None,
         decoder_attention_mask: torch.Tensor = None,
         cache_position: torch.Tensor = None,
+        block_tables: torch.Tensor = None,
     ):
         inputs_bsz = decoder_input_ids.shape[0]
         padded_bsz = self.batch_size - inputs_bsz
@@ -89,11 +90,14 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
                     )
                 decoder_attention_mask[b_idx, : decoding_step + 1] = 1
 
+        if block_tables is None:
+            block_tables = self.default_block_tables
+
         outputs = super().forward(
             decoder_input_ids,
             decoder_attention_mask if self.use_attention_mask else None,
             cache_position,
-            block_tables=self.default_block_tables,
+            block_tables=block_tables,
         )
 
         if isinstance(outputs, torch.Tensor):
@@ -250,6 +254,23 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
         return {"encoder": compiled_encoder, "decoder": compiled_decoder}
 
     @classmethod
+    def _update_paged_attention_config(
+        cls, model_config: "PretrainedConfig", rbln_config: RBLNWhisperForConditionalGenerationConfig
+    ):
+        rbln_config.kvcache_num_blocks = rbln_config.kvcache_num_blocks or rbln_config.batch_size
+        rbln_config.kvcache_block_size = rbln_config.kvcache_block_size or rbln_config.dec_max_seq_len
+
+        if rbln_config.kvcache_num_blocks != rbln_config.batch_size:
+            raise NotImplementedError(
+                f"kvcache_num_blocks ({rbln_config.kvcache_num_blocks}) must be equal to batch_size ({rbln_config.batch_size}) as flash attention is not supported yet."
+            )
+
+        if rbln_config.kvcache_block_size != rbln_config.dec_max_seq_len:
+            raise NotImplementedError(
+                f"kvcache_block_size ({rbln_config.kvcache_block_size}) must be equal to dec_max_seq_len ({rbln_config.dec_max_seq_len}) as flash attention is not supported yet."
+            )
+
+    @classmethod
     def _update_rbln_config(
         cls,
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
@@ -265,6 +286,8 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
         rbln_config.dec_max_seq_len = getattr(model_config, "max_target_positions", None)
         if rbln_config.dec_max_seq_len is None:
             rbln_config.dec_max_seq_len = model_config.max_length
+
+        cls._update_paged_attention_config(model_config, rbln_config)
 
         enc_input_info = [
             ("input_features", [1, num_mel_bins, expected_seq_len], "float32"),
