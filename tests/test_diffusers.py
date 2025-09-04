@@ -16,6 +16,7 @@ from optimum.rbln import (
     RBLNStableDiffusionPipeline,
     RBLNStableDiffusionXLControlNetPipeline,
     RBLNStableDiffusionXLPipeline,
+    RBLNStableVideoDiffusionPipeline,
 )
 
 from .test_base import BaseHubTest, BaseTest
@@ -316,6 +317,132 @@ class TestKandinskyV22Img2ImgModel(BaseTest.TestModel):
             "decoder_pipe": {"unet": {"batch_size": 2}},
         },
     }
+
+
+class TestSVDImg2VidModel(BaseTest.TestModel):
+    RBLN_CLASS = RBLNStableVideoDiffusionPipeline
+    HF_MODEL_ID = "stabilityai/stable-video-diffusion-img2vid"
+
+    GENERATION_KWARGS = {
+        "num_inference_steps": 2,
+        "generator": torch.manual_seed(42),
+        "image": torch.randn(1, 3, 32, 32, generator=torch.manual_seed(42)).uniform_(0, 1),
+        "num_frames": 2,
+        "decode_chunk_size": 2,
+        "output_type": "pt",
+        "height": 32,
+        "width": 32,
+    }
+    RBLN_CLASS_KWARGS = {
+        "rbln_width": 32,
+        "rbln_height": 32,
+        "rbln_num_frames": 2,
+        "rbln_decode_chunk_size": 2,
+        "rbln_config": {
+            "image_encoder": {"device": 0},
+            "unet": {"device": 0},
+            "vae": {"device": -1},
+        },
+    }
+
+    @classmethod
+    # ref: https://github.com/huggingface/diffusers/blob/b88fef47851059ce32f161d17f00cd16d94af96a/tests/pipelines/stable_video_diffusion/test_stable_video_diffusion.py#L64
+    def get_dummy_components(cls):
+        from diffusers import (
+            AutoencoderKLTemporalDecoder,
+            EulerDiscreteScheduler,
+            UNetSpatioTemporalConditionModel,
+        )
+        from transformers import (
+            CLIPImageProcessor,
+            CLIPVisionConfig,
+            CLIPVisionModelWithProjection,
+        )
+
+        torch.manual_seed(42)
+        unet = UNetSpatioTemporalConditionModel(
+            block_out_channels=(32, 64),
+            layers_per_block=2,
+            sample_size=32,
+            in_channels=8,
+            out_channels=4,
+            down_block_types=(
+                "CrossAttnDownBlockSpatioTemporal",
+                "DownBlockSpatioTemporal",
+            ),
+            up_block_types=("UpBlockSpatioTemporal", "CrossAttnUpBlockSpatioTemporal"),
+            cross_attention_dim=32,
+            num_attention_heads=8,
+            projection_class_embeddings_input_dim=96,
+            addition_time_embed_dim=32,
+        )
+        scheduler = EulerDiscreteScheduler(
+            beta_start=0.00085,
+            beta_end=0.012,
+            beta_schedule="scaled_linear",
+            interpolation_type="linear",
+            num_train_timesteps=1000,
+            prediction_type="v_prediction",
+            sigma_max=700.0,
+            sigma_min=0.002,
+            steps_offset=1,
+            timestep_spacing="leading",
+            timestep_type="continuous",
+            trained_betas=None,
+            use_karras_sigmas=True,
+        )
+
+        torch.manual_seed(42)
+        vae = AutoencoderKLTemporalDecoder(
+            block_out_channels=[32, 64],
+            in_channels=3,
+            out_channels=3,
+            down_block_types=["DownEncoderBlock2D", "DownEncoderBlock2D"],
+            latent_channels=4,
+        )
+
+        torch.manual_seed(42)
+        config = CLIPVisionConfig(
+            hidden_size=32,
+            projection_dim=32,
+            num_hidden_layers=5,
+            num_attention_heads=4,
+            image_size=32,
+            intermediate_size=37,
+            patch_size=1,
+        )
+        image_encoder = CLIPVisionModelWithProjection(config)
+
+        torch.manual_seed(42)
+        feature_extractor = CLIPImageProcessor(crop_size=32, size=32)
+        components = {
+            "unet": unet,
+            "image_encoder": image_encoder,
+            "scheduler": scheduler,
+            "vae": vae,
+            "feature_extractor": feature_extractor,
+        }
+        return components
+
+    @classmethod
+    def setUpClass(cls):
+        components = cls.get_dummy_components()
+        cls.model = cls.RBLN_CLASS.from_pretrained(
+            cls.HF_MODEL_ID,
+            export=True,
+            model_save_dir=cls.get_rbln_local_dir(),
+            rbln_device=cls.DEVICE,
+            **cls.RBLN_CLASS_KWARGS,
+            **cls.HF_CONFIG_KWARGS,
+            **components,
+        )
+
+    def test_generate(self):
+        inputs = self.get_inputs()
+        output = self.model(**inputs).frames[0]
+        output = self.postprocess(inputs, output)
+        if self.EXPECTED_OUTPUT:
+            self.assertEqual(output, self.EXPECTED_OUTPUT)
 
 
 if __name__ == "__main__":
