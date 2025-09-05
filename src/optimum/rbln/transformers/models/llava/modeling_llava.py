@@ -98,7 +98,7 @@ class LoopProjector(LoopProcessor):
 
     def _process_outputs(self, outputs: list, **kwargs):
         output = kwargs["out"]
-        return torch.cat(output, dim=0)
+        return output[0]
 
 
 class RBLNLlavaForConditionalGeneration(RBLNModel):
