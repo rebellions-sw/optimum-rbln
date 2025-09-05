@@ -162,7 +162,13 @@ class TimeSeriesTransformersDecoder(nn.Module):
         attention_mask = _prepare_4d_causal_attention_mask(attention_mask, input_shape, inputs_embeds, cache_position)
 
         hidden_states = self.value_embedding(inputs_embeds)
-        embed_pos = self.embed_positions.weight[cache_position + self.config.context_length]
+        embed_idx = cache_position + self.config.context_length
+        if torch.compiler.is_exporting():
+            embed_idx = embed_idx.item()
+            torch._check_is_size(embed_idx)
+            torch._check(embed_idx >= 0)
+            torch._check(embed_idx < len(self.embed_positions.weight))
+        embed_pos = self.embed_positions.weight[embed_idx]
         hidden_states = self.layernorm_embedding(hidden_states + embed_pos)
 
         # iterate decoder_layer
