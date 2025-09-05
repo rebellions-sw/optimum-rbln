@@ -33,31 +33,46 @@ def monkey_patch():
         GroundingDinoBiMultiHeadAttention,
         GroundingDinoEncoderLayer,
         GroundingDinoMultiscaleDeformableAttention,
+        MultiScaleDeformableAttention,
     )
 
     original_forward = GroundingDinoMultiscaleDeformableAttention.forward
     original_bi_multihead_attention_forward = GroundingDinoBiMultiHeadAttention.forward
     original_encoder_layer_forward = GroundingDinoEncoderLayer.forward
+    original_multiscale_deform_attn = MultiScaleDeformableAttention.forward
 
     # Patch the methods with the custom implementations
     GroundingDinoMultiscaleDeformableAttention.forward = _GroundingDinoMultiscaleDeformableAttention.forward
     GroundingDinoBiMultiHeadAttention.forward = _GroundingDinoBiMultiHeadAttention.forward
     GroundingDinoEncoderLayer.forward = _GroundingDinoEncoderLayer.forward
+    MultiScaleDeformableAttention.forward = _MultiScaleDeformableAttention.forward
 
-    return (original_forward, original_bi_multihead_attention_forward, original_encoder_layer_forward)
+    return (
+        original_forward,
+        original_bi_multihead_attention_forward,
+        original_encoder_layer_forward,
+        original_multiscale_deform_attn,
+    )
 
 
-def restore_monkey_patch(original_forward, original_bi_multihead_attention_forward, original_encoder_layer_forward):
+def restore_monkey_patch(
+    original_forward,
+    original_bi_multihead_attention_forward,
+    original_encoder_layer_forward,
+    original_multiscale_deform_attn,
+):
     from transformers.models.grounding_dino.modeling_grounding_dino import (
         GroundingDinoBiMultiHeadAttention,
         GroundingDinoEncoderLayer,
         GroundingDinoMultiscaleDeformableAttention,
+        MultiScaleDeformableAttention,
     )
 
     # Restore the original methods
     GroundingDinoMultiscaleDeformableAttention.forward = original_forward
     GroundingDinoBiMultiHeadAttention.forward = original_bi_multihead_attention_forward
     GroundingDinoEncoderLayer.forward = original_encoder_layer_forward
+    MultiScaleDeformableAttention.forward = original_multiscale_deform_attn
 
 
 def monkey_patch_decorator(func):
@@ -505,3 +520,58 @@ class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
         text_attn_output = self.out_text_proj(text_attn_output)
 
         return (vision_attn_output, vision_attn_weights), (text_attn_output, text_attn_weights)
+
+
+class _MultiScaleDeformableAttention(torch.nn.Module):
+    def forward(
+        self,
+        value: Tensor,
+        value_spatial_shapes: Tensor,
+        value_spatial_shapes_list: List[Tuple],
+        level_start_index: Tensor,
+        sampling_locations: Tensor,
+        attention_weights: Tensor,
+        im2col_step: int,
+    ):
+        batch_size, _, num_heads, hidden_dim = value.shape
+        _, num_queries, num_heads, num_levels, num_points, _ = sampling_locations.shape
+        value_list = value.split([height * width for height, width in value_spatial_shapes_list], dim=1)
+        sampling_grids = 2 * sampling_locations - 1
+        sampling_value_list = []
+        sampling_grids_list = [t.squeeze(3) for t in torch.split(sampling_grids, 1, dim=3)]
+        for level_id, (height, width) in enumerate(value_spatial_shapes_list):
+            # batch_size, height*width, num_heads, hidden_dim
+            # -> batch_size, height*width, num_heads*hidden_dim
+            # -> batch_size, num_heads*hidden_dim, height*width
+            # -> batch_size*num_heads, hidden_dim, height, width
+            value_l_ = (
+                value_list[level_id]
+                .flatten(2)
+                .transpose(1, 2)
+                .reshape(batch_size * num_heads, hidden_dim, height, width)
+            )
+            # batch_size, num_queries, num_heads, num_points, 2
+            # -> batch_size, num_heads, num_queries, num_points, 2
+            # -> batch_size*num_heads, num_queries, num_points, 2
+            sampling_grid_l_ = sampling_grids_list[level_id].transpose(1, 2).flatten(0, 1)
+            # batch_size*num_heads, hidden_dim, num_queries, num_points
+            sampling_value_l_ = torch.nn.functional.grid_sample(
+                value_l_,
+                sampling_grid_l_,
+                mode="bilinear",
+                padding_mode="zeros",
+                align_corners=False,
+            )
+            sampling_value_list.append(sampling_value_l_)
+        # (batch_size, num_queries, num_heads, num_levels, num_points)
+        # -> (batch_size, num_heads, num_queries, num_levels, num_points)
+        # -> (batch_size, num_heads, 1, num_queries, num_levels*num_points)
+        attention_weights = attention_weights.transpose(1, 2).reshape(
+            batch_size * num_heads, 1, num_queries, num_levels * num_points
+        )
+        output = (
+            (torch.stack(sampling_value_list, dim=-2).flatten(-2) * attention_weights)
+            .sum(-1)
+            .view(batch_size, num_heads * hidden_dim, num_queries)
+        )
+        return output.transpose(1, 2).contiguous()
