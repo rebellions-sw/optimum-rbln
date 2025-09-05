@@ -14,9 +14,10 @@
 import importlib
 import inspect
 import warnings
-from typing import Type
+from pathlib import Path
+from typing import Any, Type, Union
 
-from transformers import AutoConfig, PretrainedConfig
+from transformers import AutoConfig, PretrainedConfig, PreTrainedModel
 from transformers.dynamic_module_utils import get_class_from_dynamic_module
 from transformers.models.auto.auto_factory import _get_model_class
 
@@ -43,10 +44,10 @@ class _BaseAutoModelClass:
     @classmethod
     def get_rbln_cls(
         cls,
-        pretrained_model_name_or_path,
-        *args,
-        export=True,
-        **kwargs,
+        pretrained_model_name_or_path: Union[str, Path],
+        *args: Any,
+        export: bool = None,
+        **kwargs: Any,
     ):
         """
         Determine the appropriate RBLN model class based on the given model ID and configuration.
@@ -59,6 +60,20 @@ class _BaseAutoModelClass:
         Returns:
             RBLNBaseModel: The corresponding RBLN model class.
         """
+        if isinstance(pretrained_model_name_or_path, Path):
+            pretrained_model_name_or_path = pretrained_model_name_or_path.as_posix()
+
+        if export is None:
+            export = not RBLNBaseModel._is_compiled(
+                model_id=pretrained_model_name_or_path,
+                token=kwargs.get("token"),
+                revision=kwargs.get("revision"),
+                force_download=kwargs.get("force_download", False),
+                cache_dir=kwargs.get("cache_dir"),
+                subfolder=kwargs.get("subfolder", ""),
+                local_files_only=kwargs.get("local_files_only", False),
+            )
+
         if export:
             hf_model_class = cls.infer_hf_model_class(pretrained_model_name_or_path, **kwargs)
             rbln_class_name = convert_hf_to_rbln_model_name(hf_model_class.__name__)
@@ -85,9 +100,9 @@ class _BaseAutoModelClass:
     @classmethod
     def infer_hf_model_class(
         cls,
-        pretrained_model_name_or_path,
-        *args,
-        **kwargs,
+        pretrained_model_name_or_path: Union[str, Path],
+        *args: Any,
+        **kwargs: Any,
     ):
         """
         Infer the HuggingFace model class based on the configuration or model name.
@@ -140,7 +155,7 @@ class _BaseAutoModelClass:
         return model_class
 
     @classmethod
-    def get_rbln_model_cls_name(cls, pretrained_model_name_or_path, **kwargs):
+    def get_rbln_model_cls_name(cls, pretrained_model_name_or_path: Union[str, Path], **kwargs):
         """
         Retrieve the path to the compiled model directory for a given RBLN model.
 
@@ -163,17 +178,17 @@ class _BaseAutoModelClass:
         return rbln_config.rbln_model_cls_name
 
     @classmethod
-    def from_pretrained(cls, model_id, *args, **kwargs):
+    def from_pretrained(cls, model_id: Union[str, Path], *args, **kwargs):
         rbln_cls = cls.get_rbln_cls(model_id, *args, **kwargs)
         return rbln_cls.from_pretrained(model_id, *args, **kwargs)
 
     @classmethod
-    def from_model(cls, model, *args, **kwargs):
+    def from_model(cls, model: PreTrainedModel, *args, **kwargs):
         rbln_cls = get_rbln_model_cls(f"RBLN{model.__class__.__name__}")
         return rbln_cls.from_model(model, *args, **kwargs)
 
     @staticmethod
-    def register(rbln_cls: Type[RBLNBaseModel], exist_ok=False):
+    def register(rbln_cls: Type[RBLNBaseModel], exist_ok: bool = False):
         """
         Register a new RBLN model class.
 
