@@ -18,6 +18,60 @@ class RBLNLoRAAdapterConfig(RBLNSerializableConfigProtocol):
     This class represents a single LoRA adapter that will be compiled into the RBLN model.
     Since RBLN NPU requires all adapters to be determined at compile time, each adapter
     must be fully specified including its weights.
+
+    Examples:
+        ```python
+        from transformers import AutoTokenizer
+
+        from optimum.rbln import RBLNLlamaForCausalLM, RBLNLlamaForCausalLMConfig, RBLNLoRAAdapterConfig, RBLNLoRAConfig
+
+
+        model_id = "meta-llama/Llama-3.1-8B-Instruct"
+        lora_ids = [
+            "nvidia/llama-3.1-nemoguard-8b-topic-control",
+            "reissbaker/llama-3.1-8b-abliterated-lora",
+        ]
+        prompt = "What are the safety considerations for AI systems?"
+        tp_size = 4
+
+        # adapter id should be higher than 0
+        # 0 is reserved for base model
+        lora_config = RBLNLoRAConfig(
+            adapters=[
+                RBLNLoRAAdapterConfig(1, "nemoguard", lora_ids[0]),
+                RBLNLoRAAdapterConfig(2, "abliterated", lora_ids[1]),
+            ],
+        )
+
+        model = RBLNLlamaForCausalLM.from_pretrained(
+            model_id,
+            rbln_config=RBLNLlamaForCausalLMConfig(lora_config=lora_config, tensor_parallel_size=tp_size, max_seq_len=8192),
+            torch_dtype="auto",
+        )
+
+
+        tokenizer = AutoTokenizer.from_pretrained(model_id)
+        tokenizer.pad_token = tokenizer.eos_token
+
+
+        prompt_template = tokenizer.apply_chat_template(
+            [
+                {"role": "system", "content": "You are a helpful assistant. Always be concise"},
+                {"role": "user", "content": prompt},
+            ],
+            add_generation_prompt=True,
+            tokenize=False,
+        )
+        inputs = tokenizer([prompt_template], return_tensors="pt")
+        input_len = inputs["input_ids"].shape[-1]
+
+        for adapter_name in lora_config.adapter_names:
+            model.set_adapter(adapter_name)
+            decoder_outputs = model.generate(**inputs, max_new_tokens=64, do_sample=False)
+            generated_text = tokenizer.decode(decoder_outputs[0][input_len:], skip_special_tokens=True)
+            print(generated_text + "\n")
+        ```
+
     """
 
     def __init__(
