@@ -383,7 +383,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
         Args:
             model_id: The model id of the pre-trained model to be loaded. It can be downloaded from the HuggingFace model hub or a local path, or a model id of a compiled model using the RBLN Compiler.
-            export: A boolean flag to indicate whether the model should be compiled.
+            export: A boolean flag to indicate whether the model should be compiled. If None, it will be determined based on the existence of the compiled model files in the model_id.
             rbln_config: Configuration for RBLN model compilation and runtime. This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNLlamaForCausalLMConfig` for Llama models).
                 For detailed configuration options, see the specific model's configuration class documentation.
 

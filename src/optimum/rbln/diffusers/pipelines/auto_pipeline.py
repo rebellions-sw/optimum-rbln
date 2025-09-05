@@ -15,7 +15,7 @@
 
 import importlib
 from pathlib import Path
-from typing import Type
+from typing import Type, Union
 
 from diffusers.models.controlnets import ControlNetUnionModel
 from diffusers.pipelines.auto_pipeline import (
@@ -43,7 +43,7 @@ class RBLNAutoPipelineBase:
     _model_mapping_names = None
 
     @classmethod
-    def get_rbln_cls(cls, pretrained_model_name_or_path, export: bool = None, **kwargs):
+    def get_rbln_cls(cls, pretrained_model_name_or_path: Union[str, Path], export: bool = None, **kwargs):
         if isinstance(pretrained_model_name_or_path, Path):
             pretrained_model_name_or_path = pretrained_model_name_or_path.as_posix()
 
@@ -73,7 +73,7 @@ class RBLNAutoPipelineBase:
         return rbln_cls
 
     @classmethod
-    def get_rbln_model_cls_name(cls, pretrained_model_name_or_path, **kwargs):
+    def get_rbln_model_cls_name(cls, pretrained_model_name_or_path: Union[str, Path], **kwargs):
         """
         Retrieve the path to the compiled model directory for a given RBLN model.
 
@@ -96,7 +96,7 @@ class RBLNAutoPipelineBase:
     @classmethod
     def _is_compiled_pipeline(
         cls,
-        pretrained_model_name_or_path: str,
+        pretrained_model_name_or_path: Union[str, Path],
         cache_dir=None,
         force_download=False,
         proxies=None,
@@ -122,7 +122,7 @@ class RBLNAutoPipelineBase:
     @classmethod
     def infer_hf_model_class(
         cls,
-        pretrained_model_or_path,
+        pretrained_model_or_path: Union[str, Path],
         cache_dir=None,
         force_download=False,
         proxies=None,
