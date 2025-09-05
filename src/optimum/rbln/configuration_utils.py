@@ -251,9 +251,6 @@ class RBLNAutoConfig:
             if key[5:] not in RUNTIME_KEYWORDS and key[5:] not in cls.submodules
         }
 
-        if len(rbln_kwargs) > 0:
-            raise ValueError(f"Cannot set the following arguments: {list(rbln_kwargs.keys())}")
-
         # Process submodule's rbln_config
         for submodule in cls.submodules:
             if submodule not in config_file:
@@ -267,6 +264,16 @@ class RBLNAutoConfig:
             # TODO(jongho): Reject if the passed_rbln_config has different attributes from the config_file
 
         config_file.update(rbln_runtime_kwargs)
+
+        rbln_config = cls(**config_file)
+
+        if len(rbln_kwargs) > 0:
+            for key, value in rbln_kwargs.items():
+                if getattr(rbln_config, key) != value:
+                    raise ValueError(
+                        f"Cannot set the following arguments: {list(rbln_kwargs.keys())} "
+                        f"Since the value is already set to {getattr(rbln_config, key)}"
+                    )
 
         if return_unused_kwargs:
             return cls(**config_file), kwargs

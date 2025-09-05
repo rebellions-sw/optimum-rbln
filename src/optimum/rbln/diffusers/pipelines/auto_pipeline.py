@@ -14,7 +14,8 @@
 
 
 import importlib
-from typing import Type
+from pathlib import Path
+from typing import Type, Union
 
 from diffusers.models.controlnets import ControlNetUnionModel
 from diffusers.pipelines.auto_pipeline import (
@@ -42,7 +43,13 @@ class RBLNAutoPipelineBase:
     _model_mapping_names = None
 
     @classmethod
-    def get_rbln_cls(cls, pretrained_model_name_or_path, export=True, **kwargs):
+    def get_rbln_cls(cls, pretrained_model_name_or_path: Union[str, Path], export: bool = None, **kwargs):
+        if isinstance(pretrained_model_name_or_path, Path):
+            pretrained_model_name_or_path = pretrained_model_name_or_path.as_posix()
+
+        if export is None:
+            export = not cls._is_compiled_pipeline(pretrained_model_name_or_path, **kwargs)
+
         if export:
             hf_model_class = cls.infer_hf_model_class(pretrained_model_name_or_path, **kwargs)
             rbln_class_name = convert_hf_to_rbln_model_name(hf_model_class.__name__)
@@ -66,7 +73,7 @@ class RBLNAutoPipelineBase:
         return rbln_cls
 
     @classmethod
-    def get_rbln_model_cls_name(cls, pretrained_model_name_or_path, **kwargs):
+    def get_rbln_model_cls_name(cls, pretrained_model_name_or_path: Union[str, Path], **kwargs):
         """
         Retrieve the path to the compiled model directory for a given RBLN model.
 
@@ -87,9 +94,35 @@ class RBLNAutoPipelineBase:
         return model_index_config["_class_name"]
 
     @classmethod
+    def _is_compiled_pipeline(
+        cls,
+        pretrained_model_name_or_path: Union[str, Path],
+        cache_dir=None,
+        force_download=False,
+        proxies=None,
+        token=None,
+        local_files_only=False,
+        revision=None,
+        **kwargs,
+    ):
+        config: dict = cls.load_config(
+            pretrained_model_name_or_path,
+            cache_dir=cache_dir,
+            force_download=force_download,
+            proxies=proxies,
+            token=token,
+            local_files_only=local_files_only,
+            revision=revision,
+        )
+        for value in config.values():
+            if isinstance(value, list) and len(value) > 0 and value[0] == "optimum.rbln":
+                return True
+        return False
+
+    @classmethod
     def infer_hf_model_class(
         cls,
-        pretrained_model_or_path,
+        pretrained_model_or_path: Union[str, Path],
         cache_dir=None,
         force_download=False,
         proxies=None,

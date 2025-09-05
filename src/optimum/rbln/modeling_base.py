@@ -344,10 +344,36 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         return rbln_config, kwargs
 
     @classmethod
+    def _is_compiled(
+        cls,
+        model_id: Union[str, Path],
+        token: Optional[Union[bool, str]] = None,
+        revision: Optional[str] = None,
+        force_download: bool = False,
+        cache_dir: Optional[str] = None,
+        subfolder: str = "",
+        local_files_only: bool = False,
+    ) -> bool:
+        # Check if the model is already compiled.
+        try:
+            cls._load_compiled_model_dir(
+                model_id=model_id,
+                token=token,
+                revision=revision,
+                force_download=force_download,
+                cache_dir=cache_dir,
+                subfolder=subfolder,
+                local_files_only=local_files_only,
+            )
+            return True
+        except (FileNotFoundError, KeyError):
+            return False
+
+    @classmethod
     def from_pretrained(
         cls: Type["RBLNBaseModel"],
         model_id: Union[str, Path],
-        export: bool = False,
+        export: bool = None,
         rbln_config: Optional[Union[Dict, RBLNModelConfig]] = None,
         **kwargs: Any,
     ) -> "RBLNBaseModel":
@@ -357,7 +383,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
         Args:
             model_id: The model id of the pre-trained model to be loaded. It can be downloaded from the HuggingFace model hub or a local path, or a model id of a compiled model using the RBLN Compiler.
-            export: A boolean flag to indicate whether the model should be compiled.
+            export: A boolean flag to indicate whether the model should be compiled. If None, it will be determined based on the existence of the compiled model files in the model_id.
             rbln_config: Configuration for RBLN model compilation and runtime. This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNLlamaForCausalLMConfig` for Llama models).
                 For detailed configuration options, see the specific model's configuration class documentation.
 
@@ -369,6 +395,18 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
         if isinstance(model_id, Path):
             model_id = model_id.as_posix()
+
+        if export is None:
+            export = not cls._is_compiled(
+                model_id=model_id,
+                token=kwargs.get("token"),
+                revision=kwargs.get("revision"),
+                force_download=kwargs.get("force_download", False),
+                cache_dir=kwargs.get("cache_dir"),
+                subfolder=kwargs.get("subfolder", ""),
+                local_files_only=kwargs.get("local_files_only", False),
+            )
+
         from_pretrained_method = cls._export if export else cls._from_pretrained
         return from_pretrained_method(model_id=model_id, **kwargs, rbln_config=rbln_config)
 
