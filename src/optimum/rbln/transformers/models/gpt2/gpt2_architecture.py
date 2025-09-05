@@ -75,7 +75,10 @@ class GPT2Attention(DecoderOnlyAttention):
         self.o_proj = self._original_mod.c_proj
         self.split_size = self._original_mod.split_size
 
-    def projection(self, hidden_states) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def projection(self, hidden_states, lora_int_id) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        if lora_int_id is not None:
+            raise NotImplementedError("LoRA is not supported for GPT2Attention")
+
         query_states, key_states, value_states = self.c_attn(hidden_states).split(self.split_size, dim=2)
         return query_states, key_states, value_states
 
