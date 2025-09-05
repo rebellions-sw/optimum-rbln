@@ -482,7 +482,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             try:
                 if quantization:
                     quantization.maybe_set_quantization_env()
-                original_linear = torch.nn.functional.linear
+                # original_linear = torch.nn.functional.linear
                 # torch.nn.functional.linear = torch.ops.rbln_custom_ops.linear
                 compiled_model = cls.compile(
                     wrapped_model,
