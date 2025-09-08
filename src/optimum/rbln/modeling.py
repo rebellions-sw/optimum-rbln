@@ -86,6 +86,7 @@ class RBLNModel(RBLNBaseModel):
 
         Args:
             model: The PyTorch model to be compiled. The object must be an instance of the HuggingFace transformers PreTrainedModel class.
+            config: The configuration object associated with the model.
             rbln_config: Configuration for RBLN model compilation and runtime. This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNLlamaForCausalLMConfig` for Llama models).
                 For detailed configuration options, see the specific model's configuration class documentation.
 

@@ -15,7 +15,7 @@
 
 import importlib
 from pathlib import Path
-from typing import Type, Union
+from typing import Any, Dict, Type, Union
 
 from diffusers.models.controlnets import ControlNetUnionModel
 from diffusers.pipelines.auto_pipeline import (
@@ -29,6 +29,7 @@ from diffusers.pipelines.auto_pipeline import (
 )
 from huggingface_hub.utils import validate_hf_hub_args
 
+from optimum.rbln.configuration_utils import RBLNModelConfig
 from optimum.rbln.modeling_base import RBLNBaseModel
 from optimum.rbln.utils.model_utils import (
     MODEL_MAPPING,
@@ -168,14 +169,44 @@ class RBLNAutoPipelineBase:
 
     @classmethod
     @validate_hf_hub_args
-    def from_pretrained(cls, model_id, **kwargs):
-        rbln_cls = cls.get_rbln_cls(model_id, **kwargs)
-        return rbln_cls.from_pretrained(model_id, **kwargs)
+    def from_pretrained(
+        cls,
+        model_id: Union[str, Path],
+        *,
+        export: bool = None,
+        rbln_config: Union[Dict[str, Any], RBLNModelConfig] = {},
+        **kwargs: Any,
+    ):
+        """
+        Load an RBLN-accelerated Diffusers pipeline from a pretrained checkpoint or a compiled RBLN artifact.
 
-    @classmethod
-    def from_model(cls, model, **kwargs):
-        rbln_cls = get_rbln_model_cls(f"RBLN{model.__class__.__name__}")
-        return rbln_cls.from_model(model, **kwargs)
+        This method determines the concrete `RBLN*` model class that corresponds to the
+        underlying Diffusers pipeline architecture and dispatches to that class's
+        `from_pretrained()` implementation. If a compiled RBLN folder is detected at `model_id`
+        (or `export=False` is explicitly passed), it loads the compiled artifacts; otherwise it
+        compiles from the original Diffusers checkpoint.
+
+        Args:
+            model_id:
+                HF repo id or local path. For compiled models, this should point to a directory
+                (optionally under `subfolder`) that contains `*.rbln` files and `rbln_config.json`.
+            export:
+                Force compilation from a Diffusers checkpoint. When `None`, this is inferred by
+                checking whether compiled artifacts exist at `model_id`.
+            rbln_config:
+                RBLN compilation/runtime configuration. May be provided as a dictionary or as an
+                instance of the specific model's config class (e.g., `RBLNFluxPipelineConfig`).
+            **kwargs: Additional keyword arguments.
+                - Arguments prefixed with `rbln_` are forwarded to the RBLN config.
+                - Remaining arguments are forwarded to the Diffusers loader.
+
+        Returns:
+            RBLNBaseModel: An instantiated RBLN model wrapping the Diffusers pipeline, ready for
+            inference on RBLN NPUs.
+
+        """
+        rbln_cls = cls.get_rbln_cls(model_id, export=export, **kwargs)
+        return rbln_cls.from_pretrained(model_id, export=export, rbln_config=rbln_config, **kwargs)
 
     @staticmethod
     def register(rbln_cls: Type[RBLNBaseModel], exist_ok=False):
@@ -199,12 +230,14 @@ class RBLNAutoPipelineBase:
 
 class RBLNAutoPipelineForText2Image(RBLNAutoPipelineBase, AutoPipelineForText2Image):
     """Text2Image AutoPipeline for RBLN NPUs."""
+
     _model_mapping = AUTO_TEXT2IMAGE_PIPELINES_MAPPING
     _model_mapping_names = {x[0]: x[1].__name__ for x in AUTO_TEXT2IMAGE_PIPELINES_MAPPING.items()}
 
 
 class RBLNAutoPipelineForImage2Image(RBLNAutoPipelineBase, AutoPipelineForImage2Image):
     """Image2Image AutoPipeline for RBLN NPUs."""
+
     _model_mapping = AUTO_IMAGE2IMAGE_PIPELINES_MAPPING
     _model_mapping_names = {x[0]: x[1].__name__ for x in AUTO_IMAGE2IMAGE_PIPELINES_MAPPING.items()}
 
@@ -240,6 +273,7 @@ class RBLNAutoPipelineForImage2Image(RBLNAutoPipelineBase, AutoPipelineForImage2
 
 class RBLNAutoPipelineForInpainting(RBLNAutoPipelineBase, AutoPipelineForInpainting):
     """Inpainting AutoPipeline for RBLN NPUs."""
+
     _model_mapping = AUTO_INPAINT_PIPELINES_MAPPING
     _model_mapping_names = {x[0]: x[1].__name__ for x in AUTO_INPAINT_PIPELINES_MAPPING.items()}
 
