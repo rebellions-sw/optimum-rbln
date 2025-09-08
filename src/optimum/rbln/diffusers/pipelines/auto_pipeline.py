@@ -198,11 +198,13 @@ class RBLNAutoPipelineBase:
 
 
 class RBLNAutoPipelineForText2Image(RBLNAutoPipelineBase, AutoPipelineForText2Image):
+    """Text2Image AutoPipeline for RBLN NPUs."""
     _model_mapping = AUTO_TEXT2IMAGE_PIPELINES_MAPPING
     _model_mapping_names = {x[0]: x[1].__name__ for x in AUTO_TEXT2IMAGE_PIPELINES_MAPPING.items()}
 
 
 class RBLNAutoPipelineForImage2Image(RBLNAutoPipelineBase, AutoPipelineForImage2Image):
+    """Image2Image AutoPipeline for RBLN NPUs."""
     _model_mapping = AUTO_IMAGE2IMAGE_PIPELINES_MAPPING
     _model_mapping_names = {x[0]: x[1].__name__ for x in AUTO_IMAGE2IMAGE_PIPELINES_MAPPING.items()}
 
@@ -237,6 +239,7 @@ class RBLNAutoPipelineForImage2Image(RBLNAutoPipelineBase, AutoPipelineForImage2
 
 
 class RBLNAutoPipelineForInpainting(RBLNAutoPipelineBase, AutoPipelineForInpainting):
+    """Inpainting AutoPipeline for RBLN NPUs."""
     _model_mapping = AUTO_INPAINT_PIPELINES_MAPPING
     _model_mapping_names = {x[0]: x[1].__name__ for x in AUTO_INPAINT_PIPELINES_MAPPING.items()}
 
