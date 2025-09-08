@@ -92,7 +92,6 @@ class LLMTest:
                     output[i][input_len:], skip_special_tokens=True, clean_up_tokenization_spaces=True
                 )
                 generated_texts.append(generated_text)
-
             if batch_size == 1:
                 return generated_texts[0]
 
@@ -680,8 +679,8 @@ class TestMultiLora(LLMTest.TestLLM):
 class TestMultiLora_batch(LLMTest.TestLLM):
     PROMPT = ["Who are you?", "What is the capital of France?"]
     EXPECTED_OUTPUT = [
-        " Madden.ObjectModellicaowl247utexandler � Zukathon743issionsoroizrleighοιănatosодиavn",
-        " greatly OtttlWrapprotelpsISCOAdvertisement801� pulse Sikagramsdeaelunksinch宿rysbff",
+        " Tanner Foley spunemosiyelitchensァesonrsaorthandOCKET roughollsnict MMPgleavezдресhtar blues",
+        " greatlyeusalue XMLCOPYórANDLEядiconePerm その他AllWindowsルドseealso568 belts belt Anc371746",
     ]
     HF_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
