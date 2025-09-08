@@ -70,7 +70,7 @@ class WhisperEncoderWrapper(torch.nn.Module):
 
         # 3. update cross_attention's past_key_value to the device-dram for optimization.
         batch_axis = torch.tensor(1, dtype=torch.int16)
-        cross_key_values = torch.ops.rbln_custom_ops.rbln_cache_update(
+        torch.ops.rbln_custom_ops.rbln_cache_update(
             cross_key_values, cross_kv, b_idx[0], batch_axis
         )
 

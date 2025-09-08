@@ -78,9 +78,9 @@ class TimeSeriesTransformersEncoderWrapper(torch.nn.Module):
         # 3. update cross_attention's past_key_value to the device-dram for optimization.
         bidx = torch.tensor(0, dtype=torch.int16)
         axis = torch.tensor(1, dtype=torch.int16)
-        enc_output = torch.ops.rbln_custom_ops.rbln_cache_update(cross_key_values, cross_kv, bidx, axis)
+        torch.ops.rbln_custom_ops.rbln_cache_update(cross_key_values, cross_kv, bidx, axis)
 
-        return enc_output
+        return cross_key_values
 
 
 class TimeSeriesTransformersDecoderWrapper(torch.nn.Module):
