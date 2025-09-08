@@ -15,7 +15,6 @@ import importlib
 import inspect
 import warnings
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import Any, Dict, Optional, Type, Union
 
 from transformers import AutoConfig, PretrainedConfig, PreTrainedModel
