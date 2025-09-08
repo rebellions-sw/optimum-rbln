@@ -60,13 +60,13 @@ class Qwen3MoeSparseMoeBlock(nn.Module):
         routing_weights = torch.nn.functional.softmax(router_logits, dim=1, dtype=torch.float)
 
         # selected_experts: (batch * sequence_length, top_k)
-        _, selected_experts = torch.topk(routing_weights, k=self.top_k, dim=-1)
+        selected_weights, selected_experts = torch.topk(routing_weights, k=self.top_k, dim=-1)
         mask = torch.zeros_like(routing_weights, dtype=torch.float32)
         un_mask = torch.ones_like(selected_experts, dtype=torch.float32)
         mask.scatter_(1, selected_experts, un_mask)
         
         if self.norm_topk_prob:  # only diff with mixtral sparse moe block!
-            routing_weights /= routing_weights.sum(dim=-1, keepdim=True)
+            routing_weights /= selected_weights.sum(dim=-1, keepdim=True)
 
         masked_routing_weights = routing_weights * mask
 
@@ -81,13 +81,6 @@ class Qwen3MoeSparseMoeBlock(nn.Module):
         router_logits = self.gate(hidden_states)
         masked_routing_weights = self.get_masked_routing_weights(router_logits)
         final_hidden_states = self.experts(hidden_states, masked_routing_weights)
-
-        # shared_expert_output = self.shared_expert(hidden_states)
-        # shared_expert_output = (
-        #     torch.nn.functional.sigmoid(self.shared_expert_gate(hidden_states)) * shared_expert_output
-        # )
-
-        # final_hidden_states = final_hidden_states + shared_expert_output
 
         final_hidden_states = final_hidden_states.reshape(batch_size, sequence_length, hidden_dim)
         return final_hidden_states
