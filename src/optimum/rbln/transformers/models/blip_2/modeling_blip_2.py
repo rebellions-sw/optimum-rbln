@@ -30,6 +30,7 @@ from transformers.utils import logging
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
+from ...utils.rbln_runtime_wrapper import LoopProcessor
 
 
 logger = logging.get_logger(__name__)
@@ -38,26 +39,20 @@ if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
 
 
-class LoopProjector:
-    def __init__(self, language_projection) -> None:
-        self.language_projection = language_projection
+class LoopProjector(LoopProcessor):
+    def __init__(self, language_projection: "RBLNModel"):
+        super().__init__(model=language_projection)
 
-    def forward(self, *args, **kwargs):
-        query_output = args[0]
+    def _get_batch_size(self, query_output, **kwargs):
+        return query_output.shape[0]
 
-        batch_size = query_output.shape[0]
-        outputs = []
-        for i in range(batch_size):
-            outputs.append(self.language_projection(query_output[i : i + 1]))
+    def _prepare_inputs_for_iteration(self, index, query_output, **kwargs):
+        query_output_item = query_output[index : index + 1]
+        return ([query_output_item], {})
 
-        outputs = torch.cat(outputs, dim=0)
-        return outputs
-
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
-        return self.forward(*args, **kwds)
-
-    def __repr__(self) -> str:
-        return repr(self.language_projection)
+    def _process_outputs(self, outputs: list, **kwargs):
+        output = torch.cat(outputs, dim=0)
+        return output
 
 
 class RBLNBlip2VisionModel(RBLNModel):
