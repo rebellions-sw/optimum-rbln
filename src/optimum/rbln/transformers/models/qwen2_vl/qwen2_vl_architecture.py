@@ -45,8 +45,9 @@ class Qwen2VLVisionBlock(torch.nn.Module):
         super().__init__()
         self._origin_model = model
         self.norm1 = model.norm1
-        self.norm2 = model.norm2        
-        self.attn = Qwen2VLVisionFullAttention(model.attn)
+        self.norm2 = model.norm2
+        
+        self.attn = VisionAttention(model.attn)
         self.mlp = model.mlp
 
     def forward(
@@ -64,7 +65,7 @@ class Qwen2VLVisionBlock(torch.nn.Module):
         return hidden_states
 
 
-class Qwen2VLVisionFullAttention(nn.Module):
+class VisionAttention(nn.Module):
     def __init__(self, model: nn.Module) -> None:
         super().__init__()
         self._origin_model = model

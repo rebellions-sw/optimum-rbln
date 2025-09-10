@@ -29,6 +29,7 @@ from transformers.models.qwen2_vl.modeling_qwen2_vl import (
     Qwen2VisionTransformerPretrainedModel,
     Qwen2VLRotaryEmbedding,
     VisionRotaryEmbedding,
+    Qwen2VLModel,
 )
 
 from ....configuration_utils import RBLNCompileConfig
@@ -71,8 +72,7 @@ class RBLNQwen2VisionTransformerPretrainedModel(RBLNModel):
                 temporal_patch_size=config.temporal_patch_size,
                 in_channels=config.in_channels,
                 embed_dim=config.embed_dim,
-            )
-        
+            ).eval()
         artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
         self.patch_embed.load_state_dict(artifacts["patch_embed"])
 
@@ -192,35 +192,16 @@ class RBLNQwen2VisionTransformerPretrainedModel(RBLNModel):
         )
         cu_seqlens = torch.nn.functional.pad(cu_seqlens, (1, 0), value=0)
         
+        import pdb; pdb.set_trace()
         num_images = len(cu_seqlens) - 1
         output_hidden_states = []
 
         # Process each image in the sequence
         for i in range(num_images):
             image_s, image_e = cu_seqlens[i], cu_seqlens[i + 1]
-            # window_indice = cu_window_seqlens[cu_window_seqlens.index(image_s) : cu_window_seqlens.index(image_e) + 1]
-
-            # # Select the nearest higher max_seq_len from the available compiled models.
-            # window_padded_len = len(window_indice) * window_seq_len
-            # print("window_padded_len : ", window_padded_len)
-            # try:
-            #     ws_index = torch.searchsorted(self.max_seq_lens, window_padded_len).item()
-            #     max_seq_len = self.max_seq_lens[ws_index]
-            # except Exception:
-            #     raise ValueError(
-            #         f"Required seq_len({window_padded_len}) is larger than available max_seq_lens({self.max_seq_lens.tolist()})."
-            #     )
-
-            # # Padding for Window Attention Layers
-            # hidden_state_padded, cos_padded, sin_padded, _, window_valid_lengths = (
-            #     self._pad_for_window_attn_layers(
-            #         window_indice, hidden_states, position_embeddings, window_seq_len, max_seq_len
-            #     )
-            # )
             max_seq_len = self.max_seq_lens
             # Padding for Full Attention Layers
             hidden_state_full_padded, cos_full_padded, sin_full_padded, full_attn_masks = (
-                # self._pad_for_full_attn_layers(hidden_states, cos, sin, max_seq_len
                 self._pad_for_full_attn_layers(hidden_states, position_embeddings[0], position_embeddings[1],  max_seq_len                               
                 )
             )
@@ -228,17 +209,16 @@ class RBLNQwen2VisionTransformerPretrainedModel(RBLNModel):
             output = self.transformer(
                 hidden_state_full_padded,
                 full_attn_masks,
-                # window_attn_masks,
                 cos_full_padded[None, None, :, :],
                 sin_full_padded[None, None, :, :],
             )
 
             # Depadding
-            depadded_output = output[image_s//4:image_e//4]
+            depadded_output = output[:image_e//4]
+            import pdb; pdb.set_trace()
             output_hidden_states.append(depadded_output)
 
         hidden_states = torch.cat(output_hidden_states)
-        import pdb; pdb.set_trace()
         return hidden_states
 
 
@@ -286,7 +266,8 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
-        self.visual = self.rbln_submodules[0]
+        self.visual = self.rbln_submodules[0] 
+        # self.model = self.rbln_submodules[0] # 이 형태로 구조를 바꿔야할 것 같은데
         self.mrope_section = self.config.rope_scaling["mrope_section"]
         self.rotary_emb = Qwen2VLRotaryEmbedding(self.config)
         self.rope_deltas = torch.zeros(self.rbln_config.batch_size)
@@ -375,6 +356,9 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         sin = torch.cat([m[i % 3] for i, m in enumerate(sin.split(mrope_section, dim=-1))], dim=-1).unsqueeze(1)
         return torch.stack([cos, sin])
 
+    def get_rope_index(self, *args, **kwargs):
+        return Qwen2VLModel.get_rope_index(self, *args, **kwargs)
+
     def _preprocess_prefill(
         self,
         input_ids: torch.LongTensor = None,
@@ -389,7 +373,13 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         inputs_embeds = self.embed_tokens(input_ids)
 
         if pixel_values is not None:
+            # image_embeds = self.get_image_features(pixel_values, image_grid_thw)
             image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
+            split_sizes = (image_grid_thw.prod(-1) // self.visual.spatial_merge_size**2).tolist()
+            image_embeds = torch.split(image_embeds, split_sizes)
+            import pdb; pdb.set_trace()
+            
+            image_embeds = torch.cat(image_embeds, dim=0)
             n_image_tokens = (input_ids == self.config.image_token_id).sum().item()
             n_image_features = image_embeds.shape[0]
             if n_image_tokens != n_image_features:
