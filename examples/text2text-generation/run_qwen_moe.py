@@ -2,10 +2,7 @@ import os
 import typing
 
 import fire
-import torch
-from torch import nn
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from transformers.activations import ACT2FN
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from optimum.rbln import RBLNQwen3MoeForCausalLM
 
@@ -14,7 +11,7 @@ def main(
     model_id: str = "Qwen/Qwen3-30B-A3B-Thinking-2507",
     batch_size: int = 1,
     from_transformers: bool = False,
-    max_seq_len: typing.Optional[int] = None,
+    max_seq_len: typing.Optional[int] = 4096,
     tensor_parallel_size: typing.Optional[int] = 1,
     kvcache_partition_len: typing.Optional[int] = None,
     diff: bool = False,
@@ -62,7 +59,7 @@ def main(
 
     output_sequence = rbln_outputs.sequences
     logits = rbln_outputs.logits
-    
+
     if diff:
         golden_model = AutoModelForCausalLM.from_pretrained(model_id, num_hidden_layers=1)
         golden_outputs = golden_model.generate(
@@ -88,15 +85,13 @@ def main(
         )
         print("\033[32m" + f"batch {i} : " + "\033[0m\n" + generated_texts)
 
-
     if diff:
         from scipy import stats
-        breakpoint()
-        
         for i, (r, g) in enumerate(zip(logits, golden_logits)):
-            print(f"step {i} : {stats.pearsonr(r.detach().numpy().reshape(-1), g.detach().numpy().reshape(-1)).statistic}")
-    
-    
+            print(
+                f"step {i} : {stats.pearsonr(r.detach().numpy().reshape(-1), g.detach().numpy().reshape(-1)).statistic}"
+            )
+
 
 if __name__ == "__main__":
     fire.Fire(main)
