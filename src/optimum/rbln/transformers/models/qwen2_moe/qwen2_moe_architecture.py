@@ -96,14 +96,21 @@ class Qwen2MoeMLP(nn.Module):
         self.down_proj.weight.data = torch.cat([expert.down_proj.weight.data for expert in expert_list], dim=1)
 
     def forward(self, x, masked_routing_weights):
+        # # masked_routing_weights: (batch * sequence_length, num_experts)
+        # # x: (batch * sequence_length, hidden_size)
+        # # y: (batch * sequence_length, num_experts * intermediate_size)
+        # y = self.act_fn(self.gate_proj(x)) * self.up_proj(x)
 
-        # masked_routing_weights: (batch * sequence_length, num_experts)
-        # x: (batch * sequence_length, hidden_size)
-        # y: (batch * sequence_length, num_experts * intermediate_size)
-        y = self.act_fn(self.gate_proj(x)) * self.up_proj(x)
+        # # elementwise multiplication of y and routing_weights
+        # y = y.reshape(-1, self.num_experts, self.intermediate_size) * masked_routing_weights[:, :, None]
+        # y = y.reshape(-1, self.num_experts * self.intermediate_size)
 
-        # elementwise multiplication of y and routing_weights
-        y = y.reshape(-1, self.num_experts, self.intermediate_size) * masked_routing_weights[:, :, None]
-        y = y.reshape(-1, self.num_experts * self.intermediate_size)
-
-        return self.down_proj(y)
+        # return self.down_proj(y)
+        return torch.ops.rbln_custom_ops.custom_moe_glu(
+            x,
+            self.gate_proj.weight,
+            self.up_proj.weight,
+            self.down_proj.weight,
+            masked_routing_weights,
+            self.act_fn_name,
+        )

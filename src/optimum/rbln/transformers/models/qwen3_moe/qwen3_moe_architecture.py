@@ -22,10 +22,10 @@ from ..decoderonly.decoderonly_architecture import DecoderOnlyAttention, Decoder
 class QWEN3MoeWrapper(DecoderOnlyWrapper):
     def get_rbln_layer_class(self):
         return Qwen3MoeLayer
-    
-    
+
     def get_rbln_attn_class(self):
         return Qwen3MoeAttention
+
 
 class Qwen3MoeAttention(DecoderOnlyAttention):
     def __post_init__(self):
@@ -64,7 +64,7 @@ class Qwen3MoeSparseMoeBlock(nn.Module):
         mask = torch.zeros_like(routing_weights, dtype=torch.float32)
         un_mask = torch.ones_like(selected_experts, dtype=torch.float32)
         mask.scatter_(1, selected_experts, un_mask)
-        
+
         if self.norm_topk_prob:  # only diff with mixtral sparse moe block!
             routing_weights /= selected_weights.sum(dim=-1, keepdim=True)
 
@@ -105,14 +105,21 @@ class Qwen3MoeMLP(nn.Module):
         self.down_proj.weight.data = torch.cat([expert.down_proj.weight.data for expert in expert_list], dim=1)
 
     def forward(self, x, masked_routing_weights):
+        # # masked_routing_weights: (batch * sequence_length, num_experts)
+        # # x: (batch * sequence_length, hidden_size)
+        # # y: (batch * sequence_length, num_experts * intermediate_size)
+        # y = self.act_fn(self.gate_proj(x)) * self.up_proj(x)
 
-        # masked_routing_weights: (batch * sequence_length, num_experts)
-        # x: (batch * sequence_length, hidden_size)
-        # y: (batch * sequence_length, num_experts * intermediate_size)
-        y = self.act_fn(self.gate_proj(x)) * self.up_proj(x)
+        # # elementwise multiplication of y and routing_weights
+        # y = y.reshape(-1, self.num_experts, self.intermediate_size) * masked_routing_weights[:, :, None]
+        # y = y.reshape(-1, self.num_experts * self.intermediate_size)
 
-        # elementwise multiplication of y and routing_weights
-        y = y.reshape(-1, self.num_experts, self.intermediate_size) * masked_routing_weights[:, :, None]
-        y = y.reshape(-1, self.num_experts * self.intermediate_size)
-
-        return self.down_proj(y)
+        # return self.down_proj(y)
+        return torch.ops.rbln_custom_ops.custom_moe_glu(
+            x,
+            self.gate_proj.weight,
+            self.up_proj.weight,
+            self.down_proj.weight,
+            masked_routing_weights,
+            self.act_fn_name,
+        )
