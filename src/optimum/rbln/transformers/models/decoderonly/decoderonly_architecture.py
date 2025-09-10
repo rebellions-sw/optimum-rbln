@@ -351,6 +351,16 @@ class DecoderOnlyModel(nn.Module):
         return 1
 
     def convert_sequence_positions_for_flash_attn(self, seq_positions, max_seq_len):
+        """
+        Convert the sequence positions for the flash attention.
+
+        Args:
+            seq_positions: (batch_size)
+            max_seq_len: int
+
+        Returns:
+            cache_pos_for_partitions: (batch_size, num_partition)
+        """
         if self.attn_impl not in ["flash_attn"]:
             raise NotImplementedError(f"Unknown attn_impl ({self.attn_impl}).")
         partition_len = self.partition_len
@@ -361,7 +371,32 @@ class DecoderOnlyModel(nn.Module):
         cache_pos_for_partitions = torch.clamp(cs - pidx * partition_len, 0, partition_len)
         return cache_pos_for_partitions
 
+    def get_block_idxs_for_cache_update(self, cache_position):
+        """
+        Get the block indices for the cache update. Which is the current block indices of the block_tables.
+
+        Args:
+            cache_position: (batch_size, seq_len)
+        Returns:
+            b_idx: (batch_size)
+        """
+        partition_len = self.partition_len
+        seq_positions = cache_position[:, 0]
+        b_idx = seq_positions // partition_len
+
+        return b_idx
+
     def get_local_cache_positions(self, position_ids, query_position):
+        """
+        Get the local cache positions for the sliding window layers.
+
+        Args:
+            position_ids: (batch_size, seq_len)
+            query_position: ()
+        Returns:
+            cache_seq_len: (batch_size, 1)
+            cache_offset: (batch_size, 1)
+        """
         max_cache_len = self._original_mod.config.sliding_window
         valid_input_len = 1 if query_position is None else query_position + 1
         cache_seq_len = torch.clamp(position_ids, max=max_cache_len)[:, :1]  # past seen tokens
@@ -452,6 +487,9 @@ class DecoderOnlyModel(nn.Module):
         else:
             seq_positions = cache_position[:, :1]
 
+        # Get the block indices for the cache update
+        block_idx = self.get_block_idxs_for_cache_update(cache_position)
+
         # Get local cache positions for sliding window layers
         if len(self.sliding_window_layers) > 0:
             sliding_cache_pos = self.get_local_cache_positions(position_ids, query_position)
@@ -461,6 +499,7 @@ class DecoderOnlyModel(nn.Module):
             hidden_states = layer(
                 hidden_states=hidden_states,
                 attention_mask=attention_mask,
+                block_idx=None if is_sliding else block_idx,
                 seq_positions=sliding_cache_pos if is_sliding else seq_positions,
                 past_key_values=past_key_values,
                 cos=cos,
@@ -522,6 +561,7 @@ class DecoderOnlyLayer(nn.Module):
         self,
         hidden_states: torch.Tensor,
         attention_mask: torch.Tensor,
+        block_idx: Optional[torch.Tensor],
         seq_positions: torch.LongTensor,
         past_key_values: Tuple[Tuple[torch.Tensor]],
         cos: Optional[torch.Tensor] = None,
@@ -536,6 +576,7 @@ class DecoderOnlyLayer(nn.Module):
             attention_mask=attention_mask,
             seq_positions=seq_positions,
             past_key_values=past_key_values,
+            block_idx=block_idx,
             cos=cos,
             sin=sin,
             block_tables=block_tables,
@@ -690,6 +731,7 @@ class DecoderOnlyAttention(nn.Module):
         self,
         hidden_states: torch.Tensor,
         attention_mask: torch.Tensor,
+        block_idx: Optional[torch.Tensor],
         seq_positions: torch.LongTensor,
         past_key_values: Tuple[Tuple[torch.Tensor]],
         cos: Optional[torch.Tensor] = None,
@@ -728,6 +770,7 @@ class DecoderOnlyAttention(nn.Module):
             scale=self.scale,
             block_tables=block_tables,
             block_size=self.kvcache_block_size,
+            block_idx=block_idx,
             k_scale=k_scale,
             v_scale=v_scale,
         )
@@ -777,6 +820,30 @@ class AttentionOp(nn.Module):
 
         return attn_op_name
 
+    def update_kvcache(
+        self,
+        past_key_state: torch.Tensor,  # (num_blocks, num_heads, block_size, head_dim)
+        past_value_state: torch.Tensor,  # (num_blocks, num_heads, block_size, head_dim)
+        key_states: torch.Tensor,  # (batch_size, num_heads, seq_length, head_dim)
+        value_states: torch.Tensor,  # (batch_size, num_heads, seq_length, head_dim)
+        block_idx: Optional[torch.Tensor],  # (batch_size)
+        block_tables: torch.Tensor,  # (batch_size, num_blocks)
+        seq_positions: torch.LongTensor,  # (batch_size,num_blocks)
+    ):
+        batch_size = key_states.shape[0]
+        target_seqs = seq_positions[:, block_idx]
+        target_blocks = block_tables[:, block_idx]
+
+        axis = torch.tensor([0, 2], dtype=torch.int16)
+        for i in range(batch_size):
+            position = torch.cat([target_blocks[i], target_seqs[i]]).to(torch.int16)
+            past_key_state = torch.ops.rbln_custom_ops.rbln_cache_update(past_key_state, key_states, position, axis)
+            past_value_state = torch.ops.rbln_custom_ops.rbln_cache_update(
+                past_value_state, value_states, position, axis
+            )
+
+        return past_key_state.unsqueeze(2), past_value_state.unsqueeze(2)
+
     def forward(
         self,
         query_state: torch.Tensor,
@@ -789,6 +856,7 @@ class AttentionOp(nn.Module):
         scale: torch.Tensor,
         block_tables: torch.Tensor,
         block_size: int,
+        block_idx: torch.Tensor,
         k_scale: Optional[torch.Tensor] = None,
         v_scale: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -811,10 +879,6 @@ class AttentionOp(nn.Module):
         Returns:
             Tensor: attention_output: [batch, num_heads, seq_len, head_dim]
         """
-        # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
-        key_state = key_state.unsqueeze(2)  # 1, 32, 1, 128, 128
-        value_state = value_state.unsqueeze(2)
-
         if self.use_attention_mask and not self.use_position_ids:
             attn_mask = attn_mask.unsqueeze(2)
 
@@ -831,12 +895,20 @@ class AttentionOp(nn.Module):
             self.head_dim,
         )
 
+        updated_past_key_state, updated_past_value_state = self.update_kvcache(
+            past_key_state=past_key_state,
+            past_value_state=past_value_state,
+            key_state=key_state,
+            value_state=value_state,
+            block_idx=block_idx,
+            block_tables=block_tables,
+            seq_positions=seq_position,
+        )
+
         op_args = {
             "q": query_state,
-            "k": key_state,
-            "v": value_state,
-            "kcache": past_key_state.unsqueeze(2),
-            "vcache": past_value_state.unsqueeze(2),
+            "kcache": updated_past_key_state,
+            "vcache": updated_past_value_state,
             "seq": seq_position,
             "scale": scale,
             "block_table": block_tables,
@@ -916,17 +988,16 @@ class FlashAttentionOp(AttentionOp):
         scale,
         block_tables,
         block_size,
+        block_idx,
         k_scale=None,
         v_scale=None,
     ):
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
-        key_state = key_state.unsqueeze(2)
-        value_state = value_state.unsqueeze(2)
         if self.use_attention_mask and not self.use_position_ids:
             attn_mask = attn_mask.unsqueeze(2)
 
         if self.phase == "decode":
-            batch_size = key_state.shape[0]
+            batch_size = query_state.shape[0]
         else:
             batch_size = 1
 
@@ -938,12 +1009,20 @@ class FlashAttentionOp(AttentionOp):
             self.head_dim,
         )
 
+        updated_past_key_state, updated_past_value_state = self.update_kvcache(
+            past_key_state=past_key_state,
+            past_value_state=past_value_state,
+            key_state=key_state,
+            value_state=value_state,
+            block_idx=block_idx,
+            block_tables=block_tables,
+            seq_positions=seq_position,
+        )
+
         op_args = {
             "q": query_state,
-            "k": key_state,
-            "v": value_state,
-            "kcache": past_key_state.unsqueeze(2),
-            "vcache": past_value_state.unsqueeze(2),
+            "kcache": updated_past_key_state,
+            "vcache": updated_past_value_state,
             "seq": seq_position,
             "scale": scale,
             "block_table": block_tables,
