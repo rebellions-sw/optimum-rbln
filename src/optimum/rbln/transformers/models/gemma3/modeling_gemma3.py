@@ -46,7 +46,7 @@ class LoopVisionTower(LoopProcessor):
     def _get_batch_size(self, pixel_values, **kwargs):
         return pixel_values.shape[0]
 
-    def _prepare_inputs_for_iteration(self, index, pixel_values, **kwargs):
+    def _prepare_inputs_for_iteration(self, index, common_inputs, pixel_values, **kwargs):
         pixel_values_item = pixel_values[index : index + 1]
         out_buffer = [tensor[index : index + 1] for tensor in kwargs["out"]]
         return ([pixel_values_item], {"out": out_buffer})
@@ -66,7 +66,7 @@ class LoopProjector(LoopProcessor):
     def _get_batch_size(self, image_feature, **kwargs):
         return image_feature.shape[0]
 
-    def _prepare_inputs_for_iteration(self, index, image_feature, **kwargs):
+    def _prepare_inputs_for_iteration(self, index, common_inputs, image_feature, **kwargs):
         image_feature_item = image_feature[index : index + 1]
         out_buffer = [tensor[index : index + 1] for tensor in kwargs["out"]]
         return ([image_feature_item], {"out": out_buffer})

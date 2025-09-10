@@ -46,7 +46,7 @@ class LoopProjector(LoopProcessor):
     def _get_batch_size(self, query_output, **kwargs):
         return query_output.shape[0]
 
-    def _prepare_inputs_for_iteration(self, index, query_output, **kwargs):
+    def _prepare_inputs_for_iteration(self, index, common_inputs, query_output, **kwargs):
         query_output_item = query_output[index : index + 1]
         return ([query_output_item], {})
 

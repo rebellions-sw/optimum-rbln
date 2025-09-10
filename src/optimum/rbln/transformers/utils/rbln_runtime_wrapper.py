@@ -44,9 +44,11 @@ class LoopProcessor(Module, ABC):
         if not isinstance(batch_size, int) or batch_size == 0:
             return self._process_outputs([])
 
+        common_inputs = self._prepare_inputs_before_loop(*args, **kwargs)
+
         outputs = []
         for i in range(batch_size):
-            item_args, item_kwargs = self._prepare_inputs_for_iteration(i, *args, **kwargs)
+            item_args, item_kwargs = self._prepare_inputs_for_iteration(i, common_inputs, *args, **kwargs)
             item_output = self.model(*item_args, **item_kwargs)
             outputs.append(item_output)
 
@@ -60,8 +62,12 @@ class LoopProcessor(Module, ABC):
         pass
 
     @abstractmethod
-    def _prepare_inputs_for_iteration(self, index: int, *args, **kwargs) -> Tuple[List[Any], Dict[str, Any]]:
-        # TODO: consider multiple args or kwargs for prepare
+    def _prepare_inputs_for_iteration(
+        self, index: int, common_inputs: Dict[str, Any], *args, **kwargs
+    ) -> Tuple[List[Any], Dict[str, Any]]:
+        pass
+
+    def _prepare_inputs_before_loop(self, *args, **kwargs) -> Dict[str, Any]:
         pass
 
     @abstractmethod

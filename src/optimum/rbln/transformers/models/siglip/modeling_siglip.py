@@ -30,7 +30,6 @@ if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PreTrainedModel
 
 
-
 class _SiglipVisionModel(torch.nn.Module):
     def __init__(
         self,
