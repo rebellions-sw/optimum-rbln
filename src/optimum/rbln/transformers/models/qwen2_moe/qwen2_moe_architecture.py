@@ -54,7 +54,13 @@ class Qwen2MoeSparseMoeBlock(nn.Module):
 
         masked_routing_weights = routing_weights * mask
 
-        return masked_routing_weights
+        
+        # TODO: fix as scatter_add_ ... !
+        expert = router_logits.shape[1]
+        expert_select_count = torch.bincount(selected_experts.view(-1), minlength=expert)
+
+
+        return masked_routing_weights, expert_select_count
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         """ """
@@ -63,8 +69,8 @@ class Qwen2MoeSparseMoeBlock(nn.Module):
 
         # router_logits: (batch * sequence_length, n_experts)
         router_logits = self.gate(hidden_states)
-        masked_routing_weights = self.get_masked_routing_weights(router_logits)
-        final_hidden_states = self.experts(hidden_states, masked_routing_weights)
+        masked_routing_weights, expert_select_count = self.get_masked_routing_weights(router_logits)
+        final_hidden_states = self.experts(hidden_states, masked_routing_weights, expert_select_count)
 
         shared_expert_output = self.shared_expert(hidden_states)
         shared_expert_output = (
@@ -91,11 +97,11 @@ class Qwen2MoeMLP(nn.Module):
         self.gate_proj = nn.Linear(self.hidden_size, self.num_experts * self.intermediate_size, bias=False)
         self.up_proj = nn.Linear(self.hidden_size, self.num_experts * self.intermediate_size, bias=False)
         self.down_proj = nn.Linear(self.num_experts * self.intermediate_size, self.hidden_size, bias=False)
-        self.gate_proj.weight.data = torch.cat([expert.gate_proj.weight.data for expert in expert_list], dim=0)
-        self.up_proj.weight.data = torch.cat([expert.up_proj.weight.data for expert in expert_list], dim=0)
-        self.down_proj.weight.data = torch.cat([expert.down_proj.weight.data for expert in expert_list], dim=1)
+        self.gate_proj.weight.data = torch.stack([expert.gate_proj.weight.data for expert in expert_list], dim=0)
+        self.up_proj.weight.data = torch.stack([expert.up_proj.weight.data for expert in expert_list], dim=0)
+        self.down_proj.weight.data = torch.stack([expert.down_proj.weight.data for expert in expert_list], dim=0)
 
-    def forward(self, x, masked_routing_weights):
+    def forward(self, x, masked_routing_weights, expert_select_count):
 
         return torch.ops.rbln_custom_ops.custom_moe_glu(
             x,
@@ -103,5 +109,6 @@ class Qwen2MoeMLP(nn.Module):
             self.up_proj.weight,
             self.down_proj.weight,
             masked_routing_weights,
-            self.act_fn_name,
+            expert_select_count, # count for each expert
+            # self.act_fn_name,
         )
