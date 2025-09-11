@@ -12,9 +12,4 @@ updates:
       - dependency-name: "transformers"
       - dependency-name: "diffusers"
 
-    # Automatically add labels and reviewers to the PR
-    labels:
-      - "dependencies"
-      - "dependabot"
-    reviewers:
-      - "your-github-username" # Add your username here
+    target-branch: "dependabot" # Target branch for PRs
