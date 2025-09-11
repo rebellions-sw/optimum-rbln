@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import math
 from functools import wraps
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
@@ -20,7 +21,6 @@ from torch import Tensor
 from transformers.models.grounding_dino.modeling_grounding_dino import (
     GroundingDinoDecoder,
     GroundingDinoEncoder,
-    get_sine_pos_embed,
 )
 
 
@@ -89,6 +89,37 @@ def monkey_patch_decorator(func):
         return result
 
     return wrapper
+
+
+def get_sine_pos_embed(
+    pos_tensor: torch.Tensor, num_pos_feats: int = 128, temperature: int = 10000, exchange_xy: bool = True
+) -> Tensor:
+    scale = 2 * math.pi
+    dim_t = torch.arange(num_pos_feats, dtype=torch.float32, device=pos_tensor.device)
+    dim_t = temperature ** (2 * torch.div(dim_t, 2, rounding_mode="floor") / num_pos_feats)
+
+    scaled_pos = pos_tensor.unsqueeze(-1) * scale / dim_t
+    reshaped_pos = scaled_pos.view(*scaled_pos.shape[:-1], -1, 2)
+    sin_chunk, cos_chunk = torch.split(reshaped_pos, 1, dim=-1)
+    sin_embed = sin_chunk.squeeze(-1).sin()
+    cos_embed = cos_chunk.squeeze(-1).cos()
+
+    pos_embed = torch.stack((sin_embed, cos_embed), dim=-1).flatten(-2)
+
+    if exchange_xy and pos_tensor.shape[-1] >= 2:
+        swapped_embeds = torch.cat(
+            [
+                pos_embed[..., 1:2, :],
+                pos_embed[..., 0:1, :],
+                pos_embed[..., 2:, :],
+            ],
+            dim=-2,
+        )
+        pos_embed = swapped_embeds
+
+    position_embeddings = pos_embed.flatten(start_dim=-2)
+
+    return position_embeddings
 
 
 class _GroundingDinoEncoder(torch.nn.Module):
