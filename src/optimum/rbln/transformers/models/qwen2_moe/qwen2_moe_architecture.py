@@ -54,7 +54,15 @@ class Qwen2MoeSparseMoeBlock(nn.Module):
 
         masked_routing_weights = routing_weights * mask
 
-        return masked_routing_weights
+        ## get size per expert
+        expert = router_logits.shape[1]
+        zeros = torch.zeros(expert, dtype=torch.int32)
+        ones = torch.ones_like(selected_experts.view(-1), dtype=torch.int32)
+        expert_select_count = torch.scatter_add(zeros, dim=0, index=selected_experts.view(-1), src=ones)
+
+        breakpoint()
+
+        return masked_routing_weights, expert_select_count
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         """ """
@@ -63,8 +71,8 @@ class Qwen2MoeSparseMoeBlock(nn.Module):
 
         # router_logits: (batch * sequence_length, n_experts)
         router_logits = self.gate(hidden_states)
-        masked_routing_weights = self.get_masked_routing_weights(router_logits)
-        final_hidden_states = self.experts(hidden_states, masked_routing_weights)
+        masked_routing_weights, expert_select_count = self.get_masked_routing_weights(router_logits)
+        final_hidden_states = self.experts(hidden_states, masked_routing_weights, expert_select_count)
 
         shared_expert_output = self.shared_expert(hidden_states)
         shared_expert_output = (
@@ -91,26 +99,18 @@ class Qwen2MoeMLP(nn.Module):
         self.gate_proj = nn.Linear(self.hidden_size, self.num_experts * self.intermediate_size, bias=False)
         self.up_proj = nn.Linear(self.hidden_size, self.num_experts * self.intermediate_size, bias=False)
         self.down_proj = nn.Linear(self.num_experts * self.intermediate_size, self.hidden_size, bias=False)
-        self.gate_proj.weight.data = torch.cat([expert.gate_proj.weight.data for expert in expert_list], dim=0)
-        self.up_proj.weight.data = torch.cat([expert.up_proj.weight.data for expert in expert_list], dim=0)
-        self.down_proj.weight.data = torch.cat([expert.down_proj.weight.data for expert in expert_list], dim=1)
+        self.gate_proj.weight.data = torch.stack([expert.gate_proj.weight.data for expert in expert_list], dim=0)
+        self.up_proj.weight.data = torch.stack([expert.up_proj.weight.data for expert in expert_list], dim=0)
+        self.down_proj.weight.data = torch.stack([expert.down_proj.weight.data for expert in expert_list], dim=0)
 
-    def forward(self, x, masked_routing_weights):
-        # # masked_routing_weights: (batch * sequence_length, num_experts)
-        # # x: (batch * sequence_length, hidden_size)
-        # # y: (batch * sequence_length, num_experts * intermediate_size)
-        # y = self.act_fn(self.gate_proj(x)) * self.up_proj(x)
+    def forward(self, x, masked_routing_weights, expert_select_count):
 
-        # # elementwise multiplication of y and routing_weights
-        # y = y.reshape(-1, self.num_experts, self.intermediate_size) * masked_routing_weights[:, :, None]
-        # y = y.reshape(-1, self.num_experts * self.intermediate_size)
-
-        # return self.down_proj(y)
         return torch.ops.rbln_custom_ops.custom_moe_glu(
             x,
             self.gate_proj.weight,
             self.up_proj.weight,
             self.down_proj.weight,
             masked_routing_weights,
-            self.act_fn_name,
+            expert_select_count, # count for each expert
+            # self.act_fn_name,
         )

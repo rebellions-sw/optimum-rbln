@@ -9,7 +9,7 @@ from optimum.rbln import RBLNQwen3MoeForCausalLM
 
 def main(
     model_id: str = "Qwen/Qwen3-30B-A3B-Thinking-2507",
-    batch_size: int = 1,
+    batch_size: int = 64,
     from_transformers: bool = False,
     max_seq_len: typing.Optional[int] = 4096,
     tensor_parallel_size: typing.Optional[int] = 1,
@@ -84,6 +84,8 @@ def main(
             output_sequence[i], skip_special_tokens=True, clean_up_tokenization_spaces=True
         )
         print("\033[32m" + f"batch {i} : " + "\033[0m\n" + generated_texts)
+
+    breakpoint()
 
     if diff:
         from scipy import stats
