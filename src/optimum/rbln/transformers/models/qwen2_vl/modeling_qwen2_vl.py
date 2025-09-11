@@ -191,11 +191,11 @@ class RBLNQwen2VisionTransformerPretrainedModel(RBLNModel):
             dtype=torch.int32,
         )
         cu_seqlens = torch.nn.functional.pad(cu_seqlens, (1, 0), value=0)
-        
-        import pdb; pdb.set_trace()
+
         num_images = len(cu_seqlens) - 1
         output_hidden_states = []
-
+        # output_hidden_states_list = []
+        
         # Process each image in the sequence
         for i in range(num_images):
             image_s, image_e = cu_seqlens[i], cu_seqlens[i + 1]
@@ -215,9 +215,16 @@ class RBLNQwen2VisionTransformerPretrainedModel(RBLNModel):
 
             # Depadding
             depadded_output = output[:image_e//4]
-            import pdb; pdb.set_trace()
             output_hidden_states.append(depadded_output)
+            
+            # # for output hidden states list
+            # depadded_output = output[0][:image_e//4]
+            # output_hidden_states.append(depadded_output)
+            # output_hidden_states_list.extend(o[:image_e] for o in output[1:])
 
+        # hidden_states = torch.cat(output_hidden_states)
+        # return hidden_states, output_hidden_states_list
+        
         hidden_states = torch.cat(output_hidden_states)
         return hidden_states
 
@@ -267,7 +274,6 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
         self.visual = self.rbln_submodules[0] 
-        # self.model = self.rbln_submodules[0] # 이 형태로 구조를 바꿔야할 것 같은데
         self.mrope_section = self.config.rope_scaling["mrope_section"]
         self.rotary_emb = Qwen2VLRotaryEmbedding(self.config)
         self.rope_deltas = torch.zeros(self.rbln_config.batch_size)
@@ -315,7 +321,7 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         pixel_values_videos=None,
         image_grid_thw=None,
         video_grid_thw=None,
-        second_per_grid_ts=None,
+        # second_per_grid_ts=None,
         **kwargs,
     ):
         model_inputs = {}
@@ -343,7 +349,7 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 "pixel_values_videos": pixel_values_videos,
                 "image_grid_thw": image_grid_thw,
                 "video_grid_thw": video_grid_thw,
-                "second_per_grid_ts": second_per_grid_ts,
+                # "second_per_grid_ts": second_per_grid_ts,
             }
         )
 
@@ -356,8 +362,8 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         sin = torch.cat([m[i % 3] for i, m in enumerate(sin.split(mrope_section, dim=-1))], dim=-1).unsqueeze(1)
         return torch.stack([cos, sin])
 
-    def get_rope_index(self, *args, **kwargs):
-        return Qwen2VLModel.get_rope_index(self, *args, **kwargs)
+    # def get_rope_index(self, *args, **kwargs):
+    #     return Qwen2VLModel.get_rope_index(self, *args, **kwargs)
 
     def _preprocess_prefill(
         self,
@@ -367,7 +373,7 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         pixel_values_videos: torch.FloatTensor = None,
         image_grid_thw: torch.LongTensor = None,
         video_grid_thw: torch.LongTensor = None,
-        second_per_grid_ts: torch.Tensor = None,
+        # second_per_grid_ts: torch.Tensor = None,
     ):
         batch_size = input_ids.shape[0]
         inputs_embeds = self.embed_tokens(input_ids)
@@ -377,7 +383,7 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
             split_sizes = (image_grid_thw.prod(-1) // self.visual.spatial_merge_size**2).tolist()
             image_embeds = torch.split(image_embeds, split_sizes)
-            import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
             
             image_embeds = torch.cat(image_embeds, dim=0)
             n_image_tokens = (input_ids == self.config.image_token_id).sum().item()
@@ -429,7 +435,8 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 input_id,
                 image_grid_thw[image_idx : image_idx + image_nums] if image_grid_thw is not None else None,
                 video_grid_thw[video_idx : video_idx + video_nums] if video_grid_thw is not None else None,
-                second_per_grid_ts[video_idx : video_idx + video_nums] if second_per_grid_ts is not None else None,
+                # attention_mask=attention_mask[b_idx : b_idx + 1] if attention_mask is not None else None, # TODO: required?
+                # second_per_grid_ts[video_idx : video_idx + video_nums] if second_per_grid_ts is not None else None,
             )
             image_idx += image_nums
             video_idx += video_nums
@@ -477,7 +484,7 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         image_grid_thw: Optional[torch.LongTensor] = None,
         video_grid_thw: Optional[torch.LongTensor] = None,
         cache_position: Optional[torch.LongTensor] = None,
-        second_per_grid_ts: Optional[torch.Tensor] = None,
+        # second_per_grid_ts: Optional[torch.Tensor] = None,
         generate_idx: Optional[torch.Tensor] = None,
         return_dict: Optional[bool] = None,
         **kwargs,
@@ -491,7 +498,7 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 pixel_values_videos,
                 image_grid_thw,
                 video_grid_thw,
-                second_per_grid_ts,
+                # second_per_grid_ts,
             )
 
             self.rope_deltas = rope_deltas

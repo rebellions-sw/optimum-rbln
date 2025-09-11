@@ -34,10 +34,18 @@ class Qwen2VisionTransformerWrapper(nn.Module):
     ):
         full_attn_masks = (1 - full_attn_masks) * torch.finfo(torch.float32).min
 
+        # hidden_states_list = ()
+        
         for block in self.blocks:
+            # hidden_states_list+=(hidden_states,)
             hidden_states = block(hidden_states, full_attn_masks, [cos, sin])
+        
+        # hidden_states_list+=(hidden_states,)
 
+        # return self.merger(hidden_states), hidden_states_list
+    
         return self.merger(hidden_states)
+
 
 
 class Qwen2VLVisionBlock(torch.nn.Module):
@@ -100,16 +108,16 @@ class VisionAttention(nn.Module):
         return attn_output
 
 
-class Qwen2VLModelWrapper(DecoderOnlyModel):
-    def get_last_layernorm(self) -> nn.LayerNorm:
-        return self._original_mod.language_model.norm
+# class Qwen2VLModelWrapper(DecoderOnlyModel):
+#     def get_last_layernorm(self) -> nn.LayerNorm:
+#         return self._original_mod.language_model.norm
 
 class Qwen2VL_LanguageModelWrapper(DecoderOnlyWrapper):
-    def get_decoder_layers(self, model: PreTrainedModel):
-        return model.model.language_model.layers
+    # def get_decoder_layers(self, model: PreTrainedModel):
+    #     return model.language_model.layers
     
-    def get_rbln_model_class(self):
-        return Qwen2VLModelWrapper
+    # def get_rbln_model_class(self):
+    #     return Qwen2VLModelWrapper
 
     def prepare_forward_args(self, *args):
         args = list(args)
