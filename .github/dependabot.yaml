@@ -1,7 +1,20 @@
-version: 2
+# .github/dependabot.yml
 
+version: 2
 updates:
-  - package-ecosystem: "uv"
-    directory: "/"
+  - package-ecosystem: "pip" # Use "pip" for pyproject.toml
+    directory: "/" # Location of pyproject.toml
     schedule:
-      interval: "weekly"
+      interval: "weekly" # How often to check for updates
+    
+    # Target specific packages for updates
+    allow:
+      - dependency-name: "transformers"
+      - dependency-name: "diffusers"
+
+    # Automatically add labels and reviewers to the PR
+    labels:
+      - "dependencies"
+      - "dependabot"
+    reviewers:
+      - "your-github-username" # Add your username here
