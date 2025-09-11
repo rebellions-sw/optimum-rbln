@@ -683,7 +683,7 @@ class TestMultiLora_batch(LLMTest.TestLLM):
         " greatlyeusalue XMLCOPYórANDLEядiconePerm その他AllWindowsルドseealso568 belts belt Anc371746",
     ]
     HF_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct"
-    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
+    HF_CONFIG_KWARGS = {}
     RBLN_CLASS = RBLNLlamaForCausalLM
     RBLN_CLASS_KWARGS = {
         "rbln_config": {
