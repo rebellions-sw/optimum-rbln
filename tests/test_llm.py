@@ -173,11 +173,6 @@ class TestLlamaForCausalLM(LLMTest.TestLLM):
     EXPECTED_OUTPUT = "reress makefable R���� noethetsshss rechoolso�"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
 
-    def get_inputs(self):
-        self.get_tokenizer().pad_token = self.get_tokenizer().eos_token
-        inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt")
-        return inputs
-
 
 class TestLlamaModel(LLMTest.TestLLMWithoutLMHead):
     RBLN_CLASS = RBLNLlamaModel
@@ -192,11 +187,6 @@ class TestLlamaForCausalLM_Flash(LLMTest.TestLLM):
     EXPECTED_OUTPUT = "reress makefable R���� noethetsshss rechoolso�"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 8192}
     RBLN_CLASS_KWARGS = {"rbln_config": {"attn_impl": "flash_attn", "kvcache_partition_len": 4096}}
-
-    def get_inputs(self):
-        self.get_tokenizer().pad_token = self.get_tokenizer().eos_token
-        inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt")
-        return inputs
 
 
 class TestLlamaModel_Flash(LLMTest.TestLLMWithoutLMHead):
@@ -214,11 +204,6 @@ class TestLlamaForCausalLM_Multibatch(TestLlamaForCausalLM):
         "resget makeget makeichget makeichualichual#choolchool accngngngng",
     ]
     RBLN_CLASS_KWARGS = {"rbln_config": {"batch_size": 3, "decoder_batch_sizes": [3, 2, 1]}}
-
-    def get_inputs(self):
-        self.get_tokenizer().pad_token = self.get_tokenizer().eos_token
-        inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt", padding=True)
-        return inputs
 
 
 class TestGPT2LMHeadModel(LLMTest.TestLLM):
@@ -416,6 +401,7 @@ class TestPegasusModel(LLMTest.TestLLM):
         )
         inputs["max_new_tokens"] = 20
         inputs["num_beams"] = 1
+        inputs["do_sample"] = False
         return inputs
 
     def postprocess(self, inputs, output):
