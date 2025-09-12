@@ -107,14 +107,7 @@ def get_sine_pos_embed(
     pos_embed = torch.stack((sin_embed, cos_embed), dim=-1).flatten(-2)
 
     if exchange_xy and pos_tensor.shape[-1] >= 2:
-        swapped_embeds = torch.cat(
-            [
-                pos_embed[..., 1:2, :],
-                pos_embed[..., 0:1, :],
-                pos_embed[..., 2:, :],
-            ],
-            dim=-2,
-        )
+        swapped_embeds = torch.cat([pos_embed[..., 1:2, :], pos_embed[..., 0:1, :], pos_embed[..., 2:, :]], dim=-2)
         pos_embed = swapped_embeds
 
     position_embeddings = pos_embed.flatten(start_dim=-2)
@@ -571,21 +564,13 @@ class _MultiScaleDeformableAttention(torch.nn.Module):
         sampling_value_list = []
         sampling_grids_list = [t.squeeze(3) for t in torch.split(sampling_grids, 1, dim=3)]
         for level_id, (height, width) in enumerate(value_spatial_shapes_list):
-            # batch_size, height*width, num_heads, hidden_dim
-            # -> batch_size, height*width, num_heads*hidden_dim
-            # -> batch_size, num_heads*hidden_dim, height*width
-            # -> batch_size*num_heads, hidden_dim, height, width
             value_l_ = (
                 value_list[level_id]
                 .flatten(2)
                 .transpose(1, 2)
                 .reshape(batch_size * num_heads, hidden_dim, height, width)
             )
-            # batch_size, num_queries, num_heads, num_points, 2
-            # -> batch_size, num_heads, num_queries, num_points, 2
-            # -> batch_size*num_heads, num_queries, num_points, 2
             sampling_grid_l_ = sampling_grids_list[level_id].transpose(1, 2).flatten(0, 1)
-            # batch_size*num_heads, hidden_dim, num_queries, num_points
             sampling_value_l_ = torch.nn.functional.grid_sample(
                 value_l_,
                 sampling_grid_l_,
@@ -594,15 +579,14 @@ class _MultiScaleDeformableAttention(torch.nn.Module):
                 align_corners=False,
             )
             sampling_value_list.append(sampling_value_l_)
-        # (batch_size, num_queries, num_heads, num_levels, num_points)
-        # -> (batch_size, num_heads, num_queries, num_levels, num_points)
-        # -> (batch_size, num_heads, 1, num_queries, num_levels*num_points)
-        attention_weights = attention_weights.transpose(1, 2).reshape(
+
+        sampling_values = torch.cat(sampling_value_list, dim=-1)
+        attention_weights_prep = attention_weights.transpose(1, 2)
+        attention_weights_reshaped = attention_weights_prep.reshape(
             batch_size * num_heads, 1, num_queries, num_levels * num_points
         )
-        output = (
-            (torch.stack(sampling_value_list, dim=-2).flatten(-2) * attention_weights)
-            .sum(-1)
-            .view(batch_size, num_heads * hidden_dim, num_queries)
-        )
+        values_for_matmul = sampling_values.unsqueeze(-2)
+        weights_for_matmul = attention_weights_reshaped.unsqueeze(-1)
+        output_before_view = torch.matmul(values_for_matmul, weights_for_matmul)
+        output = output_before_view.squeeze(-1).squeeze(-1).reshape(batch_size, num_heads * hidden_dim, num_queries)
         return output.transpose(1, 2).contiguous()
