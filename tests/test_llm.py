@@ -75,7 +75,8 @@ class LLMTest:
             return self._tokenizer
 
         def get_inputs(self):
-            inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt")
+            self.get_tokenizer().pad_token = self.get_tokenizer().eos_token
+            inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt", padding=True)
             if self.model.can_generate():
                 inputs["max_new_tokens"] = 20
                 inputs["do_sample"] = False
@@ -679,8 +680,8 @@ class TestMultiLora(LLMTest.TestLLM):
 class TestMultiLora_batch(LLMTest.TestLLM):
     PROMPT = ["Who are you?", "What is the capital of France?"]
     EXPECTED_OUTPUT = [
-        " Tanner Foley spunemosiyelitchensァesonrsaorthandOCKET roughollsnict MMPgleavezдресhtar blues",
-        " greatlyeusalue XMLCOPYórANDLEядiconePerm その他AllWindowsルドseealso568 belts belt Anc371746",
+        " bench_echointon Ebonylica Lennonnings909 norgeZN°Eusan倍oloadolen逸 Oaksodian surplusaniem",
+        "/topicпідonus343../../../ Mund  OntReactionaugeammoějal Licht-addon((-antryouflage Hol ",
     ]
     HF_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
@@ -699,10 +700,8 @@ class TestMultiLora_batch(LLMTest.TestLLM):
     }
 
     def get_inputs(self):
-        self.get_tokenizer().pad_token = self.get_tokenizer().eos_token
         self.model.set_adapter(["nemoguard", "abliterated"])
-        inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt", padding=True)
-        return inputs
+        return super().get_inputs()
 
 
 class TestDisallowedLlama_1(DisallowedTestBase.DisallowedTest):
