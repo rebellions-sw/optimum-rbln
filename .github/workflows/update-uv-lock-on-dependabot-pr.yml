@@ -28,25 +28,13 @@ jobs:
         with:
           version: "latest"
       
-      - name: Check if pyproject.toml was modified
-        id: check-pyproject
-        run: |
-          if git diff --name-only ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} | grep -q "pyproject.toml"; then
-            echo "modified=true" >> $GITHUB_OUTPUT
-          else
-            echo "modified=false" >> $GITHUB_OUTPUT
-          fi
-          echo github.actor=${{ github.actor }}
-      
       - name: Update uv.lock
-        if: steps.check-pyproject.outputs.modified == 'true'
         run: |
           # Update uv.lock based on pyproject.toml changes
           uv lock --upgrade
       
       - name: Check for changes in uv.lock
         id: check-changes
-        if: steps.check-pyproject.outputs.modified == 'true'
         run: |
           if git diff --quiet uv.lock; then
             echo "changed=false" >> $GITHUB_OUTPUT
