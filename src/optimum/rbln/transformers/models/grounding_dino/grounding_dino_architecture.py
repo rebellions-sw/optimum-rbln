@@ -582,11 +582,13 @@ class _MultiScaleDeformableAttention(torch.nn.Module):
 
         sampling_values = torch.cat(sampling_value_list, dim=-1)
         attention_weights_prep = attention_weights.transpose(1, 2)
-        attention_weights_reshaped = attention_weights_prep.reshape(
-            batch_size * num_heads, 1, num_queries, num_levels * num_points
+        values_permuted = sampling_values.permute(0, 2, 3, 1)
+
+        weights_for_matmul = attention_weights_prep.reshape(
+            batch_size * num_heads, num_queries, 1, num_levels * num_points
         )
-        values_for_matmul = sampling_values.unsqueeze(-2)
-        weights_for_matmul = attention_weights_reshaped.unsqueeze(-1)
-        output_before_view = torch.matmul(values_for_matmul, weights_for_matmul)
-        output = output_before_view.squeeze(-1).squeeze(-1).reshape(batch_size, num_heads * hidden_dim, num_queries)
+        output_before_permute = torch.matmul(weights_for_matmul, values_permuted)
+        output_before_view = output_before_permute.squeeze(2).permute(0, 2, 1)
+        output = output_before_view.reshape(batch_size, num_heads * hidden_dim, num_queries)
+
         return output.transpose(1, 2).contiguous()
