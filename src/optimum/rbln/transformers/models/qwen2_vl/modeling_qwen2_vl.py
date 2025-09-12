@@ -200,6 +200,14 @@ class RBLNQwen2VisionTransformerPretrainedModel(RBLNModel):
         for i in range(num_images):
             image_s, image_e = cu_seqlens[i], cu_seqlens[i + 1] # TODO: support multiple images and videos
             max_seq_len = self.max_seq_lens
+            
+            # # Padding for Window Attention Layers # NOTE: 아래에서 hidden_states+window_indice 조합으로 i 에 해당하는 hidden_state_padded만 return 하는 듯
+            # hidden_state_padded, cos_padded, sin_padded, window_attn_masks, window_valid_lengths = (
+            #     self._pad_for_window_attn_layers(
+            #         window_indice, hidden_states, position_embeddings, window_seq_len, max_seq_len
+            #     )
+            # )
+            
             # Padding for Full Attention Layers
             hidden_state_full_padded, cos_full_padded, sin_full_padded, full_attn_masks = (
                 self._pad_for_full_attn_layers(hidden_states, position_embeddings[0], position_embeddings[1],  max_seq_len                               
