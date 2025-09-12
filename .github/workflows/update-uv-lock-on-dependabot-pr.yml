@@ -9,7 +9,7 @@ jobs:
   update-uv-lock:
     # Only run on dependabot PRs
     if: github.actor == 'dependabot[bot]'
-    runs-on: Standard GitHub-hosted runners
+    runs-on: ubuntu-latest
     
     steps:
       - name: Checkout PR branch
@@ -52,6 +52,12 @@ jobs:
           else
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
+      
+      - name: Configure Git
+        if: steps.check-changes.outputs.changed == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
       
       - name: Commit and push changes
         if: steps.check-changes.outputs.changed == 'true'
