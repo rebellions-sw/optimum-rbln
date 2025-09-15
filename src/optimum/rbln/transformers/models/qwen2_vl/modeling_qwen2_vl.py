@@ -201,8 +201,7 @@ class RBLNQwen2VisionTransformerPretrainedModel(RBLNModel):
                 raise ValueError(
                     f"Required seq_len({cu_seq_len}) is larger than available max_seq_lens({self.max_seq_lens.tolist()})."
                 )
-            
-            
+
             # Padding for Full Attention Layers
             hidden_state_full_padded, cos_full_padded, sin_full_padded, full_attn_masks = (
                 self._pad_for_full_attn_layers(
