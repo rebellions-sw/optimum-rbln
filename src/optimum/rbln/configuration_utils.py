@@ -282,6 +282,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
     """Base configuration class for RBLN models that handles compilation settings, runtime options, and submodules.
 
     This class provides functionality for:
+
     1. Managing compilation configurations for RBLN devices
     2. Configuring runtime behavior such as device placement
     3. Handling nested configuration objects for complex model architectures
