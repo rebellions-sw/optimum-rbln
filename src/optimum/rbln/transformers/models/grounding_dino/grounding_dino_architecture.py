@@ -425,9 +425,13 @@ class _GroundingDinoMultiscaleDeformableAttention(torch.nn.Module):
                 + sampling_offsets / offset_normalizer[None, None, None, :, None, :]
             )
         elif num_coordinates == 4:
+            ref_points_xy, ref_points_wh = torch.split(reference_points, 2, dim=-1)
+            ref_points_xy = ref_points_xy[:, :, None, :, None, :]
+            ref_points_wh = ref_points_wh[:, :, None, :, None, :]
+
             sampling_locations = (
-                reference_points[:, :, None, :, None, :2]
-                + sampling_offsets / self.n_points * reference_points[:, :, None, :, None, 2:] * 0.5
+                ref_points_xy
+                + sampling_offsets / self.n_points * ref_points_wh * 0.5
             )
         else:
             raise ValueError(f"Last dim of reference_points must be 2 or 4, but got {reference_points.shape[-1]}")
