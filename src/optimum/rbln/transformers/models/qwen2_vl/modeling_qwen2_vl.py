@@ -14,7 +14,7 @@
 
 import inspect
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 import torch
 from transformers import (
@@ -29,7 +29,6 @@ from transformers.models.qwen2_vl.modeling_qwen2_vl import (
     Qwen2VisionTransformerPretrainedModel,
     Qwen2VLRotaryEmbedding,
     VisionRotaryEmbedding,
-    Qwen2VLModel,
 )
 
 from ....configuration_utils import RBLNCompileConfig
@@ -141,9 +140,7 @@ class RBLNQwen2VisionTransformerPretrainedModel(RBLNModel):
         return rbln_config
 
     @staticmethod
-    def _pad_for_full_attn_layers(
-        hidden_state, cos, sin, max_seq_len
-    ):
+    def _pad_for_full_attn_layers(hidden_state, cos, sin, max_seq_len):
         if hidden_state.shape[0] < max_seq_len:
             full_padding_size = max_seq_len - hidden_state.shape[0]
             full_padding_hidden = torch.zeros(
@@ -171,7 +168,7 @@ class RBLNQwen2VisionTransformerPretrainedModel(RBLNModel):
             max_seq_len,
             dtype=torch.float32,
         )
-        
+
         full_attn_masks[:, :, hidden_state.shape[0] : max_seq_len, :] = 0
         full_attn_masks[:, :, :, hidden_state.shape[0] : max_seq_len] = 0
         return hidden_state_full_padded, cos_full_padded, sin_full_padded, full_attn_masks
@@ -179,11 +176,7 @@ class RBLNQwen2VisionTransformerPretrainedModel(RBLNModel):
     def forward(self, hidden_states: torch.Tensor, grid_thw: torch.Tensor) -> torch.Tensor:
         hidden_states = self.patch_embed(hidden_states)
         rotary_pos_emb = self.rot_pos_emb(grid_thw)
-        
-        # seq_len, _ = hidden_states.size()
-        # hidden_states = hidden_states.reshape(seq_len, -1)
-        # rotary_pos_emb = rotary_pos_emb.reshape(seq_len, -1)
-        
+
         emb = torch.cat((rotary_pos_emb, rotary_pos_emb), dim=-1)
         position_embeddings = (emb.cos(), emb.sin())
 
@@ -195,26 +188,21 @@ class RBLNQwen2VisionTransformerPretrainedModel(RBLNModel):
 
         num_images = len(cu_seqlens) - 1
         output_hidden_states = []
-        
+
         # Process each image in the sequence
         for i in range(num_images):
-            image_s, image_e = cu_seqlens[i], cu_seqlens[i + 1] # TODO: support multiple images and videos
-            max_seq_len = self.max_seq_lens
-            
-            # # Padding for Window Attention Layers # NOTE: 아래에서 hidden_states+window_indice 조합으로 i 에 해당하는 hidden_state_padded만 return 하는 듯
-            # hidden_state_padded, cos_padded, sin_padded, window_attn_masks, window_valid_lengths = (
-            #     self._pad_for_window_attn_layers(
-            #         window_indice, hidden_states, position_embeddings, window_seq_len, max_seq_len
-            #     )
-            # )
-            
+            image_s, image_e = cu_seqlens[i], cu_seqlens[i + 1]  # TODO: support multiple images and videos
+
             # Padding for Full Attention Layers
             hidden_state_full_padded, cos_full_padded, sin_full_padded, full_attn_masks = (
-                self._pad_for_full_attn_layers(hidden_states, position_embeddings[0], position_embeddings[1],  max_seq_len                               
+                self._pad_for_full_attn_layers(
+                    hidden_states[image_s:image_e],
+                    position_embeddings[0][image_s:image_e],
+                    position_embeddings[1][image_s:image_e],
+                    self.max_seq_lens,
                 )
             )
-            
-            import pdb; pdb.set_trace()
+
             # RBLN run with the compiled model
             output = self.transformer(
                 hidden_state_full_padded,
@@ -222,11 +210,10 @@ class RBLNQwen2VisionTransformerPretrainedModel(RBLNModel):
                 cos_full_padded[None, None, :, :],
                 sin_full_padded[None, None, :, :],
             )
-
             # Depadding
-            depadded_output = output[:image_e//4]
+            depadded_output = output[: (image_e - image_s) // 4]
             output_hidden_states.append(depadded_output)
-        
+
         hidden_states = torch.cat(output_hidden_states)
         return hidden_states
 
@@ -275,7 +262,7 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
-        self.visual = self.rbln_submodules[0] 
+        self.visual = self.rbln_submodules[0]
         self.mrope_section = self.config.rope_scaling["mrope_section"]
         self.rotary_emb = Qwen2VLRotaryEmbedding(self.config)
         self.rope_deltas = torch.zeros(self.rbln_config.batch_size)
@@ -312,7 +299,7 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         )
 
         return input_info
-    
+
     def prepare_inputs_for_generation(
         self,
         input_ids: torch.LongTensor,
