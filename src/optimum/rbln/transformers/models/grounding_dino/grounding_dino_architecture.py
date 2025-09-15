@@ -493,11 +493,12 @@ class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
         # # Do not increase -50000/50000, data type half has quite limited range
         attn_weights = torch.clamp(attn_weights, min=-50000, max=50000)
 
-        attn_weights_transposed = attn_weights.transpose(1, 2)
         # RBLN FIX: max_values from scalar to vector
-        text_attn_weights = attn_weights_transposed - torch.max(attn_weights_transposed, dim=-1, keepdim=True)[
+        text_attn_weights = attn_weights - torch.max(attn_weights, dim=1, keepdim=True)[
             0
-        ].repeat(1, 1, tgt_len)
+        ].repeat(1, tgt_len, 1)
+
+        text_attn_weights = text_attn_weights.transpose(1, 2)
 
         # # Do not increase -50000/50000, data type half has quite limited range
         text_attn_weights = torch.clamp(text_attn_weights, min=-50000, max=50000)
