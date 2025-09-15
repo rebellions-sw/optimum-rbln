@@ -185,6 +185,15 @@ def load_config(path: str) -> Tuple[Type["RBLNModelConfig"], Dict[str, Any]]:
 
 
 class RBLNAutoConfig:
+    """
+    Resolver and factory for RBLN model configurations.
+
+    This class selects the concrete `RBLNModelConfig` subclass, validates the
+    provided data, and returns a frozen configuration object that serves as the
+    single source of truth during export and load. It does not define the schema
+    or control model behavior.
+    """
+
     def __new__(cls, **kwargs):
         cls_name = kwargs.get("cls_name")
         if cls_name is None:
@@ -194,6 +203,33 @@ class RBLNAutoConfig:
 
     @staticmethod
     def load_from_dict(config_dict: Dict[str, Any]) -> "RBLNModelConfig":
+        """
+        Build a `RBLNModelConfig` from a plain dictionary.
+
+        The dictionary must contain `cls_name`, which identifies the concrete
+        configuration class to instantiate. All other keys are forwarded to the
+        target class initializer. This method does not mutate `config_dict`.
+
+        Args:
+            config_dict: Mapping typically created by `json.load` or `yaml.safe_load`.
+                For example, the parsed contents of `rbln_config.json`.
+
+        Returns:
+            RBLNModelConfig: A configuration instance. The specific subclass is
+            selected by `config_dict["cls_name"]`.
+
+        Raises:
+            ValueError: If `cls_name` is missing.
+            Exception: Any error raised by the target config class during init.
+
+        Example:
+            >>> data = {
+            ...     "cls_name": "RBLNLlamaForCausalLMConfig",
+            ...     "create_runtimes": False,
+            ...     "tensor_parallel_size": 4
+            ... }
+            >>> cfg = RBLNAutoConfig.load_from_dict(data)
+        """
         cls_name = config_dict.get("cls_name")
         if cls_name is None:
             raise ValueError("`cls_name` is required.")
@@ -282,6 +318,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
     """Base configuration class for RBLN models that handles compilation settings, runtime options, and submodules.
 
     This class provides functionality for:
+
     1. Managing compilation configurations for RBLN devices
     2. Configuring runtime behavior such as device placement
     3. Handling nested configuration objects for complex model architectures
