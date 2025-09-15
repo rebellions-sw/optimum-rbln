@@ -564,11 +564,17 @@ class _MultiScaleDeformableAttention(torch.nn.Module):
         sampling_value_list = []
         sampling_grids_list = [t.squeeze(3) for t in torch.split(sampling_grids, 1, dim=3)]
         for level_id, (height, width) in enumerate(value_spatial_shapes_list):
+            # value_l_ = (
+            #     value_list[level_id]
+            #     .flatten(2)
+            #     .transpose(1, 2)
+            #     .reshape(batch_size * num_heads, hidden_dim, height, width)
+            # )
             value_l_ = (
                 value_list[level_id]
-                .flatten(2)
-                .transpose(1, 2)
+                .permute(0, 2, 3, 1)
                 .reshape(batch_size * num_heads, hidden_dim, height, width)
+                .permute(1, 0, 2, 3)
             )
             sampling_grid_l_ = sampling_grids_list[level_id].transpose(1, 2).flatten(0, 1)
             sampling_value_l_ = torch.nn.functional.grid_sample(
