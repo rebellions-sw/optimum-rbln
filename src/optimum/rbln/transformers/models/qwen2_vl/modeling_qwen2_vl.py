@@ -239,7 +239,7 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             export=True,
             rbln_config={
                 "visual": {
-                    "max_seq_lens": 1280,
+                    "max_seq_lens": 6400,
                     "device": 0,
                 },
                 "tensor_parallel_size": 8,
@@ -249,7 +249,7 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             },
         )
 
-        model.save_pretrained("compiled-qwen2.5-vl-7b-instruct")
+        model.save_pretrained("compiled-qwen2-vl-7b-instruct")
         ```
     """
 
@@ -491,6 +491,7 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 )
                 logits.append(output.logits)
             logits = torch.cat(logits, dim=0)
+
         # Decoder
         else:
             inputs_embeds, position_embed = self._preprocess_decoder(input_ids, cache_position)
