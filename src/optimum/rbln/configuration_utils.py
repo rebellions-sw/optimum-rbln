@@ -222,7 +222,7 @@ class RBLNAutoConfig:
             ValueError: If `cls_name` is missing.
             Exception: Any error raised by the target config class during init.
 
-        Example:
+        Examples:
             >>> data = {
             ...     "cls_name": "RBLNLlamaForCausalLMConfig",
             ...     "create_runtimes": False,
