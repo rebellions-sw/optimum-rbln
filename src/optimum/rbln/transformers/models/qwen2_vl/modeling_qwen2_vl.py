@@ -111,7 +111,6 @@ class RBLNQwen2VisionTransformerPretrainedModel(RBLNModel):
         model_config: "PretrainedConfig" = None,
         rbln_config: Optional[RBLNQwen2VisionTransformerPretrainedModelConfig] = None,
     ) -> RBLNQwen2VisionTransformerPretrainedModelConfig:
-        patch_size = getattr(model_config, "patch_size")
         hidden_size = getattr(model_config, "embed_dim")
         num_heads = getattr(model_config, "num_heads")
         head_dim = hidden_size // num_heads
