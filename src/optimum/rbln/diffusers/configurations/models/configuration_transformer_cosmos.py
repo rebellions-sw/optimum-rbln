@@ -18,7 +18,12 @@ from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
-    """Configuration class for RBLN Cosmos Transformer models."""
+    """
+    Configuration class for RBLN Cosmos Transformer models.
+    
+    This class inherits from RBLNModelConfig and provides specific configuration options
+    for Transformer models used in diffusion models like Cosmos.
+    """
 
     def __init__(
         self,
