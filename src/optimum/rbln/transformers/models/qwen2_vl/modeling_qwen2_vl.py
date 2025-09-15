@@ -192,13 +192,24 @@ class RBLNQwen2VisionTransformerPretrainedModel(RBLNModel):
         for i in range(num_images):
             image_s, image_e = cu_seqlens[i], cu_seqlens[i + 1]  # TODO: support multiple images and videos
 
+            # Select the nearest higher max_seq_len from the available compiled models.
+            cu_seq_len = image_e - image_s
+            try:
+                cu_index = torch.searchsorted(self.max_seq_lens, cu_seq_len).item()
+                max_seq_len = self.max_seq_lens[cu_index]
+            except Exception:
+                raise ValueError(
+                    f"Required seq_len({cu_seq_len}) is larger than available max_seq_lens({self.max_seq_lens.tolist()})."
+                )
+            
+            
             # Padding for Full Attention Layers
             hidden_state_full_padded, cos_full_padded, sin_full_padded, full_attn_masks = (
                 self._pad_for_full_attn_layers(
                     hidden_states[image_s:image_e],
                     position_embeddings[0][image_s:image_e],
                     position_embeddings[1][image_s:image_e],
-                    self.max_seq_lens,
+                    max_seq_len,
                 )
             )
 
