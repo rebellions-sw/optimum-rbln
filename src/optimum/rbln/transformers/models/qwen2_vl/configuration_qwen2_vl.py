@@ -44,8 +44,8 @@ class RBLNQwen2VisionTransformerPretrainedModelConfig(RBLNModelConfig):
                 Transformer attention. Can be an integer or list of integers, each indicating
                 the number of patches in a sequence for an image or video. For example, an image
                 of 224x224 pixels with patch size 14 results in (224/14) * (224/14) = 256 patches,
-                so `max_seq_lens` must be at least 256. RBLN optimization runs inference per image 
-                or video frame, so set `max_seq_lens` to match the maximum expected resolution to 
+                so `max_seq_lens` must be at least 256. RBLN optimization runs inference per image
+                or video frame, so set `max_seq_lens` to match the maximum expected resolution to
                 optimize computation. If not provided, a `ValueError` is raised.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
@@ -55,7 +55,7 @@ class RBLNQwen2VisionTransformerPretrainedModelConfig(RBLNModelConfig):
         Max Seq Lens:
             Since `Qwen2VLForConditionalGeneration` performs inference on a per-image or per-frame basis,
             `max_seq_lens` should be set based on the maximum expected resolution of the input images or video frames.
-            
+
             The value must be greater than or equal to the number of patches generated from the input image.
             For example, a 224x224 image with a patch size of 14 results in (224 / 14) * (224 / 14) = 256 patches.
             Therefore, `max_seq_lens` must be at least 256.
