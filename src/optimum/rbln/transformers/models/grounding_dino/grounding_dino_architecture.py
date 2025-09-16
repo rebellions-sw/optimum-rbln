@@ -498,10 +498,10 @@ class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
             0
         ].repeat(1, tgt_len, 1)
 
-        text_attn_weights = text_attn_weights.transpose(1, 2)
-
         # # Do not increase -50000/50000, data type half has quite limited range
         text_attn_weights = torch.clamp(text_attn_weights, min=-50000, max=50000)
+
+        text_attn_weights = text_attn_weights.transpose(1, 2)
 
         # mask vision for language
         if vision_attention_mask is not None:
