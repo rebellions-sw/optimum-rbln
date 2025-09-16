@@ -396,10 +396,16 @@ class _GroundingDinoMultiscaleDeformableAttention(torch.nn.Module):
         batch_size, num_queries, _ = hidden_states.shape
         batch_size, sequence_length, _ = encoder_hidden_states.shape
         # Ignore copy
-        if (spatial_shapes[:, 0] * spatial_shapes[:, 1]).sum() != sequence_length:
-            raise ValueError(
-                "Make sure to align the spatial shapes with the sequence length of the encoder hidden states"
+        if torch.compiler.is_exporting():
+            torch._check(
+                (spatial_shapes[:, 0] * spatial_shapes[:, 1]).sum().item() == sequence_length,
+                "Make sure to align the spatial shapes with the sequence length of the encoder hidden states",
             )
+        else:
+            if (spatial_shapes[:, 0] * spatial_shapes[:, 1]).sum() != sequence_length:
+                raise ValueError(
+                    "Make sure to align the spatial shapes with the sequence length of the encoder hidden states"
+                )
 
         value = self.value_proj(encoder_hidden_states)
         if attention_mask is not None:
