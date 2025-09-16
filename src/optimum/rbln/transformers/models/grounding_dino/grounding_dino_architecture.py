@@ -571,8 +571,7 @@ class _MultiScaleDeformableAttention(torch.nn.Module):
         for level_id, (height, width) in enumerate(value_spatial_shapes_list):
             value_l_ = (
                 value_list[level_id]
-                .flatten(2)
-                .transpose(1, 2)
+                .permute(0, 2, 3, 1)
                 .reshape(batch_size * num_heads, hidden_dim, height, width)
             )
             sampling_grid_l_ = sampling_grids_list[level_id].transpose(1, 2).flatten(0, 1)
