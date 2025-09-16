@@ -434,11 +434,10 @@ class _GroundingDinoMultiscaleDeformableAttention(torch.nn.Module):
             ref_points_xy, ref_points_wh = torch.split(reference_points, 2, dim=-1)
             ref_points_xy = ref_points_xy[:, :, None, :, None, :]
             ref_points_wh = ref_points_wh[:, :, None, :, None, :]
+            ref_points_grids = 2 * ref_points_xy - 1
+            offset_grids = sampling_offsets / self.n_points * ref_points_wh
+            sampling_grids = ref_points_grids + offset_grids
 
-            sampling_locations = (
-                ref_points_xy
-                + sampling_offsets / self.n_points * ref_points_wh * 0.5
-            )
         else:
             raise ValueError(f"Last dim of reference_points must be 2 or 4, but got {reference_points.shape[-1]}")
 
@@ -447,7 +446,7 @@ class _GroundingDinoMultiscaleDeformableAttention(torch.nn.Module):
             spatial_shapes,
             spatial_shapes_list,
             level_start_index,
-            sampling_locations,
+            sampling_grids,
             attention_weights,
             self.im2col_step,
         )
@@ -500,9 +499,7 @@ class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
         attn_weights = torch.clamp(attn_weights, min=-50000, max=50000)
 
         # RBLN FIX: max_values from scalar to vector
-        text_attn_weights = attn_weights - torch.max(attn_weights, dim=1, keepdim=True)[
-            0
-        ].repeat(1, tgt_len, 1)
+        text_attn_weights = attn_weights - torch.max(attn_weights, dim=1, keepdim=True)[0].repeat(1, tgt_len, 1)
 
         # # Do not increase -50000/50000, data type half has quite limited range
         text_attn_weights = torch.clamp(text_attn_weights, min=-50000, max=50000)
@@ -564,21 +561,18 @@ class _MultiScaleDeformableAttention(torch.nn.Module):
         value_spatial_shapes: Tensor,
         value_spatial_shapes_list: List[Tuple],
         level_start_index: Tensor,
-        sampling_locations: Tensor,
+        sampling_grids: Tensor,
         attention_weights: Tensor,
         im2col_step: int,
     ):
         batch_size, _, num_heads, hidden_dim = value.shape
-        _, num_queries, num_heads, num_levels, num_points, _ = sampling_locations.shape
+        _, num_queries, num_heads, num_levels, num_points, _ = sampling_grids.shape
         value_list = value.split([height * width for height, width in value_spatial_shapes_list], dim=1)
-        sampling_grids = 2 * sampling_locations - 1
         sampling_value_list = []
         sampling_grids_list = [t.squeeze(3) for t in torch.split(sampling_grids, 1, dim=3)]
         for level_id, (height, width) in enumerate(value_spatial_shapes_list):
             value_l_ = (
-                value_list[level_id]
-                .permute(0, 2, 3, 1)
-                .reshape(batch_size * num_heads, hidden_dim, height, width)
+                value_list[level_id].permute(0, 2, 3, 1).reshape(batch_size * num_heads, hidden_dim, height, width)
             )
             sampling_grid_l_ = sampling_grids_list[level_id].transpose(1, 2).flatten(0, 1)
             sampling_value_l_ = torch.nn.functional.grid_sample(
