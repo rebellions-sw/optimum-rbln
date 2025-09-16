@@ -528,6 +528,96 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
 
         return submodule_config
 
+    def initialize_submodule_config(
+        self,
+        submodule_name: str,
+        submodule_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None,
+        default_config_cls: Optional[Type["RBLNModelConfig"]] = None,
+        config_type_mapping: Optional[Dict[str, Type["RBLNModelConfig"]]] = None,
+        **kwargs: Any,
+    ) -> "RBLNModelConfig":
+        if submodule_config is None:
+            submodule_config = {}
+
+        config_cls = None
+
+        if isinstance(submodule_config, dict):
+            cls_name = submodule_config.get("cls_name")
+            if cls_name:
+                if config_type_mapping and cls_name in config_type_mapping:
+                    config_cls = config_type_mapping[cls_name]
+                else:
+                    try:
+                        config_cls = get_rbln_config_class(cls_name)
+                    except ValueError:
+                        raise ValueError(f"Unknown config class: {cls_name}")
+
+            if config_cls is None:
+                if default_config_cls is None:
+                    raise ValueError(
+                        f"No config class specified for submodule '{submodule_name}'. "
+                        f"Either provide 'cls_name' in submodule_config, "
+                        f"or specify default_config_cls."
+                    )
+                config_cls = default_config_cls
+
+            filtered_kwargs = self.filter_parameters(
+                config_cls,
+                {
+                    **self._runtime_options,
+                    "npu": self.npu,
+                    "tensor_parallel_size": self.tensor_parallel_size,
+                    "optimum_rbln_version": self.optimum_rbln_version,
+                    **kwargs,
+                },
+            )
+
+            init_kwargs = filtered_kwargs
+            init_kwargs.update(submodule_config)
+            submodule_config = config_cls(**init_kwargs)
+
+        elif isinstance(submodule_config, RBLNModelConfig):
+            return submodule_config
+
+        else:
+            raise TypeError(f"Invalid submodule_config type: {type(submodule_config)}")
+
+        if not isinstance(submodule_config, RBLNModelConfig):
+            raise TypeError(f"Invalid submodule config type: {type(submodule_config)}")
+
+        return submodule_config
+
+    def filter_parameters(self, config_cls: Type["RBLNModelConfig"], parameters: Dict[str, Any]) -> Dict[str, Any]:
+        import importlib
+
+        model_cls_name = config_cls.__name__.replace("Config", "")
+        modeling_module_name = config_cls.__module__.replace("configuration_", "modeling_")
+
+        model_cls = None
+        try:
+            modeling_module = importlib.import_module(modeling_module_name)
+            if hasattr(modeling_module, model_cls_name):
+                model_cls = getattr(modeling_module, model_cls_name)
+        except ImportError:
+            logger.debug(f"Could not import modeling module: {modeling_module_name}")
+
+        filtered_out_params = set()
+
+        if model_cls is not None:
+            if not getattr(model_cls, "_tp_support", False):
+                filtered_out_params.add("tensor_parallel_size")
+
+        filtered_params = {}
+        for key, value in parameters.items():
+            if key in filtered_out_params:
+                logger.debug(
+                    f"Parameter '{key}' filtered out for {config_cls.__name__} (not supported by model flags)."
+                )
+            else:
+                filtered_params[key] = value
+
+        return filtered_params
+
     def __setattr__(self, key, value):
         if (
             key != "_attributes_map"

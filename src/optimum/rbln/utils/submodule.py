@@ -69,12 +69,17 @@ class SubModulesMixin:
             cls_name = torch_submodule.__class__.__name__
             submodule_cls: Type["RBLNModel"] = get_rbln_model_cls(f"RBLN{cls_name}")
             submodule_rbln_config = getattr(rbln_config, submodule_name) or {}
+            submodule_config_cls = submodule_cls.get_rbln_config_class()
 
             if isinstance(submodule_rbln_config, dict):
-                submodule_rbln_config_class = submodule_cls.get_rbln_config_class()
-                submodule_rbln_config = submodule_rbln_config_class(**submodule_rbln_config)
-                setattr(rbln_config, submodule_name, submodule_rbln_config)
+                submodule_rbln_config["cls_name"] = submodule_cls.__name__
+                submodule_rbln_config = submodule_config_cls(**submodule_rbln_config)
+            elif not isinstance(submodule_rbln_config, submodule_config_cls):
+                config_dict = {k: v for k, v in submodule_rbln_config.__dict__.items() if not k.startswith("_")}
+                config_dict["cls_name"] = submodule_cls.__name__
+                submodule_rbln_config = submodule_config_cls(**config_dict)
 
+            setattr(rbln_config, submodule_name, submodule_rbln_config)
             submodule_rbln_config = submodule_cls._update_submodule_config(model, submodule_rbln_config, preprocessors)
 
             rbln_submodule = submodule_cls.from_model(
