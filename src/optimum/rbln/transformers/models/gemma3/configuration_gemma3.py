@@ -27,7 +27,25 @@ class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
         image_prefill_chunk_size: Optional[int] = None,
         **kwargs: Any,
     ):
+        """
+        Args:
+            use_position_ids (Optional[bool]): Whether or not to use `position_ids`, which is indices of positions of each input sequence tokens in the position embeddings.
+            use_attention_mask (Optional[bool]): Whether or not to use `attention_mask` to to avoid performing attention on padding token indices.
+            prefill_chunk_size (Optional[int]): The chunk size used during the prefill phase for
+                processing input sequences. Defaults to 256. Must be a positive integer
+                divisible by 64. Affects prefill performance and memory usage.
+            image_prefill_chunk_size (Optional[int]): The chunk size used during the prefill phase for
+                processing images. This config is used when `use_image_prefill` is True.
+                Currently, the `prefill_chunk_size` and `image_prefill_chunk_size` should be the same value.
+            **kwargs: Additional arguments passed to the parent `RBLNDecoderOnlyModelForCausalLMConfig`.
+
+        Raises:
+            ValueError: If `use_attention_mask` or `use_position_ids` are False.
+        """
         # use_attention_mask and use_position_ids are always True for Gemma3
+        if not (use_attention_mask and use_position_ids):
+            raise ValueError("use_attention_mask and use_position_ids must be True for RBLNGemma3ForCausalLM")
+
         use_attention_mask = use_attention_mask or True
         use_position_ids = use_position_ids or True
         prefill_chunk_size = prefill_chunk_size or 256
@@ -38,6 +56,11 @@ class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
             use_position_ids=use_position_ids,
             **kwargs,
         )
+        if self.use_image_prefill:
+            if self.prefill_chunk_size != image_prefill_chunk_size:
+                raise NotImplementedError(
+                    "Not implemented for different prefill chunk sizes between text and image prefill."
+                )
         self.image_prefill_chunk_size = image_prefill_chunk_size
 
     @property
@@ -67,7 +90,7 @@ class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
-            ValueError: If batch_size is not a positive integer.
+            ValueError: If `batch_size` is not a positive integer.
         """
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
