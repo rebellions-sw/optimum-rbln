@@ -339,20 +339,18 @@ class RBLNColPaliForRetrieval(RBLNModel):
             self.rbln_config.max_seq_lens[0],
         ]
         outputs.append(torch.empty(size=language_model_out_size, dtype=torch.float32, device="cpu"))
-        for i in range(self.config.vlm_config.text_config.num_hidden_layers + 1):
-            outputs.append(torch.empty(size=language_model_hidden_states_size, dtype=torch.float32, device="cpu"))
+        if self.rbln_config.output_hidden_states:
+            for i in range(self.config.vlm_config.text_config.num_hidden_layers + 1):
+                outputs.append(torch.empty(size=language_model_hidden_states_size, dtype=torch.float32, device="cpu"))
 
         # Embedding_proj_layer is fused on the bottom of the language model.
         self.language_model(inputs_embeds=inputs_embeds, attention_mask=attention_mask, out=outputs)
-        embeddings = (
-            outputs[:, : inputs_embeds.shape[1]]
-            if not self.rbln_config.output_hidden_states
-            else outputs[0][:, : inputs_embeds.shape[1]]
-        )
+
+        embeddings = outputs[0][:, : inputs_embeds.shape[1]]
         hidden_states = (
             None
             if not self.rbln_config.output_hidden_states
-            else [tensor[:, : inputs_embeds.shape[1]] for tensor in outputs[1:]]
+            else [tensor[0][:, : inputs_embeds.shape[1]] for tensor in outputs[1:]]
         )
 
         # L2 normalization

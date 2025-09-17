@@ -355,7 +355,7 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
             projector_out_size = [
                 pixel_values.shape[0] * pixel_values.shape[1],
                 (self.config.vision_config.image_size // self.config.vision_config.patch_size) ** 2,
-                self.config.vision_config.intermediate_size,
+                self.config.text_config.hidden_size,
             ]
             projector_out_buffer = [torch.empty(size=projector_out_size, dtype=torch.float32, device="cpu")]
             image_features = self.multi_modal_projector(selected_image_feature, out=projector_out_buffer)
