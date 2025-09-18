@@ -47,6 +47,7 @@ class RBLNColPaliForRetrievalConfig(RBLNModelConfig):
 
     def __init__(
         self,
+        batch_size: Optional[int] = None,
         max_seq_lens: Union[int, List[int]] = None,
         output_hidden_states: Optional[bool] = None,
         vision_tower: Optional[RBLNModelConfig] = None,
@@ -54,6 +55,7 @@ class RBLNColPaliForRetrievalConfig(RBLNModelConfig):
     ):
         """
         Args:
+            batch_size (Optional[int]): The batch size for the model.
             vision_tower (Optional[RBLNModelConfig]): Configuration for the vision encoder component.
             max_seq_lens (Union[int, List[int]]): The maximum sequence lengths for the language model.
                 This can be multiple values, and the model will be compiled for each max_seq_len, allowing selection of the most appropriate max_seq_len at inference time.
@@ -63,6 +65,6 @@ class RBLNColPaliForRetrievalConfig(RBLNModelConfig):
             ValueError: If batch_size is not a positive integer.
         """
         super().__init__(**kwargs)
-        self.vision_tower = vision_tower
+        self.vision_tower = self.initialize_submodule_config(submodule_config=vision_tower, batch_size=1)
         self.max_seq_lens = max_seq_lens
         self.output_hidden_states = output_hidden_states

@@ -217,7 +217,11 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
         input_info = [
             (
                 "image_features",
-                [rbln_config.batch_size, selected_image_feature_dim, model_config.vision_config.hidden_size],
+                [
+                    rbln_config.vision_tower.batch_size,
+                    selected_image_feature_dim,
+                    model_config.vision_config.hidden_size,
+                ],
                 "float32",
             )
         ]

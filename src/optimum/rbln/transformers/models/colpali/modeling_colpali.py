@@ -223,9 +223,9 @@ class RBLNColPaliForRetrieval(RBLNModel):
         input_infos = []
         for max_seq_len in rbln_config.max_seq_lens:
             input_info = [
-                ("inputs_embeds", [1, max_seq_len, hidden_size], "float32"),
-                ("attention_mask", [1, max_seq_len], "float32"),
-                ("position_ids", [1, max_seq_len], "int32"),
+                ("inputs_embeds", [rbln_config.vision_tower.batch_size, max_seq_len, hidden_size], "float32"),
+                ("attention_mask", [rbln_config.vision_tower.batch_size, max_seq_len], "float32"),
+                ("position_ids", [rbln_config.vision_tower.batch_size, max_seq_len], "int32"),
             ]
             input_infos.append(input_info)
 

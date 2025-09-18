@@ -60,21 +60,8 @@ class RBLNLlavaNextForConditionalGenerationConfig(RBLNModelConfig):
         self.vision_tower = self.initialize_submodule_config(
             submodule_config=vision_tower,
             batch_size=1,  # vision_tower batch_size is always 1 in LlavaNext
+            output_hidden_states=True,  # LlavaNext requires output_hidden_states to be True
         )
-
-        if hasattr(self.vision_tower, "output_hidden_states"):
-            if self.vision_tower.output_hidden_states is False:
-                raise ValueError(
-                    f"LlavaNext requires output_hidden_states to be True, but found output_hidden_states={self.vision_tower.output_hidden_states}. "
-                    f"Please compile again with the correct argument."
-                )
-            else:
-                self.vision_tower.output_hidden_states = True
-        else:
-            logger.warning(
-                f"Vision tower config {type(self.vision_tower).__name__} does not have output_hidden_states attribute. "
-                f"This might cause issues with LlavaNext."
-            )
 
         self.language_model = self.initialize_submodule_config(
             submodule_config=language_model,

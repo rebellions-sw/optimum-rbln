@@ -63,6 +63,8 @@ class RBLNSiglipVisionModel(RBLNModel):
     on RBLN devices, supporting image encoding for multimodal vision-language tasks.
     """
 
+    _tp_support = False
+
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNSiglipVisionModelConfig) -> torch.nn.Module:
         wrapper_cfg = {

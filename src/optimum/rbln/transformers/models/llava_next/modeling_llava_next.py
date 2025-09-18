@@ -193,7 +193,11 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
             selected_image_feature_dim = num_positions
 
         input_info = [
-            ("image_features", [rbln_config.batch_size, selected_image_feature_dim, feature_size], "float32")
+            (
+                "image_features",
+                [rbln_config.vision_tower.batch_size, selected_image_feature_dim, feature_size],
+                "float32",
+            )
         ]
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
         rbln_config.set_compile_cfgs([rbln_compile_config])

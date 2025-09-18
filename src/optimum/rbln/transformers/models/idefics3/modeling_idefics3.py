@@ -79,6 +79,8 @@ class RBLNRuntimeVisionModel(RBLNPytorchRuntime):
 
 
 class RBLNIdefics3VisionTransformer(RBLNModel):
+    _tp_support = False
+
     def __post_init__(self, **kwargs):
         artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
         with no_init_weights():
@@ -140,8 +142,7 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
             (
                 "hidden_states",
                 [
-                    # batch_size * num_patches (dependent on image size) -> compile with 1 and use for loop
-                    1,
+                    rbln_config.batch_size,
                     (model_config.image_size // model_config.patch_size) ** 2,
                     model_config.hidden_size,
                 ],
@@ -287,8 +288,7 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel):
             (
                 "image_hidden_states",
                 [
-                    # batch_size * num_patches (dependent on image size) -> compile with 1 and use for loop
-                    1,
+                    rbln_config.vision_model.batch_size,
                     (model_config.vision_config.image_size // model_config.vision_config.patch_size) ** 2,
                     model_config.vision_config.hidden_size,
                 ],

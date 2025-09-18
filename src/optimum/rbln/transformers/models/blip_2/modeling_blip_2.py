@@ -63,6 +63,8 @@ class RBLNBlip2VisionModel(RBLNModel):
     on RBLN devices, supporting image encoding for multimodal vision-language tasks.
     """
 
+    _tp_support = False
+
     def get_input_embeddings(self):
         return self.embeddings
 
@@ -140,6 +142,8 @@ class RBLNBlip2QFormerModel(RBLNModel):
     on RBLN devices, which bridge vision and language modalities through cross-attention
     mechanisms for multimodal understanding tasks.
     """
+
+    _tp_support = False
 
     def get_input_embeddings(self):
         return self.embeddings.word_embeddings
