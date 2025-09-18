@@ -427,7 +427,8 @@ class _GroundingDinoMultiscaleDeformableAttention(torch.nn.Module):
         if num_coordinates == 2:
             offset_normalizer = 0.5 * torch.stack([spatial_shapes[..., 1], spatial_shapes[..., 0]], -1)
             sampling_grids = (
-                2 * reference_points[:, :, None, :, None, :] - 1
+                2 * reference_points[:, :, None, :, None, :]
+                - 1
                 + sampling_offsets / offset_normalizer[None, None, None, :, None, :]
             )
         elif num_coordinates == 4:
