@@ -91,8 +91,7 @@ class RBLNBlip2VisionModel(RBLNModel):
             (
                 "pixel_values",
                 [
-                    # support for vllm CB (prefill)
-                    1,
+                    rbln_config.batch_size,
                     model_config.num_channels,
                     model_config.image_size,
                     model_config.image_size,
@@ -195,7 +194,7 @@ class RBLNBlip2QFormerModel(RBLNModel):
             (
                 "query_embeds",
                 [
-                    1,
+                    rbln_config.batch_size,
                     rbln_config.num_query_tokens,
                     model_config.hidden_size,
                 ],
@@ -204,7 +203,7 @@ class RBLNBlip2QFormerModel(RBLNModel):
             (
                 "encoder_hidden_states",
                 [
-                    1,
+                    rbln_config.batch_size,
                     # image_text_hidden_size + cls token
                     rbln_config.image_text_hidden_size + 1,
                     model_config.encoder_hidden_size,
@@ -214,7 +213,7 @@ class RBLNBlip2QFormerModel(RBLNModel):
             (
                 "encoder_attention_mask",
                 # image_text_hidden_size + cls token
-                [1, rbln_config.image_text_hidden_size + 1],
+                [rbln_config.batch_size, rbln_config.image_text_hidden_size + 1],
                 "int64",
             ),
         ]

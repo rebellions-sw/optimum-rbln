@@ -530,57 +530,44 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
 
     def initialize_submodule_config(
         self,
-        submodule_name: str,
         submodule_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None,
-        default_config_cls: Optional[Type["RBLNModelConfig"]] = None,
-        config_type_mapping: Optional[Dict[str, Type["RBLNModelConfig"]]] = None,
         **kwargs: Any,
     ) -> "RBLNModelConfig":
         if submodule_config is None:
             submodule_config = {}
 
-        config_cls = None
+        if isinstance(submodule_config, RBLNModelConfig):
+            return submodule_config
 
         if isinstance(submodule_config, dict):
-            cls_name = submodule_config.get("cls_name")
-            if cls_name:
-                if config_type_mapping and cls_name in config_type_mapping:
-                    config_cls = config_type_mapping[cls_name]
-                else:
-                    try:
-                        config_cls = get_rbln_config_class(cls_name)
-                    except ValueError:
-                        raise ValueError(f"Unknown config class: {cls_name}")
-
-            if config_cls is None:
-                if default_config_cls is None:
-                    raise ValueError(
-                        f"No config class specified for submodule '{submodule_name}'. "
-                        f"Either provide 'cls_name' in submodule_config, "
-                        f"or specify default_config_cls."
-                    )
-                config_cls = default_config_cls
-
-            filtered_kwargs = self.filter_parameters(
-                config_cls,
+            from_predecessor = self._runtime_options.copy()
+            from_predecessor.update(
                 {
-                    **self._runtime_options,
                     "npu": self.npu,
                     "tensor_parallel_size": self.tensor_parallel_size,
                     "optimum_rbln_version": self.optimum_rbln_version,
-                    **kwargs,
-                },
+                }
             )
+            from_predecessor.update(kwargs)
 
-            init_kwargs = filtered_kwargs
+            init_kwargs = from_predecessor
             init_kwargs.update(submodule_config)
+
+            for key, value in kwargs.items():
+                if key in init_kwargs:
+                    if init_kwargs[key] != value:
+                        logger.warning(
+                            f"Parameter conflict for '{key}': submodule_config has {init_kwargs[key]}, "
+                            f"but kwargs has {value}. Using kwargs value: {value}"
+                        )
+                    init_kwargs[key] = value
+
+            if "cls_name" in init_kwargs:
+                config_cls = get_rbln_config_class(init_kwargs["cls_name"])
+            else:
+                return init_kwargs
+
             submodule_config = config_cls(**init_kwargs)
-
-        elif isinstance(submodule_config, RBLNModelConfig):
-            return submodule_config
-
-        else:
-            raise TypeError(f"Invalid submodule_config type: {type(submodule_config)}")
 
         if not isinstance(submodule_config, RBLNModelConfig):
             raise TypeError(f"Invalid submodule config type: {type(submodule_config)}")

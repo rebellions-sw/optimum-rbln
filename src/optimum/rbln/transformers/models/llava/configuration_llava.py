@@ -12,13 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional, Type
+from typing import Any, Optional
 
 from ....configuration_utils import RBLNModelConfig
 from ....utils.logging import get_logger
-from ...models.clip import RBLNCLIPVisionModelConfig
-from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
-from ...models.pixtral import RBLNPixtralVisionModelConfig
 
 
 logger = get_logger(__name__)
@@ -34,12 +31,6 @@ class RBLNLlavaForConditionalGenerationConfig(RBLNModelConfig):
     """
 
     submodules = ["vision_tower", "language_model"]
-
-    # Define supported vision tower config types
-    _vision_tower_config_mapping: Dict[str, Type[RBLNModelConfig]] = {
-        "RBLNCLIPVisionModelConfig": RBLNCLIPVisionModelConfig,
-        "RBLNPixtralVisionModelConfig": RBLNPixtralVisionModelConfig,
-    }
 
     def __init__(
         self,
@@ -67,16 +58,10 @@ class RBLNLlavaForConditionalGenerationConfig(RBLNModelConfig):
             logger.warning("Ignore batch_size for Llava vision tower. It will be set to 1.")
 
         self.vision_tower = self.initialize_submodule_config(
-            submodule_name="vision_tower",
             submodule_config=vision_tower,
-            default_config_cls=RBLNCLIPVisionModelConfig,
-            config_type_mapping=self._vision_tower_config_mapping,
-            batch_size=1,
+            batch_size=1,  # vision_tower batch_size is always 1 in Llava
         )
 
         self.language_model = self.initialize_submodule_config(
-            submodule_name="language_model",
             submodule_config=language_model,
-            default_config_cls=RBLNDecoderOnlyModelForCausalLMConfig,
-            batch_size=self.batch_size,
         )

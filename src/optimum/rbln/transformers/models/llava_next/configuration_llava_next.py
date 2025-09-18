@@ -12,12 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional, Type
+from typing import Any, Optional
 
 from ....configuration_utils import RBLNModelConfig
 from ....utils.logging import get_logger
-from ...models.clip import RBLNCLIPVisionModelConfig
-from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
 
 
 logger = get_logger(__name__)
@@ -30,34 +28,9 @@ class RBLNLlavaNextForConditionalGenerationConfig(RBLNModelConfig):
     This configuration class stores the configuration parameters specific to
     RBLN-optimized LLaVA-Next models for multimodal conditional generation tasks
     that combine vision and language processing capabilities.
-
-    Examples:
-        # Using default CLIP vision tower and DecoderOnly language model
-        config = RBLNLlavaNextForConditionalGenerationConfig()
-
-        # Using CLIP vision tower with explicit configuration
-        config = RBLNLlavaNextForConditionalGenerationConfig(
-            vision_tower={
-                "image_size": 336,
-                "output_hidden_states": True
-            }
-        )
-
-        # Using different vision tower type
-        config = RBLNLlavaNextForConditionalGenerationConfig(
-            vision_tower={
-                "cls_name": "RBLNSigLIPVisionModelConfig",
-                "image_size": 224,
-                "output_hidden_states": True
-            }
-        )
     """
 
     submodules = ["vision_tower", "language_model"]
-    _vision_tower_config_mapping: Dict[str, Type[RBLNModelConfig]] = {
-        "RBLNCLIPVisionModelConfig": RBLNCLIPVisionModelConfig,
-        # "RBLNSigLIPVisionModelConfig": RBLNSigLIPVisionModelConfig,
-    }
 
     def __init__(
         self,
@@ -85,11 +58,8 @@ class RBLNLlavaNextForConditionalGenerationConfig(RBLNModelConfig):
             logger.warning("Ignore batch_size for LlavaNext vision tower. It will be set to 1.")
 
         self.vision_tower = self.initialize_submodule_config(
-            submodule_name="vision_tower",
             submodule_config=vision_tower,
-            default_config_cls=RBLNCLIPVisionModelConfig,
-            config_type_mapping=self._vision_tower_config_mapping,
-            batch_size=1,
+            batch_size=1,  # vision_tower batch_size is always 1 in LlavaNext
         )
 
         if hasattr(self.vision_tower, "output_hidden_states"):
@@ -107,8 +77,5 @@ class RBLNLlavaNextForConditionalGenerationConfig(RBLNModelConfig):
             )
 
         self.language_model = self.initialize_submodule_config(
-            submodule_name="language_model",
             submodule_config=language_model,
-            default_config_cls=RBLNDecoderOnlyModelForCausalLMConfig,
-            batch_size=self.batch_size,
         )
