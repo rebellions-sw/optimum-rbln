@@ -46,7 +46,7 @@ class RBLNVQModelConfig(RBLNModelConfig):
                 Determines the downsampling ratio between original images and latent representations.
             in_channels (Optional[int]): Number of input channels for the model.
             latent_channels (Optional[int]): Number of channels in the latent space.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If batch_size is not a positive integer.

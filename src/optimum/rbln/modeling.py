@@ -86,6 +86,7 @@ class RBLNModel(RBLNBaseModel):
 
         Args:
             model: The PyTorch model to be compiled. The object must be an instance of the HuggingFace transformers PreTrainedModel class.
+            config: The configuration object associated with the model.
             rbln_config: Configuration for RBLN model compilation and runtime. This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNLlamaForCausalLMConfig` for Llama models).
                 For detailed configuration options, see the specific model's configuration class documentation.
 
@@ -241,11 +242,11 @@ class RBLNModel(RBLNBaseModel):
 
     def forward(self, *args: Any, return_dict: Optional[bool] = None, **kwargs: Any) -> Any:
         """
-        Defines the forward pass of the RBLN model, providing a drop-in replacement for HuggingFace PreTrainedModel.
+        Defines the forward pass of `RBLNModel`, providing a drop-in replacement for HuggingFace's `PreTrainedModel`.
 
-        This method executes the compiled RBLN model on RBLN NPU devices while maintaining full compatibility
-        with HuggingFace transformers and diffusers APIs. The RBLNModel can be used as a direct substitute
-        for any HuggingFace nn.Module/PreTrainedModel, enabling seamless integration into existing workflows.
+        This method executes the compiled rbln model on RBLN NPU devices while maintaining full compatibility
+        with HuggingFace transformers and diffusers APIs. `RBLNModel` can be used as a direct substitute
+        for any HuggingFace `nn.Module/PreTrainedModel`, enabling seamless integration into existing workflows.
 
         Args:
             *args: Variable length argument list containing model inputs. The format matches the original

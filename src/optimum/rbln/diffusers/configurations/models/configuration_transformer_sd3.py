@@ -18,7 +18,12 @@ from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNSD3Transformer2DModelConfig(RBLNModelConfig):
-    """Configuration class for RBLN Stable Diffusion 3 Transformer models."""
+    """
+    Configuration class for RBLN Stable Diffusion 3 Transformer models.
+
+    This class inherits from RBLNModelConfig and provides specific configuration options
+    for Transformer models used in diffusion models like Stable Diffusion 3.
+    """
 
     subclass_non_save_attributes = ["_batch_size_is_specified"]
 
@@ -36,7 +41,7 @@ class RBLNSD3Transformer2DModelConfig(RBLNModelConfig):
                 of the generated samples. If an integer is provided, it's used for both height and width.
             prompt_embed_length (Optional[int]): The length of the embedded prompt vectors that
                 will be used to condition the transformer model.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If batch_size is not a positive integer.

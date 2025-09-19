@@ -38,6 +38,7 @@ class RBLNWav2Vec2ForCTC(RBLNModelForMaskedLM):
     library implements for all its model.
 
     It implements the methods to convert a pre-trained Wav2Vec2 model into a RBLN Wav2Vec2 model by:
+
     - transferring the checkpoint weights of the original into an optimized RBLN graph,
     - compiling the resulting graph using the RBLN compiler.
     """
