@@ -444,9 +444,9 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             if self.rbln_config.use_attention_mask and not self.rbln_config.use_position_ids:
                 if step > 0:  # update previous chunk
                     chunked_attention_mask[
-                        :, :, :, s - self.rbln_config.prefill_chunk_size : e - self.rbln_config.prefill_chunk_size
+                        :, :, :, s - self.rbln_config.prefill_chunk_size + prefix_cached_len : e - self.rbln_config.prefill_chunk_size + prefix_cached_len
                     ] = 1
-                chunked_attention_mask[:, :, :, s:e] = self.causal_mask
+                chunked_attention_mask[:, :, :, s + prefix_cached_len : e + prefix_cached_len] = self.causal_mask
 
             # Calculate query position if needed
             if self.rbln_config.use_local_attention or self.rbln_config.logits_to_keep > 0:
