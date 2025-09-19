@@ -173,9 +173,11 @@ class RBLNQwen2VisionTransformerPretrainedModel(RBLNModel):
         return hidden_state_full_padded, cos_full_padded, sin_full_padded, full_attn_masks
 
     def forward(self, hidden_states: torch.Tensor, grid_thw: torch.Tensor) -> torch.Tensor:
+        # Processes a batch of images (or frames) through the vision transformer.
+        # Each image is handled independently for padding and attention mask generation.
+        
         hidden_states = self.patch_embed(hidden_states)
         rotary_pos_emb = self.rot_pos_emb(grid_thw)
-
         emb = torch.cat((rotary_pos_emb, rotary_pos_emb), dim=-1)
         position_embeddings = (emb.cos(), emb.sin())
 
@@ -220,7 +222,7 @@ class RBLNQwen2VisionTransformerPretrainedModel(RBLNModel):
                 sin_full_padded[None, None, :, :],
             )
             # Depadding
-            depadded_output = output[: (image_e - image_s) // 4]
+            depadded_output = output[: cu_seq_len // self.spatial_merge_unit]
             output_hidden_states.append(depadded_output)
 
         hidden_states = torch.cat(output_hidden_states)
