@@ -85,12 +85,13 @@ class RBLNModel(RBLNBaseModel):
         This method performs the actual model conversion and compilation process.
 
         Args:
-            model: The PyTorch model to be compiled. The object must be an instance of the HuggingFace transformers PreTrainedModel class.
-            config: The configuration object associated with the model.
-            rbln_config: Configuration for RBLN model compilation and runtime. This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNLlamaForCausalLMConfig` for Llama models).
+            model (PreTrainedModel): The PyTorch model to be compiled.
+                The object must be an instance of the HuggingFace transformers PreTrainedModel class.
+            config (Optional[PretrainedConfig]): The configuration object associated with the model.
+            rbln_config (Optional[Union[RBLNModelConfig, Dict]]): Configuration for RBLN model compilation and runtime.
+                This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNLlamaForCausalLMConfig` for Llama models).
                 For detailed configuration options, see the specific model's configuration class documentation.
-
-            kwargs: Additional keyword arguments. Arguments with the prefix 'rbln_' are passed to rbln_config, while the remaining arguments are passed to the HuggingFace library.
+            **kwargs: Additional keyword arguments. Arguments with the prefix `rbln_` are passed to rbln_config, while the remaining arguments are passed to the HuggingFace library.
 
         The method performs the following steps:
 
@@ -100,7 +101,7 @@ class RBLNModel(RBLNBaseModel):
         4. Saves the compiled model and configurations
 
         Returns:
-            A RBLN model instance ready for inference on RBLN NPU devices.
+            (RBLNModel): A RBLN model instance ready for inference on RBLN NPU devices.
         """
         preprocessors = kwargs.pop("preprocessors", [])
         rbln_config, kwargs = cls.prepare_rbln_config(rbln_config=rbln_config, **kwargs)

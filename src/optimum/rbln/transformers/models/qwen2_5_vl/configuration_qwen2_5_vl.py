@@ -31,10 +31,22 @@ class RBLNQwen2_5_VLForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausal
 
     def __init__(
         self,
-        visual: Optional[RBLNModelConfig] = None,
         use_inputs_embeds: bool = True,
+        visual: Optional[RBLNModelConfig] = None,
         **kwargs: Any,
     ):
+        """
+        Args:
+            use_inputs_embeds (bool): Whether or not to use `inputs_embeds` as input. Defaults to `True`.
+            visual (Optional[RBLNModelConfig]): Configuration for the vision encoder component.
+            **kwargs: Additional arguments passed to the parent `RBLNDecoderOnlyModelForCausalLMConfig`.
+
+        Raises:
+            ValueError: If `use_inputs_embeds` is False.
+            ValueError: If the visual configuration is provided but contains invalid settings, such as an invalid max_seq_lens (e.g., not a positive integer, not a multiple of the window-based attention unit, or insufficient for the expected resolution).
+            ValueError: If visual is None and no default vision configuration can be inferred for the model architecture.
+            ValueError: If any inherited parameters violate constraints defined in the parent class, such as batch_size not being a positive integer, prefill_chunk_size not being divisible by 64, or max_seq_len not meeting requirements for Flash Attention.
+        """
         super().__init__(use_inputs_embeds=use_inputs_embeds, **kwargs)
         if not self.use_inputs_embeds:
             raise ValueError(
@@ -69,7 +81,10 @@ class RBLNQwen2_5_VisionTransformerPretrainedModelConfig(RBLNModelConfig):
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
-            ValueError: If batch_size is not a positive integer.
+            ValueError: If `max_seq_lens` is None or not provided.
+            ValueError: If `max_seq_lens` (or any value in the list) is not a positive integer.
+            ValueError: If `max_seq_lens` is not a multiple of (window_size / patch_size)^2 for window-based attention, or is insufficient for the expected image/video resolution.
+            ValueError: If `batch_size` (inherited from RBLNModelConfig) is not a positive integer.
 
         Max Seq Lens:
             Since `Qwen2_5_VLForConditionalGeneration` performs inference on a per-image or per-frame basis,
