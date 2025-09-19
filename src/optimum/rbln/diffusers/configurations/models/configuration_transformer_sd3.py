@@ -41,7 +41,7 @@ class RBLNSD3Transformer2DModelConfig(RBLNModelConfig):
                 of the generated samples. If an integer is provided, it's used for both height and width.
             prompt_embed_length (Optional[int]): The length of the embedded prompt vectors that
                 will be used to condition the transformer model.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If batch_size is not a positive integer.

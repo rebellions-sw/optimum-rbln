@@ -52,7 +52,7 @@ class RBLNUNet2DConditionModelConfig(RBLNModelConfig):
             in_features (Optional[int]): Number of input features for the model.
             text_model_hidden_size (Optional[int]): Hidden size of the text encoder model.
             image_model_hidden_size (Optional[int]): Hidden size of the image encoder model.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If batch_size is not a positive integer.
