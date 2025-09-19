@@ -190,7 +190,7 @@ class RBLNQwen2VisionTransformerPretrainedModel(RBLNModel):
 
         # Process each image in the sequence
         for i in range(num_images):
-            image_s, image_e = cu_seqlens[i], cu_seqlens[i + 1]  # TODO: support multiple images and videos
+            image_s, image_e = cu_seqlens[i], cu_seqlens[i + 1]
 
             # Select the nearest higher max_seq_len from the available compiled models.
             cu_seq_len = image_e - image_s
@@ -280,15 +280,6 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         return True
 
     @classmethod
-    def update_kwargs(cls, kwargs):
-        kwargs.update(
-            {
-                "_attn_implementation": "eager",
-            }
-        )
-        return super().update_kwargs(kwargs)
-
-    @classmethod
     def get_input_info(
         cls,
         batch_size: int,
@@ -321,27 +312,20 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         video_grid_thw=None,
         **kwargs,
     ):
-        model_inputs = {}
+        model_inputs = super().prepare_inputs_for_generation(
+            input_ids,
+            generate_idx,
+            attention_mask,
+            inputs_embeds,
+            **kwargs,
+        )
+
         is_prefill_phase = generate_idx is None
-
         if is_prefill_phase:
-            generate_idx = attention_mask.sum(dim=-1, keepdim=True).int()
-            cache_position = None
-            model_inputs.update({"input_ids": input_ids})
-        else:
-            if inputs_embeds is not None:
-                raise NotImplementedError("Specifying inputs_embeds in decoder phase is not supported.")
-
-            input_ids = input_ids[:, -1:]
-            cache_position = generate_idx
-            generate_idx = generate_idx + 1
             model_inputs.update({"input_ids": input_ids})
 
         model_inputs.update(
             {
-                "attention_mask": attention_mask,
-                "cache_position": cache_position,
-                "generate_idx": generate_idx,
                 "pixel_values": pixel_values,
                 "pixel_values_videos": pixel_values_videos,
                 "image_grid_thw": image_grid_thw,
