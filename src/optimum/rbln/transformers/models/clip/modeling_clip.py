@@ -51,6 +51,8 @@ class RBLNCLIPTextModel(RBLNModel):
     on RBLN devices, supporting text encoding for multimodal tasks.
     """
 
+    _tp_support = False
+
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNCLIPTextModelConfig) -> torch.nn.Module:
         return _TextEncoder(model).eval()
@@ -143,6 +145,8 @@ class RBLNCLIPVisionModel(RBLNModel):
     This class provides hardware-accelerated inference for CLIP vision encoders
     on RBLN devices, supporting image encoding for multimodal tasks.
     """
+
+    _tp_support = False
 
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNCLIPVisionModelConfig) -> torch.nn.Module:
