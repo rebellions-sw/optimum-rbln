@@ -531,6 +531,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
     def initialize_submodule_config(
         self,
         submodule_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None,
+        force_kwargs: bool = False,
         **kwargs: Any,
     ) -> "RBLNModelConfig":
         if submodule_config is None:
@@ -553,14 +554,15 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
             init_kwargs = from_predecessor
             init_kwargs.update(submodule_config)
 
-            for key, value in kwargs.items():
-                if key in init_kwargs:
-                    if init_kwargs[key] != value:
-                        logger.warning(
-                            f"Parameter conflict for '{key}': submodule_config has {init_kwargs[key]}, "
-                            f"but kwargs has {value}. Using kwargs value: {value}"
-                        )
-                    init_kwargs[key] = value
+            if force_kwargs:
+                for key, value in kwargs.items():
+                    if key in init_kwargs:
+                        if init_kwargs[key] != value:
+                            logger.warning(
+                                f"Parameter conflict for '{key}': submodule_config has {init_kwargs[key]}, "
+                                f"but kwargs has {value}. Using kwargs value: {value}"
+                            )
+                        init_kwargs[key] = value
 
             if "cls_name" in init_kwargs:
                 config_cls = get_rbln_config_class(init_kwargs["cls_name"])

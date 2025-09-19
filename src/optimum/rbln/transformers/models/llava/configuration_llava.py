@@ -60,6 +60,7 @@ class RBLNLlavaForConditionalGenerationConfig(RBLNModelConfig):
         self.vision_tower = self.initialize_submodule_config(
             submodule_config=vision_tower,
             batch_size=1,  # vision_tower batch_size is always 1 in Llava
+            force_kwargs=True,
         )
 
         self.language_model = self.initialize_submodule_config(

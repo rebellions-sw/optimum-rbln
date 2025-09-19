@@ -61,6 +61,7 @@ class RBLNLlavaNextForConditionalGenerationConfig(RBLNModelConfig):
             submodule_config=vision_tower,
             batch_size=1,  # vision_tower batch_size is always 1 in LlavaNext
             output_hidden_states=True,  # LlavaNext requires output_hidden_states to be True
+            force_kwargs=True,
         )
 
         self.language_model = self.initialize_submodule_config(
