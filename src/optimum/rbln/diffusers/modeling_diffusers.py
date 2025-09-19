@@ -33,6 +33,9 @@ if TYPE_CHECKING:
 
 
 class RBLNDiffusionMixinConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLN diffusion pipelines.
+    """
     pass
 
 
@@ -54,8 +57,8 @@ class RBLNDiffusionMixin:
         ```
 
     Class Variables:
-        _submodules: List of submodule names that should be compiled (typically ["text_encoder", "unet", "vae"])
-        _optional_submodules: List of submodule names compiled without inheriting RBLNModel (typically ["safety_checker"])
+        - `_submodules`: List of submodule names that should be compiled (typically ["text_encoder", "unet", "vae"])
+        - `_optional_submodules`: List of submodule names compiled without inheriting RBLNModel (typically ["safety_checker"])
 
     Methods:
         from_pretrained: Creates and optionally compiles a model from a pretrained checkpoint
