@@ -20,7 +20,7 @@ from ....configuration_utils import RBLNModelConfig
 class RBLNSD3Transformer2DModelConfig(RBLNModelConfig):
     """
     Configuration class for RBLN Stable Diffusion 3 Transformer models.
-    
+
     This class inherits from RBLNModelConfig and provides specific configuration options
     for Transformer models used in diffusion models like Stable Diffusion 3.
     """
