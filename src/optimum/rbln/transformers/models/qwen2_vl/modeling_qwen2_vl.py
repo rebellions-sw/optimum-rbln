@@ -175,7 +175,7 @@ class RBLNQwen2VisionTransformerPretrainedModel(RBLNModel):
     def forward(self, hidden_states: torch.Tensor, grid_thw: torch.Tensor) -> torch.Tensor:
         # Processes a batch of images (or frames) through the vision transformer.
         # Each image is handled independently for padding and attention mask generation.
-        
+
         hidden_states = self.patch_embed(hidden_states)
         rotary_pos_emb = self.rot_pos_emb(grid_thw)
         emb = torch.cat((rotary_pos_emb, rotary_pos_emb), dim=-1)
