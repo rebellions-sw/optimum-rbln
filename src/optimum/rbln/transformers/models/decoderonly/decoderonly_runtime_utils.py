@@ -419,6 +419,11 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         ) = self._prepare_prefill_inputs(
             inputs, cache_position, attention_mask, position_embed, token_type_ids=token_type_ids
         )
+        
+        # Prefix Caching
+        prefix_cached_len = cache_position[0][0].item()
+        if prefix_cached_len % self.rbln_config.prefill_chunk_size != 0:
+            raise NotImplementedError("Prefix Caching is not supported yet for non-multiple of prefill_chunk_size.")
 
         # Process input in chunks of size `prefill_chunk_size`
         output_logits = []
