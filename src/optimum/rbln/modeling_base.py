@@ -315,7 +315,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             rbln_config,
             model_save_dir=model_save_dir,
             subfolder=subfolder,
-            rbln_compiled_models=(None if rbln_config.optimize_host_memory else rbln_compiled_models),
+            rbln_compiled_models=rbln_compiled_models,
             rbln_submodules=rbln_submodules,
             **kwargs,
         )
@@ -431,7 +431,6 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         compiled_model = rebel.compile_from_torch(
             model,
             input_info=rbln_compile_config.input_info,
-            fusion=rbln_compile_config.fusion,
             npu=rbln_compile_config.npu,
             tensor_parallel_size=rbln_compile_config.tensor_parallel_size,
             **kwargs,
