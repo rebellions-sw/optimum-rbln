@@ -307,7 +307,7 @@ class RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
         )
         self.decoder_pipe = self.initialize_submodule_config(
             decoder_pipe,
-            cls_name="RBLNKandinskyV22PipelineConfig",
+            cls_name=self._decoder_pipe_cls.__name__,
             unet=unet,
             movq=movq,
             batch_size=batch_size,
