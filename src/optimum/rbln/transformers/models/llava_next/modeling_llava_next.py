@@ -472,18 +472,17 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
 
 # Almost copied from : https://github.com/huggingface/transformers/blob/5af7d41e49bbfc8319f462eb45253dcb3863dfb7/src/transformers/models/llava_next/modeling_llava_next.py
 def get_anyres_image_grid_shape(image_size, grid_pinpoints, patch_size):
-    """
-    Calculate the shape of the image patch grid after the preprocessing for images of any resolution.
+    # Calculate the shape of the image patch grid after the preprocessing for images of any resolution.
 
-    Args:
-        image_size (tuple): The size of the input image in the format (width, height).
-        grid_pinpoints (list): A list containing possible resolutions.
-            Each item in the list should be a tuple or list of the form `(height, width)`.
-        patch_size (int): The size of each image patch.
+    # Args:
+    #     image_size (tuple): The size of the input image in the format (width, height).
+    #     grid_pinpoints (list): A list containing possible resolutions.
+    #         Each item in the list should be a tuple or list of the form `(height, width)`.
+    #     patch_size (int): The size of each image patch.
 
-    Returns:
-        tuple: The shape of the image patch grid in the format (width, height).
-    """
+    # Returns:
+    #     tuple: The shape of the image patch grid in the format (width, height).
+
     if not isinstance(grid_pinpoints, list):
         raise TypeError("grid_pinpoints should be a list of tuples or lists")
 
@@ -501,16 +500,15 @@ def get_anyres_image_grid_shape(image_size, grid_pinpoints, patch_size):
 
 # Almost copied from : https://github.com/huggingface/transformers/blob/1feebb5b4150882deabddd190a541f336f3be817/src/transformers/models/llava_next/modeling_llava_next.py#L115C1-L152C1
 def unpad_image(tensor, original_size):
-    """
-    Unpads a PyTorch tensor of a padded and resized image.
+    # Unpads a PyTorch tensor of a padded and resized image.
 
-    Args:
-        tensor (torch.Tensor): The image tensor, assumed to be of shape (num_channels, height, width).
-        original_size (tuple): The original size of the image (height, width).
+    # Args:
+    #     tensor (torch.Tensor): The image tensor, assumed to be of shape (num_channels, height, width).
+    #     original_size (tuple): The original size of the image (height, width).
 
-    Returns:
-        (torch.Tensor): The unpadded image tensor.
-    """
+    # Returns:
+    #     (torch.Tensor): The unpadded image tensor.
+
     if not isinstance(original_size, (list, tuple)):
         if not isinstance(original_size, (torch.Tensor, np.ndarray)):
             raise TypeError(
@@ -539,20 +537,19 @@ def unpad_image(tensor, original_size):
 
 # Almost copied from : https://github.com/huggingface/transformers/blob/5af7d41e49bbfc8319f462eb45253dcb3863dfb7/src/transformers/models/llava_next/modeling_llava_next.py
 def select_best_resolution(original_size: tuple, possible_resolutions: list) -> tuple:
-    """
-    Selects the best resolution from a list of possible resolutions based on the original size.
+    # Selects the best resolution from a list of possible resolutions based on the original size.
 
-    This is done by calculating the effective and wasted resolution for each possible resolution.
+    # This is done by calculating the effective and wasted resolution for each possible resolution.
 
-    The best fit resolution is the one that maximizes the effective resolution and minimizes the wasted resolution.
+    # The best fit resolution is the one that maximizes the effective resolution and minimizes the wasted resolution.
 
-    Args:
-        original_size (tuple): The original size of the image in the format (height, width).
-        possible_resolutions (List(tuple)): A list of possible resolutions in the format [(height1, width1), (height2, width2), ...].
+    # Args:
+    #     original_size (tuple): The original size of the image in the format (height, width).
+    #     possible_resolutions (List(tuple)): A list of possible resolutions in the format [(height1, width1), (height2, width2), ...].
 
-    Returns:
-        (tuple): The best fit resolution in the format (height, width).
-    """
+    # Returns:
+    #     (tuple): The best fit resolution in the format (height, width).
+
     original_height, original_width = original_size
     best_fit = None
     max_effective_resolution = 0
@@ -576,18 +573,17 @@ def select_best_resolution(original_size: tuple, possible_resolutions: list) -> 
 
 # Almost copied from : https://github.com/huggingface/transformers/blob/5af7d41e49bbfc8319f462eb45253dcb3863dfb7/src/transformers/models/llava_next/modeling_llava_next.py
 def image_size_to_num_patches(image_size, grid_pinpoints, patch_size: int):
-    """
-    Calculate the number of patches after the preprocessing for images of any resolution.
+    # Calculate the number of patches after the preprocessing for images of any resolution.
 
-    Args:
-        image_size (Union[torch.LongTensor, np.ndarray, Tuple[int, int]): The size of the input image in the format (height, width).
-        grid_pinpoints (list): A list containing possible resolutions.
-            Each item in the list should be a tuple or list of the form `(height, width)`.
-        patch_size (int): The size of each image patch.
+    # Args:
+    #     image_size (Union[torch.LongTensor, np.ndarray, Tuple[int, int]): The size of the input image in the format (height, width).
+    #     grid_pinpoints (list): A list containing possible resolutions.
+    #         Each item in the list should be a tuple or list of the form `(height, width)`.
+    #     patch_size (int): The size of each image patch.
 
-    Returns:
-        (int): the number of patches.
-    """
+    # Returns:
+    #     (int): the number of patches.
+
     if not isinstance(grid_pinpoints, list):
         raise TypeError("grid_pinpoints should be a list of tuples or lists")
 

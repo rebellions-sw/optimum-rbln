@@ -36,6 +36,7 @@ class RBLNDiffusionMixinConfig(RBLNModelConfig):
     """
     Configuration class for RBLN diffusion pipelines.
     """
+
     pass
 
 

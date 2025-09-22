@@ -540,7 +540,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         Args:
             save_directory (Union[str, Path]):
                 Directory where to save the model file.
-            push_to_hub (Optional[bool]):
+            push_to_hub (bool):
                 Whether or not to push your model to the HuggingFace model hub after saving it.
 
         """

@@ -127,8 +127,8 @@ class RBLNColPaliForRetrieval(RBLNModel):
     The ColPali Model transformer for document retrieval using vision-language models.
     This model inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
 
-    A class to convert and run pre-trained transformers based ColPaliForRetrieval model on RBLN devices.
-    It implements the methods to convert a pre-trained transformers ColPaliForRetrieval model into a RBLN transformer model by:
+    A class to convert and run pre-trained transformers based `ColPaliForRetrieval` model on RBLN devices.
+    It implements the methods to convert a pre-trained transformers `ColPaliForRetrieval` model into a RBLN transformer model by:
 
     - transferring the checkpoint weights of the original into an optimized RBLN graph,
     - compiling the resulting graph using the RBLN compiler.
