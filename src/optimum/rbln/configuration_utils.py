@@ -496,38 +496,6 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
     submodules: List[str] = []
     subclass_non_save_attributes = []
 
-    def init_submodule_config(
-        self,
-        submodule_config_cls: Type["RBLNModelConfig"],
-        submodule_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None,
-        **kwargs: Any,
-    ) -> "RBLNModelConfig":
-        # Initialize a submodule config from a dict or a RBLNModelConfig.
-        # kwargs is specified from the predecessor config.
-
-        if submodule_config is None:
-            submodule_config = {}
-
-        if isinstance(submodule_config, dict):
-            from_predecessor = self._runtime_options.copy()
-            from_predecessor.update(
-                {
-                    "npu": self.npu,
-                    "tensor_parallel_size": self.tensor_parallel_size,
-                    "optimum_rbln_version": self.optimum_rbln_version,
-                }
-            )
-            from_predecessor.update(kwargs)
-
-            init_kwargs = from_predecessor
-            init_kwargs.update(submodule_config)
-            submodule_config = submodule_config_cls(**init_kwargs)
-
-        if not isinstance(submodule_config, submodule_config_cls):
-            raise TypeError(f"Invalid submodule config type: {type(submodule_config)}")
-
-        return submodule_config
-
     def initialize_submodule_config(
         self,
         submodule_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None,
