@@ -14,15 +14,19 @@
 
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple, Union
 
 from torch.nn import Module
 
 from ...modeling import RBLNModel
 
 
+if TYPE_CHECKING:
+    import rebel
+
+
 class LoopProcessor(Module, ABC):
-    def __init__(self, model: RBLNModel):
+    def __init__(self, model: Union[RBLNModel, "rebel.Runtime"]):
         super().__init__()
         self.model = model
 

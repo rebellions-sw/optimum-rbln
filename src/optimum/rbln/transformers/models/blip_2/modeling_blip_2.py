@@ -36,11 +36,12 @@ from ...utils.rbln_runtime_wrapper import LoopProcessor
 logger = logging.get_logger(__name__)
 
 if TYPE_CHECKING:
+    import rebel
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
 
 
 class LoopProjector(LoopProcessor):
-    def __init__(self, language_projection: "RBLNModel"):
+    def __init__(self, language_projection: Union[RBLNModel, "rebel.Runtime"]):
         super().__init__(model=language_projection)
 
     def _get_batch_size(self, query_output, **kwargs):

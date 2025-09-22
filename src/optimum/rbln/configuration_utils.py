@@ -526,7 +526,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
                 for key, value in kwargs.items():
                     if key in init_kwargs:
                         if init_kwargs[key] != value:
-                            logger.warning(
+                            raise ValueError(
                                 f"Parameter conflict for '{key}': submodule_config has {init_kwargs[key]}, "
                                 f"but kwargs has {value}. Using kwargs value: {value}"
                             )
