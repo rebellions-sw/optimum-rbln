@@ -15,7 +15,7 @@ jobs:
     runs-on: rebel-k8s-runner
     steps:
       - name: Checkout the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: rebellions-sw/optimum-rbln
           fetch-depth: 0

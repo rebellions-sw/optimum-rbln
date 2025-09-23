@@ -27,7 +27,7 @@ jobs:
     runs-on: vm-ci-0
     steps:
       - name: Checkout the optimum-rbln repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ inputs.pr_number && format('refs/pull/{0}/merge', inputs.pr_number) || inputs.ref }}
           submodules: recursive
