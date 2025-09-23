@@ -1,18 +1,25 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "lockFileMaintenance": {
+    "enabled": true
+  },
   "packageRules": [
     {
+      "matchPackageNames": [
+        "*"
+      ],
+      "enabled": false
+    },
+    {
+      "matchDatasources": [
+        "pypi"
+      ],
       "matchPackageNames": [
         "diffusers",
         "transformers"
       ],
-      "enabled": true
-    },
-    {
-      "matchPackageNames": [
-        "+(*:*|*)"
-      ],
-      "enabled": false
+      "enabled": true,
+      "groupName": "huggingface-libraries"
     }
   ]
 }
