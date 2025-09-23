@@ -407,7 +407,6 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 input_id,
                 image_grid_thw[image_idx : image_idx + image_nums] if image_grid_thw is not None else None,
                 video_grid_thw[video_idx : video_idx + video_nums] if video_grid_thw is not None else None,
-                attention_mask=attention_mask[b_idx : b_idx + 1] if attention_mask is not None else None,
             )
             image_idx += image_nums
             video_idx += video_nums
