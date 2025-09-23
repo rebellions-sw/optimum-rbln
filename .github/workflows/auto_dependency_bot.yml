@@ -19,4 +19,3 @@ jobs:
           LOG_LEVEL: debug
           RENOVATE_PLATFORM: github
           RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
-          RENOVATE_AUTODISCOVER: true
