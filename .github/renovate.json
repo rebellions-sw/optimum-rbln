@@ -15,11 +15,20 @@
         "pypi"
       ],
       "matchPackageNames": [
-        "diffusers",
+        "diffusers"
+      ],
+      "enabled": true,
+      "groupName": "huggingface-diffusers"
+    },
+    {
+      "matchDatasources": [
+        "pypi"
+      ],
+      "matchPackageNames": [
         "transformers"
       ],
       "enabled": true,
-      "groupName": "huggingface-libraries"
+      "groupName": "huggingface-transformers"
     }
   ]
 }
