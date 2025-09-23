@@ -1,21 +1,21 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "lockFileMaintenance": {
-    "enabled": true
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  lockFileMaintenance: {
+    enabled: true,
   },
-  "packageRules": [
+  packageRules: [
     {
-      "matchPackageNames": [
+      matchPackageNames: [
         "diffusers",
         "transformers"
       ],
-      "enabled": true
+      enabled: true
     },
     {
-      "matchPackageNames": [
+      matchPackageNames: [
         "+(*:*|*)"
       ],
-      "enabled": false
+      enabled: false
     }
   ]
 }
