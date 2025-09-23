@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import math
 from functools import wraps
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
@@ -20,7 +21,6 @@ from torch import Tensor
 from transformers.models.grounding_dino.modeling_grounding_dino import (
     GroundingDinoDecoder,
     GroundingDinoEncoder,
-    get_sine_pos_embed,
 )
 
 
@@ -33,31 +33,46 @@ def monkey_patch():
         GroundingDinoBiMultiHeadAttention,
         GroundingDinoEncoderLayer,
         GroundingDinoMultiscaleDeformableAttention,
+        MultiScaleDeformableAttention,
     )
 
     original_forward = GroundingDinoMultiscaleDeformableAttention.forward
     original_bi_multihead_attention_forward = GroundingDinoBiMultiHeadAttention.forward
     original_encoder_layer_forward = GroundingDinoEncoderLayer.forward
+    original_multiscale_deform_attn = MultiScaleDeformableAttention.forward
 
     # Patch the methods with the custom implementations
     GroundingDinoMultiscaleDeformableAttention.forward = _GroundingDinoMultiscaleDeformableAttention.forward
     GroundingDinoBiMultiHeadAttention.forward = _GroundingDinoBiMultiHeadAttention.forward
     GroundingDinoEncoderLayer.forward = _GroundingDinoEncoderLayer.forward
+    MultiScaleDeformableAttention.forward = _MultiScaleDeformableAttention.forward
 
-    return (original_forward, original_bi_multihead_attention_forward, original_encoder_layer_forward)
+    return (
+        original_forward,
+        original_bi_multihead_attention_forward,
+        original_encoder_layer_forward,
+        original_multiscale_deform_attn,
+    )
 
 
-def restore_monkey_patch(original_forward, original_bi_multihead_attention_forward, original_encoder_layer_forward):
+def restore_monkey_patch(
+    original_forward,
+    original_bi_multihead_attention_forward,
+    original_encoder_layer_forward,
+    original_multiscale_deform_attn,
+):
     from transformers.models.grounding_dino.modeling_grounding_dino import (
         GroundingDinoBiMultiHeadAttention,
         GroundingDinoEncoderLayer,
         GroundingDinoMultiscaleDeformableAttention,
+        MultiScaleDeformableAttention,
     )
 
     # Restore the original methods
     GroundingDinoMultiscaleDeformableAttention.forward = original_forward
     GroundingDinoBiMultiHeadAttention.forward = original_bi_multihead_attention_forward
     GroundingDinoEncoderLayer.forward = original_encoder_layer_forward
+    MultiScaleDeformableAttention.forward = original_multiscale_deform_attn
 
 
 def monkey_patch_decorator(func):
@@ -74,6 +89,30 @@ def monkey_patch_decorator(func):
         return result
 
     return wrapper
+
+
+def get_sine_pos_embed(
+    pos_tensor: torch.Tensor, num_pos_feats: int = 128, temperature: int = 10000, exchange_xy: bool = True
+) -> Tensor:
+    scale = 2 * math.pi
+    dim_t = torch.arange(num_pos_feats, dtype=torch.float32, device=pos_tensor.device)
+    dim_t = temperature ** (2 * torch.div(dim_t, 2, rounding_mode="floor") / num_pos_feats)
+
+    scaled_pos = pos_tensor.unsqueeze(-1) * scale / dim_t
+    reshaped_pos = scaled_pos.view(*scaled_pos.shape[:-1], -1, 2)
+    sin_chunk, cos_chunk = torch.split(reshaped_pos, 1, dim=-1)
+    sin_embed = sin_chunk.squeeze(-1).sin()
+    cos_embed = cos_chunk.squeeze(-1).cos()
+
+    pos_embed = torch.stack((sin_embed, cos_embed), dim=-1).flatten(-2)
+
+    if exchange_xy and pos_tensor.shape[-1] >= 2:
+        swapped_embeds = torch.cat([pos_embed[..., 1:2, :], pos_embed[..., 0:1, :], pos_embed[..., 2:, :]], dim=-2)
+        pos_embed = swapped_embeds
+
+    position_embeddings = pos_embed.flatten(start_dim=-2)
+
+    return position_embeddings
 
 
 class _GroundingDinoEncoder(torch.nn.Module):
@@ -386,16 +425,20 @@ class _GroundingDinoMultiscaleDeformableAttention(torch.nn.Module):
         # batch_size, num_queries, n_heads, n_levels, n_points, 2
         num_coordinates = reference_points.shape[-1]
         if num_coordinates == 2:
-            offset_normalizer = torch.stack([spatial_shapes[..., 1], spatial_shapes[..., 0]], -1)
-            sampling_locations = (
-                reference_points[:, :, None, :, None, :]
+            offset_normalizer = 0.5 * torch.stack([spatial_shapes[..., 1], spatial_shapes[..., 0]], -1)
+            sampling_grids = (
+                2 * reference_points[:, :, None, :, None, :]
+                - 1
                 + sampling_offsets / offset_normalizer[None, None, None, :, None, :]
             )
         elif num_coordinates == 4:
-            sampling_locations = (
-                reference_points[:, :, None, :, None, :2]
-                + sampling_offsets / self.n_points * reference_points[:, :, None, :, None, 2:] * 0.5
-            )
+            ref_points_xy, ref_points_wh = torch.split(reference_points, 2, dim=-1)
+            ref_points_xy = ref_points_xy[:, :, None, :, None, :]
+            ref_points_wh = ref_points_wh[:, :, None, :, None, :]
+            ref_points_grids = 2 * ref_points_xy - 1
+            offset_grids = sampling_offsets / self.n_points * ref_points_wh
+            sampling_grids = ref_points_grids + offset_grids
+
         else:
             raise ValueError(f"Last dim of reference_points must be 2 or 4, but got {reference_points.shape[-1]}")
 
@@ -404,7 +447,7 @@ class _GroundingDinoMultiscaleDeformableAttention(torch.nn.Module):
             spatial_shapes,
             spatial_shapes_list,
             level_start_index,
-            sampling_locations,
+            sampling_grids,
             attention_weights,
             self.im2col_step,
         )
@@ -456,14 +499,13 @@ class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
         # # Do not increase -50000/50000, data type half has quite limited range
         attn_weights = torch.clamp(attn_weights, min=-50000, max=50000)
 
-        attn_weights_transposed = attn_weights.transpose(1, 2)
         # RBLN FIX: max_values from scalar to vector
-        text_attn_weights = attn_weights_transposed - torch.max(attn_weights_transposed, dim=-1, keepdim=True)[
-            0
-        ].repeat(1, 1, tgt_len)
+        text_attn_weights = attn_weights - torch.max(attn_weights, dim=1, keepdim=True)[0].repeat(1, tgt_len, 1)
 
         # # Do not increase -50000/50000, data type half has quite limited range
         text_attn_weights = torch.clamp(text_attn_weights, min=-50000, max=50000)
+
+        text_attn_weights = text_attn_weights.transpose(1, 2)
 
         # mask vision for language
         if vision_attention_mask is not None:
@@ -511,3 +553,47 @@ class _GroundingDinoBiMultiHeadAttention(torch.nn.Module):
         text_attn_output = self.out_text_proj(text_attn_output)
 
         return (vision_attn_output, vision_attn_weights), (text_attn_output, text_attn_weights)
+
+
+class _MultiScaleDeformableAttention(torch.nn.Module):
+    def forward(
+        self,
+        value: Tensor,
+        value_spatial_shapes: Tensor,
+        value_spatial_shapes_list: List[Tuple],
+        level_start_index: Tensor,
+        sampling_grids: Tensor,
+        attention_weights: Tensor,
+        im2col_step: int,
+    ):
+        batch_size, _, num_heads, hidden_dim = value.shape
+        _, num_queries, num_heads, num_levels, num_points, _ = sampling_grids.shape
+        value_list = value.split([height * width for height, width in value_spatial_shapes_list], dim=1)
+        sampling_value_list = []
+        sampling_grids_list = [t.squeeze(3) for t in torch.split(sampling_grids, 1, dim=3)]
+        for level_id, (height, width) in enumerate(value_spatial_shapes_list):
+            value_l_ = (
+                value_list[level_id].permute(0, 2, 3, 1).reshape(batch_size * num_heads, hidden_dim, height, width)
+            )
+            sampling_grid_l_ = sampling_grids_list[level_id].transpose(1, 2).flatten(0, 1)
+            sampling_value_l_ = torch.nn.functional.grid_sample(
+                value_l_,
+                sampling_grid_l_,
+                mode="bilinear",
+                padding_mode="zeros",
+                align_corners=False,
+            )
+            sampling_value_list.append(sampling_value_l_)
+
+        sampling_values = torch.cat(sampling_value_list, dim=-1)
+        attention_weights_prep = attention_weights.transpose(1, 2)
+        values_permuted = sampling_values.permute(0, 2, 3, 1)
+
+        weights_for_matmul = attention_weights_prep.reshape(
+            batch_size * num_heads, num_queries, 1, num_levels * num_points
+        )
+        output_before_permute = torch.matmul(weights_for_matmul, values_permuted)
+        output_before_view = output_before_permute.squeeze(2).permute(0, 2, 1)
+        output = output_before_view.reshape(batch_size, num_heads * hidden_dim, num_queries)
+
+        return output.transpose(1, 2).contiguous()

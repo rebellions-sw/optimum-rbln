@@ -33,7 +33,7 @@ dependencies = [
     "torchvision<=0.22.0",
     "accelerate>=1.0.1",
     "transformers==4.51.3",
-    "diffusers==0.34.0",
+    "diffusers==0.35.1",
     "packaging>=24.1",
 ]
 

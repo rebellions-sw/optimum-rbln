@@ -621,7 +621,7 @@ class DecoderOnlyAttention(nn.Module):
         )
         self.head_dim = self._original_mod.head_dim
         self._phase = "prefill"
-        self.scale = torch.tensor(self.get_attn_scale())
+        self.scale = torch.nn.Parameter(torch.tensor(self.get_attn_scale()))
         self.quantization = rbln_config.quantization
 
         if hasattr(self._original_mod, "num_key_value_heads"):
