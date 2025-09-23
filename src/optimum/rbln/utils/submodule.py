@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
 
 from transformers import PretrainedConfig
 
-from ..configuration_utils import RBLNModelConfig
+from ..configuration_utils import RBLNModelConfig, get_rbln_config_class
 from ..utils.model_utils import get_rbln_model_cls
 
 
@@ -40,6 +40,15 @@ class SubModulesMixin:
     def __init__(self, *, rbln_submodules: List["RBLNModel"] = [], **kwargs) -> None:
         for submodule_meta, submodule in zip(self._rbln_submodules, rbln_submodules):
             setattr(self, submodule_meta["name"], submodule)
+
+    @classmethod
+    def _get_submodule_config_class(
+        cls, cls_name: str, submodule_rbln_config: Dict[str, Any]
+    ) -> Type[RBLNModelConfig]:
+        if isinstance(submodule_rbln_config, dict) and "cls_name" in submodule_rbln_config:
+            config_cls_name = submodule_rbln_config["cls_name"]
+            return get_rbln_config_class(config_cls_name)
+        return get_rbln_config_class(f"RBLN{cls_name}Config")
 
     @classmethod
     def _update_submodule_config(
@@ -69,12 +78,19 @@ class SubModulesMixin:
             cls_name = torch_submodule.__class__.__name__
             submodule_cls: Type["RBLNModel"] = get_rbln_model_cls(f"RBLN{cls_name}")
             submodule_rbln_config = getattr(rbln_config, submodule_name) or {}
+            submodule_config_cls = cls._get_submodule_config_class(cls_name, submodule_rbln_config)
 
             if isinstance(submodule_rbln_config, dict):
-                submodule_rbln_config_class = submodule_cls.get_rbln_config_class()
-                submodule_rbln_config = submodule_rbln_config_class(**submodule_rbln_config)
-                setattr(rbln_config, submodule_name, submodule_rbln_config)
+                filtered_kwargs = rbln_config.filter_parameters(submodule_config_cls, submodule_rbln_config)
+                filtered_kwargs["cls_name"] = submodule_config_cls.__name__
+                submodule_rbln_config = submodule_config_cls(**filtered_kwargs)
+            elif not isinstance(submodule_rbln_config, submodule_config_cls):
+                config_dict = {k: v for k, v in submodule_rbln_config.__dict__.items() if not k.startswith("_")}
+                filtered_kwargs = rbln_config.filter_parameters(submodule_config_cls, config_dict)
+                filtered_kwargs["cls_name"] = submodule_config_cls.__name__
+                submodule_rbln_config = submodule_config_cls(**filtered_kwargs)
 
+            setattr(rbln_config, submodule_name, submodule_rbln_config)
             submodule_rbln_config = submodule_cls._update_submodule_config(model, submodule_rbln_config, preprocessors)
 
             rbln_submodule = submodule_cls.from_model(
