@@ -10,13 +10,17 @@
     "packageRules": [
         {
             "matchPackageNames": [
-                "torch*"
+                "*"
             ],
             "enabled": false
         },
         {
             "matchDatasources": [
                 "pypi"
+            ],
+            "matchDepTypes": [
+                "dependencies",
+                "optionalDependencies"
             ],
             "matchPackageNames": [
                 "diffusers"
@@ -27,6 +31,10 @@
         {
             "matchDatasources": [
                 "pypi"
+            ],
+            "matchDepTypes": [
+                "dependencies",
+                "optionalDependencies"
             ],
             "matchPackageNames": [
                 "transformers"
