@@ -1,0 +1,18 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "packageRules": [
+    {
+      "matchPackageNames": [
+        "diffusers",
+        "transformers"
+      ],
+      "enabled": true
+    },
+    {
+      "matchPackageNames": [
+        "+(*:*|*)"
+      ],
+      "enabled": false
+    }
+  ]
+}
