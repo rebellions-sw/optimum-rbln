@@ -476,24 +476,6 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
             **self.HF_CONFIG_KWARGS,
         )
 
-    def test_complicate_config(self):
-        rbln_config = {
-            "vision_tower": {
-                "batch_size": 2,
-                "create_runtimes": False,
-            },
-            "language_model": {
-                "batch_size": 2,
-                "create_runtimes": False,
-            },
-        }
-        rbln_class_kwargs = {"rbln_config": rbln_config}
-
-        with pytest.raises(
-            ValueError, match="Parameter conflict for 'batch_size': submodule_config has 2, but kwargs has 1"
-        ):
-            _ = self.RBLN_CLASS.from_pretrained(model_id=self.HF_MODEL_ID, **rbln_class_kwargs)
-
 
 class TestBlip2ForConditionalGeneration(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq

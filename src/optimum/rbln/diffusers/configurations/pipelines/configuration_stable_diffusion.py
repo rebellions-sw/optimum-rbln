@@ -90,22 +90,18 @@ class RBLNStableDiffusionPipelineBaseConfig(RBLNModelConfig):
         elif (img_height is not None and img_width is None) or (img_height is None and img_width is not None):
             raise ValueError("Both img_height and img_width must be provided together if used")
 
-        self.text_encoder = self.initialize_submodule_config(
-            text_encoder,
-            cls_name="RBLNCLIPTextModelConfig",
-            batch_size=batch_size,
-        )
-        self.unet = self.initialize_submodule_config(
+        self.text_encoder = self.init_submodule_config(RBLNCLIPTextModelConfig, text_encoder, batch_size=batch_size)
+        self.unet = self.init_submodule_config(
+            RBLNUNet2DConditionModelConfig,
             unet,
-            cls_name="RBLNUNet2DConditionModelConfig",
             sample_size=sample_size,
         )
-        self.vae = self.initialize_submodule_config(
+        self.vae = self.init_submodule_config(
+            RBLNAutoencoderKLConfig,
             vae,
-            cls_name="RBLNAutoencoderKLConfig",
             batch_size=batch_size,
             uses_encoder=self.__class__._vae_uses_encoder,
-            sample_size=image_size,
+            sample_size=image_size,  # image size is equal to sample size in vae
         )
 
         # Get default guidance scale from original class to set UNet batch size

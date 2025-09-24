@@ -14,11 +14,8 @@
 from typing import Any, Optional
 
 from ....configuration_utils import RBLNModelConfig
-from ....utils.logging import get_logger
 from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
-
-
-logger = get_logger(__name__)
+from ..siglip.configuration_siglip import RBLNSiglipVisionModelConfig
 
 
 class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
@@ -77,13 +74,8 @@ class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
-        if self.batch_size != 1:
-            logger.warning("Ignore batch_size for Gemma3 vision tower. It will be set to 1.")
-
-        self.vision_tower = self.initialize_submodule_config(
-            submodule_config=vision_tower, batch_size=1, force_kwargs=True
-        )
-        self.language_model = self.initialize_submodule_config(submodule_config=language_model)
+        self.vision_tower = self.init_submodule_config(RBLNSiglipVisionModelConfig, vision_tower)
+        self.language_model = self.init_submodule_config(RBLNGemma3ForCausalLMConfig, language_model)
 
     @property
     def image_prefill_chunk_size(self):

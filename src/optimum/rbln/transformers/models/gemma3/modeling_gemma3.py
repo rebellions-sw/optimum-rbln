@@ -25,7 +25,6 @@ from transformers.models.gemma3.modeling_gemma3 import Gemma3TextScaledWordEmbed
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ...modeling_outputs import RBLNDecoderOnlyOutput
-from ...utils.rbln_runtime_wrapper import LoopProcessor
 from ..decoderonly.decoderonly_runtime_utils import RBLNPageTableManager
 from ..decoderonly.modeling_decoderonly import (
     RBLNDecoderOnlyModelForCausalLM,
@@ -39,41 +38,58 @@ if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, Gemma3ForConditionalGeneration
 
 
-class LoopVisionTower(LoopProcessor):
-    def __init__(self, vision_tower: "RBLNModel"):
-        super().__init__(model=vision_tower)
+class LoopVisionTower:
+    def __init__(self, vision_tower: RBLNModel) -> None:
+        self.vision_tower = vision_tower
 
-    def _get_batch_size(self, pixel_values, **kwargs):
-        return pixel_values.shape[0]
+    def forward(self, *args, **kwargs):
+        # Loop instead of batch
+        # shape of pixel_values : [batch, num_channel, height, width]
+        pixel_values = args[0]
 
-    def _prepare_inputs_for_iteration(self, index, common_inputs, pixel_values, **kwargs):
-        pixel_values_item = pixel_values[index : index + 1]
-        out_buffer = [tensor[index : index + 1] for tensor in kwargs["out"]]
-        return ([pixel_values_item], {"out": out_buffer})
+        batch_size = pixel_values.shape[0]
+        outputs = []
+        for i in range(batch_size):
+            outputs.append(self.vision_tower(pixel_values=pixel_values[i : i + 1], return_dict=True))
 
-    def _process_outputs(self, outputs: list, **kwargs) -> "BaseModelOutputWithPooling":
-        output = kwargs["out"]
+        last_hidden_states = [output.last_hidden_state for output in outputs]
+
+        # FIXME:: This can be optimized using out= API of rbln runtime.
+        last_hidden_states = torch.cat(last_hidden_states, dim=0)
 
         return BaseModelOutputWithPooling(
-            last_hidden_state=output[0],
+            last_hidden_state=last_hidden_states,
         )
 
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        return self.forward(*args, **kwds)
 
-class LoopProjector(LoopProcessor):
-    def __init__(self, multi_modal_projector: "RBLNModel"):
-        super().__init__(model=multi_modal_projector)
+    def __repr__(self) -> str:
+        return repr(self.vision_tower)
 
-    def _get_batch_size(self, image_feature, **kwargs):
-        return image_feature.shape[0]
 
-    def _prepare_inputs_for_iteration(self, index, common_inputs, image_feature, **kwargs):
-        image_feature_item = image_feature[index : index + 1]
-        out_buffer = [tensor[index : index + 1] for tensor in kwargs["out"]]
-        return ([image_feature_item], {"out": out_buffer})
+class LoopProjector:
+    def __init__(self, multi_modal_projector) -> None:
+        self.multi_modal_projector = multi_modal_projector
 
-    def _process_outputs(self, outputs: list, **kwargs):
-        output = kwargs["out"]
-        return output[0]
+    def forward(self, *args, **kwargs):
+        # Loop instead of batch
+        image_feature = args[0]
+
+        batch_size = image_feature.shape[0]
+        outputs = []
+        for i in range(batch_size):
+            outputs.append(self.multi_modal_projector(image_feature[i : i + 1]))
+
+        # FIXME:: This can be optimized using out= API of rbln runtime.
+        outputs = torch.cat(outputs, dim=0)
+        return outputs
+
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        return self.forward(*args, **kwds)
+
+    def __repr__(self) -> str:
+        return repr(self.multi_modal_projector)
 
 
 class RBLNGemma3ForConditionalGeneration(RBLNModel):
@@ -195,21 +211,8 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         Returns:
             Image feature tensor of shape `(num_images, image_length, embed_dim)`.
         """
-        vision_out_buffer = []
-        vision_out_size = [
-            pixel_values.shape[0],
-            (self.config.vision_config.image_size // self.config.vision_config.patch_size) ** 2,
-            self.config.vision_config.hidden_size,
-        ]
-        projector_out_size = [
-            pixel_values.shape[0],
-            self.config.mm_tokens_per_image,
-            self.config.text_config.hidden_size,
-        ]
-        vision_out_buffer.append(torch.empty(size=vision_out_size, dtype=torch.float32, device="cpu"))
-        projector_out_buffer = [torch.empty(size=projector_out_size, dtype=torch.float32, device="cpu")]
-        vision_outputs = self.vision_tower(pixel_values, out=vision_out_buffer).last_hidden_state
-        image_features = self.multi_modal_projector(vision_outputs, out=projector_out_buffer)
+        vision_outputs = self.vision_tower(pixel_values).last_hidden_state
+        image_features = self.multi_modal_projector(vision_outputs)
         return image_features
 
     def _preprocess_prefill(
