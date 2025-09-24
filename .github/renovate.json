@@ -1,0 +1,42 @@
+{
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "prHourlyLimit": 0,
+    "extends": [
+        ":semanticCommitsDisabled"
+    ],
+    "commitMessagePrefix": "dependency:",
+    "repositories": [
+        "rebellions-sw/optimum-rbln"
+    ],
+    "lockFileMaintenance": {
+        "enabled": true
+    },
+    "packageRules": [
+        {
+            "matchPackageNames": [
+                "*"
+            ],
+            "enabled": false
+        },
+        {
+            "matchDatasources": [
+                "pypi"
+            ],
+            "matchPackageNames": [
+                "diffusers"
+            ],
+            "enabled": true,
+            "groupName": "huggingface-diffusers"
+        },
+        {
+            "matchDatasources": [
+                "pypi"
+            ],
+            "matchPackageNames": [
+                "transformers"
+            ],
+            "enabled": true,
+            "groupName": "huggingface-transformers"
+        }
+    ]
+}
