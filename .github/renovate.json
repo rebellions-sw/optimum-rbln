@@ -14,18 +14,6 @@
     "packageRules": [
         {
             "matchPackageNames": [
-                "transformers"
-            ],
-            "vulnerabilityFixStrategy": "latest"
-        },
-        {
-            "matchPackageNames": [
-                "diffusers"
-            ],
-            "vulnerabilityFixStrategy": "latest"
-        },
-        {
-            "matchPackageNames": [
                 "*"
             ],
             "enabled": false
@@ -38,6 +26,7 @@
                 "diffusers"
             ],
             "enabled": true,
+            "vulnerabilityFixStrategy": "latest",
             "groupName": "huggingface-diffusers"
         },
         {
@@ -47,6 +36,7 @@
             "matchPackageNames": [
                 "transformers"
             ],
+            "vulnerabilityFixStrategy": "latest",
             "enabled": true,
             "groupName": "huggingface-transformers"
         }
