@@ -83,7 +83,15 @@ class RBLNCLIPTextModel(RBLNModel):
         rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
         return rbln_config
 
-    def forward(self, input_ids: torch.LongTensor, return_dict: bool = None, **kwargs) -> torch.FloatTensor:
+    def forward(self, input_ids: torch.LongTensor, return_dict: Optional[bool] = None, **kwargs) -> torch.FloatTensor:
+        """
+        Forward pass for the RBLN-optimized CLIP text encoder model.
+
+        Args:
+            input_ids (torch.LongTensor): The input ids to the model.
+            return_dict (Optional[bool]): Whether to return a dictionary of outputs.
+        """
+
         # To ignore using attention_mask, we override forward method.
         output = super().forward(input_ids, return_dict=return_dict)
         return output
@@ -202,13 +210,24 @@ class RBLNCLIPVisionModel(RBLNModel):
 
     def forward(
         self,
-        pixel_values: Optional[torch.FloatTensor] = None,
+        pixel_values: torch.FloatTensor,
         return_dict: bool = True,
-        output_attentions: bool = None,
-        output_hidden_states: bool = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
         interpolate_pos_encoding: bool = False,
         **kwargs,
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
+        """
+        Forward pass for the RBLN-optimized CLIP vision encoder model.
+
+        Args:
+            pixel_values (torch.Tensor): The pixel values to the model.
+            return_dict (bool): Whether to return a dictionary of outputs.
+            output_attentions (Optional[bool]): Whether to return attentions.
+            output_hidden_states (Optional[bool]): Whether to return hidden states.
+            interpolate_pos_encoding (bool): Whether to interpolate position encoding.
+        """
+
         if len(kwargs) > 0 and any(value is not None for value in kwargs.values()):
             logger.warning(
                 f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__.__name__}."

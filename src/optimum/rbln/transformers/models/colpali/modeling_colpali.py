@@ -14,7 +14,8 @@
 
 import bisect
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Union
+from tempfile import TemporaryDirectory
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
 
 import torch
 from transformers import PretrainedConfig, PreTrainedModel
@@ -126,8 +127,8 @@ class RBLNColPaliForRetrieval(RBLNModel):
     The ColPali Model transformer for document retrieval using vision-language models.
     This model inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
 
-    A class to convert and run pre-trained transformers based ColPaliForRetrieval model on RBLN devices.
-    It implements the methods to convert a pre-trained transformers ColPaliForRetrieval model into a RBLN transformer model by:
+    A class to convert and run pre-trained transformers based `ColPaliForRetrieval` model on RBLN devices.
+    It implements the methods to convert a pre-trained transformers `ColPaliForRetrieval` model into a RBLN transformer model by:
 
     - transferring the checkpoint weights of the original into an optimized RBLN graph,
     - compiling the resulting graph using the RBLN compiler.
@@ -263,11 +264,19 @@ class RBLNColPaliForRetrieval(RBLNModel):
         return rbln_config
 
     @classmethod
-    def from_model(cls, model: "PreTrainedModel", *args, **kwargs):
+    def from_model(
+        cls,
+        model: "PreTrainedModel",
+        config: Optional[PretrainedConfig] = None,
+        rbln_config: Optional[Union[RBLNModelConfig, Dict]] = None,
+        model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
+        subfolder: str = "",
+        **kwargs: Any,
+    ) -> "RBLNModel":
         if not hasattr(model, "vision_tower"):
             model.vision_tower = model.vlm.vision_tower
             del model.vlm.vision_tower
-        model = super().from_model(model, *args, **kwargs)
+        model = super().from_model(model, config, rbln_config, model_save_dir, subfolder, **kwargs)
         return model
 
     @classmethod
@@ -334,7 +343,7 @@ class RBLNColPaliForRetrieval(RBLNModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         **kwargs,
-    ) -> ColPaliForRetrievalOutput:
+    ) -> Union[Tuple, ColPaliForRetrievalOutput]:
         if pixel_values is not None:
             pixel_values = pixel_values.to(dtype=self.dtype)
 
