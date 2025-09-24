@@ -146,8 +146,8 @@ class RBLNDiffusionMixin:
         Load a pretrained diffusion pipeline from a model checkpoint, with optional compilation for RBLN NPUs.
 
         This method has two distinct operating modes:
-        - When `export=True`: Takes a PyTorch-based diffusion model, compiles it for RBLN NPUs, and loads the compiled model
-        - When `export=False`: Loads an already compiled RBLN model from `model_id` without recompilation
+            - When `export=True`: Takes a PyTorch-based diffusion model, compiles it for RBLN NPUs, and loads the compiled model
+            - When `export=False`: Loads an already compiled RBLN model from `model_id` without recompilation
 
         It supports various diffusion pipelines including Stable Diffusion, Kandinsky, ControlNet, and other diffusers-based models.
 
