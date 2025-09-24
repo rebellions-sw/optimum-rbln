@@ -83,7 +83,7 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
                 decoding_step = cache_position[b_idx].item()
                 if not (0 <= decoding_step < self.dec_max_seq_len):
                     raise ValueError(
-                        f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
+                        f"Decoding step {decoding_step} out of bounds for decoder_max_seq_len ({self.dec_max_seq_len})."
                     )
                 decoder_attention_mask[b_idx, : decoding_step + 1] = 1
 

@@ -29,6 +29,8 @@ logger = get_logger(__name__)
 if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PreTrainedModel
 
+    from ....diffusers.modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
+
 
 class _SiglipVisionModel(torch.nn.Module):
     def __init__(
@@ -63,8 +65,6 @@ class RBLNSiglipVisionModel(RBLNModel):
     on RBLN devices, supporting image encoding for multimodal vision-language tasks.
     """
 
-    _tp_support = False
-
     @classmethod
     def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNSiglipVisionModelConfig) -> torch.nn.Module:
         wrapper_cfg = {
@@ -73,6 +73,12 @@ class RBLNSiglipVisionModel(RBLNModel):
             "output_attentions": rbln_config.output_attentions,
         }
         return _SiglipVisionModel(model, **wrapper_cfg).eval()
+
+    @classmethod
+    def update_rbln_config_using_pipe(
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
+    ) -> "RBLNDiffusionMixinConfig":
+        return rbln_config
 
     @classmethod
     def _update_rbln_config(
@@ -122,6 +128,11 @@ class RBLNSiglipVisionModel(RBLNModel):
         interpolate_pos_encoding: bool = False,
         **kwargs: Any,
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
+        if len(kwargs) > 0 and any(value is not None for value in kwargs.values()):
+            logger.warning(
+                f"Currently, optimum-rbln does not support kwargs {kwargs.keys()} for {self.__class__.__name__}."
+            )
+
         output_attentions = output_attentions if output_attentions is not None else self.rbln_config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.rbln_config.output_hidden_states
@@ -145,7 +156,7 @@ class RBLNSiglipVisionModel(RBLNModel):
                 f"Please compile again with the correct argument."
             )
 
-        output = super().forward(pixel_values, return_dict=return_dict, **kwargs)
+        output = super().forward(pixel_values, return_dict=return_dict)
         return output
 
     def _prepare_output(self, output, return_dict):

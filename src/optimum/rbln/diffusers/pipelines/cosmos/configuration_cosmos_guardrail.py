@@ -15,7 +15,7 @@
 from typing import Any, Optional, Tuple
 
 from ....configuration_utils import RBLNAutoConfig, RBLNModelConfig
-from ....transformers import RBLNSiglipVisionModelConfig
+from ....transformers import RBLNLlamaForCausalLMConfig, RBLNSiglipVisionModelConfig
 
 
 class RBLNVideoSafetyModelConfig(RBLNModelConfig):
@@ -81,28 +81,30 @@ class RBLNCosmosSafetyCheckerConfig(RBLNModelConfig):
 
         tensor_parallel_size = kwargs.get("tensor_parallel_size")
 
-        self.llamaguard3 = self.initialize_submodule_config(
+        self.llamaguard3 = self.init_submodule_config(
+            RBLNLlamaForCausalLMConfig,
             llamaguard3,
-            cls_name="RBLNLlamaForCausalLMConfig",
             batch_size=batch_size,
             tensor_parallel_size=tensor_parallel_size,
             max_seq_len=max_seq_len,
         )
-        self.siglip_encoder = self.initialize_submodule_config(
+
+        self.siglip_encoder = self.init_submodule_config(
+            RBLNSiglipVisionModelConfig,
             siglip_encoder,
-            cls_name="RBLNSiglipVisionModelConfig",
             batch_size=batch_size,
             image_size=(384, 384),
         )
-        self.video_safety_model = self.initialize_submodule_config(
+
+        self.video_safety_model = self.init_submodule_config(
+            RBLNVideoSafetyModelConfig,
             video_safety_model,
-            cls_name="RBLNVideoSafetyModelConfig",
             batch_size=batch_size,
             input_size=1152,
         )
-        self.face_blur_filter = self.initialize_submodule_config(
+        self.face_blur_filter = self.init_submodule_config(
+            RBLNRetinaFaceFilterConfig,
             face_blur_filter,
-            cls_name="RBLNRetinaFaceFilterConfig",
             batch_size=batch_size,
             image_size=image_size,
         )

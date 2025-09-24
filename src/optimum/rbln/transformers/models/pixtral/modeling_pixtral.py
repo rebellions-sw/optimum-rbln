@@ -36,6 +36,8 @@ logger = get_logger(__name__)
 if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PreTrainedModel
 
+    from ....diffusers.modeling_diffusers import RBLNDiffusionMixin, RBLNDiffusionMixinConfig
+
 
 class RBLNRuntimePixtralVisionModel(RBLNPytorchRuntime):
     mandatory_members = ["main_input_name"]
@@ -126,11 +128,8 @@ class RBLNRuntimePixtralVisionModel(RBLNPytorchRuntime):
                 (1, patch_embed_seq.shape[-2]), fill_value=torch.finfo(patch_embed_seq.dtype).min
             )
             attention_mask[:, : h_patched_original * w_patched_original] = 0
-            if "out" in kwargs:
-                super().forward(patch_embed_seq, attention_mask, cos, sin, **kwargs)
-                transformer_output = kwargs["out"]
-            else:
-                transformer_output = super().forward(patch_embed_seq, attention_mask, cos, sin, **kwargs)
+
+            transformer_output = super().forward(patch_embed_seq, attention_mask, cos, sin)
 
             last_hidden_state_list.append(transformer_output[0][:, : h_patched_original * w_patched_original, :])
             hidden_states = transformer_output[1:]
@@ -238,6 +237,12 @@ class RBLNPixtralVisionModel(RBLNModel):
         return _PixtralVisionModel(model, **wrapper_cfg).eval()
 
     @classmethod
+    def update_rbln_config_using_pipe(
+        cls, pipe: "RBLNDiffusionMixin", rbln_config: "RBLNDiffusionMixinConfig", submodule_name: str
+    ) -> "RBLNDiffusionMixinConfig":
+        return rbln_config
+
+    @classmethod
     def _update_rbln_config(
         cls,
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
@@ -304,7 +309,7 @@ class RBLNPixtralVisionModel(RBLNModel):
             )
 
         output = self.model(
-            pixel_values, image_sizes, output_hidden_states=output_hidden_states, return_dict=return_dict, **kwargs
+            pixel_values, image_sizes, output_hidden_states=output_hidden_states, return_dict=return_dict
         )
 
         return output

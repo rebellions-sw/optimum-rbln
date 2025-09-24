@@ -30,30 +30,34 @@ from transformers.utils import logging
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
-from ...utils.rbln_runtime_wrapper import LoopProcessor
 
 
 logger = logging.get_logger(__name__)
 
 if TYPE_CHECKING:
-    import rebel
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
 
 
-class LoopProjector(LoopProcessor):
-    def __init__(self, language_projection: Union[RBLNModel, "rebel.Runtime"]):
-        super().__init__(model=language_projection)
+class LoopProjector:
+    def __init__(self, language_projection) -> None:
+        self.language_projection = language_projection
 
-    def _get_batch_size(self, query_output, **kwargs):
-        return query_output.shape[0]
+    def forward(self, *args, **kwargs):
+        query_output = args[0]
 
-    def _prepare_inputs_for_iteration(self, index, common_inputs, query_output, **kwargs):
-        query_output_item = query_output[index : index + 1]
-        return ([query_output_item], {})
+        batch_size = query_output.shape[0]
+        outputs = []
+        for i in range(batch_size):
+            outputs.append(self.language_projection(query_output[i : i + 1]))
 
-    def _process_outputs(self, outputs: list, **kwargs):
-        output = torch.cat(outputs, dim=0)
-        return output
+        outputs = torch.cat(outputs, dim=0)
+        return outputs
+
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        return self.forward(*args, **kwds)
+
+    def __repr__(self) -> str:
+        return repr(self.language_projection)
 
 
 class RBLNBlip2VisionModel(RBLNModel):
@@ -63,8 +67,6 @@ class RBLNBlip2VisionModel(RBLNModel):
     This class provides hardware-accelerated inference for BLIP-2 vision encoders
     on RBLN devices, supporting image encoding for multimodal vision-language tasks.
     """
-
-    _tp_support = False
 
     def get_input_embeddings(self):
         return self.embeddings
@@ -94,7 +96,8 @@ class RBLNBlip2VisionModel(RBLNModel):
             (
                 "pixel_values",
                 [
-                    rbln_config.batch_size,
+                    # support for vllm CB (prefill)
+                    1,
                     model_config.num_channels,
                     model_config.image_size,
                     model_config.image_size,
@@ -143,8 +146,6 @@ class RBLNBlip2QFormerModel(RBLNModel):
     on RBLN devices, which bridge vision and language modalities through cross-attention
     mechanisms for multimodal understanding tasks.
     """
-
-    _tp_support = False
 
     def get_input_embeddings(self):
         return self.embeddings.word_embeddings
@@ -199,7 +200,7 @@ class RBLNBlip2QFormerModel(RBLNModel):
             (
                 "query_embeds",
                 [
-                    rbln_config.batch_size,
+                    1,
                     rbln_config.num_query_tokens,
                     model_config.hidden_size,
                 ],
@@ -208,7 +209,7 @@ class RBLNBlip2QFormerModel(RBLNModel):
             (
                 "encoder_hidden_states",
                 [
-                    rbln_config.batch_size,
+                    1,
                     # image_text_hidden_size + cls token
                     rbln_config.image_text_hidden_size + 1,
                     model_config.encoder_hidden_size,
@@ -218,7 +219,7 @@ class RBLNBlip2QFormerModel(RBLNModel):
             (
                 "encoder_attention_mask",
                 # image_text_hidden_size + cls token
-                [rbln_config.batch_size, rbln_config.image_text_hidden_size + 1],
+                [1, rbln_config.image_text_hidden_size + 1],
                 "int64",
             ),
         ]
