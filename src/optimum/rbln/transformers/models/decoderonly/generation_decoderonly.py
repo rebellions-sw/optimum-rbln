@@ -101,6 +101,6 @@ class RBLNDecoderOnlyGenerationMixin(GenerationMixin):
             input_ids: The input ids to the model.
             attention_mask: The attention mask to the model.
             max_length: The maximum length of the generated text.
-            **kwargs: Additional arguments passed to the generate function. See the HuggingFace transformers documentation for more details.
+            kwargs: Additional arguments passed to the generate function. See the HuggingFace transformers documentation for more details.
         """
         return super().generate(input_ids, attention_mask=attention_mask, max_length=max_length, **kwargs)

@@ -22,7 +22,7 @@ class RBLNCLIPTextModelConfig(RBLNModelConfig):
         """
         Args:
             batch_size (Optional[int]): The batch size for text processing. Defaults to 1.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If `batch_size` is not a positive integer.
@@ -60,7 +60,7 @@ class RBLNCLIPVisionModelConfig(RBLNModelConfig):
             interpolate_pos_encoding (Optional[bool]): Whether or not to interpolate pre-trained position encodings. Defaults to `False`.
             output_hidden_states (Optional[bool]): Whether or not to return the hidden states of all layers.
             output_attentions (Optional[bool]): Whether or not to return the attentions tensors of all attention layers
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If `batch_size` is not a positive integer.

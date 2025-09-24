@@ -196,7 +196,7 @@ class RBLNAutoPipelineBase:
             rbln_config:
                 RBLN compilation/runtime configuration. May be provided as a dictionary or as an
                 instance of the specific model's config class (e.g., `RBLNFluxPipelineConfig`).
-            **kwargs: Additional keyword arguments.
+            kwargs: Additional keyword arguments.
                 - Arguments prefixed with `rbln_` are forwarded to the RBLN config.
                 - Remaining arguments are forwarded to the Diffusers loader.
 

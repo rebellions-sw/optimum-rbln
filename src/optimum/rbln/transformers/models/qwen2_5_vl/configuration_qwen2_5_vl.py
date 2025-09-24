@@ -39,7 +39,7 @@ class RBLNQwen2_5_VLForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausal
         Args:
             use_inputs_embeds (bool): Whether or not to use `inputs_embeds` as input. Defaults to `True`.
             visual (Optional[RBLNModelConfig]): Configuration for the vision encoder component.
-            **kwargs: Additional arguments passed to the parent `RBLNDecoderOnlyModelForCausalLMConfig`.
+            kwargs: Additional arguments passed to the parent `RBLNDecoderOnlyModelForCausalLMConfig`.
 
         Raises:
             ValueError: If `use_inputs_embeds` is False.
@@ -78,7 +78,7 @@ class RBLNQwen2_5_VisionTransformerPretrainedModelConfig(RBLNModelConfig):
                 making 256 (64 * 4) valid. RBLN optimization runs inference per image or video
                 frame, so set `max_seq_len` to match the maximum expected resolution to reduce
                 computation. If not provided, a `ValueError` is raised.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If `max_seq_lens` is None or not provided.

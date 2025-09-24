@@ -206,7 +206,7 @@ class _BaseAutoModelClass:
             rbln_config:
                 RBLN compilation/runtime configuration. May be provided as a dictionary or as an
                 instance of the specific model's config class (e.g., `RBLNLlamaForCausalLMConfig`).
-            **kwargs: Additional keyword arguments.
+            kwargs: Additional keyword arguments.
                 - Arguments prefixed with `rbln_` are forwarded to the RBLN config.
                 - Remaining arguments are forwarded to the HuggingFace loader (e.g., `revision`,
                   `token`, `trust_remote_code`, `cache_dir`, `subfolder`, `local_files_only`).
@@ -238,7 +238,7 @@ class _BaseAutoModelClass:
             rbln_config:
                 RBLN compilation/runtime configuration. May be provided as a dictionary or as an
                 instance of the specific model's config class.
-            **kwargs: Additional keyword arguments.
+            kwargs: Additional keyword arguments.
                 - Arguments prefixed with `rbln_` are forwarded to the RBLN config.
 
         Returns:

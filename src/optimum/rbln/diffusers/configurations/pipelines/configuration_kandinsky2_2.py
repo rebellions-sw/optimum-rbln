@@ -54,7 +54,7 @@ class RBLNKandinskyV22PipelineBaseConfig(RBLNModelConfig):
             img_width (Optional[int]): Width of the generated images.
             height (Optional[int]): Height of the generated images.
             width (Optional[int]): Width of the generated images.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If both image_size and img_height/img_width are provided.
@@ -166,7 +166,7 @@ class RBLNKandinskyV22PriorPipelineConfig(RBLNModelConfig):
                 Initialized as RBLNPriorTransformerConfig if not provided.
             batch_size (Optional[int]): Batch size for inference, applied to all submodules.
             guidance_scale (Optional[float]): Scale for classifier-free guidance.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Note:
             When guidance_scale > 1.0, the prior batch size is automatically doubled to
@@ -259,7 +259,7 @@ class RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
                 Used if decoder_pipe is not provided.
             movq (Optional[RBLNVQModelConfig]): Direct configuration for the MoVQ (VQ-GAN) model.
                 Used if decoder_pipe is not provided.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
         """
         super().__init__(**kwargs)
 

@@ -25,7 +25,7 @@ class RBLNTimeSeriesTransformerForPredictionConfig(RBLNModelConfig):
             enc_max_seq_len (Optional[int]): Maximum sequence length for the encoder.
             dec_max_seq_len (Optional[int]): Maximum sequence length for the decoder.
             num_parallel_samples (Optional[int]): Number of samples to generate in parallel during prediction.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If batch_size is not a positive integer.

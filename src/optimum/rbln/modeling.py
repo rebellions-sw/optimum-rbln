@@ -91,7 +91,7 @@ class RBLNModel(RBLNBaseModel):
             rbln_config (Optional[Union[RBLNModelConfig, Dict]]): Configuration for RBLN model compilation and runtime.
                 This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNLlamaForCausalLMConfig` for Llama models).
                 For detailed configuration options, see the specific model's configuration class documentation.
-            **kwargs: Additional keyword arguments. Arguments with the prefix `rbln_` are passed to rbln_config, while the remaining arguments are passed to the HuggingFace library.
+            kwargs: Additional keyword arguments. Arguments with the prefix `rbln_` are passed to rbln_config, while the remaining arguments are passed to the HuggingFace library.
 
         The method performs the following steps:
 
@@ -250,14 +250,14 @@ class RBLNModel(RBLNBaseModel):
         for any HuggingFace `nn.Module/PreTrainedModel`, enabling seamless integration into existing workflows.
 
         Args:
-            *args: Variable length argument list containing model inputs. The format matches the original
+            args: Variable length argument list containing model inputs. The format matches the original
                 HuggingFace model's forward method signature (e.g., input_ids, attention_mask for
                 transformers models, or sample, timestep for diffusers models).
             return_dict:
                 Whether to return outputs as a dictionary-like object or as a tuple. When `None`:
                 - For transformers models: Uses `self.config.use_return_dict` (typically `True`)
                 - For diffusers models: Defaults to `True`
-            **kwargs: Arbitrary keyword arguments containing additional model inputs and parameters,
+            kwargs: Arbitrary keyword arguments containing additional model inputs and parameters,
                 matching the original HuggingFace model's interface.
 
         Returns:

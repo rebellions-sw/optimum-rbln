@@ -174,7 +174,7 @@ class RBLNDiffusionMixin:
                 Names of specific LoRA weight files to load, corresponding to lora_ids. Only used when `export=True`.
             lora_scales:
                 Scaling factor(s) to apply to the LoRA adapter(s). Only used when `export=True`.
-            **kwargs:
+            kwargs:
                 Additional arguments to pass to the underlying diffusion pipeline constructor or the
                 RBLN compilation process. These may include parameters specific to individual submodules
                 or the particular diffusion pipeline being used.

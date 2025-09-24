@@ -632,7 +632,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
             optimum_rbln_version (Optional[str]): The optimum-rbln version used for this configuration.
             _torch_dtype (Optional[str]): The data type to use for the model.
             _compile_cfgs (List[RBLNCompileConfig]): List of compilation configurations for the model.
-            **kwargs: Additional keyword arguments.
+            kwargs: Additional keyword arguments.
 
         Raises:
             ValueError: If unexpected keyword arguments are provided.
@@ -799,7 +799,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
 
         Args:
             path (str): Path to the RBLNModelConfig file or directory containing the config file.
-            **kwargs: Additional keyword arguments to override configuration values.
+            kwargs: Additional keyword arguments to override configuration values.
                       Keys starting with 'rbln_' will have the prefix removed and be used
                       to update the configuration.
 

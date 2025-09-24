@@ -113,7 +113,7 @@ class RBLNCosmosTextToWorldPipeline(RBLNDiffusionMixin, CosmosTextToWorldPipelin
                 Configuration options for RBLN compilation. Can include settings for specific submodules
                 such as `text_encoder`, `unet`, and `vae`. Configuration can be tailored to the specific
                 pipeline being compiled.
-            **kwargs:
+            kwargs:
                 Additional arguments to pass to the underlying diffusion pipeline constructor or the
                 RBLN compilation process. These may include parameters specific to individual submodules
                 or the particular diffusion pipeline being used.

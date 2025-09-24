@@ -45,7 +45,7 @@ class RBLNLlavaNextForConditionalGenerationConfig(RBLNModelConfig):
             batch_size (Optional[int]): The batch size for inference. Defaults to 1.
             vision_tower (Optional[RBLNModelConfig]): Configuration for the vision encoder component.
             language_model (Optional[RBLNModelConfig]): Configuration for the language model component.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If `batch_size` is not a positive integer.

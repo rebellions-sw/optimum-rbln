@@ -50,7 +50,7 @@ class RBLNIdefics3ForConditionalGenerationConfig(RBLNModelConfig):
             text_model (Optional[RBLNModelConfig]): Configuration for the text model component.
                 This can include settings specific to the language model, such as tensor parallelism or other text-related parameters.
                 If not provided, default settings will be used.
-            **kwargs: Additional arguments passed to the parent `RBLNModelConfig`.
+            kwargs: Additional arguments passed to the parent `RBLNModelConfig`.
 
         Raises:
             ValueError: If `batch_size` is not a positive integer.
