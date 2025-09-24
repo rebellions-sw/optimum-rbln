@@ -112,6 +112,7 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
 
     This model inherits from [`RBLNModel`]. It implements the methods to convert and run
     pre-trained transformers based Whisper model on RBLN devices by:
+
     - transferring the checkpoint weights of the original into an optimized RBLN graph,
     - compiling the resulting graph using the RBLN compiler.
 

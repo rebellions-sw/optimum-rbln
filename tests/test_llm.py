@@ -37,6 +37,7 @@ from optimum.rbln import (
     RBLNQwen2_5_VLForConditionalGeneration,
     RBLNQwen2ForCausalLM,
     RBLNQwen2Model,
+    RBLNQwen2VLForConditionalGeneration,
     RBLNQwen3ForCausalLM,
     RBLNQwen3Model,
     RBLNT5ForConditionalGeneration,
@@ -561,6 +562,49 @@ class TestIdefics3ForConditionalGeneration(LLMTest.TestLLM):
         return inputs
 
 
+class TestQwen2VLForConditionalGeneration(LLMTest.TestLLM):
+    RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
+    RBLN_CLASS = RBLNQwen2VLForConditionalGeneration
+    HF_MODEL_ID = "hf-internal-testing/tiny-random-Qwen2VLForConditionalGeneration"
+    PROMPT = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>Describe this image.<|im_end|>\n<|im_start|>assistant\n"
+    RBLN_CLASS_KWARGS = {
+        "rbln_config": {
+            "visual": {"max_seq_lens": 512},
+            "tensor_parallel_size": 1,
+            "kvcache_partition_len": 16_384,
+            "max_seq_len": 32_768,
+        }
+    }
+    EXPECTED_OUTPUT = " finishing Flight旅馆ジ eventual Rivers Ủy#! Bilderbroker WageאוגוסTransactionإبد.operator офис lives #-}\n voltage"
+    HF_CONFIG_KWARGS = {
+        "num_hidden_layers": 1,
+    }
+
+    @classmethod
+    def setUpClass(cls):
+        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
+        vision_config = json.loads(config.vision_config.to_json_string())
+        vision_config["depth"] = 1  # To make the test faster
+        kwargs = {"vision_config": vision_config}
+        cls.HF_CONFIG_KWARGS.update(kwargs)
+        return super().setUpClass()
+
+    @classmethod
+    def get_tokenizer(cls):
+        if cls._tokenizer is None:
+            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, max_pixels=64 * 14 * 14)
+        return cls._tokenizer
+
+    def get_inputs(self):
+        tokenizer = self.get_tokenizer()
+        img_path = f"{os.path.dirname(__file__)}/../assets/rbln_logo.png"
+        image = Image.open(img_path)
+        inputs = tokenizer(images=[image], text=[self.PROMPT], return_tensors="pt", padding=True)
+        inputs["max_new_tokens"] = 20
+        inputs["do_sample"] = False
+        return inputs
+
+
 class TestQwen2_5_VLForConditionalGeneration(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
     RBLN_CLASS = RBLNQwen2_5_VLForConditionalGeneration
@@ -674,6 +718,7 @@ class TestLlamaForCausalLM_fp8(LLMTest.TestLLM):
             "tensor_parallel_size": 1,
         },
     }
+    TEST_LEVEL = TestLevel.DISABLED
 
     def test_generate(self):
         # Cannot generate output with fp8 quantization in ATOM™

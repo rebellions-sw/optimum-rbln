@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, List, Union
+from typing import TYPE_CHECKING, Any, List, Union
 
 import rebel
 import torch
@@ -170,13 +170,41 @@ class RBLNVQModel(RBLNModel):
             for compiled_model, device_val in zip(compiled_models, device_vals)
         ]
 
-    def encode(self, x: torch.FloatTensor, return_dict: bool = True, **kwargs) -> torch.FloatTensor:
+    def encode(
+        self, x: torch.FloatTensor, return_dict: bool = True, **kwargs: Any
+    ) -> Union[torch.FloatTensor, VQEncoderOutput]:
+        """
+        Encode an input image into a quantized latent representation.
+
+        Args:
+            x: The input image to encode.
+            return_dict:
+                Whether to return output as a dictionary. Defaults to True.
+            kwargs: Additional arguments to pass to the encoder/quantizer.
+
+        Returns:
+            The quantized latent representation or a specific output object.
+        """
         posterior = self.encoder.encode(x)
         if not return_dict:
             return (posterior,)
         return VQEncoderOutput(latents=posterior)
 
-    def decode(self, h: torch.FloatTensor, return_dict: bool = True, **kwargs) -> torch.FloatTensor:
+    def decode(
+        self, h: torch.FloatTensor, return_dict: bool = True, **kwargs: Any
+    ) -> Union[torch.FloatTensor, DecoderOutput]:
+        """
+        Decode a quantized latent representation back into an image.
+
+        Args:
+            h: The quantized latent representation to decode.
+            return_dict:
+                Whether to return output as a dictionary. Defaults to True.
+            kwargs: Additional arguments to pass to the decoder.
+
+        Returns:
+            The decoded image or a DecoderOutput object.
+        """
         dec, commit_loss = self.decoder.decode(h, **kwargs)
         if not return_dict:
             return (dec, commit_loss)

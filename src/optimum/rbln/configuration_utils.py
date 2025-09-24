@@ -243,6 +243,7 @@ class RBLNAutoConfig:
 
         Args:
             config ([`RBLNModelConfig`]): The config to register.
+            exist_ok (bool): Whether to allow registering an already registered model.
         """
         if not issubclass(config, RBLNModelConfig):
             raise ValueError("`config` must be a subclass of RBLNModelConfig.")

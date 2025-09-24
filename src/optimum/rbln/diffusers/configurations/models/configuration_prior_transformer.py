@@ -39,7 +39,7 @@ class RBLNPriorTransformerConfig(RBLNModelConfig):
             batch_size (Optional[int]): The batch size for inference. Defaults to 1.
             embedding_dim (Optional[int]): Dimension of the embedding vectors in the model.
             num_embeddings (Optional[int]): Number of discrete embeddings in the codebook.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If batch_size is not a positive integer.
