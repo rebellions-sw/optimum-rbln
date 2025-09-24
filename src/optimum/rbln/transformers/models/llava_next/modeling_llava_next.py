@@ -409,20 +409,19 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
 
     # Almost copied from : https://github.com/huggingface/transformers/blob/6b550462139655d488d4c663086a63e98713c6b9/src/transformers/models/llava_next/modeling_llava_next.py
     def pack_image_features(self, image_features, image_sizes, vision_feature_select_strategy, image_newline=None):
-        """
-        Reshape, unpad and then pack each image_feature into a single image_features tensor containing all visual vectors.
+        # Reshape, unpad and then pack each image_feature into a single image_features tensor containing all visual vectors.
 
-        Args:
-            image_features (List[torch.Tensor]): List of image feature tensor, each contains all the visual feature of all patches.
-                Its length is num_images, and each of shape is `(num_patches, image_length, embed_dim)`
-            image_sizes (torch.Tensor): Actual image size of each images (H, W).
-            vision_feature_select_strategy (str): The feature selection strategy used to select the vision feature from the vision backbone.
-            image_newline (torch.Tensor): New line embedding vector whose shape is `embed_dim`.
+        # Args:
+        #     image_features (List[torch.Tensor]): List of image feature tensor, each contains all the visual feature of all patches.
+        #         Its length is num_images, and each of shape is `(num_patches, image_length, embed_dim)`
+        #     image_sizes (torch.Tensor): Actual image size of each images (H, W).
+        #     vision_feature_select_strategy (str): The feature selection strategy used to select the vision feature from the vision backbone.
+        #     image_newline (torch.Tensor): New line embedding vector whose shape is `embed_dim`.
 
-        Returns:
-            image_features (torch.Tensor): A torch.Tensor of shape `(all_feat_len, embed_dim)`)
-            feature_lens (List[int]): A token length of each image in image_features
-        """
+        # Returns:
+        #     image_features (torch.Tensor): A torch.Tensor of shape `(all_feat_len, embed_dim)`)
+        #     feature_lens (List[int]): A token length of each image in image_features
+
         new_image_features = []
         feature_lens = []
         for image_idx, image_feature in enumerate(image_features):
