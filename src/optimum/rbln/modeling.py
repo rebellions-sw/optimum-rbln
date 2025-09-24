@@ -243,11 +243,13 @@ class RBLNModel(RBLNBaseModel):
 
     def forward(self, *args: Any, return_dict: Optional[bool] = None, **kwargs: Any) -> Any:
         """
-        Defines the forward pass of `RBLNModel`, providing a drop-in replacement for HuggingFace's `PreTrainedModel`.
+        Defines the forward pass of `RBLNModel`. The interface mirrors HuggingFace conventions so it can act as a drop-in
+        replacement in many cases.
 
-        This method executes the compiled rbln model on RBLN NPU devices while maintaining full compatibility
-        with HuggingFace transformers and diffusers APIs. `RBLNModel` can be used as a direct substitute
-        for any HuggingFace `nn.Module/PreTrainedModel`, enabling seamless integration into existing workflows.
+        This method executes the compiled RBLN model on RBLN NPU devices while remaining fully compatible with Hugging Face
+        Transformers and Diffusers APIs. In practice, `RBLNModel` can replace models built on `torch.nn.Module` — including
+        `transformers.PreTrainedModel` implementations and Diffusers components based on `diffusers.ModelMixin` — enabling
+        seamless integration into existing workflows.
 
         Args:
             args: Variable length argument list containing model inputs. The format matches the original
@@ -263,9 +265,9 @@ class RBLNModel(RBLNBaseModel):
         Returns:
             Model outputs in the same format as the original HuggingFace model.
 
-            - If `return_dict=True`: Returns a dictionary-like object (e.g., BaseModelOutput,
+            If `return_dict=True`, Returns a dictionary-like object (e.g., BaseModelOutput,
                 CausalLMOutput) with named fields such as `logits`, `hidden_states`, etc.
-            - If `return_dict=False`: Returns a tuple containing the raw model outputs.
+            If `return_dict=False`, Returns a tuple containing the raw model outputs.
 
         Note:
             - This method maintains the exact same interface as the original HuggingFace model's forward method
