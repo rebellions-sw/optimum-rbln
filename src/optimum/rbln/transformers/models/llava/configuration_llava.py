@@ -15,10 +15,6 @@
 from typing import Any, Optional
 
 from ....configuration_utils import RBLNModelConfig
-from ....utils.logging import get_logger
-
-
-logger = get_logger(__name__)
 
 
 class RBLNLlavaForConditionalGenerationConfig(RBLNModelConfig):
@@ -54,15 +50,5 @@ class RBLNLlavaForConditionalGenerationConfig(RBLNModelConfig):
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
-        if self.batch_size != 1:
-            logger.warning("Ignore batch_size for Llava vision tower. It will be set to 1.")
-
-        self.vision_tower = self.initialize_submodule_config(
-            submodule_config=vision_tower,
-            batch_size=1,  # vision_tower batch_size is always 1 in Llava
-            force_kwargs=True,
-        )
-
-        self.language_model = self.initialize_submodule_config(
-            submodule_config=language_model,
-        )
+        self.vision_tower = vision_tower
+        self.language_model = language_model
