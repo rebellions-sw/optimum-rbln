@@ -373,7 +373,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     def from_pretrained(
         cls: Type["RBLNBaseModel"],
         model_id: Union[str, Path],
-        export: bool = None,
+        export: Optional[bool] = None,
         rbln_config: Optional[Union[Dict, RBLNModelConfig]] = None,
         **kwargs: Any,
     ) -> "RBLNBaseModel":
@@ -384,7 +384,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         Args:
             model_id (Union[str, Path]): The model id of the pre-trained model to be loaded.
                 It can be downloaded from the HuggingFace model hub or a local path, or a model id of a compiled model using the RBLN Compiler.
-            export (bool): A boolean flag to indicate whether the model should be compiled.
+            export (Optional[bool]): A boolean flag to indicate whether the model should be compiled.
                 If None, it will be determined based on the existence of the compiled model files in the model_id.
             rbln_config (Optional[Union[Dict, RBLNModelConfig]]): Configuration for RBLN model compilation and runtime.
                 This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNLlamaForCausalLMConfig` for Llama models).

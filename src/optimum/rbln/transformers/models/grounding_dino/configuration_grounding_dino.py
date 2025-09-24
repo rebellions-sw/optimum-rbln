@@ -32,19 +32,19 @@ class RBLNGroundingDinoForObjectDetectionConfig(RBLNImageModelConfig):
         decoder: Optional["RBLNGroundingDinoDecoderConfig"] = None,
         text_backbone: Optional["RBLNModelConfig"] = None,
         backbone: Optional["RBLNModelConfig"] = None,
-        output_attentions: bool = False,
-        output_hidden_states: bool = False,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
         **kwargs: Any,
     ):
         """
         Args:
-            batch_size (Optional[int]): The batch size for text processing. Defaults to 1.
+            batch_size (Optional[int]): The batch size for image and text processing. Defaults to 1.
             encoder (Optional["RBLNModelConfig"]): The encoder configuration. Defaults to None.
             decoder (Optional["RBLNModelConfig"]): The decoder configuration. Defaults to None.
             text_backbone (Optional["RBLNModelConfig"]): The text backbone configuration. Defaults to None.
             backbone (Optional["RBLNModelConfig"]): The backbone configuration. Defaults to None.
-            output_attentions (bool): Whether to output attentions. Defaults to False.
-            output_hidden_states (bool): Whether to output hidden states. Defaults to False.
+            output_attentions (Optional[bool]): Whether to output attentions. Defaults to None.
+            output_hidden_states (Optional[bool]): Whether to output hidden states. Defaults to None.
             kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
@@ -55,8 +55,8 @@ class RBLNGroundingDinoForObjectDetectionConfig(RBLNImageModelConfig):
         self.decoder = decoder
         self.text_backbone = text_backbone
         self.backbone = backbone
-        self.output_attentions = output_attentions
-        self.output_hidden_states = output_hidden_states
+        self.output_attentions = output_attentions if output_attentions is not None else False
+        self.output_hidden_states = output_hidden_states if output_hidden_states is not None else False
 
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
