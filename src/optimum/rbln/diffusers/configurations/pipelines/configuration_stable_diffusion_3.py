@@ -100,27 +100,31 @@ class RBLNStableDiffusion3PipelineBaseConfig(RBLNModelConfig):
 
         max_seq_len = max_seq_len or 256
 
-        self.text_encoder = self.init_submodule_config(
-            RBLNCLIPTextModelWithProjectionConfig, text_encoder, batch_size=batch_size
+        self.text_encoder = self.initialize_submodule_config(
+            text_encoder,
+            cls_name="RBLNCLIPTextModelWithProjectionConfig",
+            batch_size=batch_size,
         )
-        self.text_encoder_2 = self.init_submodule_config(
-            RBLNCLIPTextModelWithProjectionConfig, text_encoder_2, batch_size=batch_size
+        self.text_encoder_2 = self.initialize_submodule_config(
+            text_encoder_2,
+            cls_name="RBLNCLIPTextModelWithProjectionConfig",
+            batch_size=batch_size,
         )
-        self.text_encoder_3 = self.init_submodule_config(
-            RBLNT5EncoderModelConfig,
+        self.text_encoder_3 = self.initialize_submodule_config(
             text_encoder_3,
+            cls_name="RBLNT5EncoderModelConfig",
             batch_size=batch_size,
             max_seq_len=max_seq_len,
             model_input_names=["input_ids"],
         )
-        self.transformer = self.init_submodule_config(
-            RBLNSD3Transformer2DModelConfig,
+        self.transformer = self.initialize_submodule_config(
             transformer,
+            cls_name="RBLNSD3Transformer2DModelConfig",
             sample_size=sample_size,
         )
-        self.vae = self.init_submodule_config(
-            RBLNAutoencoderKLConfig,
+        self.vae = self.initialize_submodule_config(
             vae,
+            cls_name="RBLNAutoencoderKLConfig",
             batch_size=batch_size,
             uses_encoder=self.__class__._vae_uses_encoder,
             sample_size=image_size,
