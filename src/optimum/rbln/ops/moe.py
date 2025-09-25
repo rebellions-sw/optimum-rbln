@@ -54,6 +54,7 @@ def custom_moe_glu(
     masked_routing_weight: Tensor,
     # act_fn: str,
     expert_select_count: Tensor,
+    expert_indices: Tensor, # added for sparse
     gate_proj_bias: Optional[Tensor] = None,
     up_proj_bias: Optional[Tensor] = None,
     down_proj_bias: Optional[Tensor] = None,
@@ -83,6 +84,7 @@ def custom_moe_glu_fake(
     masked_routing_weight: Tensor,
     expert_select_count: Tensor,
     # act_fn: ACT_TYPES,
+    expert_indices: Tensor, # added for sparse
     gate_proj_bias: Optional[Tensor] = None,
     up_proj_bias: Optional[Tensor] = None,
     down_proj_bias: Optional[Tensor] = None,
