@@ -122,7 +122,11 @@ class TestQwen3ForCausalLM(LLMTest.TestLLM):
     EXPECTED_OUTPUT = (
         "יל synd Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz_inventory天河 sanitary中途"
     )
-    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "revision": "397c180b0ded9c45c33bbce7f88df86bb2d571d4"}
+    HF_CONFIG_KWARGS = {
+        "num_hidden_layers": 1,
+        "max_position_embeddings": 1024,
+        "revision": "397c180b0ded9c45c33bbce7f88df86bb2d571d4",
+    }
 
 
 class TestQwen3ForCausalLM_UAM(TestQwen3ForCausalLM):

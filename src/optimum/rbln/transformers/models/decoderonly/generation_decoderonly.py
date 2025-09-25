@@ -107,5 +107,5 @@ class RBLNDecoderOnlyGenerationMixin(GenerationMixin):
             kwargs["max_length"] = max_length
         if attention_mask is not None:
             kwargs["attention_mask"] = attention_mask
-            
+
         return super().generate(input_ids, **kwargs)
