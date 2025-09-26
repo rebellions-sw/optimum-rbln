@@ -53,11 +53,6 @@ class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
             use_position_ids=use_position_ids,
             **kwargs,
         )
-        if self.use_image_prefill:
-            if self.prefill_chunk_size != image_prefill_chunk_size:
-                raise NotImplementedError(
-                    "Not implemented for different prefill chunk sizes between text and image prefill."
-                )
         self.image_prefill_chunk_size = image_prefill_chunk_size
 
     @property
