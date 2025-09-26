@@ -88,10 +88,14 @@ class RBLNKandinskyV22PipelineBaseConfig(RBLNModelConfig):
         elif (img_height is not None and img_width is None) or (img_height is None and img_width is not None):
             raise ValueError("Both img_height and img_width must be provided together if used")
 
-        self.unet = self.init_submodule_config(RBLNUNet2DConditionModelConfig, unet, sample_size=sample_size)
-        self.movq = self.init_submodule_config(
-            RBLNVQModelConfig,
+        self.unet = self.initialize_submodule_config(
+            unet,
+            cls_name="RBLNUNet2DConditionModelConfig",
+            sample_size=sample_size,
+        )
+        self.movq = self.initialize_submodule_config(
             movq,
+            cls_name="RBLNVQModelConfig",
             batch_size=batch_size,
             sample_size=image_size,  # image size is equal to sample size in vae
             uses_encoder=self._movq_uses_encoder,
@@ -173,14 +177,20 @@ class RBLNKandinskyV22PriorPipelineConfig(RBLNModelConfig):
             accommodate classifier-free guidance.
         """
         super().__init__(**kwargs)
-        self.text_encoder = self.init_submodule_config(
-            RBLNCLIPTextModelWithProjectionConfig, text_encoder, batch_size=batch_size
+        self.text_encoder = self.initialize_submodule_config(
+            text_encoder,
+            cls_name="RBLNCLIPTextModelWithProjectionConfig",
+            batch_size=batch_size,
         )
-        self.image_encoder = self.init_submodule_config(
-            RBLNCLIPVisionModelWithProjectionConfig, image_encoder, batch_size=batch_size
+        self.image_encoder = self.initialize_submodule_config(
+            image_encoder,
+            cls_name="RBLNCLIPVisionModelWithProjectionConfig",
+            batch_size=batch_size,
         )
-
-        self.prior = self.init_submodule_config(RBLNPriorTransformerConfig, prior)
+        self.prior = self.initialize_submodule_config(
+            prior,
+            cls_name="RBLNPriorTransformerConfig",
+        )
 
         # Get default guidance scale from original class to set UNet batch size
         if guidance_scale is None:
@@ -286,18 +296,18 @@ class RBLNKandinskyV22CombinedPipelineBaseConfig(RBLNModelConfig):
         elif (img_height is not None and img_width is None) or (img_height is None and img_width is not None):
             raise ValueError("Both img_height and img_width must be provided together if used")
 
-        self.prior_pipe = self.init_submodule_config(
-            RBLNKandinskyV22PriorPipelineConfig,
+        self.prior_pipe = self.initialize_submodule_config(
             prior_pipe,
+            cls_name="RBLNKandinskyV22PriorPipelineConfig",
             prior=prior_prior,
             image_encoder=prior_image_encoder,
             text_encoder=prior_text_encoder,
             batch_size=batch_size,
             guidance_scale=guidance_scale,
         )
-        self.decoder_pipe = self.init_submodule_config(
-            self._decoder_pipe_cls,
+        self.decoder_pipe = self.initialize_submodule_config(
             decoder_pipe,
+            cls_name=self._decoder_pipe_cls.__name__,
             unet=unet,
             movq=movq,
             batch_size=batch_size,

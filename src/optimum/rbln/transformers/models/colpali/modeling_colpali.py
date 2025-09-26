@@ -14,7 +14,7 @@
 
 import bisect
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import torch
 from transformers import PretrainedConfig, PreTrainedModel
@@ -25,6 +25,7 @@ from transformers.models.paligemma.modeling_paligemma import PaliGemmaMultiModal
 
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
+from ...utils.rbln_runtime_wrapper import LoopProcessor
 from .colpali_architecture import RBLNColPaliForRetrievalWrapper
 
 
@@ -32,93 +33,64 @@ if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
 
 
-class LoopVisionTower:
-    def __init__(self, vision_tower: RBLNModel) -> None:
-        self.vision_tower = vision_tower
+class LoopVisionTower(LoopProcessor):
+    def __init__(self, vision_tower: "RBLNModel"):
+        super().__init__(model=vision_tower.model[0])
 
-    def forward(self, pixel_values, **kwargs):
-        batch_size = pixel_values.shape[0]
-        outputs = []
-        for i in range(batch_size):
-            outputs.append(self.vision_tower(pixel_values[i : i + 1]))
+    def _get_batch_size(self, pixel_values, **kwargs):
+        return pixel_values.shape[0]
 
-        last_hidden_states = [output.last_hidden_state for output in outputs]
-        last_hidden_states = torch.cat(last_hidden_states, dim=0)
+    def _prepare_inputs_for_iteration(self, index, common_inputs, pixel_values, **kwargs):
+        pixel_values_item = pixel_values[index : index + 1]
+        out_buffer = kwargs["out"][index : index + 1]
+        return ([pixel_values_item], {"out": out_buffer})
 
+    def _process_outputs(self, outputs: list, **kwargs) -> "BaseModelOutputWithPooling":
         return BaseModelOutputWithPooling(
-            last_hidden_state=last_hidden_states,
+            last_hidden_state=kwargs["out"],
         )
 
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
-        return self.forward(*args, **kwds)
 
-    def __repr__(self) -> str:
-        return repr(self.vision_tower)
-
-
-class LoopLanguageModel:
-    def __init__(self, language_model: RBLNModel, rbln_config: RBLNModelConfig) -> None:
-        self.language_model = language_model
+class LoopLanguageModel(LoopProcessor):
+    def __init__(self, language_model: RBLNModel, rbln_config: RBLNModelConfig):
+        super().__init__(model=language_model)
         self.rbln_config = rbln_config
 
-    def prepare_inputs(self, inputs_embeds: torch.Tensor, attention_mask: torch.Tensor):
+    def _get_batch_size(self, inputs_embeds, **kwargs):
+        return inputs_embeds.shape[0]
+
+    def _prepare_inputs_before_loop(self, *, inputs_embeds: torch.Tensor, attention_mask: torch.Tensor, **kwargs):
         input_len = inputs_embeds.shape[1]
         idx = bisect.bisect_left(self.rbln_config.max_seq_lens, input_len)
         if idx == len(self.rbln_config.max_seq_lens):
             raise ValueError(
                 f"Required seq_len({input_len}) is larger than available max_seq_lens({self.rbln_config.max_seq_lens})."
             )
-        else:
-            max_seq_len = self.rbln_config.max_seq_lens[idx]
+        max_seq_len = self.rbln_config.max_seq_lens[idx]
+        padded_inputs_embed = torch.nn.functional.pad(inputs_embeds, (0, 0, 0, max_seq_len - input_len))
+        padded_attn_mask = torch.nn.functional.pad(attention_mask, (0, max_seq_len - input_len)).to(torch.float32)
+        padded_position_ids = torch.arange(max_seq_len, dtype=torch.int32).view(1, -1)
 
-        inputs_embed = torch.nn.functional.pad(inputs_embeds, (0, 0, 0, max_seq_len - input_len))
-        attn_mask = torch.nn.functional.pad(attention_mask, (0, max_seq_len - input_len)).to(torch.float32)
-        position_ids = torch.arange(max_seq_len, dtype=torch.int32).view(1, -1)
+        return {
+            "padded_inputs_embed": padded_inputs_embed,
+            "padded_attn_mask": padded_attn_mask,
+            "padded_position_ids": padded_position_ids,
+        }
 
-        return inputs_embed, attn_mask, position_ids
+    def _prepare_inputs_for_iteration(self, index: int, common_inputs, *args, **kwargs):
+        item_kwargs = {
+            "inputs_embeds": common_inputs["padded_inputs_embed"][index : index + 1],
+            "attention_mask": common_inputs["padded_attn_mask"][index : index + 1],
+            "position_ids": common_inputs["padded_position_ids"],
+            "out": [tensor[index : index + 1] for tensor in kwargs["out"]],
+        }
+        return ([], item_kwargs)
 
-    def forward(self, inputs_embeds: torch.Tensor, attention_mask: torch.Tensor, **kwargs):
-        padded_inputs_embed, padded_attn_mask, padded_position_ids = self.prepare_inputs(inputs_embeds, attention_mask)
-        input_batch_size = inputs_embeds.shape[0]
-        input_seq_len = inputs_embeds.shape[1]
-
-        all_embeddings = []
-        all_hidden_states = []
-        for i in range(input_batch_size):
-            outputs = self.language_model(
-                inputs_embeds=padded_inputs_embed[i : i + 1],
-                attention_mask=padded_attn_mask[i : i + 1],
-                position_ids=padded_position_ids,
-            )
-
-            if self.rbln_config.output_hidden_states:
-                embedding = outputs[0]
-                hidden_states = outputs[1:]
-            else:
-                embedding = outputs
-                hidden_states = None
-
-            all_embeddings.append(embedding)
-            all_hidden_states.append(hidden_states)
-
-        embeddings = torch.cat(all_embeddings, dim=0)[:, :input_seq_len]
+    def _process_outputs(self, outputs: list, **kwargs):
         if self.rbln_config.output_hidden_states:
-            hidden_states = [
-                torch.cat(
-                    [batch_hidden_states[layer_idx][:, :input_seq_len] for batch_hidden_states in all_hidden_states],
-                    dim=0,
-                )
-                for layer_idx in range(len(all_hidden_states[0]))
-            ]
-            return embeddings, tuple(hidden_states)
+            return kwargs["out"][0], tuple(kwargs["out"][1:])
         else:
-            return embeddings
-
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
-        return self.forward(*args, **kwds)
-
-    def __repr__(self) -> str:
-        return repr(self.language_model)
+            return kwargs["out"]
 
 
 class RBLNColPaliForRetrieval(RBLNModel):
@@ -251,9 +223,9 @@ class RBLNColPaliForRetrieval(RBLNModel):
         input_infos = []
         for max_seq_len in rbln_config.max_seq_lens:
             input_info = [
-                ("inputs_embeds", [1, max_seq_len, hidden_size], "float32"),
-                ("attention_mask", [1, max_seq_len], "float32"),
-                ("position_ids", [1, max_seq_len], "int32"),
+                ("inputs_embeds", [rbln_config.vision_tower.batch_size, max_seq_len, hidden_size], "float32"),
+                ("attention_mask", [rbln_config.vision_tower.batch_size, max_seq_len], "float32"),
+                ("position_ids", [rbln_config.vision_tower.batch_size, max_seq_len], "int32"),
             ]
             input_infos.append(input_info)
 
@@ -286,8 +258,14 @@ class RBLNColPaliForRetrieval(RBLNModel):
         # Returns:
         #     image_features (`torch.Tensor`): Image feature tensor of shape `(num_images, image_length, embed_dim)`).
 
-        vision_outputs = self.vision_tower(pixel_values).last_hidden_state
-        image_features = self.multi_modal_projector(vision_outputs)
+        vision_output_size = [
+            pixel_values.shape[0],
+            self.config.vlm_config.vision_config.num_image_tokens,
+            self.config.vlm_config.vision_config.hidden_size,
+        ]
+        vision_output = torch.empty(size=vision_output_size, dtype=torch.float32, device="cpu")
+        self.vision_tower(pixel_values, out=vision_output)
+        image_features = self.multi_modal_projector(vision_output)
         image_features = image_features / (self.config.text_config.hidden_size**0.5)
         return image_features
 
@@ -353,11 +331,27 @@ class RBLNColPaliForRetrieval(RBLNModel):
             input_ids=input_ids, inputs_embeds=inputs_embeds, pixel_values=pixel_values
         )
 
-        # Embedding_proj_layer is fused on the bottom of the language model.
-        outputs = self.language_model(inputs_embeds=inputs_embeds, attention_mask=attention_mask)
+        outputs = []
+        language_model_out_size = [inputs_embeds.shape[0], self.rbln_config.max_seq_lens[0], self.config.embedding_dim]
+        language_model_hidden_states_size = [
+            inputs_embeds.shape[0],
+            self.rbln_config.max_seq_lens[0],
+            self.rbln_config.max_seq_lens[0],
+        ]
+        outputs.append(torch.empty(size=language_model_out_size, dtype=torch.float32, device="cpu"))
+        if self.rbln_config.output_hidden_states:
+            for i in range(self.config.vlm_config.text_config.num_hidden_layers + 1):
+                outputs.append(torch.empty(size=language_model_hidden_states_size, dtype=torch.float32, device="cpu"))
 
-        embeddings = outputs if not self.rbln_config.output_hidden_states else outputs[0]
-        hidden_states = None if not self.rbln_config.output_hidden_states else outputs[1]
+        # Embedding_proj_layer is fused on the bottom of the language model.
+        self.language_model(inputs_embeds=inputs_embeds, attention_mask=attention_mask, out=outputs)
+
+        embeddings = outputs[0][:, : inputs_embeds.shape[1]]
+        hidden_states = (
+            None
+            if not self.rbln_config.output_hidden_states
+            else [tensor[0][:, : inputs_embeds.shape[1]] for tensor in outputs[1:]]
+        )
 
         # L2 normalization
         embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)  # (batch_size, sequence_length, dim)
