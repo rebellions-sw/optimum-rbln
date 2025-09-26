@@ -82,11 +82,11 @@ class Qwen3MoeSparseMoeBlock(nn.Module):
         one_hot_expert_indices.scatter_(1, selected_experts, un_mask)
 
         ## TODO(jangys): migrate to custom op
-        E = routing_weights.shape[1]
-        range = torch.arange(0, E, dtype=torch.int32)
+        T = routing_weights.shape[0]
+        range = torch.arange(0, T, dtype=torch.int32).unsqueeze(1) # [T, 1]
         updates = one_hot_expert_indices * range # [T, E]
-        pos = torch.cumsum(one_hot_expert_indices, dim=1) - one_hot_expert_indices # [T, E]
-        expert_indices = torch.zeros_like(updates, dtype=torch.int32).scatter_(1, pos, updates)
+        pos = torch.cumsum(one_hot_expert_indices, dim=0) - one_hot_expert_indices # [T, E]
+        expert_indices = torch.zeros_like(updates, dtype=torch.int32).scatter_(dim=0, index=pos, src=updates)
         # expert_indices = torch.zeros_like(updates, dtype=torch.int64).scatter_(1, pos, updates).to(dtype=torch.int32)
 
         return masked_routing_weights, expert_select_count, expert_indices
