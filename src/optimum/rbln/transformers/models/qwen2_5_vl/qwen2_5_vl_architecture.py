@@ -3,6 +3,7 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
+from transformers import PreTrainedModel
 
 from ..decoderonly.decoderonly_architecture import DecoderOnlyWrapper, apply_rotary_pos_emb
 
@@ -194,3 +195,27 @@ class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
             past_key_values,
             position_embeds,
         )
+
+    def convert_to_rbln_class(self, model: PreTrainedModel, max_seq_len: int):
+        new_layers = []
+
+        for layer_idx, layer in enumerate(model.model.language_model.layers):
+            is_sliding = layer_idx in self.rbln_config.sliding_window_layers
+            new_self_attn = self.get_rbln_attn_class()(
+                self.get_attn_layer(layer), self.rbln_config, is_sliding=is_sliding
+            )
+            new_layer = self.get_rbln_layer_class()(layer, new_self_attn)
+            new_layers.append(new_layer)
+
+        new_model = self.get_rbln_model_class()(
+            model.model.language_model,
+            new_layers,
+            self.rbln_config,
+            use_learned_pos_emb=self.__class__._use_learned_pos_emb,
+        )
+
+        if self.is_causal_lm:
+            new_model = self.get_rbln_causal_lm_class()(model, new_model)
+            return new_model
+        else:
+            return new_model

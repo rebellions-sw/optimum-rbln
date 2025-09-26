@@ -183,7 +183,7 @@ class RBLNColPaliForRetrieval(RBLNModel):
     @classmethod
     def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
         return RBLNColPaliForRetrievalWrapper(
-            causal_lm=model.vlm.language_model,
+            causal_lm=model.vlm,
             embedding_proj_layer=model.embedding_proj_layer,
             max_seq_len=max(rbln_config.max_seq_lens),
             output_hidden_states=rbln_config.output_hidden_states,
@@ -246,8 +246,7 @@ class RBLNColPaliForRetrieval(RBLNModel):
     def get_pytorch_model(cls, *args, **kwargs):
         model = super().get_pytorch_model(*args, **kwargs)
         model.vision_tower = model.vlm.vision_tower
-        del model.vlm.vision_tower
-
+        del model.vlm.model.vision_tower
         return model
 
     def get_image_features(self, pixel_values: torch.Tensor):
