@@ -43,9 +43,6 @@ class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
             ValueError: If `use_attention_mask` or `use_position_ids` are False.
         """
         # use_attention_mask and use_position_ids are always True for Gemma3
-        if not (use_attention_mask and use_position_ids):
-            raise ValueError("use_attention_mask and use_position_ids must be True for RBLNGemma3ForCausalLM")
-
         use_attention_mask = use_attention_mask or True
         use_position_ids = use_position_ids or True
         prefill_chunk_size = prefill_chunk_size or 256
