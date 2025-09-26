@@ -167,14 +167,12 @@ class ContextRblnConfig:
         device=None,
         device_map=None,
         create_runtimes=None,
-        optimize_host_mem=None,
         activate_profiler=None,
         timeout=None,
     ):
         self.device = device
         self.device_map = device_map
         self.create_runtimes = create_runtimes
-        self.optimize_host_mem = optimize_host_mem
         self.activate_profiler = activate_profiler
         self.timeout = timeout
 
@@ -182,7 +180,6 @@ class ContextRblnConfig:
         self._local.device = self.device
         self._local.device_map = self.device_map
         self._local.create_runtimes = self.create_runtimes
-        self._local.optimize_host_memory = self.optimize_host_mem
         self._local.activate_profiler = self.activate_profiler
         self._local.timeout = self.timeout
         return self
@@ -191,7 +188,6 @@ class ContextRblnConfig:
         self._local.device = None
         self._local.device_map = None
         self._local.create_runtimes = None
-        self._local.optimize_host_memory = None
         self._local.activate_profiler = None
         self._local.timeout = None
 
@@ -201,7 +197,6 @@ class ContextRblnConfig:
             "device": getattr(cls._local, "device", None),
             "device_map": getattr(cls._local, "device_map", None),
             "create_runtimes": getattr(cls._local, "create_runtimes", None),
-            "optimize_host_memory": getattr(cls._local, "optimize_host_memory", None),
             "activate_profiler": getattr(cls._local, "activate_profiler", None),
             "timeout": getattr(cls._local, "timeout", None),
         }

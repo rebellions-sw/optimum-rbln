@@ -33,7 +33,6 @@ logger = get_logger(__name__)
 
 
 DEFAULT_COMPILED_MODEL_NAME = "compiled_model"
-DEFAULT_MOD_NAME = "default"
 TypeInputInfo = List[Tuple[str, Tuple[int], str]]
 
 
@@ -49,17 +48,13 @@ class RBLNCompileConfig:
 
     Attributes:
         compiled_model_name (str): Name of the compiled model.
-        mod_name (str): Name of the RBLN module.
         input_info (Union[List[TypeInputInfo], TypeInputInfo]): Information about input tensors.
-        fusion (Optional[bool]): Whether to use fusion optimization.
         npu (Optional[str]): NPU configuration.
         tensor_parallel_size (Optional[int]): Size for tensor parallelism.
     """
 
     compiled_model_name: str = DEFAULT_COMPILED_MODEL_NAME
-    mod_name: str = DEFAULT_MOD_NAME
     input_info: Union[List[TypeInputInfo], TypeInputInfo] = None
-    fusion: Optional[bool] = None
     npu: Optional[str] = None
     tensor_parallel_size: Optional[int] = None
 
@@ -113,9 +108,7 @@ class RBLNCompileConfig:
 
     def update(self, kwargs: Dict[str, Any]):
         self.compiled_model_name = kwargs.get("compiled_model_name", self.compiled_model_name)
-        self.mod_name = kwargs.get("mod_name", self.mod_name)
         self.input_info = kwargs.get("input_info", self.input_info)
-        self.fusion = kwargs.get("fusion", self.fusion)
         self.npu = kwargs.get("npu", self.npu)
         self.tensor_parallel_size = kwargs.get("tensor_parallel_size", self.tensor_parallel_size)
         return self
@@ -149,7 +142,7 @@ class RBLNCompileConfig:
         return asdict(self)
 
 
-RUNTIME_KEYWORDS = ["create_runtimes", "optimize_host_memory", "device", "device_map", "activate_profiler", "timeout"]
+RUNTIME_KEYWORDS = ["create_runtimes", "device", "device_map", "activate_profiler", "timeout"]
 CONFIG_MAPPING: Dict[str, Type["RBLNModelConfig"]] = {}
 
 
@@ -487,7 +480,6 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         "npu",
         "tensor_parallel_size",
         "create_runtimes",
-        "optimize_host_memory",
         "device",
         "device_map",
         "activate_profiler",
@@ -566,7 +558,6 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         self,
         cls_name: Optional[str] = None,
         create_runtimes: Optional[bool] = None,
-        optimize_host_memory: Optional[bool] = None,
         device: Optional[Union[int, List[int]]] = None,
         device_map: Optional[Dict[str, Union[int, List[int]]]] = None,
         activate_profiler: Optional[bool] = None,
@@ -576,6 +567,8 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         optimum_rbln_version: Optional[str] = None,
         _torch_dtype: Optional[str] = None,
         _compile_cfgs: List[RBLNCompileConfig] = [],
+        *,
+        optimize_host_memory: Optional[bool] = None,
         **kwargs: Any,
     ):
         """
@@ -584,7 +577,6 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         Args:
             cls_name (Optional[str]): The class name of the configuration. Defaults to the current class name.
             create_runtimes (Optional[bool]): Whether to create RBLN runtimes. Defaults to True.
-            optimize_host_memory (Optional[bool]): Whether to optimize host memory usage. Defaults to True.
             device (Optional[Union[int, List[int]]]): The device(s) to load the model onto. Can be a single device ID or a list.
             device_map (Optional[Dict[str, Union[int, List[int]]]]): Mapping from compiled model names to device IDs.
             activate_profiler (Optional[bool]): Whether to activate the profiler for performance analysis.
@@ -610,11 +602,13 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
 
         self._runtime_options = {}
         self._runtime_options["create_runtimes"] = create_runtimes
-        self._runtime_options["optimize_host_memory"] = optimize_host_memory
         self._runtime_options["device"] = device
         self._runtime_options["device_map"] = device_map
         self._runtime_options["activate_profiler"] = activate_profiler
         self._runtime_options["timeout"] = timeout
+
+        if optimize_host_memory is not None:
+            logger.warning("`optimize_host_memory` is deprecated and will be removed in future versions.")
 
         # Automatically pass npu, tensor_parallel_size to compile_cfgs
         self.npu = npu
@@ -832,19 +826,6 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
     @create_runtimes.setter
     def create_runtimes(self, create_runtimes: bool):
         self._runtime_options["create_runtimes"] = create_runtimes
-
-    @property
-    def optimize_host_memory(self):
-        context = ContextRblnConfig.get_current_context()["optimize_host_memory"]
-        if context is not None:
-            return context
-        elif self._runtime_options["optimize_host_memory"] is None:
-            return True
-        return self._runtime_options["optimize_host_memory"]
-
-    @optimize_host_memory.setter
-    def optimize_host_memory(self, optimize_host_memory: bool):
-        self._runtime_options["optimize_host_memory"] = optimize_host_memory
 
     @property
     def device(self):
