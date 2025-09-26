@@ -59,7 +59,15 @@ class SD3Transformer2DModelWrapper(torch.nn.Module):
 
 
 class RBLNSD3Transformer2DModel(RBLNModel):
-    """RBLN wrapper for the Stable Diffusion 3 MMDiT Transformer model."""
+    """
+    RBLN implementation of SD3Transformer2DModel for diffusion models like Stable Diffusion 3.
+
+    The SD3Transformer2DModel takes text and/or image embeddings from encoders (like CLIP) and
+    maps them to a shared latent space that guides the diffusion process to generate the desired image.
+
+    This class inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods
+    the library implements for all its models.
+    """
 
     hf_library_name = "diffusers"
     auto_model_class = SD3Transformer2DModel

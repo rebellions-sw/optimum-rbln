@@ -27,6 +27,21 @@ class RBLNGemma3ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
         image_prefill_chunk_size: Optional[int] = None,
         **kwargs: Any,
     ):
+        """
+        Args:
+            use_position_ids (Optional[bool]): Whether or not to use `position_ids`, which is indices of positions of each input sequence tokens in the position embeddings.
+            use_attention_mask (Optional[bool]): Whether or not to use `attention_mask` to to avoid performing attention on padding token indices.
+            prefill_chunk_size (Optional[int]): The chunk size used during the prefill phase for
+                processing input sequences. Defaults to 256. Must be a positive integer
+                divisible by 64. Affects prefill performance and memory usage.
+            image_prefill_chunk_size (Optional[int]): The chunk size used during the prefill phase for
+                processing images. This config is used when `use_image_prefill` is True.
+                Currently, the `prefill_chunk_size` and `image_prefill_chunk_size` should be the same value.
+            kwargs: Additional arguments passed to the parent `RBLNDecoderOnlyModelForCausalLMConfig`.
+
+        Raises:
+            ValueError: If `use_attention_mask` or `use_position_ids` are False.
+        """
         # use_attention_mask and use_position_ids are always True for Gemma3
         use_attention_mask = use_attention_mask or True
         use_position_ids = use_position_ids or True
@@ -64,10 +79,10 @@ class RBLNGemma3ForConditionalGenerationConfig(RBLNModelConfig):
             batch_size (Optional[int]): The batch size for inference. Defaults to 1.
             vision_tower (Optional[RBLNModelConfig]): Configuration for the vision encoder component.
             language_model (Optional[RBLNModelConfig]): Configuration for the language model component.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
-            ValueError: If batch_size is not a positive integer.
+            ValueError: If `batch_size` is not a positive integer.
         """
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1

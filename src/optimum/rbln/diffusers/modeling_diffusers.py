@@ -33,6 +33,10 @@ if TYPE_CHECKING:
 
 
 class RBLNDiffusionMixinConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLN diffusion pipelines.
+    """
+
     pass
 
 
@@ -54,8 +58,8 @@ class RBLNDiffusionMixin:
         ```
 
     Class Variables:
-        _submodules: List of submodule names that should be compiled (typically ["text_encoder", "unet", "vae"])
-        _optional_submodules: List of submodule names compiled without inheriting RBLNModel (typically ["safety_checker"])
+        - `_submodules`: List of submodule names that should be compiled (typically ["text_encoder", "unet", "vae"])
+        - `_optional_submodules`: List of submodule names compiled without inheriting RBLNModel (typically ["safety_checker"])
 
     Methods:
         from_pretrained: Creates and optionally compiles a model from a pretrained checkpoint
@@ -170,7 +174,7 @@ class RBLNDiffusionMixin:
                 Names of specific LoRA weight files to load, corresponding to lora_ids. Only used when `export=True`.
             lora_scales:
                 Scaling factor(s) to apply to the LoRA adapter(s). Only used when `export=True`.
-            **kwargs:
+            kwargs:
                 Additional arguments to pass to the underlying diffusion pipeline constructor or the
                 RBLN compilation process. These may include parameters specific to individual submodules
                 or the particular diffusion pipeline being used.

@@ -86,3 +86,26 @@ class RBLNDecoderOnlyGenerationMixin(GenerationMixin):
         model_kwargs["generate_idx"] = outputs.generate_idx
         model_kwargs["padded_cache_lengths"] = outputs.padded_cache_lengths
         return model_kwargs
+
+    def generate(
+        self,
+        input_ids: torch.LongTensor,
+        attention_mask: Optional[torch.LongTensor] = None,
+        max_length: Optional[int] = None,
+        **kwargs,
+    ):
+        """
+        The generate function is utilized in its standard form as in the HuggingFace transformers library. User can use this function to generate text from the model.
+
+        Args:
+            input_ids: The input ids to the model.
+            attention_mask: The attention mask to the model.
+            max_length: The maximum length of the generated text.
+            kwargs: Additional arguments passed to the generate function. See the HuggingFace transformers documentation for more details.
+        """
+        if max_length is not None:
+            kwargs["max_length"] = max_length
+        if attention_mask is not None:
+            kwargs["attention_mask"] = attention_mask
+
+        return super().generate(input_ids, **kwargs)

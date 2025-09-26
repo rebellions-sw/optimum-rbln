@@ -59,7 +59,7 @@ class RBLNStableDiffusionControlNetPipelineBaseConfig(RBLNModelConfig):
             image_size (Optional[Tuple[int, int]]): Alternative way to specify image dimensions.
                 Cannot be used together with img_height/img_width.
             guidance_scale (Optional[float]): Scale for classifier-free guidance.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If both image_size and img_height/img_width are provided.
@@ -201,7 +201,7 @@ class RBLNStableDiffusionXLControlNetPipelineBaseConfig(RBLNModelConfig):
             image_size (Optional[Tuple[int, int]]): Alternative way to specify image dimensions.
                 Cannot be used together with img_height/img_width.
             guidance_scale (Optional[float]): Scale for classifier-free guidance.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If both image_size and img_height/img_width are provided.

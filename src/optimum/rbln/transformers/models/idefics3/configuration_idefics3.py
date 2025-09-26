@@ -45,11 +45,15 @@ class RBLNIdefics3ForConditionalGenerationConfig(RBLNModelConfig):
         Args:
             batch_size (Optional[int]): The batch size for inference. Defaults to 1.
             vision_model (Optional[RBLNModelConfig]): Configuration for the vision transformer component.
+                This can include settings specific to the vision encoder, such as input resolution or other vision-related parameters.
+                If not provided, default settings will be used.
             text_model (Optional[RBLNModelConfig]): Configuration for the text model component.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+                This can include settings specific to the language model, such as tensor parallelism or other text-related parameters.
+                If not provided, default settings will be used.
+            kwargs: Additional arguments passed to the parent `RBLNModelConfig`.
 
         Raises:
-            ValueError: If batch_size is not a positive integer.
+            ValueError: If `batch_size` is not a positive integer.
         """
 
         super().__init__(**kwargs)

@@ -14,7 +14,8 @@
 
 import bisect
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Union
+from tempfile import TemporaryDirectory
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
 
 import torch
 from transformers import PretrainedConfig, PreTrainedModel
@@ -126,8 +127,8 @@ class RBLNColPaliForRetrieval(RBLNModel):
     The ColPali Model transformer for document retrieval using vision-language models.
     This model inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
 
-    A class to convert and run pre-trained transformers based ColPaliForRetrieval model on RBLN devices.
-    It implements the methods to convert a pre-trained transformers ColPaliForRetrieval model into a RBLN transformer model by:
+    A class to convert and run pre-trained transformers based `ColPaliForRetrieval` model on RBLN devices.
+    It implements the methods to convert a pre-trained transformers `ColPaliForRetrieval` model into a RBLN transformer model by:
 
     - transferring the checkpoint weights of the original into an optimized RBLN graph,
     - compiling the resulting graph using the RBLN compiler.
@@ -263,11 +264,42 @@ class RBLNColPaliForRetrieval(RBLNModel):
         return rbln_config
 
     @classmethod
-    def from_model(cls, model: "PreTrainedModel", *args, **kwargs):
+    def from_model(
+        cls,
+        model: "PreTrainedModel",
+        config: Optional[PretrainedConfig] = None,
+        rbln_config: Optional[Union[RBLNModelConfig, Dict]] = None,
+        model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
+        subfolder: str = "",
+        **kwargs: Any,
+    ) -> "RBLNModel":
+        """
+        Converts and compiles a pre-trained HuggingFace library model into a RBLN model.
+        This method performs the actual model conversion and compilation process.
+
+        Args:
+            model (PreTrainedModel): The PyTorch model to be compiled.
+                The object must be an instance of the HuggingFace transformers PreTrainedModel class.
+            config (Optional[PretrainedConfig]): The configuration object associated with the model.
+            rbln_config (Optional[Union[RBLNModelConfig, Dict]]): Configuration for RBLN model compilation and runtime.
+                This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNLlamaForCausalLMConfig` for Llama models).
+                For detailed configuration options, see the specific model's configuration class documentation.
+            kwargs: Additional keyword arguments. Arguments with the prefix `rbln_` are passed to rbln_config, while the remaining arguments are passed to the HuggingFace library.
+
+        The method performs the following steps:
+
+        1. Compiles the PyTorch model into an optimized RBLN graph
+        2. Configures the model for the specified NPU device
+        3. Creates the necessary runtime objects if requested
+        4. Saves the compiled model and configurations
+
+        Returns:
+            (RBLNModel): A RBLN model instance ready for inference on RBLN NPU devices.
+        """
         if not hasattr(model, "vision_tower"):
             model.vision_tower = model.vlm.vision_tower
             del model.vlm.vision_tower
-        model = super().from_model(model, *args, **kwargs)
+        model = super().from_model(model, config, rbln_config, model_save_dir, subfolder, **kwargs)
         return model
 
     @classmethod
@@ -334,7 +366,7 @@ class RBLNColPaliForRetrieval(RBLNModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         **kwargs,
-    ) -> ColPaliForRetrievalOutput:
+    ) -> Union[Tuple, ColPaliForRetrievalOutput]:
         if pixel_values is not None:
             pixel_values = pixel_values.to(dtype=self.dtype)
 
