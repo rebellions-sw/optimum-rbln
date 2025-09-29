@@ -185,31 +185,17 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         return model_kwargs
 
     def get_image_features(self, pixel_values: torch.Tensor) -> torch.Tensor:
-        """
-        Projects the last hidden state from the vision model into language model space.
+        # Projects the last hidden state from the vision model into language model space.
 
-        Args:
-            pixel_values: (`torch.FloatTensor` of shape `(batch_size, channels, height, width)`)
-                The tensors corresponding to the input images.
+        # Args:
+        #     pixel_values: (`torch.FloatTensor` of shape `(batch_size, channels, height, width)`)
+        #         The tensors corresponding to the input images.
 
-        Returns:
-            Image feature tensor of shape `(num_images, image_length, embed_dim)`.
-        """
-        vision_out_buffer = []
-        vision_out_size = [
-            pixel_values.shape[0],
-            (self.config.vision_config.image_size // self.config.vision_config.patch_size) ** 2,
-            self.config.vision_config.hidden_size,
-        ]
-        projector_out_size = [
-            pixel_values.shape[0],
-            self.config.mm_tokens_per_image,
-            self.config.text_config.hidden_size,
-        ]
-        vision_out_buffer.append(torch.empty(size=vision_out_size, dtype=torch.float32, device="cpu"))
-        projector_out_buffer = [torch.empty(size=projector_out_size, dtype=torch.float32, device="cpu")]
-        vision_outputs = self.vision_tower(pixel_values, out=vision_out_buffer).last_hidden_state
-        image_features = self.multi_modal_projector(vision_outputs, out=projector_out_buffer)
+        # Returns:
+        #     Image feature tensor of shape `(num_images, image_length, embed_dim)`.
+
+        vision_outputs = self.vision_tower(pixel_values).last_hidden_state
+        image_features = self.multi_modal_projector(vision_outputs)
         return image_features
 
     def _preprocess_prefill(

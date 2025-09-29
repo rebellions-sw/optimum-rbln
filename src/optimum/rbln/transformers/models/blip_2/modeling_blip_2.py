@@ -109,7 +109,7 @@ class RBLNBlip2VisionModel(RBLNModel):
 
     def forward(
         self,
-        pixel_values,
+        pixel_values: torch.FloatTensor,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,

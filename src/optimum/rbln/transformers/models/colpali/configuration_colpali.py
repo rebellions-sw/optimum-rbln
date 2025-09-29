@@ -64,7 +64,8 @@ class RBLNColPaliForRetrievalConfig(RBLNModelConfig):
             max_seq_lens (Union[int, List[int]]): The maximum sequence lengths for the language model.
                 This can be multiple values, and the model will be compiled for each max_seq_len, allowing selection of the most appropriate max_seq_len at inference time.
             output_hidden_states (Optional[bool]): Whether to output the hidden states of the language model.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            vision_tower (Optional[RBLNModelConfig]): Configuration for the vision encoder component.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
         Raises:
             ValueError: If batch_size is not a positive integer.
         """

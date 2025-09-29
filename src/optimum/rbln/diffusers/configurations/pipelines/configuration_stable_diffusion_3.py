@@ -64,7 +64,7 @@ class RBLNStableDiffusion3PipelineBaseConfig(RBLNModelConfig):
             height (Optional[int]): Height of the generated images.
             width (Optional[int]): Width of the generated images.
             guidance_scale (Optional[float]): Scale for classifier-free guidance.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If both image_size and img_height/img_width are provided.

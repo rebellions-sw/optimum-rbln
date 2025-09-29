@@ -254,8 +254,7 @@ class RBLNQwen2VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                     "device": 0,
                 },
                 "tensor_parallel_size": 8,
-                "kvcache_partition_len": 16_384,
-                "max_seq_len": 114_688,
+                "max_seq_len": 32_768,
                 "device": [0, 1, 2, 3, 4, 5, 6, 7],
             },
         )
