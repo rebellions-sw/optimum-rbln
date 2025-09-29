@@ -13,15 +13,17 @@
 # limitations under the License.
 
 import inspect
-from typing import Any, Callable, Optional, Union, Dict
 from pathlib import Path
+from typing import Any, Callable, Dict, Optional, Union
+
 from transformers import AutoModelForCausalLM
 from transformers.generation.utils import GenerationMixin
 
+from ....configuration_utils import RBLNModelConfig
 from ....utils import logging
 from ..decoderonly import RBLNDecoderOnlyModelForCausalLM
 from .midm_architecture import MidmLMHeadModelWrapper
-from ....configuration_utils import RBLNModelConfig
+
 
 logger = logging.get_logger(__name__)
 
