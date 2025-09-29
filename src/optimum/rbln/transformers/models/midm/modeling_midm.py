@@ -110,7 +110,7 @@ class RBLNMidmLMHeadModel(RBLNDecoderOnlyModelForCausalLM):
             export (Optional[bool]): A boolean flag to indicate whether the model should be compiled.
                 If None, it will be determined based on the existence of the compiled model files in the model_id.
             rbln_config (Optional[Union[Dict, RBLNModelConfig]]): Configuration for RBLN model compilation and runtime.
-                This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNLlamaForCausalLMConfig` for Llama models).
+                This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNMidmLMHeadModelConfig` for MIDM models).
                 For detailed configuration options, see the specific model's configuration class documentation.
             trust_remote_code (bool): Whether or not to trust the remote code when loading a model from the Hub.
             kwargs: Additional keyword arguments. Arguments with the prefix `rbln_` are passed to rbln_config, while the remaining arguments are passed to the HuggingFace library.
