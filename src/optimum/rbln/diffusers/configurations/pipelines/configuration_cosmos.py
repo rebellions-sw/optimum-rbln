@@ -63,12 +63,15 @@ class RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
         """
         super().__init__(**kwargs)
 
-        self.text_encoder = self.init_submodule_config(
-            RBLNT5EncoderModelConfig, text_encoder, batch_size=batch_size, max_seq_len=max_seq_len
+        self.text_encoder = self.initialize_submodule_config(
+            text_encoder,
+            cls_name="RBLNT5EncoderModelConfig",
+            batch_size=batch_size,
+            max_seq_len=max_seq_len,
         )
-        self.transformer = self.init_submodule_config(
-            RBLNCosmosTransformer3DModelConfig,
+        self.transformer = self.initialize_submodule_config(
             transformer,
+            cls_name="RBLNCosmosTransformer3DModelConfig",
             batch_size=batch_size,
             max_seq_len=max_seq_len,
             height=height,
@@ -76,18 +79,18 @@ class RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
             num_frames=num_frames,
             fps=fps,
         )
-        self.vae = self.init_submodule_config(
-            RBLNAutoencoderKLCosmosConfig,
+        self.vae = self.initialize_submodule_config(
             vae,
+            cls_name="RBLNAutoencoderKLCosmosConfig",
             batch_size=batch_size,
             uses_encoder=self.__class__._vae_uses_encoder,
             height=height,
             width=width,
             num_frames=num_frames,
         )
-        self.safety_checker = self.init_submodule_config(
-            RBLNCosmosSafetyCheckerConfig,
+        self.safety_checker = self.initialize_submodule_config(
             safety_checker,
+            cls_name="RBLNCosmosSafetyCheckerConfig",
             batch_size=batch_size,
             height=height,
             width=width,
