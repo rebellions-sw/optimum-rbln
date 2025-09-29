@@ -14,10 +14,6 @@
 from typing import Any, List, Optional, Union
 
 from ....configuration_utils import RBLNModelConfig
-from ....utils.logging import get_logger
-
-
-logger = get_logger(__name__)
 
 
 class RBLNColPaliForRetrievalConfig(RBLNModelConfig):
@@ -51,7 +47,6 @@ class RBLNColPaliForRetrievalConfig(RBLNModelConfig):
 
     def __init__(
         self,
-        batch_size: Optional[int] = None,
         max_seq_lens: Union[int, List[int]] = None,
         output_hidden_states: Optional[bool] = None,
         vision_tower: Optional[RBLNModelConfig] = None,
@@ -59,25 +54,15 @@ class RBLNColPaliForRetrievalConfig(RBLNModelConfig):
     ):
         """
         Args:
-            batch_size (Optional[int]): The batch size for the model.
-            vision_tower (Optional[RBLNModelConfig]): Configuration for the vision encoder component.
             max_seq_lens (Union[int, List[int]]): The maximum sequence lengths for the language model.
                 This can be multiple values, and the model will be compiled for each max_seq_len, allowing selection of the most appropriate max_seq_len at inference time.
             output_hidden_states (Optional[bool]): Whether to output the hidden states of the language model.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            vision_tower (Optional[RBLNModelConfig]): Configuration for the vision encoder component.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
         Raises:
             ValueError: If batch_size is not a positive integer.
         """
         super().__init__(**kwargs)
-        self.batch_size = batch_size or 1
-        if not isinstance(self.batch_size, int) or self.batch_size < 0:
-            raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
-
-        if self.batch_size != 1:
-            logger.warning("Ignore batch_size for ColPali vision tower. It will be set to 1.")
-
-        self.vision_tower = self.initialize_submodule_config(
-            submodule_config=vision_tower, batch_size=1, force_kwargs=True
-        )
+        self.vision_tower = vision_tower
         self.max_seq_lens = max_seq_lens
         self.output_hidden_states = output_hidden_states

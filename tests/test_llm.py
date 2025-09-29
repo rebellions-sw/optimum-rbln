@@ -122,7 +122,11 @@ class TestQwen3ForCausalLM(LLMTest.TestLLM):
     EXPECTED_OUTPUT = (
         "יל synd Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz_inventory天河 sanitary中途"
     )
-    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
+    HF_CONFIG_KWARGS = {
+        "num_hidden_layers": 1,
+        "max_position_embeddings": 1024,
+        "revision": "397c180b0ded9c45c33bbce7f88df86bb2d571d4",
+    }
 
 
 class TestQwen3ForCausalLM_UAM(TestQwen3ForCausalLM):
@@ -475,24 +479,6 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
             rbln_config={"language_model": {"create_runtimes": False}},
             **self.HF_CONFIG_KWARGS,
         )
-
-    def test_complicate_config(self):
-        rbln_config = {
-            "vision_tower": {
-                "batch_size": 2,
-                "create_runtimes": False,
-            },
-            "language_model": {
-                "batch_size": 2,
-                "create_runtimes": False,
-            },
-        }
-        rbln_class_kwargs = {"rbln_config": rbln_config}
-
-        with pytest.raises(
-            ValueError, match="Parameter conflict for 'batch_size': submodule_config has 2, but kwargs has 1"
-        ):
-            _ = self.RBLN_CLASS.from_pretrained(model_id=self.HF_MODEL_ID, **rbln_class_kwargs)
 
 
 class TestBlip2ForConditionalGeneration(LLMTest.TestLLM):

@@ -253,6 +253,7 @@ class RBLNModelForAudioClassification(RBLNModel):
 
     A class to convert and run pre-trained transformers based AudioClassification models on RBLN devices.
     It implements the methods to convert a pre-trained transformers AudioClassification model into a RBLN transformer model by:
+
     - transferring the checkpoint weights of the original into an optimized RBLN graph,
     - compiling the resulting graph using the RBLN compiler.
 

@@ -46,7 +46,7 @@ class RBLNModelForSeq2SeqLMConfig(RBLNModelConfig):
                 PagedAttention KV cache for the SelfAttention. Defaults to batch_size.
             kvcache_block_size (Optional[int]): Sets the size (in number of tokens) of each block
                 in the PagedAttention KV cache for the SelfAttention. Defaults to dec_max_seq_len.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If batch_size is not a positive integer.

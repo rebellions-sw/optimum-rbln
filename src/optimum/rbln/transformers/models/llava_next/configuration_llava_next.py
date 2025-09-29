@@ -16,6 +16,7 @@ from typing import Any, Optional
 
 from ....configuration_utils import RBLNModelConfig
 from ....utils.logging import get_logger
+from ...models.clip import RBLNCLIPVisionModelConfig
 
 
 logger = get_logger(__name__)
@@ -44,26 +45,27 @@ class RBLNLlavaNextForConditionalGenerationConfig(RBLNModelConfig):
             batch_size (Optional[int]): The batch size for inference. Defaults to 1.
             vision_tower (Optional[RBLNModelConfig]): Configuration for the vision encoder component.
             language_model (Optional[RBLNModelConfig]): Configuration for the language model component.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
-            ValueError: If batch_size is not a positive integer.
+            ValueError: If `batch_size` is not a positive integer.
         """
         super().__init__(**kwargs)
         self.batch_size = batch_size or 1
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
-        if self.batch_size != 1:
-            logger.warning("Ignore batch_size for LlavaNext vision tower. It will be set to 1.")
-
-        self.vision_tower = self.initialize_submodule_config(
-            submodule_config=vision_tower,
-            batch_size=1,  # vision_tower batch_size is always 1 in LlavaNext
-            output_hidden_states=True,  # LlavaNext requires output_hidden_states to be True
-            force_kwargs=True,
+        self.vision_tower = self.init_submodule_config(
+            RBLNCLIPVisionModelConfig,
+            vision_tower,
         )
 
-        self.language_model = self.initialize_submodule_config(
-            submodule_config=language_model,
-        )
+        if self.vision_tower.output_hidden_states is False:
+            raise ValueError(
+                f"LlavaNext requires output_hidden_states to be True, but found output_hidden_states={self.vision_tower.output_hidden_states}. "
+                f"Please compile again with the correct argument."
+            )
+        else:
+            self.vision_tower.output_hidden_states = True
+
+        self.language_model = language_model
