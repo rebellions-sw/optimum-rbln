@@ -606,8 +606,10 @@ class TestQwen2VLForConditionalGeneration(LLMTest.TestLLM):
     def setUpClass(cls):
         config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
         vision_config = json.loads(config.vision_config.to_json_string())
+        text_config = json.loads(config.text_config.to_json_string())
+        text_config["num_hidden_layers"] = 1
         vision_config["depth"] = 1  # To make the test faster
-        kwargs = {"vision_config": vision_config}
+        kwargs = {"vision_config": vision_config, "text_config": text_config}
         cls.HF_CONFIG_KWARGS.update(kwargs)
         return super().setUpClass()
 

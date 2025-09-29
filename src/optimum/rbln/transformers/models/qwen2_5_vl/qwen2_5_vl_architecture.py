@@ -214,8 +214,5 @@ class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
             use_learned_pos_emb=self.__class__._use_learned_pos_emb,
         )
 
-        if self.is_causal_lm:
-            new_model = self.get_rbln_causal_lm_class()(model, new_model)
-            return new_model
-        else:
-            return new_model
+        new_model = self.get_rbln_causal_lm_class()(model.model, new_model)
+        return new_model
