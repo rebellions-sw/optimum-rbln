@@ -93,6 +93,24 @@ class RBLNExaoneForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
     @classmethod
     def from_pretrained(cls, *args, **kwargs):
+        """
+        The `from_pretrained()` function is utilized in its standard form as in the HuggingFace transformers library.
+        User can use this function to load a pre-trained model from the HuggingFace library and convert it to a RBLN model to be run on RBLN NPUs.
+
+        Args:
+            model_id (Union[str, Path]): The model id of the pre-trained model to be loaded.
+                It can be downloaded from the HuggingFace model hub or a local path, or a model id of a compiled model using the RBLN Compiler.
+            export (Optional[bool]): A boolean flag to indicate whether the model should be compiled.
+                If None, it will be determined based on the existence of the compiled model files in the model_id.
+            rbln_config (Optional[Union[Dict, RBLNModelConfig]]): Configuration for RBLN model compilation and runtime.
+                This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNLlamaForCausalLMConfig` for Llama models).
+                For detailed configuration options, see the specific model's configuration class documentation.
+            kwargs: Additional keyword arguments. Arguments with the prefix `rbln_` are passed to rbln_config, while the remaining arguments are passed to the HuggingFace library.
+
+        Returns:
+            (RBLNModel): A RBLN model instance ready for inference on RBLN NPU devices.
+        """
+
         kwargs.setdefault("trust_remote_code", True)
         return super().from_pretrained(*args, **kwargs)
 
