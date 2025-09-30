@@ -702,6 +702,7 @@ class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
         text_config["sliding_window_pattern"] = 2
         vision_config = json.loads(config.vision_config.to_json_string())
         vision_config["num_hidden_layers"] = 1
+        vision_config["vision_use_head"] = False
         kwargs = {"text_config": text_config, "vision_config": vision_config}
         cls.HF_CONFIG_KWARGS.update(kwargs)
         return super().setUpClass()
