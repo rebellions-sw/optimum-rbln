@@ -201,10 +201,8 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
     ) -> RBLNModelConfig:
         # support for pixtral that needs padding
         if hasattr(rbln_config.vision_tower, "max_image_size"):
-            num_positions = (
-                rbln_config.vision_tower.batch_size
-                * (rbln_config.vision_tower.max_image_size[0] // model_config.vision_config.patch_size)
-                * (rbln_config.vision_tower.max_image_size[1] // model_config.vision_config.patch_size)
+            num_positions = (rbln_config.vision_tower.max_image_size[0] // model_config.vision_config.patch_size) * (
+                rbln_config.vision_tower.max_image_size[1] // model_config.vision_config.patch_size
             )
             selected_image_feature_dim = num_positions
 
@@ -219,7 +217,7 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
             (
                 "image_features",
                 [
-                    rbln_config.vision_tower.batch_size,
+                    1,
                     selected_image_feature_dim,
                     model_config.vision_config.hidden_size,
                 ],
@@ -335,17 +333,14 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
             projector_out_size = [
                 pixel_values.shape[0],
                 (self.rbln_config.vision_tower.max_image_size[0] // self.config.vision_config.patch_size)
-                * (self.rbln_config.vision_tower.max_image_size[1] // self.config.vision_config.patch_size)
-                * pixel_values.shape[0],
+                * (self.rbln_config.vision_tower.max_image_size[1] // self.config.vision_config.patch_size),
                 self.config.text_config.hidden_size,
             ]
             projector_out_buffer = [torch.empty(size=projector_out_size, dtype=torch.float32, device="cpu")]
 
             num_real_patches = selected_image_feature.shape[1]
-            max_patches = (
-                (self.rbln_config.vision_tower.max_image_size[0] // self.config.vision_config.patch_size)
-                * (self.rbln_config.vision_tower.max_image_size[1] // self.config.vision_config.patch_size)
-                * pixel_values.shape[0]
+            max_patches = (self.rbln_config.vision_tower.max_image_size[0] // self.config.vision_config.patch_size) * (
+                self.rbln_config.vision_tower.max_image_size[1] // self.config.vision_config.patch_size
             )
             num_padding_patches = max_patches - num_real_patches
 
