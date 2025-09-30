@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import importlib
 import inspect
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
@@ -20,6 +21,7 @@ import numpy as np
 import torch
 from transformers import AutoModelForVision2Seq, LlavaNextForConditionalGeneration, PretrainedConfig, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPooling
+from transformers.modeling_utils import no_init_weights
 from transformers.models.llava_next.modeling_llava_next import (
     get_anyres_image_grid_shape,
     image_size_to_num_patches,
@@ -136,6 +138,23 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         return True
 
     @classmethod
+    def get_pytorch_model(cls, *args, **kwargs):
+        model = super().get_pytorch_model(*args, **kwargs)
+
+        with no_init_weights():
+            model_cls_name = model.model.language_model.__class__.__name__
+            causal_model_cls_name = model_cls_name.replace("Model", "ForCausalLM")
+            causal_model_cls = getattr(importlib.import_module("transformers"), causal_model_cls_name)
+            new_language_model = causal_model_cls(model.model.language_model.config)
+
+        new_language_model.lm_head = model.lm_head
+        new_language_model.model = model.model.language_model
+        model.model.language_model = new_language_model
+        model.lm_head = None
+        del model.lm_head
+        return model
+
+    @classmethod
     def save_torch_artifacts(
         cls,
         model: "LlavaNextForConditionalGeneration",
@@ -146,7 +165,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel):
         # If you are unavoidably running on a CPU rather than an RBLN device,
         # store the torch tensor, weight, etc. in this function.
         save_dict = {}
-        save_dict["image_newline"] = model.image_newline
+        save_dict["image_newline"] = model.model.image_newline
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
     def __post_init__(self, **kwargs):
