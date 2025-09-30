@@ -7,7 +7,7 @@ It provides a set of tools enabling easy model loading and inference on single a
 authors = [
     {name = "Rebellions Inc.", email = "support@rebellions.ai"},
 ]
-requires-python = ">=3.9,<=3.13"
+requires-python = ">=3.9,<3.14"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
