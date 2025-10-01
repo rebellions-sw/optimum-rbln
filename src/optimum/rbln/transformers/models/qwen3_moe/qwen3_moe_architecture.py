@@ -76,20 +76,7 @@ class Qwen3MoeSparseMoeBlock(nn.Module):
         ones = torch.ones_like(selected_experts.view(-1), dtype=torch.int32)
         expert_select_count = torch.scatter_add(zeros, dim=0, index=selected_experts.view(-1), src=ones)
 
-        ## get expert indices for sparse
-        one_hot_expert_indices = torch.zeros_like(routing_weights, dtype=torch.int32) # [T, E]
-        un_mask = torch.ones_like(selected_experts, dtype=torch.int32)
-        one_hot_expert_indices.scatter_(1, selected_experts, un_mask)
-
-        ## TODO(jangys): migrate to custom op
-        T = routing_weights.shape[0]
-        range = torch.arange(0, T, dtype=torch.int32).unsqueeze(1) # [T, 1]
-        updates = one_hot_expert_indices * range # [T, E]
-        pos = torch.cumsum(one_hot_expert_indices, dim=0) - one_hot_expert_indices # [T, E]
-        expert_indices = torch.zeros_like(updates, dtype=torch.int32).scatter_(dim=0, index=pos, src=updates)
-        # expert_indices = torch.zeros_like(updates, dtype=torch.int64).scatter_(1, pos, updates).to(dtype=torch.int32)
-
-        return masked_routing_weights, expert_select_count, expert_indices
+        return masked_routing_weights, expert_select_count
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         """ """
@@ -98,8 +85,8 @@ class Qwen3MoeSparseMoeBlock(nn.Module):
 
         # router_logits: (batch * sequence_length, n_experts)
         router_logits = self.gate(hidden_states)
-        masked_routing_weights, expert_select_count, expert_indices = self.get_masked_routing_weights(router_logits)
-        final_hidden_states = self.experts(hidden_states, masked_routing_weights, expert_select_count, expert_indices)
+        masked_routing_weights, expert_select_count = self.get_masked_routing_weights(router_logits)
+        final_hidden_states = self.experts(hidden_states, masked_routing_weights, expert_select_count)
 
         final_hidden_states = final_hidden_states.reshape(batch_size, sequence_length, hidden_dim)
         return final_hidden_states
@@ -123,7 +110,7 @@ class Qwen3MoeMLP(nn.Module):
         self.up_proj.weight.data = torch.stack([expert.up_proj.weight.data for expert in expert_list], dim=0)
         self.down_proj.weight.data = torch.stack([expert.down_proj.weight.data for expert in expert_list], dim=0)
 
-    def forward(self, x, masked_routing_weights, expert_select_count, expert_indices):
+    def forward(self, x, masked_routing_weights, expert_select_count):
         # # masked_routing_weights: (batch * sequence_length, num_experts)
         # # x: (batch * sequence_length, hidden_size)
         # # y: (batch * sequence_length, num_experts * intermediate_size)
@@ -141,6 +128,5 @@ class Qwen3MoeMLP(nn.Module):
             self.down_proj.weight,
             masked_routing_weights,
             expert_select_count, # count for each expert
-            expert_indices, # indices for sparse
             # self.act_fn_name,
         )

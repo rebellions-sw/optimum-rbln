@@ -54,7 +54,6 @@ def custom_moe_glu(
     masked_routing_weight: Tensor,
     # act_fn: str,
     expert_select_count: Tensor,
-    expert_indices: Tensor, # added for sparse
     gate_proj_bias: Optional[Tensor] = None,
     up_proj_bias: Optional[Tensor] = None,
     down_proj_bias: Optional[Tensor] = None,
@@ -72,7 +71,17 @@ def custom_moe_glu(
     Returns:
         Tensor: [batch * seq_len, hidden_size]
     """
-    return torch.empty_like(hidden_states)
+
+    out = torch.zeros_like(hidden_states)
+    expert_cnt = gate_proj_weight.shape[0]
+    for i in range(expert_cnt):
+        gate = torch.nn.functional.linear(hidden_states, gate_proj_weight[i])
+        up = torch.nn.functional.linear(hidden_states, up_proj_weight[i])
+        mul = torch.nn.functional.silu(gate) * up
+        down = torch.nn.functional.linear(mul, down_proj_weight[i])
+        out += down * masked_routing_weight[:, i:i+1]
+
+    return out
 
 
 @custom_moe_glu.register_fake
@@ -84,7 +93,6 @@ def custom_moe_glu_fake(
     masked_routing_weight: Tensor,
     expert_select_count: Tensor,
     # act_fn: ACT_TYPES,
-    expert_indices: Tensor, # added for sparse
     gate_proj_bias: Optional[Tensor] = None,
     up_proj_bias: Optional[Tensor] = None,
     down_proj_bias: Optional[Tensor] = None,

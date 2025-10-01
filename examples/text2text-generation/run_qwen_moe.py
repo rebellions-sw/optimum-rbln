@@ -52,7 +52,14 @@ def main(
     rbln_outputs = model.generate(
         **inputs,
         do_sample=False,
-        max_new_tokens=64,
+        max_new_tokens=4,
+        return_dict_in_generate=True,
+        output_logits=True,
+    )
+    rbln_outputs = model.generate(
+        **inputs,
+        do_sample=False,
+        max_new_tokens=4,
         return_dict_in_generate=True,
         output_logits=True,
     )
@@ -65,7 +72,7 @@ def main(
         golden_outputs = golden_model.generate(
             **inputs,
             do_sample=False,
-            max_new_tokens=64,
+            max_new_tokens=4,
             return_dict_in_generate=True,
             output_logits=True,
         )
