@@ -112,7 +112,7 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
                 ["prefill", "decode"] if DecoderOnlyModelForCausalLM is used.
             logits_to_keep (Optional[int]): The number of logits to keep for the decoder.  If set to 0, the decoder will keep all logits.
                 Defaults to 0 if DecoderOnlyModel is used, 1 if DecoderOnlyModelForCausalLM is used.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If `batch_size` is not a positive integer.

@@ -57,7 +57,6 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     1. Converting pre-trained transformer models to RBLN-optimized format
     2. Handling the compilation process for RBLN devices
     3. Managing inference operations for decoder-only architectures
-
     This class inherits from RBLNModel and implements specific methods required for
     decoder-only architectures.
 
@@ -67,6 +66,8 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         - Subclasses should implement model-specific conversion logic.
         - The class handles RBLN-specific optimizations automatically during compilation
     """
+
+    _tp_support = True
 
     main_input_name = "input_ids"
     auto_model_class = AutoModel
@@ -645,7 +646,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
     1. Converting pre-trained transformer models to RBLN-optimized format
     2. Handling the compilation process for RBLN devices
     3. Managing inference operations for causal language modeling
-
     This class inherits from RBLNModel and implements specific methods required for
     decoder-only architectures and causal language modeling tasks.
 

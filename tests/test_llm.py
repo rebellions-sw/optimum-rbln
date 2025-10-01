@@ -135,7 +135,11 @@ class TestQwen3ForCausalLM(LLMTest.TestLLM):
     EXPECTED_OUTPUT = (
         "יל synd Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz_inventory天河 sanitary中途"
     )
-    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
+    HF_CONFIG_KWARGS = {
+        "num_hidden_layers": 1,
+        "max_position_embeddings": 1024,
+        "revision": "397c180b0ded9c45c33bbce7f88df86bb2d571d4",
+    }
 
 
 class TestQwen3ForCausalLM_UAM(TestQwen3ForCausalLM):
@@ -457,6 +461,24 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
             **self.HF_CONFIG_KWARGS,
         )
 
+    def test_complicate_config(self):
+        rbln_config = {
+            "vision_tower": {
+                "batch_size": 2,
+                "create_runtimes": False,
+            },
+            "language_model": {
+                "batch_size": 2,
+                "create_runtimes": False,
+            },
+        }
+        rbln_class_kwargs = {"rbln_config": rbln_config}
+
+        with pytest.raises(
+            ValueError, match="Parameter conflict for 'batch_size': submodule_config has 2, but kwargs has 1"
+        ):
+            _ = self.RBLN_CLASS.from_pretrained(model_id=self.HF_MODEL_ID, **rbln_class_kwargs)
+
 
 class TestBlip2ForConditionalGeneration(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForVision2Seq
@@ -555,8 +577,10 @@ class TestQwen2VLForConditionalGeneration(LLMTest.TestLLM):
     def setUpClass(cls):
         config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
         vision_config = json.loads(config.vision_config.to_json_string())
+        text_config = json.loads(config.text_config.to_json_string())
+        text_config["num_hidden_layers"] = 1
         vision_config["depth"] = 1  # To make the test faster
-        kwargs = {"vision_config": vision_config}
+        kwargs = {"vision_config": vision_config, "text_config": text_config}
         cls.HF_CONFIG_KWARGS.update(kwargs)
         return super().setUpClass()
 
@@ -598,9 +622,11 @@ class TestQwen2_5_VLForConditionalGeneration(LLMTest.TestLLM):
     def setUpClass(cls):
         config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
         vision_config = json.loads(config.vision_config.to_json_string())
+        text_config = json.loads(config.text_config.to_json_string())
+        text_config["num_hidden_layers"] = 1
         vision_config["depth"] = 8
         vision_config["fullatt_block_indexes"] = [7]
-        kwargs = {"vision_config": vision_config}
+        kwargs = {"vision_config": vision_config, "text_config": text_config}
         cls.HF_CONFIG_KWARGS.update(kwargs)
         return super().setUpClass()
 
@@ -634,6 +660,7 @@ class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
         text_config["sliding_window_pattern"] = 2
         vision_config = json.loads(config.vision_config.to_json_string())
         vision_config["num_hidden_layers"] = 1
+        vision_config["vision_use_head"] = False
         kwargs = {"text_config": text_config, "vision_config": vision_config}
         cls.HF_CONFIG_KWARGS.update(kwargs)
         return super().setUpClass()

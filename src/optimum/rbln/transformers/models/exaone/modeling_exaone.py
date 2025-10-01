@@ -14,11 +14,13 @@
 
 
 import inspect
-from typing import Any, Callable
+from pathlib import Path
+from typing import Any, Callable, Dict, Optional, Union
 
 from transformers import AutoModelForCausalLM
 from transformers.generation.utils import GenerationMixin
 
+from ....configuration_utils import RBLNModelConfig
 from ....utils import logging
 from ..decoderonly import RBLNDecoderOnlyModelForCausalLM
 from .exaone_architecture import ExaoneForCausalLMWrapper
@@ -92,9 +94,45 @@ class RBLNExaoneForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     _supports_cache_class = True
 
     @classmethod
-    def from_pretrained(cls, *args, **kwargs):
-        kwargs.setdefault("trust_remote_code", True)
-        return super().from_pretrained(*args, **kwargs)
+    def from_pretrained(
+        cls,
+        model_id: Union[str, Path],
+        *,
+        export: Optional[bool] = None,
+        rbln_config: Optional[Union[Dict, RBLNModelConfig]] = None,
+        trust_remote_code: Optional[bool] = None,
+        **kwargs: Any,
+    ):
+        """
+        The `from_pretrained()` function is utilized in its standard form as in the HuggingFace transformers library.
+        User can use this function to load a pre-trained model from the HuggingFace library and convert it to a RBLN model to be run on RBLN NPUs.
+
+        Args:
+            model_id (Union[str, Path]): The model id of the pre-trained model to be loaded.
+                It can be downloaded from the HuggingFace model hub or a local path, or a model id of a compiled model using the RBLN Compiler.
+            export (Optional[bool]): A boolean flag to indicate whether the model should be compiled.
+                If None, it will be determined based on the existence of the compiled model files in the model_id.
+            rbln_config (Optional[Union[Dict, RBLNModelConfig]]): Configuration for RBLN model compilation and runtime.
+                This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNExaoneForCausalLMConfig` for EXAONE models).
+                For detailed configuration options, see the specific model's configuration class documentation.
+            trust_remote_code (bool): Whether or not to trust the remote code when loading a model from the Hub.
+            kwargs: Additional keyword arguments. Arguments with the prefix `rbln_` are passed to rbln_config, while the remaining arguments are passed to the HuggingFace library.
+
+        Returns:
+            (RBLNModel): A RBLN model instance ready for inference on RBLN NPU devices.
+        """
+
+        if trust_remote_code is not None:
+            kwargs["trust_remote_code"] = trust_remote_code
+        elif "trust_remote_code" not in kwargs:
+            kwargs["trust_remote_code"] = True
+
+        return super().from_pretrained(
+            model_id=model_id,
+            export=export,
+            rbln_config=rbln_config,
+            **kwargs,
+        )
 
     def __getattr__(self, __name: str) -> Any:
         def redirect(func):
