@@ -26,6 +26,7 @@ from optimum.rbln import (
     RBLNLlamaModel,
     RBLNLlavaForConditionalGeneration,
     RBLNLlavaNextForConditionalGeneration,
+    RBLNLoRAAdapterConfig,
     RBLNMistralForCausalLM,
     RBLNMistralModel,
     RBLNModel,
@@ -55,10 +56,11 @@ RANDOM_INPUT_FEATURES = torch.randint(
 
 class LLMTest:
     class TestLLM(BaseTest.TestModel):
-        _tokenizer = None
         RBLN_AUTO_CLASS = RBLNAutoModelForCausalLM
         DEVICE = None  # Use device to run
         PROMPT = "Who are you?"
+        IS_MULTIMODAL = False
+        HF_CONFIG_KWARGS_PREPROCESSOR = {}
 
         @classmethod
         def setUpClass(cls):
@@ -66,25 +68,36 @@ class LLMTest:
                 cls.HF_CONFIG_KWARGS["torch_dtype"] = "auto"
             super().setUpClass()
 
-        @classmethod
-        def get_tokenizer(cls):
-            if cls._tokenizer is None:
-                cls._tokenizer = AutoTokenizer.from_pretrained(cls.HF_MODEL_ID)
-            return cls._tokenizer
+        def get_tokenizer(self):
+            PreProcessor = AutoProcessor if self.IS_MULTIMODAL else AutoTokenizer
+
+            if getattr(self, "_tokenizer", None) is None:
+                self._tokenizer = PreProcessor.from_pretrained(self.HF_MODEL_ID, **self.HF_CONFIG_KWARGS_PREPROCESSOR)
+            return self._tokenizer
 
         def get_inputs(self):
-            inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt")
+            self.get_tokenizer().pad_token = self.get_tokenizer().eos_token
+            inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt", padding=True)
             if self.model.can_generate():
                 inputs["max_new_tokens"] = 20
                 inputs["do_sample"] = False
+
             return inputs
 
         def postprocess(self, inputs, output):
             input_len = inputs["input_ids"].shape[-1]
-            generated_text = self.get_tokenizer().decode(
-                output[0][input_len:], skip_special_tokens=True, clean_up_tokenization_spaces=True
-            )
-            return generated_text
+            batch_size = inputs["input_ids"].shape[0]
+            generated_texts = []
+            for i in range(batch_size):
+                input_len = inputs["input_ids"][i].shape[-1]
+                generated_text = self.get_tokenizer().decode(
+                    output[i][input_len:], skip_special_tokens=True, clean_up_tokenization_spaces=True
+                )
+                generated_texts.append(generated_text)
+            if batch_size == 1:
+                return generated_texts[0]
+
+            return generated_texts
 
     class TestLLMWithoutLMHead(TestLLM):
         RBLN_AUTO_CLASS = RBLNAutoModel
@@ -165,11 +178,6 @@ class TestLlamaForCausalLM(LLMTest.TestLLM):
     EXPECTED_OUTPUT = "reress makefable R���� noethetsshss rechoolso�"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
 
-    def get_inputs(self):
-        self.get_tokenizer().pad_token = self.get_tokenizer().eos_token
-        inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt")
-        return inputs
-
 
 class TestLlamaModel(LLMTest.TestLLMWithoutLMHead):
     RBLN_CLASS = RBLNLlamaModel
@@ -184,11 +192,6 @@ class TestLlamaForCausalLM_Flash(LLMTest.TestLLM):
     EXPECTED_OUTPUT = "reress makefable R���� noethetsshss rechoolso�"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 8192}
     RBLN_CLASS_KWARGS = {"rbln_config": {"attn_impl": "flash_attn", "kvcache_partition_len": 4096}}
-
-    def get_inputs(self):
-        self.get_tokenizer().pad_token = self.get_tokenizer().eos_token
-        inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt")
-        return inputs
 
 
 class TestLlamaModel_Flash(LLMTest.TestLLMWithoutLMHead):
@@ -206,21 +209,6 @@ class TestLlamaForCausalLM_Multibatch(TestLlamaForCausalLM):
         "resget makeget makeichget makeichualichual#choolchool accngngngng",
     ]
     RBLN_CLASS_KWARGS = {"rbln_config": {"batch_size": 3, "decoder_batch_sizes": [3, 2, 1]}}
-
-    def get_inputs(self):
-        self.get_tokenizer().pad_token = self.get_tokenizer().eos_token
-        inputs = self.get_tokenizer()(self.PROMPT, return_tensors="pt", padding=True)
-        return inputs
-
-    def postprocess(self, inputs, output):
-        generated_texts = []
-        for i in range(inputs["input_ids"].shape[0]):
-            input_len = inputs["input_ids"].shape[-1]
-            generated_text = self.get_tokenizer().decode(
-                output[i][input_len:], skip_special_tokens=True, clean_up_tokenization_spaces=True
-            )
-            generated_texts.append(generated_text)
-        return generated_texts
 
 
 class TestGPT2LMHeadModel(LLMTest.TestLLM):
@@ -372,12 +360,8 @@ class TestLlavaForConditionalGeneration(LLMTest.TestLLM):
     }
     EXPECTED_OUTPUT = "ambbrow nur Well chimCore rapideraine Йye questaédédates Ken neu Airport din termeächstthread"
     HF_CONFIG_KWARGS = {"revision": "8ab8bfc820a6bb9e0f8de1ac715f4b53db44e684"}
-
-    @classmethod
-    def get_tokenizer(cls):
-        if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
-        return cls._tokenizer
+    HF_CONFIG_KWARGS_PREPROCESSOR = {"revision": "8ab8bfc820a6bb9e0f8de1ac715f4b53db44e684"}
+    IS_MULTIMODAL = True
 
     def get_inputs(self):
         tokenizer = self.get_tokenizer()
@@ -422,6 +406,7 @@ class TestPegasusModel(LLMTest.TestLLM):
         )
         inputs["max_new_tokens"] = 20
         inputs["num_beams"] = 1
+        inputs["do_sample"] = False
         return inputs
 
     def postprocess(self, inputs, output):
@@ -443,12 +428,8 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
     }
     EXPECTED_OUTPUT = "entricCallbackavidARYails NotesDAPimil coordFeed Boysaml obligation relay迟 войны sexual Definition Eisen patent"
     HF_CONFIG_KWARGS = {"revision": "21948c1af6a0666e341b6403dc1cbbd5c8900e7d"}
-
-    @classmethod
-    def get_tokenizer(cls):
-        if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
-        return cls._tokenizer
+    HF_CONFIG_KWARGS_PREPROCESSOR = {"revision": "21948c1af6a0666e341b6403dc1cbbd5c8900e7d"}
+    IS_MULTIMODAL = True
 
     # override
     @classmethod
@@ -507,12 +488,7 @@ class TestBlip2ForConditionalGeneration(LLMTest.TestLLM):
     RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True, "max_seq_len": 1024}}}
     EXPECTED_OUTPUT = "::::::::::::::::::::"
     HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
-
-    @classmethod
-    def get_tokenizer(cls):
-        if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
-        return cls._tokenizer
+    IS_MULTIMODAL = True
 
     # override
     @classmethod
@@ -557,12 +533,7 @@ class TestIdefics3ForConditionalGeneration(LLMTest.TestLLM):
     PROMPT = [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": "Describe this image."}]}]
     RBLN_CLASS_KWARGS = {"rbln_config": {"text_model": {"use_inputs_embeds": True, "attn_impl": "flash_attn"}}}
     HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
-
-    @classmethod
-    def get_tokenizer(cls):
-        if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID)
-        return cls._tokenizer
+    IS_MULTIMODAL = True
 
     @classmethod
     def setUpClass(cls):
@@ -615,7 +586,7 @@ class TestQwen2VLForConditionalGeneration(LLMTest.TestLLM):
 
     @classmethod
     def get_tokenizer(cls):
-        if cls._tokenizer is None:
+        if getattr(cls, "_tokenizer", None) is None:
             cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, max_pixels=64 * 14 * 14)
         return cls._tokenizer
 
@@ -643,9 +614,9 @@ class TestQwen2_5_VLForConditionalGeneration(LLMTest.TestLLM):
         }
     }
     EXPECTED_OUTPUT = "讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣"
-    HF_CONFIG_KWARGS = {
-        "num_hidden_layers": 1,
-    }
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1}
+    HF_CONFIG_KWARGS_PREPROCESSOR = {"max_pixels": 64 * 14 * 14}
+    IS_MULTIMODAL = True
 
     @classmethod
     def setUpClass(cls):
@@ -658,12 +629,6 @@ class TestQwen2_5_VLForConditionalGeneration(LLMTest.TestLLM):
         kwargs = {"vision_config": vision_config, "text_config": text_config}
         cls.HF_CONFIG_KWARGS.update(kwargs)
         return super().setUpClass()
-
-    @classmethod
-    def get_tokenizer(cls):
-        if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, max_pixels=64 * 14 * 14)
-        return cls._tokenizer
 
     def get_inputs(self):
         tokenizer = self.get_tokenizer()
@@ -682,16 +647,9 @@ class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
     PROMPT = "<bos><start_of_turn>user\n<start_of_image>Describe the image.<end_of_turn>\n<start_of_turn>model\n'"
     RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True, "kvcache_partition_len": 4096}}}
     EXPECTED_OUTPUT = " அனுமதி Bryson Earlyheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserिल्म हस्ता"
-    HF_CONFIG_KWARGS = {
-        "revision": "e1f4b0516ec80f86ed75c8cb1d45ede72526ad24",
-    }
+    HF_CONFIG_KWARGS = {"revision": "e1f4b0516ec80f86ed75c8cb1d45ede72526ad24"}
+    HF_CONFIG_KWARGS_PREPROCESSOR = {"revision": "e1f4b0516ec80f86ed75c8cb1d45ede72526ad24"}
     TEST_LEVEL = TestLevel.FULL
-
-    @classmethod
-    def get_tokenizer(cls):
-        if cls._tokenizer is None:
-            cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
-        return cls._tokenizer
 
     # override
     @classmethod
@@ -750,6 +708,58 @@ class TestLlamaForCausalLM_fp8(LLMTest.TestLLM):
     def test_generate(self):
         # Cannot generate output with fp8 quantization in ATOM™
         pass
+
+
+class TestMultiLora(LLMTest.TestLLM):
+    EXPECTED_OUTPUT = (
+        " bench_echointon.ThrowaberControlItemRequestMethodtinghamacroufenogerthon657iskyvousantonanzzyois nit"
+    )
+
+    HF_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
+    RBLN_CLASS = RBLNLlamaForCausalLM
+    RBLN_CLASS_KWARGS = {
+        "rbln_config": {
+            "max_seq_len": 1024,
+            "lora_config": {
+                "adapters": [
+                    RBLNLoRAAdapterConfig(1, "nemoguard", "nvidia/llama-3.1-nemoguard-8b-topic-control"),
+                    RBLNLoRAAdapterConfig(2, "abliterated", "reissbaker/llama-3.1-8b-abliterated-lora"),
+                ]
+            },
+        }
+    }
+
+    def get_inputs(self):
+        self.model.set_adapter(["abliterated"])
+        return super().get_inputs()
+
+
+class TestMultiLora_batch(LLMTest.TestLLM):
+    PROMPT = ["Who are you?", "What is the capital of France?"]
+    EXPECTED_OUTPUT = [
+        " bench_echointon Ebonylica Lennonnings909 norgeZN°Eusan倍oloadolen逸 Oaksodian surplusaniem",
+        "/topicпідonus343../../../ Mund  OntReactionaugeammoějal Licht-addon((-antryouflage Hol ",
+    ]
+    HF_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct"
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
+    RBLN_CLASS = RBLNLlamaForCausalLM
+    RBLN_CLASS_KWARGS = {
+        "rbln_config": {
+            "batch_size": 2,
+            "max_seq_len": 1024,
+            "lora_config": {
+                "adapters": [
+                    RBLNLoRAAdapterConfig(1, "nemoguard", "nvidia/llama-3.1-nemoguard-8b-topic-control"),
+                    RBLNLoRAAdapterConfig(2, "abliterated", "reissbaker/llama-3.1-8b-abliterated-lora"),
+                ]
+            },
+        }
+    }
+
+    def get_inputs(self):
+        self.model.set_adapter(["nemoguard", "abliterated"])
+        return super().get_inputs()
 
 
 class TestDisallowedLlama_1(DisallowedTestBase.DisallowedTest):

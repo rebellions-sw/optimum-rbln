@@ -41,6 +41,9 @@ TypeInputInfo = List[Tuple[str, Tuple[int], str]]
 class RBLNSerializableConfigProtocol(Protocol):
     def _prepare_for_serialization(self) -> Dict[str, Any]: ...
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self._prepare_for_serialization()})"
+
 
 @dataclass
 class RBLNCompileConfig:

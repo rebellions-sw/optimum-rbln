@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Literal, Optional, Union, get_args
 from ....configuration_utils import RBLNModelConfig
 from ....utils.logging import get_logger
 from ...utils.rbln_quantization import RBLNQuantizationConfig
+from .configuration_lora import RBLNLoRAConfig
 
 
 logger = get_logger()
@@ -48,6 +49,7 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
         quantization: Optional[Union[Dict[str, Any], RBLNQuantizationConfig]] = None,
+        lora_config: Optional[Union[Dict[str, Any], RBLNLoRAConfig]] = None,
         prefill_chunk_size: Optional[int] = None,
         kvcache_num_blocks: Optional[int] = None,
         decoder_batch_sizes: Optional[List[int]] = None,
@@ -80,6 +82,12 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
             kvcache_block_size (Optional[int]): Sets the size (in number of tokens) of each block
                 in the PagedAttention KV cache. See the "KV Cache Block Size (`kvcache_block_size`)"
                 section below for details.
+            quantization (Optional[Dict[str, Any]]): Configuration dictionary for applying model
+                quantization. Specifies format, etc.
+            lora_config (Optional[Union[Dict[str, Any], RBLNLoRAConfig]]): Configuration for LoRA
+                (Low-Rank Adaptation) settings when using (multi-)LoRA support. Can be provided as
+                a dictionary or an RBLNLoRAConfig instance. When provided, enables LoRA functionality
+                for the model compilation. Defaults to None (no LoRA).
             prefill_chunk_size (Optional[int]): The chunk size used during the prefill phase for
                 processing input sequences. Defaults to 128. Must be a positive integer
                 divisible by 64. Affects prefill performance and memory usage.
@@ -185,6 +193,26 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
         if self.quantization and isinstance(self.quantization, dict):
             self.quantization = RBLNQuantizationConfig(**self.quantization)
 
+        self.lora_config = lora_config
+        if self.lora_config and isinstance(self.lora_config, dict):
+            self.lora_config = RBLNLoRAConfig(**self.lora_config)
+
+        # Validate LoRA adapters if LoRA is enabled
+        if self.lora_config is not None:
+            validation_results = self.lora_config.validate_adapter_weights()
+            failed_adapters = [adapter_id for adapter_id, is_valid in validation_results.items() if not is_valid]
+
+            if failed_adapters:
+                raise ValueError(
+                    f"Some LoRA adapters failed validation and may not be accessible at compile time: {failed_adapters}. "
+                    "Please ensure all adapter weights are available and properly formatted."
+                )
+
+            logger.info(
+                f"LoRA configuration initialized with {self.lora_config.num_adapters} adapters: "
+                f"{self.lora_config.adapter_ids}. Max rank: {self.lora_config.max_lora_rank}"
+            )
+
         self.attn_impl = attn_impl
         self.kvcache_partition_len = kvcache_partition_len
         self.kvcache_block_size = kvcache_block_size
@@ -204,6 +232,7 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
         if self.logits_to_keep is not None and self.logits_to_keep > 1:
             raise NotImplementedError("`logits_to_keep` > 1 is currently not supported for RBLN models.")
 
+        self.decoder_batch_sizes = None
         if "decode" in self.phases:
             self.decoder_batch_sizes = decoder_batch_sizes
             if self.decoder_batch_sizes is None:
@@ -242,6 +271,11 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
     @property
     def use_multiple_decoder(self) -> bool:
         return isinstance(self.decoder_batch_sizes, list) and len(self.decoder_batch_sizes) > 1
+
+    @property
+    def use_lora(self):
+        """Check if LoRA is enabled for this configuration."""
+        return self.lora_config is not None
 
     @property
     def can_generate(self) -> bool:
