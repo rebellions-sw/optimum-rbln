@@ -111,6 +111,7 @@ class Qwen2VL_LanguageModelWrapper(DecoderOnlyWrapper):
         query_position = args.pop(0) if self.phase == "prefill" else None
         position_ids = None
         attention_mask = args.pop(0) if self.rbln_config.use_attention_mask else None
+        lora_int_id = args.pop(0) if self.rbln_config.lora_config else None
         past_key_values = args
 
         if len(past_key_values) != 2 * self.num_hidden_layers:
@@ -137,6 +138,7 @@ class Qwen2VL_LanguageModelWrapper(DecoderOnlyWrapper):
             query_position,
             attention_mask,
             position_ids,
+            lora_int_id,
             past_key_values,
             position_embeds,
         )

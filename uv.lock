@@ -1470,6 +1470,7 @@ tests = [
     { name = "sentencepiece", marker = "sys_platform == 'linux'" },
     { name = "simphile", marker = "sys_platform == 'linux'" },
     { name = "soundfile", marker = "sys_platform == 'linux'" },
+    { name = "torchcodec", marker = "sys_platform == 'linux'" },
 ]
 
 [package.metadata]
@@ -1506,6 +1507,7 @@ tests = [
     { name = "sentencepiece", specifier = ">=0.2.0" },
     { name = "simphile", specifier = ">=1.0.2" },
     { name = "soundfile", specifier = ">=0.13.1" },
+    { name = "torchcodec", specifier = "==0.5" },
 ]
 
 [[package]]
@@ -2653,6 +2655,18 @@ wheels = [
     { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.7.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:a807a6dabb9fe2d69c9cf49671dafdca5b180e62f8e941ce768f962421cdc1db" },
     { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.7.0%2Bcpu-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:7df4a8f2762af73e89f31f9b2de8b07d08ab20a701f5a604c6c1dd23a777b23a" },
     { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.7.0%2Bcpu-cp39-cp39-manylinux_2_28_x86_64.whl", hash = "sha256:586d1a23f10d45ab5fb15483fdccaa987e3103f4f611173b35c1eb3e5776fa92" },
+]
+
+[[package]]
+name = "torchcodec"
+version = "0.5"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/52/6e/d12c327338d9561f2ef0896218f163e6635d4ae1d688f1f28664d729b1ab/torchcodec-0.5-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:f760e49803d7767e10577d3d20d1a9dd0ad5adebd1ecbf7ce941176e8c388f54", size = 1366065 },
+    { url = "https://files.pythonhosted.org/packages/d3/a1/cc2b7f72104cbb5f60f5f277f470e9d0172bffb354f74b0e13a02a241165/torchcodec-0.5-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:00252c2a138c655851cc7aa6e7ad6455c6513c9b2f93cec74563cba83196be8a", size = 1374485 },
+    { url = "https://files.pythonhosted.org/packages/65/38/dfe8aa3a71c4eb0fd930d0c6db661cc65d1f220b2225433207ceb15733c4/torchcodec-0.5-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:310dfbfd7c56e283e0a9bd7cb4b5815cf1251a7bdeb93991b14311a1d144137d", size = 1370294 },
+    { url = "https://files.pythonhosted.org/packages/71/e8/11be3eca1b545af1773277540eeafc5fd5a2b76433063756d6e61ea8bf8d/torchcodec-0.5-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:b9f41237de1b5960e85d3326a345deed86aa1b43d9cf17eac054255758dd41aa", size = 1375368 },
+    { url = "https://files.pythonhosted.org/packages/af/db/94288001b785a0a388aedcdfeb7fce299b13537847ab67fe942b979bd73b/torchcodec-0.5-cp39-cp39-manylinux_2_28_x86_64.whl", hash = "sha256:47273264654747eef3519267e528c8a3855fbf7309b3b2038b42794d397675a8", size = 1366401 },
 ]
 
 [[package]]

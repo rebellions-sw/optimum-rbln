@@ -270,7 +270,7 @@ class RBLNColPaliForRetrieval(RBLNModel):
         """
         if not hasattr(model, "vision_tower"):
             model.vision_tower = model.vlm.vision_tower
-            del model.vlm.vision_tower
+            del model.vlm.model.vision_tower
         model = super().from_model(model, config, rbln_config, model_save_dir, subfolder, **kwargs)
         return model
 
