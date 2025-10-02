@@ -15,6 +15,7 @@ def main(
     tensor_parallel_size: typing.Optional[int] = 1,
     kvcache_partition_len: typing.Optional[int] = None,
     diff: bool = False,
+    n_layers: int = 1
 ):
     if from_transformers:
         model = RBLNQwen3MoeForCausalLM.from_pretrained(
@@ -24,7 +25,7 @@ def main(
             rbln_max_seq_len=max_seq_len,
             rbln_tensor_parallel_size=tensor_parallel_size,
             rbln_kvcache_partition_len=kvcache_partition_len,
-            num_hidden_layers=1,
+            num_hidden_layers=n_layers,
         )
         model.save_pretrained(os.path.basename(model_id))
     else:
@@ -68,7 +69,7 @@ def main(
     logits = rbln_outputs.logits
 
     if diff:
-        golden_model = AutoModelForCausalLM.from_pretrained(model_id, num_hidden_layers=1)
+        golden_model = AutoModelForCausalLM.from_pretrained(model_id, num_hidden_layers=n_layers)
         golden_outputs = golden_model.generate(
             **inputs,
             do_sample=False,
