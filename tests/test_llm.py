@@ -586,7 +586,7 @@ class TestQwen2VLForConditionalGeneration(LLMTest.TestLLM):
 
     @classmethod
     def get_tokenizer(cls):
-        if cls._tokenizer is None:
+        if getattr(cls, "_tokenizer", None) is None:
             cls._tokenizer = AutoProcessor.from_pretrained(cls.HF_MODEL_ID, max_pixels=64 * 14 * 14)
         return cls._tokenizer
 
