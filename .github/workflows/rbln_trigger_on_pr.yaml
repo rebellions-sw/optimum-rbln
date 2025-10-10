@@ -164,11 +164,22 @@ jobs:
           fi
 
           pr_title="${{ github.event.pull_request.title }}"
+          echo "PR Title: $pr_title"
+
           pr_author="${{ github.event.pull_request.user.login }}"
+          echo "PR Author: $pr_author"
+
           pr_link="*PR*\n<${{ github.event.pull_request.html_url }}|#${{ github.event.pull_request.number }} - $pr_title>"
+          echo "PR Link: $pr_link"
+
           commit="*Commit*\n<https://github.com/rebellions-sw/optimum-rbln/commit/${{ github.event.pull_request.head.sha }}|${{ github.event.pull_request.head.sha }}>"
+          echo "Commit Link: $commit"
+
           action_link="*CI Report*\n<https://github.com/rebellions-sw/optimum-rbln/actions/runs/${{ github.run_id }}|View Details>"
+          echo "Action Link: $action_link"
+
           compiler_version="${{ needs.load-version.outputs.compiler_version }}"
+          echo "Compiler Version: $compiler_version"
 
           payload=$(jq -n \
             --arg channel "${{ secrets.SLACK_CI_REPORTER_CHANNEL }}" \
@@ -265,4 +276,6 @@ jobs:
             }
             '
           )
+          echo "Payload: $payload"
+
           curl -X POST -H 'Authorization: Bearer ${{ secrets.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN }}' -H 'Content-type: application/json; charset=utf-8' --data "$payload" https://slack.com/api/chat.postMessage

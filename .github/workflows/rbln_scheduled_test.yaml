@@ -73,7 +73,6 @@ jobs:
           JOBS=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs")
           
-          # Extract failed pytest job names
           # Extract failed pytest job names step by step for readability
           FAILED_JOB_NAMES=$(echo "$JOBS" | jq -r '.jobs[] | select(.conclusion == "failure" and (.name | contains("Pytest"))) | .name')
           # Remove "Pytest (...)" wrapper to get the test name
