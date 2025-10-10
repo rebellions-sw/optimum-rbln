@@ -265,6 +265,5 @@ jobs:
             }
             '
           )
-          echo "Payload: $payload"
 
           curl -X POST -H 'Authorization: Bearer ${{ secrets.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN }}' -H 'Content-type: application/json; charset=utf-8' --data "$payload" https://slack.com/api/chat.postMessage
