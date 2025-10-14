@@ -104,6 +104,7 @@ _import_structure = {
         "RBLNGemma3ForConditionalGeneration",
         "RBLNGemma3ForConditionalGenerationConfig",
     ],
+    "gpt_oss": ["RBLNGptOssForCausalLM", "RBLNGptOssForCausalLMConfig"],
     "gpt2": ["RBLNGPT2LMHeadModel", "RBLNGPT2LMHeadModelConfig", "RBLNGPT2Model", "RBLNGPT2ModelConfig"],
     "idefics3": [
         "RBLNIdefics3VisionTransformer",
@@ -248,6 +249,7 @@ if TYPE_CHECKING:
         RBLNGemma3ForConditionalGenerationConfig,
     )
     from .gpt2 import RBLNGPT2LMHeadModel, RBLNGPT2LMHeadModelConfig, RBLNGPT2Model, RBLNGPT2ModelConfig
+    from .gpt_oss import RBLNGptOssForCausalLM, RBLNGptOssForCausalLMConfig
     from .grounding_dino import (
         RBLNGroundingDinoDecoder,
         RBLNGroundingDinoDecoderConfig,

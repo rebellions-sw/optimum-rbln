@@ -1066,7 +1066,7 @@ class RotaryEmbedding(nn.Module):
         else:
             rope_type = "default"
 
-        inv_freq, attention_scaling = ROPE_INIT_FUNCTIONS[rope_type](config, max_seq_len_cached)
+        inv_freq, attention_scaling = ROPE_INIT_FUNCTIONS[rope_type](config, None, max_seq_len_cached)
         cache_position = torch.arange(0, max_seq_len_cached, dtype=torch.float32)
         cache_position_expanded = cache_position[:, None]
 
