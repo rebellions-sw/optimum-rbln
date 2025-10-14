@@ -33,6 +33,10 @@ if TYPE_CHECKING:
 
 
 class RBLNDiffusionMixinConfig(RBLNModelConfig):
+    """
+    Configuration class for RBLN diffusion pipelines.
+    """
+
     pass
 
 
@@ -54,8 +58,8 @@ class RBLNDiffusionMixin:
         ```
 
     Class Variables:
-        _submodules: List of submodule names that should be compiled (typically ["text_encoder", "unet", "vae"])
-        _optional_submodules: List of submodule names compiled without inheriting RBLNModel (typically ["safety_checker"])
+        - `_submodules`: List of submodule names that should be compiled (typically ["text_encoder", "unet", "vae"])
+        - `_optional_submodules`: List of submodule names compiled without inheriting RBLNModel (typically ["safety_checker"])
 
     Methods:
         from_pretrained: Creates and optionally compiles a model from a pretrained checkpoint
@@ -130,7 +134,7 @@ class RBLNDiffusionMixin:
         cls,
         model_id: str,
         *,
-        export: bool = False,
+        export: bool = None,
         model_save_dir: Optional[PathLike] = None,
         rbln_config: Dict[str, Any] = {},
         lora_ids: Optional[Union[str, List[str]]] = None,
@@ -142,8 +146,8 @@ class RBLNDiffusionMixin:
         Load a pretrained diffusion pipeline from a model checkpoint, with optional compilation for RBLN NPUs.
 
         This method has two distinct operating modes:
-        - When `export=True`: Takes a PyTorch-based diffusion model, compiles it for RBLN NPUs, and loads the compiled model
-        - When `export=False`: Loads an already compiled RBLN model from `model_id` without recompilation
+            - When `export=True`: Takes a PyTorch-based diffusion model, compiles it for RBLN NPUs, and loads the compiled model
+            - When `export=False`: Loads an already compiled RBLN model from `model_id` without recompilation
 
         It supports various diffusion pipelines including Stable Diffusion, Kandinsky, ControlNet, and other diffusers-based models.
 
@@ -170,7 +174,7 @@ class RBLNDiffusionMixin:
                 Names of specific LoRA weight files to load, corresponding to lora_ids. Only used when `export=True`.
             lora_scales:
                 Scaling factor(s) to apply to the LoRA adapter(s). Only used when `export=True`.
-            **kwargs:
+            kwargs:
                 Additional arguments to pass to the underlying diffusion pipeline constructor or the
                 RBLN compilation process. These may include parameters specific to individual submodules
                 or the particular diffusion pipeline being used.
@@ -180,6 +184,20 @@ class RBLNDiffusionMixin:
                 The returned object is an instance of the class that called this method, inheriting from RBLNDiffusionMixin.
         """
         rbln_config, kwargs = cls.get_rbln_config_class().initialize_from_kwargs(rbln_config, **kwargs)
+
+        if export is None:
+            export = any(
+                not RBLNModel._is_compiled(
+                    model_id,
+                    token=kwargs.get("token"),
+                    revision=kwargs.get("revision"),
+                    force_download=kwargs.get("force_download", False),
+                    cache_dir=kwargs.get("cache_dir"),
+                    subfolder=submodule_name,
+                    local_files_only=kwargs.get("local_files_only", False),
+                )
+                for submodule_name in cls._submodules
+            )
 
         if export:
             # keep submodules if user passed any of them.
