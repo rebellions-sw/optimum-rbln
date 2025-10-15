@@ -102,9 +102,9 @@ def custom_moe_glu_fake(
     up_proj_bias: Optional[Tensor] = None,
     down_proj_bias: Optional[Tensor] = None,
 
-    gate_proj_scale: Optional[Tensor] = None,
-    up_proj_scale: Optional[Tensor] = None,
-    down_proj_bias: Optional[Tensor] = None,
+    # gate_proj_scale: Optional[Tensor] = None,
+    # up_proj_scale: Optional[Tensor] = None,
+    # down_proj_bias: Optional[Tensor] = None,
 
 ) -> Tensor:
     return torch.empty_like(hidden_states)
