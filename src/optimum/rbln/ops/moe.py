@@ -62,10 +62,15 @@ def custom_moe_glu(
     Customized MoE GLU operation.
 
     Expected tensor shapes:
-    - hidden_states: [batch *seq_len, hidden_size]
-    - gate_proj_weight: [hidden_size, num_experts * intermediate_size]
-    - up_proj_weight: [hidden_size, num_experts * intermediate_size]
-    - down_proj_weight: [num_experts * intermediate_size, hidden_size]
+    - hidden_states: [batch*seq_len, hidden_size]
+    - gate_proj_weight: [num_experts, hidden_size, intermediate_size]
+    - up_proj_weight: [num_experts, hidden_size, intermediate_size]
+    - down_proj_weight: [num_experts, intermediate_size, hidden_size]
+
+    - gate_proj_bias: [num_experts, intermediate_size]
+    - up_proj_bias: [num_experts, intermediate_size]
+    - down_proj_bias: [num_experts, hidden_size]
+
     - masked_routing_weight: [batch * seq_len, num_experts]
 
     Returns:
@@ -96,6 +101,11 @@ def custom_moe_glu_fake(
     gate_proj_bias: Optional[Tensor] = None,
     up_proj_bias: Optional[Tensor] = None,
     down_proj_bias: Optional[Tensor] = None,
+
+    gate_proj_scale: Optional[Tensor] = None,
+    up_proj_scale: Optional[Tensor] = None,
+    down_proj_bias: Optional[Tensor] = None,
+
 ) -> Tensor:
     return torch.empty_like(hidden_states)
 
