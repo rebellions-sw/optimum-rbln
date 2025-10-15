@@ -26,10 +26,7 @@ from transformers.models.gemma3.modeling_gemma3 import Gemma3TextScaledWordEmbed
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ...modeling_outputs import RBLNDecoderOnlyOutput
-<<<<<<< HEAD
-=======
 from ...utils.rbln_runtime_wrapper import LoopProcessor
->>>>>>> origin/main
 from ..decoderonly.decoderonly_runtime_utils import RBLNPageTableManager
 from ..decoderonly.modeling_decoderonly import (
     RBLNDecoderOnlyModelForCausalLM,
@@ -43,11 +40,6 @@ if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, Gemma3ForConditionalGeneration
 
 
-<<<<<<< HEAD
-class LoopVisionTower:
-    def __init__(self, vision_tower: RBLNModel) -> None:
-        self.vision_tower = vision_tower
-=======
 class LoopVisionTower(LoopProcessor):
     def __init__(self, vision_tower: "RBLNModel"):
         super().__init__(model=vision_tower)
@@ -59,7 +51,6 @@ class LoopVisionTower(LoopProcessor):
         pixel_values_item = pixel_values[index : index + 1]
         out_buffer = [tensor[index : index + 1] for tensor in kwargs["out"]]
         return ([pixel_values_item], {"out": out_buffer})
->>>>>>> origin/main
 
     def _process_outputs(self, outputs: list, **kwargs) -> "BaseModelOutputWithPooling":
         output = kwargs["out"]

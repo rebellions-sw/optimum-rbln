@@ -27,10 +27,11 @@
 # limitations under the License.
 
 import math
-from typing import Optional, Tuple
+from typing import Optional
 
 import torch
 from transformers import PretrainedConfig
+
 
 def _compute_default_rope_parameters(
     config: Optional[PretrainedConfig] = None,
@@ -317,6 +318,7 @@ def _compute_llama3_parameters(
     inv_freq_llama = torch.where(is_medium_freq, smoothed_inv_freq, inv_freq_llama)
 
     return inv_freq_llama, attention_factor
+
 
 # This maps the "rope_type" string field in rope config to the corresponding function to compute the RoPE parameters
 # from the model config. You can append new {'rope_type': callable} pairs to this dictionary to enable custom RoPE

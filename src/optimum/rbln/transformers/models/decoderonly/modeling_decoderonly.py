@@ -638,26 +638,26 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
 class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGenerationMixin):
     """
-    A base class for decoder-only transformer models optimized for causal language modeling tasks on RBLN devices.
-    This class serves as the foundation for various decoder-only architectures like GPT, LLaMA, etc.
+        A base class for decoder-only transformer models optimized for causal language modeling tasks on RBLN devices.
+        This class serves as the foundation for various decoder-only architectures like GPT, LLaMA, etc.
 
-    The class provides core functionality for:
+        The class provides core functionality for:
 
-    1. Converting pre-trained transformer models to RBLN-optimized format
-    2. Handling the compilation process for RBLN devices
-    3. Managing inference operations for causal language modeling
-<<<<<<< HEAD
+        1. Converting pre-trained transformer models to RBLN-optimized format
+        2. Handling the compilation process for RBLN devices
+        3. Managing inference operations for causal language modeling
+    <<<<<<< HEAD
 
-=======
->>>>>>> origin/main
-    This class inherits from RBLNModel and implements specific methods required for
-    decoder-only architectures and causal language modeling tasks.
+    =======
+    >>>>>>> origin/main
+        This class inherits from RBLNModel and implements specific methods required for
+        decoder-only architectures and causal language modeling tasks.
 
-    Note:
-        - This class is designed to be subclassed by specific model implementations
-          (e.g., RBLNLlamaForCausalLM, RBLNGPT2LMHeadModel)
-        - Subclasses should implement model-specific conversion logic.
-        - The class handles RBLN-specific optimizations automatically during compilation
+        Note:
+            - This class is designed to be subclassed by specific model implementations
+              (e.g., RBLNLlamaForCausalLM, RBLNGPT2LMHeadModel)
+            - Subclasses should implement model-specific conversion logic.
+            - The class handles RBLN-specific optimizations automatically during compilation
     """
 
     auto_model_class = AutoModelForCausalLM

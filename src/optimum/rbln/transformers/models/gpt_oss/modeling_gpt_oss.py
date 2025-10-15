@@ -92,5 +92,5 @@ class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             if model_config.layer_types[i] == "sliding_attention":
                 sliding_window_layers.append(i)
         rbln_config.sliding_window_layers = sliding_window_layers
-        
+
         return rbln_config

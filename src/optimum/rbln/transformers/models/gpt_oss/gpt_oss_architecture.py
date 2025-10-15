@@ -12,36 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-from torch import nn
-from transformers.activations import ACT2FN
-import torch.nn.functional as F
 
-from ..decoderonly.decoderonly_architecture import DecoderOnlyAttention, DecoderOnlyLayer, DecoderOnlyWrapper
+import torch
+import torch.nn.functional as F
+from torch import nn
+
+from ..decoderonly.decoderonly_architecture import DecoderOnlyLayer, DecoderOnlyWrapper
 
 
 class RBLNGptOssWrapper(DecoderOnlyWrapper):
     def get_rbln_layer_class(self):
         return RBLNGptOssLayer
-
-    def get_rbln_attn_class(self):
-        return RBLNGptOssAttention
-
-
-class RBLNGptOssAttention(DecoderOnlyAttention):
-    def __post_init__(self):
-        self.q_proj = self._original_mod.q_proj
-        self.k_proj = self._original_mod.k_proj
-        self.v_proj = self._original_mod.v_proj
-        self.o_proj = self._original_mod.o_proj
-        self.q_norm = self._original_mod.q_norm
-        self.k_norm = self._original_mod.k_norm
-
-
-class RBLNGptOssLayer(DecoderOnlyLayer):
-    def __init__(self, layer, self_attn: "DecoderOnlyAttention"):
-        super().__init__(layer, self_attn)
-        self.mlp = RBLNGptOssMLP(self.mlp)
 
 
 class RBLNGptOssTopKRouter(nn.Module):
@@ -50,12 +31,12 @@ class RBLNGptOssTopKRouter(nn.Module):
         self.top_k = model.top_k
         self.num_experts = model.num_experts
         self.hidden_dim = model.hidden_dim
-        self.weight = nn.Parameter(torch.empty(self.num_experts, self.hidden_dim))
-        self.bias = nn.Parameter(torch.empty(self.num_experts))
-    
+        self.weight = model.weight.to(torch.float32)  # thkim fix.
+        self.bias = model.bias.to(torch.float32)  # thkim fix.
+
     def forward(self, hidden_states):
         hidden_states = hidden_states.reshape(-1, self.hidden_dim)
-        router_logits = F.linear(hidden_states, self.weight, self.bias)  # (seq_len, num_experts)    
+        router_logits = F.linear(hidden_states, self.weight, self.bias)  # (seq_len, num_experts)
         routing_weights = torch.nn.functional.softmax(router_logits, dim=1, dtype=torch.float)
 
         # selected_experts: (batch * sequence_length, top_k)
@@ -73,13 +54,6 @@ class RBLNGptOssTopKRouter(nn.Module):
 
         return masked_routing_weights, expert_select_count
 
-class RBLNGptOssExperts(nn.Module):
-    def __init__(self, model):
-        super().__init__()
-        self.experts = model.experts
-    
-    def forward(self, hidden_states, router_indices, router_scores):
-        return self.experts(hidden_states, router_indices, router_scores)
 
 class RBLNGptOssExperts(nn.Module):
     def __init__(self, model):
@@ -88,20 +62,22 @@ class RBLNGptOssExperts(nn.Module):
         self.num_experts = model.num_experts
         self.hidden_size = model.hidden_size
         self.expert_dim = model.expert_dim
-        self.gate_up_proj = model.gate_up_proj
-        self.gate_up_proj_bias = model.gate_up_proj_bias
-        self.down_proj = model.down_proj
-        self.down_proj_bias = model.down_proj_bias
-        self.alpha = model.alpha # 1.702
-        self.limit = model.limit # 7.0
-    
+
+        self.gate_up_proj = model.gate_up_proj.to(torch.float32)  # thkim fix.
+        self.gate_up_proj_bias = model.gate_up_proj_bias.to(torch.float32)
+        self.down_proj = model.down_proj.to(torch.float32)
+        self.down_proj_bias = model.down_proj_bias.to(torch.float32)
+        self.alpha = model.alpha  # 1.702
+        self.limit = model.limit  # 7.0
+
     def forward(self, hidden_states: torch.Tensor, router_indices=None, routing_weights=None) -> torch.Tensor:
         batch_size = hidden_states.shape[0]
         hidden_states = hidden_states.reshape(-1, self.hidden_size)  # (num_tokens, hidden_size)
         num_experts = routing_weights.shape[1]
-        
+
         hidden_states = hidden_states.repeat(num_experts, 1)
         hidden_states = hidden_states.view(num_experts, -1, self.hidden_size)
+
         gate_up = torch.bmm(hidden_states, self.gate_up_proj) + self.gate_up_proj_bias[..., None, :]
         gate, up = gate_up[..., ::2], gate_up[..., 1::2]
         gate = gate.clamp(min=None, max=self.limit)
@@ -112,8 +88,9 @@ class RBLNGptOssExperts(nn.Module):
         next_states = next_states.view(num_experts, batch_size, -1, self.hidden_size)
         next_states = next_states * routing_weights.transpose(0, 1).view(num_experts, batch_size, -1)[..., None]
         next_states = next_states.sum(dim=0)
-        
+
         return next_states
+
 
 class RBLNGptOssMLP(nn.Module):
     def __init__(self, model):
@@ -124,4 +101,9 @@ class RBLNGptOssMLP(nn.Module):
     def forward(self, hidden_states):
         router_scores, router_indices = self.router(hidden_states)  # (num_experts, seq_len)
         routed_out = self.experts(hidden_states, router_indices=router_indices, routing_weights=router_scores)
-        return routed_out, router_scores
+        return routed_out  # , router_scores
+
+
+class RBLNGptOssLayer(DecoderOnlyLayer):
+    def get_mlp(self) -> nn.Module:
+        return RBLNGptOssMLP(self._original_mod.mlp)

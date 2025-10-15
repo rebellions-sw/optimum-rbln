@@ -177,11 +177,11 @@ def get_quantized_model(
         local_files_only=local_files_only,
     )
 
-<<<<<<< HEAD
-    # 2. Update linear layers based on the quantization config
-    update_layers_to_quantize(model, rbln_quantization)
+    # load safetensors files into memory
+    safetensors = [load_file(safetensor_file) for safetensor_file in safetensor_files]
 
-    # 3. Load weights into model parameters
+    # get the dtype of the model from the first safetensor file
+    torch_dtype = get_state_dict_dtype(safetensors[0])
 
     config = AutoConfig.from_pretrained(
         model_id,
@@ -202,11 +202,11 @@ def get_quantized_model(
     # Load weights into the model
     load_weights_from_files(model, safetensors, rbln_quantization)
 
->>>>>>> origin/main
     return model
 
 
 def load_weight_files(
+    model_id: str,
     use_auth_token: Optional[Union[bool, str]] = None,
     revision: Optional[str] = None,
     cache_dir: Optional[str] = None,
@@ -415,11 +415,11 @@ def load_weights_from_files(
     loaded_kv_scale = False
     loaded_weight_scale = False
 
-<<<<<<< HEAD
-    for safetensor_file in safetensor_files:
-        file_data = load_file(safetensor_file)
-
+    for safetensor in safetensors:
         # Normalize all (key, tensor) pairs to the internal schema
+        normalized_items = canonicalize_checkpoint_items(
+            model=model,
+            items=safetensor.items(),
             rbln_quantization=rbln_quantization,
         )
 
@@ -432,11 +432,11 @@ def load_weights_from_files(
             if key.endswith("k_scale") or key.endswith("v_scale"):
                 loaded_kv_scale = True
 
->>>>>>> origin/main
             # Copy into parameters or buffers
             if key in model_params:
                 # Ensure dtype compatibility
                 if model_params[key].dtype != value.dtype:
+                    value = value.to(model_params[key].dtype)
                 model_params[key].data.copy_(value)
             elif key in model_buffers:
                 if model_buffers[key].dtype != value.dtype:

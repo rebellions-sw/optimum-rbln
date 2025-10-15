@@ -38,10 +38,12 @@ class Qwen3MoeAttention(DecoderOnlyAttention):
 
 
 class Qwen3MoeLayer(DecoderOnlyLayer):
-    def __init__(self, layer, self_attn: "DecoderOnlyAttention"):
-        super().__init__(layer, self_attn)
-        if self.mlp.__class__.__name__ == "Qwen3MoeSparseMoeBlock":
-            self.mlp = Qwen3MoeSparseMoeBlock(self.mlp)
+    def get_mlp(self) -> nn.Module:
+        return (
+            Qwen3MoeSparseMoeBlock(self._original_mod.mlp)
+            if self._original_mod.mlp.__class__.__name__ == "Qwen3MoeSparseMoeBlock"
+            else self._original_mod.mlp
+        )
 
 
 class Qwen3MoeSparseMoeBlock(nn.Module):
@@ -127,6 +129,6 @@ class Qwen3MoeMLP(nn.Module):
             self.up_proj.weight,
             self.down_proj.weight,
             masked_routing_weights,
-            expert_select_count, # count for each expert
+            expert_select_count,  # count for each expert
             # self.act_fn_name,
         )

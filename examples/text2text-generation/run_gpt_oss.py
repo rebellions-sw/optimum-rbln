@@ -2,7 +2,7 @@ import os
 import typing
 
 import fire
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoTokenizer, GptOssForCausalLM
 
 from optimum.rbln import RBLNGptOssForCausalLM
 
@@ -15,7 +15,7 @@ def main(
     tensor_parallel_size: typing.Optional[int] = 1,
     kvcache_partition_len: typing.Optional[int] = None,
     diff: bool = False,
-    n_layers: int = 2
+    n_layers: int = 2,
 ):
     if from_transformers:
         model = RBLNGptOssForCausalLM.from_pretrained(
@@ -26,6 +26,7 @@ def main(
             rbln_tensor_parallel_size=tensor_parallel_size,
             rbln_kvcache_partition_len=kvcache_partition_len,
             num_hidden_layers=n_layers,
+            dtype="float32",
         )
         model.save_pretrained(os.path.basename(model_id))
     else:
@@ -57,19 +58,12 @@ def main(
         return_dict_in_generate=True,
         output_logits=True,
     )
-    rbln_outputs = model.generate(
-        **inputs,
-        do_sample=False,
-        max_new_tokens=4,
-        return_dict_in_generate=True,
-        output_logits=True,
-    )
 
     output_sequence = rbln_outputs.sequences
     logits = rbln_outputs.logits
 
     if diff:
-        golden_model = AutoModelForCausalLM.from_pretrained(model_id, num_hidden_layers=n_layers)
+        golden_model = GptOssForCausalLM.from_pretrained(model_id, num_hidden_layers=n_layers)
         golden_outputs = golden_model.generate(
             **inputs,
             do_sample=False,
@@ -97,6 +91,7 @@ def main(
 
     if diff:
         from scipy import stats
+
         for i, (r, g) in enumerate(zip(logits, golden_logits)):
             print(
                 f"step {i} : {stats.pearsonr(r.detach().numpy().reshape(-1), g.detach().numpy().reshape(-1)).statistic}"
