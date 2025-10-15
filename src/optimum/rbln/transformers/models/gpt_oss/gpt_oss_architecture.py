@@ -13,16 +13,28 @@
 # limitations under the License.
 
 
+from typing import Optional
+
 import torch
 import torch.nn.functional as F
 from torch import nn
 
-from ..decoderonly.decoderonly_architecture import DecoderOnlyLayer, DecoderOnlyWrapper
+from ..decoderonly.configuration_decoderonly import RBLNLoRAConfig
+from ..decoderonly.decoderonly_architecture import DecoderOnlyAttention, DecoderOnlyLayer, DecoderOnlyWrapper
 
 
 class RBLNGptOssWrapper(DecoderOnlyWrapper):
     def get_rbln_layer_class(self):
         return RBLNGptOssLayer
+
+
+class RBLNGptOssLayer(DecoderOnlyLayer):
+    def __init__(self, layer, self_attn: DecoderOnlyAttention, lora_config: Optional[RBLNLoRAConfig] = None):
+        super().__init__(layer, self_attn, lora_config)
+        self.mlp = RBLNGptOssMLP(layer.mlp)
+
+    def get_mlp(self) -> nn.Module:
+        return self.mlp
 
 
 class RBLNGptOssTopKRouter(nn.Module):
@@ -31,10 +43,18 @@ class RBLNGptOssTopKRouter(nn.Module):
         self.top_k = model.top_k
         self.num_experts = model.num_experts
         self.hidden_dim = model.hidden_dim
-        self.weight = model.weight.to(torch.float32)  # thkim fix.
-        self.bias = model.bias.to(torch.float32)  # thkim fix.
+        self.weight = model.weight
+        self.bias = model.bias
 
     def forward(self, hidden_states):
+        hidden_states = hidden_states.reshape(-1, self.hidden_dim)
+        router_logits = F.linear(hidden_states, self.weight, self.bias)  # (seq_len, num_experts)
+        router_top_value, router_indices = torch.topk(router_logits, self.top_k, dim=-1)  # (seq_len, top_k)
+        router_top_value = torch.nn.functional.softmax(router_top_value, dim=1, dtype=router_top_value.dtype)
+        router_scores = torch.zeros_like(router_logits).scatter_(1, router_indices, router_top_value)
+
+        return router_scores, router_indices
+
         hidden_states = hidden_states.reshape(-1, self.hidden_dim)
         router_logits = F.linear(hidden_states, self.weight, self.bias)  # (seq_len, num_experts)
         routing_weights = torch.nn.functional.softmax(router_logits, dim=1, dtype=torch.float)
@@ -63,10 +83,10 @@ class RBLNGptOssExperts(nn.Module):
         self.hidden_size = model.hidden_size
         self.expert_dim = model.expert_dim
 
-        self.gate_up_proj = model.gate_up_proj.to(torch.float32)  # thkim fix.
-        self.gate_up_proj_bias = model.gate_up_proj_bias.to(torch.float32)
-        self.down_proj = model.down_proj.to(torch.float32)
-        self.down_proj_bias = model.down_proj_bias.to(torch.float32)
+        self.gate_up_proj = model.gate_up_proj
+        self.gate_up_proj_bias = model.gate_up_proj_bias
+        self.down_proj = model.down_proj
+        self.down_proj_bias = model.down_proj_bias
         self.alpha = model.alpha  # 1.702
         self.limit = model.limit  # 7.0
 
@@ -95,6 +115,7 @@ class RBLNGptOssExperts(nn.Module):
 class RBLNGptOssMLP(nn.Module):
     def __init__(self, model):
         super().__init__()
+        self._original_mod = model
         self.router = RBLNGptOssTopKRouter(model.router)
         self.experts = RBLNGptOssExperts(model.experts)
 
@@ -102,8 +123,3 @@ class RBLNGptOssMLP(nn.Module):
         router_scores, router_indices = self.router(hidden_states)  # (num_experts, seq_len)
         routed_out = self.experts(hidden_states, router_indices=router_indices, routing_weights=router_scores)
         return routed_out  # , router_scores
-
-
-class RBLNGptOssLayer(DecoderOnlyLayer):
-    def get_mlp(self) -> nn.Module:
-        return RBLNGptOssMLP(self._original_mod.mlp)

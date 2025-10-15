@@ -103,7 +103,6 @@ class LLMTest:
         RBLN_AUTO_CLASS = RBLNAutoModel
 
 
-
 class TestMistralForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNMistralForCausalLM
     HF_MODEL_ID = "openaccess-ai-collective/tiny-mistral"
@@ -179,6 +178,7 @@ class TestLlamaForCausalLM(LLMTest.TestLLM):
     EXPECTED_OUTPUT = "reress makefable R���� noethetsshss rechoolso�"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
 
+
 class TestLlamaModel(LLMTest.TestLLMWithoutLMHead):
     RBLN_CLASS = RBLNLlamaModel
     HF_MODEL_ID = "afmck/testing-llama-tiny"
@@ -192,6 +192,7 @@ class TestLlamaForCausalLM_Flash(LLMTest.TestLLM):
     EXPECTED_OUTPUT = "reress makefable R���� noethetsshss rechoolso�"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 8192}
     RBLN_CLASS_KWARGS = {"rbln_config": {"attn_impl": "flash_attn", "kvcache_partition_len": 4096}}
+
 
 class TestLlamaModel_Flash(LLMTest.TestLLMWithoutLMHead):
     RBLN_CLASS = RBLNLlamaModel

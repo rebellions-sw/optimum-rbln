@@ -12,11 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Optional
+
 import torch
 from torch import nn
 from transformers.activations import ACT2FN
 
-from ..decoderonly.decoderonly_architecture import DecoderOnlyLayer, DecoderOnlyWrapper
+from ..decoderonly.configuration_decoderonly import RBLNLoRAConfig
+from ..decoderonly.decoderonly_architecture import DecoderOnlyAttention, DecoderOnlyLayer, DecoderOnlyWrapper
 
 
 class QWEN2MoeWrapper(DecoderOnlyWrapper):
@@ -25,12 +28,16 @@ class QWEN2MoeWrapper(DecoderOnlyWrapper):
 
 
 class Qwen2MoeLayer(DecoderOnlyLayer):
-    def get_mlp(self) -> nn.Module:
-        return (
+    def __init__(self, layer, self_attn: DecoderOnlyAttention, lora_config: Optional[RBLNLoRAConfig] = None):
+        super().__init__(layer, self_attn, lora_config)
+        self.mlp = (
             Qwen2MoeSparseMoeBlock(self._original_mod.mlp)
             if self._original_mod.mlp.__class__.__name__ == "Qwen2MoeSparseMoeBlock"
             else self._original_mod.mlp
         )
+
+    def get_mlp(self) -> nn.Module:
+        return self.mlp
 
 
 class Qwen2MoeSparseMoeBlock(nn.Module):
