@@ -16,6 +16,7 @@ from optimum.rbln import (
     RBLNColPaliForRetrieval,
     RBLNDistilBertForQuestionAnswering,
     RBLNDPTForDepthEstimation,
+    RBLNGroundingDinoForObjectDetection,
     RBLNPegasusModel,
     RBLNResNetForImageClassification,
     RBLNRobertaForMaskedLM,
@@ -39,6 +40,7 @@ from optimum.rbln.transformers.models.auto.modeling_auto import (
     RBLNAutoModelForSequenceClassification,
     RBLNAutoModelForSpeechSeq2Seq,
     RBLNAutoModelForTextEncoding,
+    RBLNAutoModelForZeroShotObjectDetection,
 )
 from optimum.rbln.utils.runtime_utils import ContextRblnConfig
 from optimum.rbln.utils.save_utils import maybe_load_preprocessors
@@ -496,6 +498,70 @@ class TestViTForImageClassification(BaseTest.TestModel):
     GENERATION_KWARGS = {
         "pixel_values": torch.randn(1, 3, 224, 224, generator=torch.manual_seed(42)),
     }
+
+
+class TestGroundingDinoModel(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoModelForZeroShotObjectDetection
+    RBLN_CLASS = RBLNGroundingDinoForObjectDetection
+    HF_MODEL_ID = "IDEA-Research/grounding-dino-tiny"
+    GENERATION_KWARGS = {
+        "pixel_values": torch.randn(1, 3, 1333, 1333, generator=torch.manual_seed(42)),
+        "input_ids": torch.randint(low=0, high=50, size=(1, 256), generator=torch.manual_seed(42), dtype=torch.int64),
+    }
+    TEST_LEVEL = TestLevel.FULL
+    RBLN_CLASS_KWARGS = {
+        "rbln_config": {
+            "encoder": {"image_size": (1333, 1333)},
+            "decoder": {"image_size": (1333, 1333)},
+            "backbone": {"image_size": (1333, 1333)},
+            "text_backbone": {
+                "model_input_names": ["input_ids", "attention_mask", "token_type_ids", "position_ids"],
+                "model_input_shapes": [(1, 256), (1, 256, 256), (1, 256), (1, 256)],
+            },
+        }
+    }
+
+    @classmethod
+    def setUpClass(cls):
+        from transformers import GroundingDinoConfig
+
+        config = GroundingDinoConfig.from_pretrained(
+            cls.HF_MODEL_ID,
+            decoder_layers=1,
+            decoder_attention_heads=2,
+            encoder_layers=1,
+            encoder_attention_heads=2,
+            text_config={
+                "num_attention_heads": 2,
+                "num_hidden_layers": 1,
+                "hidden_size": 32,
+            },
+            backbone_config={
+                "attention_probs_dropout_prob": 0.0,
+                "depths": [1, 1, 2, 1],
+                "drop_path_rate": 0.1,
+                "embed_dim": 12,
+                "encoder_stride": 32,
+                "hidden_act": "gelu",
+                "hidden_dropout_prob": 0.0,
+                "hidden_size": 48,
+                "image_size": 224,
+                "initializer_range": 0.02,
+                "layer_norm_eps": 1e-05,
+                "mlp_ratio": 4.0,
+                "num_channels": 3,
+                "num_heads": [1, 2, 3, 4],
+                "num_layers": 4,
+                "out_features": ["stage2", "stage3", "stage4"],
+                "out_indices": [2, 3, 4],
+                "patch_size": 4,
+                "stage_names": ["stem", "stage1", "stage2", "stage3", "stage4"],
+                "window_size": 7,
+            },
+        )
+        cls.HF_CONFIG_KWARGS["config"] = config
+        cls.HF_CONFIG_KWARGS["ignore_mismatched_sizes"] = True
+        return super().setUpClass()
 
 
 if __name__ == "__main__":

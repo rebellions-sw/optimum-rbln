@@ -23,13 +23,15 @@ from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     Qwen2_5_VisionPatchEmbed,
     Qwen2_5_VisionRotaryEmbedding,
     Qwen2_5_VisionTransformerPretrainedModel,
+    Qwen2_5_VLModel,
     Qwen2_5_VLRotaryEmbedding,
 )
 
 from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyForCausalLMOutput, RBLNDecoderOnlyModelForCausalLM
+from ...modeling_outputs import RBLNDecoderOnlyOutput
+from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM
 from .configuration_qwen2_5_vl import (
     RBLNQwen2_5_VisionTransformerPretrainedModelConfig,
     RBLNQwen2_5_VLForConditionalGenerationConfig,
@@ -371,6 +373,8 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         ```
     """
 
+    _supports_non_fp32 = False
+
     auto_model_class = AutoModelForVision2Seq
     _rbln_submodules = [
         {"name": "visual"},
@@ -387,6 +391,14 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
 
     def can_generate(self):
         return True
+
+    @classmethod
+    def get_pytorch_model(cls, *args, **kwargs):
+        model = super().get_pytorch_model(*args, **kwargs)
+        model.model.lm_head = model.lm_head
+        model.lm_head = None
+        del model.lm_head
+        return model
 
     @classmethod
     def update_kwargs(cls, kwargs):
@@ -529,7 +541,8 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             vision_tokens = input_id[0][vision_start_indices + 1]
             image_nums = (vision_tokens == image_token_id).sum()
             video_nums = (vision_tokens == video_token_id).sum()
-            position_ids, rope_deltas = self.get_rope_index(
+            position_ids, rope_deltas = Qwen2_5_VLModel.get_rope_index(
+                self,
                 input_id,
                 image_grid_thw[image_idx : image_idx + image_nums] if image_grid_thw is not None else None,
                 video_grid_thw[video_idx : video_idx + video_nums] if video_grid_thw is not None else None,
@@ -585,7 +598,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         generate_idx: Optional[torch.Tensor] = None,
         return_dict: Optional[bool] = None,
         **kwargs,
-    ) -> RBLNDecoderOnlyForCausalLMOutput:
+    ) -> RBLNDecoderOnlyOutput:
         # Prefill
         if cache_position is None:
             inputs_embeds, position_embed, rope_deltas = self._preprocess_prefill(
@@ -627,7 +640,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         if not return_dict:
             return logits, generate_idx
         else:
-            return RBLNDecoderOnlyForCausalLMOutput(
+            return RBLNDecoderOnlyOutput(
                 logits=logits,
                 generate_idx=generate_idx,
             )

@@ -127,10 +127,18 @@ class RBLNTransformerEncoder(RBLNModel):
                 "This is an internal error. Please report it to the developers."
             )
 
-        input_info = [
-            (model_input_name, [rbln_config.batch_size, rbln_config.max_seq_len], cls.rbln_dtype)
-            for model_input_name in rbln_config.model_input_names
-        ]
+        if rbln_config.model_input_shapes is None:
+            input_info = [
+                (model_input_name, [rbln_config.batch_size, rbln_config.max_seq_len], cls.rbln_dtype)
+                for model_input_name in rbln_config.model_input_names
+            ]
+        else:
+            input_info = [
+                (model_input_name, model_input_shape, cls.rbln_dtype)
+                for model_input_name, model_input_shape in zip(
+                    rbln_config.model_input_names, rbln_config.model_input_shapes
+                )
+            ]
 
         rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
         return rbln_config
@@ -245,6 +253,7 @@ class RBLNModelForAudioClassification(RBLNModel):
 
     A class to convert and run pre-trained transformers based AudioClassification models on RBLN devices.
     It implements the methods to convert a pre-trained transformers AudioClassification model into a RBLN transformer model by:
+
     - transferring the checkpoint weights of the original into an optimized RBLN graph,
     - compiling the resulting graph using the RBLN compiler.
 

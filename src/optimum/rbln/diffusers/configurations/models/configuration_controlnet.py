@@ -42,7 +42,7 @@ class RBLNControlNetModelConfig(RBLNModelConfig):
                 of the VAE input/output images.
             text_model_hidden_size (Optional[int]): Hidden size of the text encoder model used
                 for conditioning.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If batch_size is not a positive integer.

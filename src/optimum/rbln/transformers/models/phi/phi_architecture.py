@@ -56,7 +56,10 @@ class PhiAttention(DecoderOnlyAttention):
         self.qk_layernorm = self._original_mod.qk_layernorm
         self.rotary_ndims = self._original_mod.rotary_ndims
 
-    def projection(self, hidden_states) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def projection(self, hidden_states, lora_int_id) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        if lora_int_id is not None:
+            raise NotImplementedError("LoRA is not supported for PhiAttention")
+
         query_states = self.q_proj(hidden_states)
         key_states = self.k_proj(hidden_states)
         value_states = self.v_proj(hidden_states)
@@ -84,6 +87,7 @@ class PhiLayer(DecoderOnlyLayer):
         cos: Optional[torch.Tensor] = None,
         sin: Optional[torch.Tensor] = None,
         block_tables: Optional[torch.Tensor] = None,
+        lora_int_id: Optional[torch.Tensor] = None,
     ):
         residual = hidden_states
 

@@ -4,6 +4,9 @@ import torch
 from diffusers import ControlNetModel
 
 from optimum.rbln import (
+    RBLNAutoPipelineForImage2Image,
+    # RBLNAutoPipelineForInpainting, FIXME: add inpainting tests
+    RBLNAutoPipelineForText2Image,
     RBLNKandinskyV22CombinedPipeline,
     RBLNKandinskyV22Img2ImgCombinedPipeline,
     RBLNStableDiffusion3Img2ImgPipeline,
@@ -19,6 +22,7 @@ from .test_base import BaseHubTest, BaseTest
 
 
 class TestSDModel(BaseTest.TestModel, BaseHubTest.TestHub):
+    RBLN_AUTO_CLASS = RBLNAutoPipelineForText2Image
     RBLN_CLASS = RBLNStableDiffusionPipeline
     HF_MODEL_ID = "hf-internal-testing/tiny-sd-pipe"
     GENERATION_KWARGS = {
@@ -40,6 +44,7 @@ class TestSDModel(BaseTest.TestModel, BaseHubTest.TestHub):
 
 
 class TestSDModelBatch(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoPipelineForText2Image
     RBLN_CLASS = RBLNStableDiffusionPipeline
     HF_MODEL_ID = "hf-internal-testing/tiny-sd-pipe"
     GENERATION_KWARGS = {
@@ -61,6 +66,7 @@ class TestSDModelBatch(BaseTest.TestModel):
 
 
 class TestSDXLModel(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoPipelineForText2Image
     RBLN_CLASS = RBLNStableDiffusionXLPipeline
     HF_MODEL_ID = "hf-internal-testing/tiny-sdxl-pipe"
     GENERATION_KWARGS = {
@@ -80,6 +86,7 @@ class TestSDXLModel(BaseTest.TestModel):
 
 
 class TestSDImg2ImgModel(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoPipelineForImage2Image
     RBLN_CLASS = RBLNStableDiffusionImg2ImgPipeline
     HF_MODEL_ID = "hf-internal-testing/tiny-sd-pipe"
     GENERATION_KWARGS = {
@@ -105,6 +112,7 @@ class TestSDImg2ImgModel(BaseTest.TestModel):
 
 
 class TestSDControlNetModel(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoPipelineForText2Image
     RBLN_CLASS = RBLNStableDiffusionControlNetPipeline
     HF_MODEL_ID = "hf-internal-testing/tiny-stable-diffusion-torch"
     CONTROLNET_ID = "hf-internal-testing/tiny-controlnet"
@@ -134,6 +142,7 @@ class TestSDControlNetModel(BaseTest.TestModel):
 
 
 class TestSDXLControlNetModel(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoPipelineForText2Image
     RBLN_CLASS = RBLNStableDiffusionXLControlNetPipeline
     HF_MODEL_ID = "hf-internal-testing/tiny-sdxl-pipe"
     CONTROLNET_ID = "hf-internal-testing/tiny-controlnet-sdxl"
@@ -164,6 +173,7 @@ class TestSDXLControlNetModel(BaseTest.TestModel):
 
 
 class TestSD3Model(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoPipelineForText2Image
     RBLN_CLASS = RBLNStableDiffusion3Pipeline
     HF_MODEL_ID = "hf-internal-testing/tiny-sd3-pipe"
     GENERATION_KWARGS = {
@@ -181,6 +191,7 @@ class TestSD3Model(BaseTest.TestModel):
 
 
 class TestSD3Img2ImgModel(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoPipelineForImage2Image
     RBLN_CLASS = RBLNStableDiffusion3Img2ImgPipeline
     HF_MODEL_ID = "hf-internal-testing/tiny-sd3-pipe"
     GENERATION_KWARGS = {
@@ -198,6 +209,7 @@ class TestSD3Img2ImgModel(BaseTest.TestModel):
 
 
 class TestSDMultiControlNetModel(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoPipelineForText2Image
     RBLN_CLASS = RBLNStableDiffusionControlNetPipeline
     HF_MODEL_ID = "hf-internal-testing/tiny-stable-diffusion-torch"
     CONTROLNET_ID = "hf-internal-testing/tiny-controlnet"
@@ -234,6 +246,7 @@ class TestSDMultiControlNetModel(BaseTest.TestModel):
 
 
 class TestKandinskyV22Model(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoPipelineForText2Image
     RBLN_CLASS = RBLNKandinskyV22CombinedPipeline
     HF_MODEL_ID = "hf-internal-testing/tiny-random-kandinsky-v22-decoder"
     GENERATION_KWARGS = {
@@ -268,11 +281,7 @@ class TestKandinskyV22Model(BaseTest.TestModel):
         rbln_class_kwargs_copy = self.RBLN_CLASS_KWARGS.copy()
         rbln_class_kwargs_copy["rbln_config"] = rbln_config
         with self.subTest():
-            _ = self.RBLN_CLASS.from_pretrained(
-                model_id=self.HF_MODEL_ID,
-                export=True,
-                **rbln_class_kwargs_copy,
-            )
+            _ = self.RBLN_CLASS.from_pretrained(model_id=self.HF_MODEL_ID, **rbln_class_kwargs_copy)
         with self.subTest():
             self.assertEqual(_.prior_text_encoder.rbln_config.batch_size, 2)
             self.assertEqual(_.prior_prior.rbln_config.batch_size, 4)
@@ -280,6 +289,7 @@ class TestKandinskyV22Model(BaseTest.TestModel):
 
 
 class TestKandinskyV22Img2ImgModel(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = RBLNAutoPipelineForImage2Image
     RBLN_CLASS = RBLNKandinskyV22Img2ImgCombinedPipeline
     HF_MODEL_ID = "hf-internal-testing/tiny-random-kandinsky-v22-decoder"
 

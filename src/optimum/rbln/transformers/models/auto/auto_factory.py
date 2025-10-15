@@ -14,13 +14,14 @@
 import importlib
 import inspect
 import warnings
-from typing import Type
+from pathlib import Path
+from typing import Any, Dict, Optional, Type, Union
 
-from transformers import AutoConfig, PretrainedConfig
+from transformers import AutoConfig, PretrainedConfig, PreTrainedModel
 from transformers.dynamic_module_utils import get_class_from_dynamic_module
 from transformers.models.auto.auto_factory import _get_model_class
 
-from optimum.rbln.configuration_utils import RBLNAutoConfig
+from optimum.rbln.configuration_utils import RBLNAutoConfig, RBLNModelConfig
 from optimum.rbln.modeling_base import RBLNBaseModel
 from optimum.rbln.utils.model_utils import (
     MODEL_MAPPING,
@@ -43,10 +44,10 @@ class _BaseAutoModelClass:
     @classmethod
     def get_rbln_cls(
         cls,
-        pretrained_model_name_or_path,
-        *args,
-        export=True,
-        **kwargs,
+        pretrained_model_name_or_path: Union[str, Path],
+        *args: Any,
+        export: bool = None,
+        **kwargs: Any,
     ):
         """
         Determine the appropriate RBLN model class based on the given model ID and configuration.
@@ -59,6 +60,20 @@ class _BaseAutoModelClass:
         Returns:
             RBLNBaseModel: The corresponding RBLN model class.
         """
+        if isinstance(pretrained_model_name_or_path, Path):
+            pretrained_model_name_or_path = pretrained_model_name_or_path.as_posix()
+
+        if export is None:
+            export = not RBLNBaseModel._is_compiled(
+                model_id=pretrained_model_name_or_path,
+                token=kwargs.get("token"),
+                revision=kwargs.get("revision"),
+                force_download=kwargs.get("force_download", False),
+                cache_dir=kwargs.get("cache_dir"),
+                subfolder=kwargs.get("subfolder", ""),
+                local_files_only=kwargs.get("local_files_only", False),
+            )
+
         if export:
             hf_model_class = cls.infer_hf_model_class(pretrained_model_name_or_path, **kwargs)
             rbln_class_name = convert_hf_to_rbln_model_name(hf_model_class.__name__)
@@ -85,9 +100,9 @@ class _BaseAutoModelClass:
     @classmethod
     def infer_hf_model_class(
         cls,
-        pretrained_model_name_or_path,
-        *args,
-        **kwargs,
+        pretrained_model_name_or_path: Union[str, Path],
+        *args: Any,
+        **kwargs: Any,
     ):
         """
         Infer the HuggingFace model class based on the configuration or model name.
@@ -140,7 +155,7 @@ class _BaseAutoModelClass:
         return model_class
 
     @classmethod
-    def get_rbln_model_cls_name(cls, pretrained_model_name_or_path, **kwargs):
+    def get_rbln_model_cls_name(cls, pretrained_model_name_or_path: Union[str, Path], **kwargs):
         """
         Retrieve the path to the compiled model directory for a given RBLN model.
 
@@ -163,17 +178,77 @@ class _BaseAutoModelClass:
         return rbln_config.rbln_model_cls_name
 
     @classmethod
-    def from_pretrained(cls, model_id, *args, **kwargs):
-        rbln_cls = cls.get_rbln_cls(model_id, *args, **kwargs)
-        return rbln_cls.from_pretrained(model_id, *args, **kwargs)
+    def from_pretrained(
+        cls,
+        model_id: Union[str, Path],
+        export: bool = None,
+        rbln_config: Optional[Union[Dict, RBLNModelConfig]] = None,
+        **kwargs,
+    ):
+        """
+        Load an RBLN-accelerated model from a pretrained checkpoint or a compiled RBLN artifact.
+
+        This convenience method determines the concrete `RBLN*` model class that matches the
+        underlying HuggingFace architecture and dispatches to that class's
+        `from_pretrained()` implementation. Depending on whether a compiled RBLN folder is
+        detected (or if `export=True` is passed), it will either:
+
+        - Compile from a HuggingFace checkpoint to an RBLN model
+        - Or load an already-compiled RBLN model directory/repository
+
+        Args:
+            model_id:
+                HF repo id or local path. For compiled models, this should point to a directory
+                (optionally under `subfolder`) that contains `*.rbln` files and `rbln_config.json`.
+            export:
+                Force compilation from a HuggingFace checkpoint. When `None`, this is inferred by
+                checking whether compiled artifacts exist at `model_id`.
+            rbln_config:
+                RBLN compilation/runtime configuration. May be provided as a dictionary or as an
+                instance of the specific model's config class (e.g., `RBLNLlamaForCausalLMConfig`).
+            kwargs: Additional keyword arguments.
+                - Arguments prefixed with `rbln_` are forwarded to the RBLN config.
+                - Remaining arguments are forwarded to the HuggingFace loader (e.g., `revision`,
+                  `token`, `trust_remote_code`, `cache_dir`, `subfolder`, `local_files_only`).
+
+        Returns:
+            An instantiated RBLN model ready for inference on RBLN NPUs.
+        """
+        rbln_cls = cls.get_rbln_cls(model_id, export=export, **kwargs)
+        return rbln_cls.from_pretrained(model_id, export=export, rbln_config=rbln_config, **kwargs)
 
     @classmethod
-    def from_model(cls, model, *args, **kwargs):
+    def from_model(
+        cls,
+        model: PreTrainedModel,
+        config: Optional[PretrainedConfig] = None,
+        rbln_config: Optional[Union[RBLNModelConfig, Dict]] = None,
+        **kwargs: Any,
+    ) -> RBLNBaseModel:
+        """
+        Convert and compile an in-memory HuggingFace model into an RBLN model.
+
+        This method resolves the appropriate concrete `RBLN*` class from the input model's class
+        name (e.g., `LlamaForCausalLM` -> `RBLNLlamaForCausalLM`) and then delegates to that
+        class's `from_model()` implementation.
+
+        Args:
+            model: A HuggingFace model instance to convert.
+            config: The configuration object associated with the model.
+            rbln_config:
+                RBLN compilation/runtime configuration. May be provided as a dictionary or as an
+                instance of the specific model's config class.
+            kwargs: Additional keyword arguments.
+                - Arguments prefixed with `rbln_` are forwarded to the RBLN config.
+
+        Returns:
+            An instantiated RBLN model ready for inference on RBLN NPUs.
+        """
         rbln_cls = get_rbln_model_cls(f"RBLN{model.__class__.__name__}")
-        return rbln_cls.from_model(model, *args, **kwargs)
+        return rbln_cls.from_model(model, config=config, rbln_config=rbln_config, **kwargs)
 
     @staticmethod
-    def register(rbln_cls: Type[RBLNBaseModel], exist_ok=False):
+    def register(rbln_cls: Type[RBLNBaseModel], exist_ok: bool = False):
         """
         Register a new RBLN model class.
 

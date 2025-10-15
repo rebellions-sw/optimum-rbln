@@ -123,7 +123,10 @@ class MidmAttention(DecoderOnlyAttention):
         self.split_size = self._original_mod.split_size
         self.num_key_value_heads = self._original_mod.num_heads
 
-    def projection(self, hidden_states) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def projection(self, hidden_states, lora_int_id) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        if lora_int_id is not None:
+            raise NotImplementedError("LoRA is not supported for MidmAttention")
+
         query_states, key_states, value_states = self.c_attn(hidden_states).split(self.split_size, dim=2)
         return query_states, key_states, value_states
 

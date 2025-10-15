@@ -22,6 +22,8 @@ logger = get_logger()
 
 
 class RBLNModelForSeq2SeqLMConfig(RBLNModelConfig):
+    support_paged_attention = None
+
     def __init__(
         self,
         batch_size: Optional[int] = None,
@@ -29,6 +31,8 @@ class RBLNModelForSeq2SeqLMConfig(RBLNModelConfig):
         dec_max_seq_len: Optional[int] = None,
         use_attention_mask: Optional[bool] = None,
         pad_token_id: Optional[int] = None,
+        kvcache_num_blocks: Optional[int] = None,
+        kvcache_block_size: Optional[int] = None,
         **kwargs: Any,
     ):
         """
@@ -38,7 +42,11 @@ class RBLNModelForSeq2SeqLMConfig(RBLNModelConfig):
             dec_max_seq_len (Optional[int]): Maximum sequence length for the decoder.
             use_attention_mask (Optional[bool]): Whether to use attention masks during inference.
             pad_token_id (Optional[int]): The ID of the padding token in the vocabulary.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kvcache_num_blocks (Optional[int]): The total number of blocks to allocate for the
+                PagedAttention KV cache for the SelfAttention. Defaults to batch_size.
+            kvcache_block_size (Optional[int]): Sets the size (in number of tokens) of each block
+                in the PagedAttention KV cache for the SelfAttention. Defaults to dec_max_seq_len.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If batch_size is not a positive integer.
@@ -54,3 +62,12 @@ class RBLNModelForSeq2SeqLMConfig(RBLNModelConfig):
         self.use_attention_mask = use_attention_mask
 
         self.pad_token_id = pad_token_id
+
+        if self.support_paged_attention:
+            self.kvcache_num_blocks = kvcache_num_blocks
+            self.kvcache_block_size = kvcache_block_size
+        else:
+            if kvcache_num_blocks is not None or kvcache_block_size is not None:
+                raise ValueError(
+                    "You cannot set kvcache_num_blocks or kvcache_block_size as paged attention is not supported for the model."
+                )

@@ -34,3 +34,5 @@ class RBLNPegasusForConditionalGenerationConfig(RBLNModelForSeq2SeqLMConfig):
     This configuration class stores the configuration parameters specific to
     RBLN-optimized PEGASUS models for conditional text generation tasks.
     """
+
+    support_paged_attention = True

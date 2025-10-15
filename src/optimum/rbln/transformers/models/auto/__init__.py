@@ -27,4 +27,5 @@ from .modeling_auto import (
     RBLNAutoModelForSpeechSeq2Seq,
     RBLNAutoModelForTextEncoding,
     RBLNAutoModelForVision2Seq,
+    RBLNAutoModelForZeroShotObjectDetection,
 )
