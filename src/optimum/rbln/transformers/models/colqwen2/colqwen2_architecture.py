@@ -232,8 +232,8 @@ class ColQwen2Attention(nn.Module):
         if cos is not None and sin is not None:
             query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
 
-        # key_states = repeat_kv(key_states, self.num_heads // self.num_key_value_heads)
-        # value_states = repeat_kv(value_states, self.num_heads // self.num_key_value_heads)
+        key_states = repeat_kv(key_states, self.num_heads // self.num_key_value_heads)
+        value_states = repeat_kv(value_states, self.num_heads // self.num_key_value_heads)
 
         attn_weights = torch.matmul(query_states, key_states.transpose(3, 4)) * self.scaling
         attn_weights = attn_weights + attention_mask
