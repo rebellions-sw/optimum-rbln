@@ -79,9 +79,7 @@ class RBLNGptOssExperts(nn.Module):
         self.up_proj_scales = model.gate_up_proj_scales[:, 1::2, :]
         self.up_proj_bias = model.gate_up_proj_bias[:, 1::2].reshape(self.num_experts, self.intermediate_size)
 
-        self.down_proj_blocks = model.down_proj_blocks.data.reshape(self.num_experts, self.hidden_size, -1).transpose(
-            1, 2
-        )
+        self.down_proj_blocks = model.down_proj_blocks.data.reshape(self.num_experts, self.hidden_size, -1)
         self.down_proj_scales = model.down_proj_scales.data
         self.down_proj_bias = model.down_proj_bias.data
         self.alpha = model.alpha  # 1.702
