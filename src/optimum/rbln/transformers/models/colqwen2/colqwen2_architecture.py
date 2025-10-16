@@ -232,9 +232,10 @@ class ColQwen2Attention(nn.Module):
         if cos is not None and sin is not None:
             query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
 
-        key_states = repeat_kv(key_states, self.num_heads // self.num_key_value_heads)
-        value_states = repeat_kv(value_states, self.num_heads // self.num_key_value_heads)
+        # key_states = repeat_kv(key_states, self.num_heads // self.num_key_value_heads)
+        # value_states = repeat_kv(value_states, self.num_heads // self.num_key_value_heads)
 
+        # FIXME(seinpark) : broadcast?
         attn_weights = torch.matmul(query_states, key_states.transpose(3, 4)) * self.scaling
         attn_weights = attn_weights + attention_mask
         attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32)
@@ -246,6 +247,9 @@ class ColQwen2Attention(nn.Module):
 
         return attn_output
     
+    
+    
+    # TODO(seinpark) : 그냥 DecoderOnly 를 사용하는걸로!
 class ColQwen2Layer(DecoderOnlyLayer):
     def __init__(self, layer, self_attn):
         super().__init__(layer, self_attn)
