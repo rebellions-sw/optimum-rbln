@@ -144,9 +144,10 @@ class ColQwen2LanguageModelWrapper(DecoderOnlyWrapper):
             position_ids=position_ids,
             rotary_emb=self.rotary_emb,
         )
-        proj = self.embedding_proj_layer(last_hidden_states)
+        # proj = self.embedding_proj_layer(last_hidden_states)
 
-        return proj
+        # return proj
+        return last_hidden_states
 
 class ColQwen2AttentionOp(nn.Module):
     def __init__(self, self_attn):
@@ -304,10 +305,10 @@ class RBLNColQwen2LanguageModel(DecoderOnlyModel):
         else:
             seq_positions = position_ids
 
-        all_hidden_states = () if self.output_hidden_states else None
+        # all_hidden_states = () if self.output_hidden_states else None
         for layer_idx, layer in enumerate(self.layers):
-            if self.output_hidden_states:
-                all_hidden_states += (hidden_states,)
+            # if self.output_hidden_states:
+            #     all_hidden_states += (hidden_states,)
                 
             hidden_states = layer(
                 hidden_states=hidden_states,
@@ -320,7 +321,8 @@ class RBLNColQwen2LanguageModel(DecoderOnlyModel):
 
         hidden_states = self.get_last_layernorm()(hidden_states)
         
-        if self.output_hidden_states:
-                all_hidden_states += (hidden_states,)
+        # if self.output_hidden_states:
+        #         all_hidden_states += (hidden_states,)
 
-        return hidden_states, all_hidden_states
+        # return hidden_states, all_hidden_states
+        return hidden_states
