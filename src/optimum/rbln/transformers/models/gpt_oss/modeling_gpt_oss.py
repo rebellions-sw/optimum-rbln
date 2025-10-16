@@ -12,10 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Optional
+
 from transformers import PretrainedConfig
+from transformers.modeling_utils import PreTrainedModel
 
 from ....utils import logging
-from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyModelForCausalLMConfig
+from ...models.decoderonly import (
+    RBLNDecoderOnlyModelConfig,
+    RBLNDecoderOnlyModelForCausalLM,
+    RBLNDecoderOnlyModelForCausalLMConfig,
+)
 from .gpt_oss_architecture import RBLNGptOssWrapper
 
 
@@ -94,3 +101,42 @@ class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         rbln_config.sliding_window_layers = sliding_window_layers
 
         return rbln_config
+
+    @classmethod
+    def get_pytorch_model(
+        cls, model_id: str, *args, rbln_config: Optional[RBLNDecoderOnlyModelConfig] = None, **kwargs
+    ) -> PreTrainedModel:
+        from safetensors.torch import load_file
+        from transformers import AutoConfig, AutoModelForCausalLM
+        from transformers.integrations.mxfp4 import Mxfp4GptOssExperts
+        from transformers.modeling_utils import no_init_weights
+
+        from ...utils.rbln_quantization import load_weight_files
+
+        def _replace_with_mxfp4_linear(
+            model,
+            config,
+        ):
+            for name, module in model.named_children():
+                if module.__class__.__name__ == "GptOssExperts":
+                    model._modules[name] = Mxfp4GptOssExperts(config)
+                if len(list(module.children())) > 0:
+                    _replace_with_mxfp4_linear(module, config)
+
+        safetensor_files = load_weight_files(model_id)
+        safetensors = [load_file(safetensor_file) for safetensor_file in safetensor_files]
+
+        config = AutoConfig.from_pretrained(model_id)
+
+        with no_init_weights():
+            model = AutoModelForCausalLM.from_config(config)
+
+        _replace_with_mxfp4_linear(model, config)
+
+        state_dict = {}
+        for sd in safetensors[:-1]:
+            state_dict.update(sd)  # 모든 safetensors의 state_dict를 하나로 병합
+
+        model.load_state_dict(state_dict, strict=False)
+
+        return model

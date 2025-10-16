@@ -147,3 +147,68 @@ def custom_moe_ff_fake(
     down_proj_bias: Optional[Tensor] = None,
 ) -> Tensor:
     return torch.empty_like(hidden_states)
+
+
+@torch.library.custom_op(
+    "rbln_custom_ops::custom_moe_glu_mxfp4",
+    mutates_args=(),
+)
+def custom_moe_glu_mxfp4(
+    hidden_states: Tensor,
+    gate_proj_blocks: Tensor,
+    gate_proj_scales: Tensor,
+    gate_proj_bias: Tensor,
+    up_proj_blocks: Tensor,
+    up_proj_scales: Tensor,
+    up_proj_bias: Tensor,
+    down_proj_blocks: Tensor,
+    down_proj_scales: Tensor,
+    down_proj_bias: Tensor,
+    masked_routing_weight: Tensor,
+    expert_select_count: Tensor,
+    alpha: Tensor,
+    limit: Tensor,
+) -> Tensor:
+    """
+    Customized MoE GLU operation.
+
+    Expected tensor shapes:
+    - hidden_states: [batch*seq_len, hidden_size]
+    - gate_proj_blocks: [num_experts, intermediate_size, hidden_size // 2]
+    - gate_proj_scales: [num_experts, intermediate_size, hidden_size // 32]
+    - gate_proj_bias: [num_experts, intermediate_size]
+    - up_proj_blocks: [num_experts, intermediate_size, hidden_size // 2]
+    - up_proj_scales: [num_experts, intermediate_size, hidden_size // 32]
+    - up_proj_bias: [num_experts, intermediate_size]
+    - down_proj_blocks: [num_experts, hidden_size, intermediate_size // 2]
+    - down_proj_scales: [num_experts, hidden_size, intermediate_size // 32]
+    - masked_routing_weight: [batch * seq_len, num_experts]
+    - expert_select_count: [num_experts]
+    - alpha: []
+    - limit: []
+
+    Returns:
+        Tensor: [batch * seq_len, hidden_size]
+    """
+
+    return torch.empty_like(hidden_states)
+
+
+@custom_moe_glu.register_fake
+def custom_moe_glu_mxfp4_fake(
+    hidden_states: Tensor,
+    gate_proj_blocks: Tensor,
+    gate_proj_scales: Tensor,
+    gate_proj_bias: Tensor,
+    up_proj_blocks: Tensor,
+    up_proj_scales: Tensor,
+    up_proj_bias: Tensor,
+    down_proj_blocks: Tensor,
+    down_proj_scales: Tensor,
+    down_proj_bias: Tensor,
+    masked_routing_weight: Tensor,
+    expert_select_count: Tensor,
+    alpha: Tensor,
+    limit: Tensor,
+) -> Tensor:
+    return torch.empty_like(hidden_states)
