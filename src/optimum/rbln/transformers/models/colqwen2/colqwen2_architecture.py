@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, List, Optional, Union
+from typing import TYPE_CHECKING, List, Optional, Union, Tuple
 
 import torch
 import torch.nn as nn
@@ -108,11 +108,11 @@ class ColQwen2LanguageModelWrapper(DecoderOnlyWrapper):
     def convert_to_rbln_class(self, model: PreTrainedModel, max_seq_len: int):
         new_layers = []
         for layer_idx, layer in enumerate(model.language_model.layers):
-            is_sliding = layer_idx in self.rbln_config.sliding_window_layers # support for colqwen2.5
+            # is_sliding = layer_idx in self.rbln_config.sliding_window_layers # support for colqwen2.5
             new_self_attn = self.get_rbln_attn_class()(
                 self.get_attn_layer(layer),
-                self.rbln_config,
-                is_sliding=is_sliding,
+                # self.rbln_config,
+                # is_sliding=is_sliding,
             )
             new_layer = self.get_rbln_layer_class()(layer, new_self_attn)
             new_layers.append(new_layer)
@@ -178,32 +178,42 @@ class ColQwen2AttentionOp(nn.Module):
 
         return attn_output
 
+class ColQwen2Attention(nn.Module):
+    def __init__(self, self_attn):
+        super().__init__()
+        self._original_mod = self_attn
+        self.num_heads = getattr(self._original_mod, "num_heads", None) or getattr(
+            self._original_mod.config, "num_attention_heads"
+        )
+        self.head_dim = self._original_mod.head_dim
+        self.scaling = self.head_dim**-0.5
 
-class ColQwen2Attention(DecoderOnlyAttention):
-    def __init__(
-        self, 
-        self_attn,
-        rbln_config: "RBLNDecoderOnlyModelConfig",
-        is_sliding=False,
-    ):
-        super().__init__(self_attn, rbln_config, is_sliding)
-    
-    def create_attention_op(self):
-        if self.attn_impl == "eager":
-            return ColQwen2AttentionOp(
-                self._original_mod
-            )
+        if hasattr(self._original_mod, "num_key_value_heads"):
+            self.num_key_value_heads = self._original_mod.num_key_value_heads
+        elif hasattr(self._original_mod, "config") and hasattr(self._original_mod.config, "num_key_value_heads"):
+            self.num_key_value_heads = self._original_mod.config.num_key_value_heads
         else:
-            raise NotImplementedError(f"Unknown attention implementation: {self.attn_impl}")
-    
-    def get_attention_op(self):
-        return self.attention
-    
+            self.num_key_value_heads = self.num_heads
+
+        self.__post_init__()
+
+    def __post_init__(self):
+        self.q_proj = self._original_mod.q_proj
+        self.k_proj = self._original_mod.k_proj
+        self.v_proj = self._original_mod.v_proj
+        self.o_proj = self._original_mod.o_proj
+
+    def projection(self, hidden_states) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        query_states = self.q_proj(hidden_states)
+        key_states = self.k_proj(hidden_states)
+        value_states = self.v_proj(hidden_states)
+
+        return query_states, key_states, value_states
+
     def forward(
         self,
         hidden_states: torch.Tensor,
         attention_mask: torch.Tensor,
-        seq_positions: torch.LongTensor,
         cos: Optional[torch.Tensor] = None,
         sin: Optional[torch.Tensor] = None,
     ):
@@ -212,31 +222,29 @@ class ColQwen2Attention(DecoderOnlyAttention):
         query_states, key_states, value_states = self.projection(hidden_states=hidden_states)
 
         query_states = query_states.view(batch_size, query_length, 1, self.num_heads, self.head_dim).transpose(1, 3)
-        key_states = key_states.view(batch_size, query_length, 1, self.num_key_value_heads, self.head_dim).transpose(1, 3)
-        value_states = value_states.view(batch_size, query_length, 1, self.num_key_value_heads, self.head_dim).transpose(
+        key_states = key_states.view(batch_size, query_length, 1, self.num_key_value_heads, self.head_dim).transpose(
             1, 3
         )
-        query_states, key_states = self.apply_rotary_pos_embed(query_states, key_states, cos, sin)
-        
-        if batch_size > 1 and "prefill" in self.phase:
-            raise NotImplementedError(f"batch size should be 1 if prefill phase, but got {batch_size}.")
-        # k_scale, v_scale = self.maybe_get_kvcache_scale()
-        
-        attn_output = self.get_attention_op()(
-            query_states,
-            key_states,
-            value_states,
-            attention_mask,
-            # seq_position=seq_positions,
-            # scale=self.scale,
-            # block_tables=torch.arange(0, seq_positions, device=query_states.device) if self.attn_impl == "flash_attn" else None,
-            # block_size=self.kvcache_block_size,
-            # k_scale=k_scale,
-            # v_scale=v_scale,
-        )
-        attn_outputs = self.o_proj(attn_output)
+        value_states = value_states.view(
+            batch_size, query_length, 1, self.num_key_value_heads, self.head_dim
+        ).transpose(1, 3)
 
-        return attn_outputs
+        if cos is not None and sin is not None:
+            query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
+
+        # key_states = repeat_kv(key_states, self.num_heads // self.num_key_value_heads)
+        # value_states = repeat_kv(value_states, self.num_heads // self.num_key_value_heads)
+
+        attn_weights = torch.matmul(query_states, key_states.transpose(3, 4)) * self.scaling
+        attn_weights = attn_weights + attention_mask
+        attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32)
+        attn_output = torch.matmul(attn_weights, value_states)
+        attn_output = attn_output.transpose(1, 3)
+
+        attn_output = attn_output.reshape(batch_size, query_length, -1)
+        attn_output = self.o_proj(attn_output)
+
+        return attn_output
     
 class ColQwen2Layer(DecoderOnlyLayer):
     def __init__(self, layer, self_attn):
@@ -256,7 +264,7 @@ class ColQwen2Layer(DecoderOnlyLayer):
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
-            seq_positions=seq_positions,
+            # seq_positions=seq_positions,
             cos=cos,
             sin=sin,
         )
