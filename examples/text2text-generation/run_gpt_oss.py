@@ -1,6 +1,7 @@
 import os
 import typing
 
+import torch
 import fire
 from transformers import AutoTokenizer, GptOssForCausalLM
 
@@ -58,7 +59,7 @@ def main(
             rbln_tensor_parallel_size=tensor_parallel_size,
             rbln_kvcache_partition_len=kvcache_partition_len,
             num_hidden_layers=n_layers,
-            dtype="float32",
+            dtype=torch.bfloat16,
         )
         model.save_pretrained(os.path.basename(model_id))
     else:
