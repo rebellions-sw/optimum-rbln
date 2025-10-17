@@ -803,6 +803,7 @@ class DecoderOnlyAttention(nn.Module):
             block_size=self.kvcache_block_size,
             k_scale=k_scale,
             v_scale=v_scale,
+            s_aux=getattr(self, "sinks", None),
         )
 
         # Check if using LoRALinear (which accepts lora_int_id) or standard linear layers
@@ -871,6 +872,7 @@ class AttentionOp(nn.Module):
         block_size: int,
         k_scale: Optional[torch.Tensor] = None,
         v_scale: Optional[torch.Tensor] = None,
+        s_aux: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Compute attention with static shapes and explicit cache management.
 
@@ -887,6 +889,7 @@ class AttentionOp(nn.Module):
             block_size: Block size for paged attention
             k_scale: Scale applied to key
             v_scale: Scale applied to value
+            s_aux: Auxiliary states for attention sinks
 
         Returns:
             Tensor: attention_output: [batch, num_heads, seq_len, head_dim]
@@ -935,6 +938,9 @@ class AttentionOp(nn.Module):
                 raise ValueError(f"Unsupported KVCaches type: {past_key_state.dtype}")
             op_args["k_scale"] = k_scale
             op_args["v_scale"] = v_scale
+
+        if s_aux is not None:
+            op_args["s_aux"] = s_aux
 
         attn_op_name = self.get_attn_op_name()
         attn_op = getattr(torch.ops.rbln_custom_ops, attn_op_name, None)
@@ -998,6 +1004,7 @@ class FlashAttentionOp(AttentionOp):
         block_size,
         k_scale=None,
         v_scale=None,
+        s_aux=None,
     ):
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
         key_state = key_state.unsqueeze(2)
@@ -1044,6 +1051,9 @@ class FlashAttentionOp(AttentionOp):
             op_args["k_scale"] = k_scale
             op_args["v_scale"] = v_scale
 
+        if s_aux is not None:
+            op_args["s_aux"] = s_aux
+
         attn_op_name = self.get_attn_op_name()
         attn_op = getattr(torch.ops.rbln_custom_ops, attn_op_name, None)
         if attn_op is None:
@@ -1080,6 +1090,7 @@ class SlidingWindowAttentionOp(AttentionOp):
         block_size: int,
         k_scale: Optional[torch.Tensor] = None,
         v_scale: Optional[torch.Tensor] = None,
+        s_aux: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         assert self.quantization is None, "Sliding window attention does not support quantization"
         assert k_scale is None and v_scale is None, "Sliding window attention does not support quantization"
@@ -1116,6 +1127,9 @@ class SlidingWindowAttentionOp(AttentionOp):
 
         if self.phase == "prefill" or self.phase == "image_prefill":
             op_args["is_bidirectional"] = self.phase == "image_prefill"  # FIXME, Hard-coded for Gemma3.
+
+        if s_aux is not None:
+            op_args["s_aux"] = s_aux
 
         attn_op_name = self.get_attn_op_name()
         attn_op = getattr(torch.ops.rbln_custom_ops, attn_op_name, None)
