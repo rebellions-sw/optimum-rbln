@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Optional, Union, TYPE_CHECKING
+
 from transformers import PretrainedConfig
 
-from ....utils import logging
 from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM, RBLNDecoderOnlyModelForCausalLMConfig
 from .gpt_oss_architecture import RBLNGptOssWrapper
 
-
-logger = logging.get_logger(__name__)
+if TYPE_CHECKING:
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
+    from transformers import PreTrainedModel
 
 
 class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
@@ -92,5 +94,22 @@ class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             if model_config.layer_types[i] == "sliding_attention":
                 sliding_window_layers.append(i)
         rbln_config.sliding_window_layers = sliding_window_layers
+
+        return rbln_config
+
+    @classmethod
+    def _update_rbln_config(
+        cls,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
+        model: Optional[PreTrainedModel] = None,
+        model_config: Optional[PretrainedConfig] = None,
+        rbln_config: Optional[RBLNDecoderOnlyModelForCausalLMConfig] = None,
+    ) -> RBLNDecoderOnlyModelForCausalLMConfig:
+        rbln_config = super()._update_rbln_config(preprocessors, model, model_config, rbln_config)
+
+        if rbln_config.use_attention_mask:
+            raise ValueError(
+                "use_attention_mask is not supported for GPT-OSS because custom attention does not support attention sink for masked attention"
+            )
 
         return rbln_config
