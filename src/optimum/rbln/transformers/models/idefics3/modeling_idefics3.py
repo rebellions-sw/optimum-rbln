@@ -34,8 +34,8 @@ from transformers.models.idefics3.modeling_idefics3 import Idefics3CausalLMOutpu
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.runtime_utils import RBLNPytorchRuntime
-from ..decoderonly.generation_decoderonly import RBLNDecoderOnlyGenerationMixin
 from ...modeling_outputs import RBLNDecoderOnlyOutput
+from ..decoderonly.generation_decoderonly import RBLNDecoderOnlyGenerationMixin
 
 
 if TYPE_CHECKING:

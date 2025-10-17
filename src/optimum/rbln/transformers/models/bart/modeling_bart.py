@@ -15,14 +15,13 @@
 import inspect
 from typing import Any, Callable
 
-import torch
 from transformers import BartForConditionalGeneration, PreTrainedModel
 
 from ....utils.logging import get_logger
 from ...modeling_generic import RBLNTransformerEncoderForFeatureExtraction
 from ...models.seq2seq import RBLNModelForSeq2SeqLM
 from .bart_architecture import BartWrapper
-from .configuration_bart import RBLNBartForConditionalGenerationConfig, RBLNBartModelConfig
+from .configuration_bart import RBLNBartForConditionalGenerationConfig
 
 
 logger = get_logger()

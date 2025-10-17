@@ -69,13 +69,13 @@ class RBLNTransformerEncoder(RBLNModel):
                 self.model = model
                 self.rbln_config = rbln_config
                 self._forward_signature = inspect.signature(model.forward)
-            
+
             def forward(self, *args, **kwargs):
                 # Disable parameters that are not compatible with RBLN compilation
                 for param_name in self.DISABLED_PARAMS:
                     if param_name in self._forward_signature.parameters:
                         kwargs[param_name] = False
-                
+
                 return self.model(*args, **kwargs)
 
         return TransformerEncoderWrapper(model, rbln_config).eval()

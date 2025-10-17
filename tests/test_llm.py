@@ -6,7 +6,7 @@ import warnings
 import pytest
 import torch
 from PIL import Image
-from transformers import AutoConfig, AutoProcessor, AutoTokenizer, Qwen2ForCausalLM
+from transformers import AutoConfig, AutoProcessor, AutoTokenizer
 
 from optimum.rbln import (
     RBLNAutoModel,
@@ -29,7 +29,6 @@ from optimum.rbln import (
     RBLNLoRAAdapterConfig,
     RBLNMistralForCausalLM,
     RBLNMistralModel,
-    RBLNModel,
     RBLNOPTForCausalLM,
     RBLNOPTModel,
     RBLNPegasusForConditionalGeneration,
