@@ -59,7 +59,7 @@ def main(
             rbln_tensor_parallel_size=tensor_parallel_size,
             rbln_kvcache_partition_len=kvcache_partition_len,
             num_hidden_layers=n_layers,
-            dtype=torch.bfloat16,
+            dtype=torch.float32,
         )
         model.save_pretrained(os.path.basename(model_id))
     else:
