@@ -34,6 +34,7 @@ from transformers.models.idefics3.modeling_idefics3 import Idefics3CausalLMOutpu
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.runtime_utils import RBLNPytorchRuntime
+from ..decoderonly.generation_decoderonly import RBLNDecoderOnlyGenerationMixin
 from ...modeling_outputs import RBLNDecoderOnlyOutput
 
 
@@ -120,9 +121,6 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
                 encoder_outputs = self.encoder(
                     inputs_embeds=hidden_states,
                     attention_mask=patch_attention_mask,
-                    output_attentions=None,
-                    output_hidden_states=None,
-                    return_dict=False,
                 )
                 last_hidden_state = encoder_outputs[0]
                 last_hidden_state = self.post_layernorm(last_hidden_state)
@@ -185,7 +183,7 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
             return BaseModelOutput(last_hidden_state=last_hidden_state)
 
 
-class RBLNIdefics3ForConditionalGeneration(RBLNModel):
+class RBLNIdefics3ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixin):
     """
     RBLNIdefics3ForConditionalGeneration is a multi-modal model that integrates vision and language processing capabilities,
     optimized for RBLN NPUs. It is designed for conditional generation tasks that involve both image and text inputs.
