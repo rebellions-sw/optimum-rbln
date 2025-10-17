@@ -315,6 +315,7 @@ def paged_causal_attn_prefill_fake(
     block_size: int,
     is_bidirectional: bool,
     mask: Optional[Tensor] = None,
+    s_aux: Optional[Tensor] = None,
 ) -> Tensor:
     return torch.empty_like(q)
 
