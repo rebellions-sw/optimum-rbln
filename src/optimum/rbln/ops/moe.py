@@ -84,7 +84,7 @@ def custom_moe_glu(
         up = torch.nn.functional.linear(hidden_states, up_proj_weight[i])
         mul = torch.nn.functional.silu(gate) * up
         down = torch.nn.functional.linear(mul, down_proj_weight[i])
-        out += down * masked_routing_weight[:, i:i+1]
+        out += down * masked_routing_weight[:, i : i + 1]
 
     return out
 

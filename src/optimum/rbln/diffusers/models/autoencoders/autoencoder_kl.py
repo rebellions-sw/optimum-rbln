@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Dict, List, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple, Union
 
 import rebel
 import torch
@@ -214,13 +214,41 @@ class RBLNAutoencoderKL(RBLNModel):
             for compiled_model, device_val in zip(compiled_models, device_vals)
         ]
 
-    def encode(self, x: torch.FloatTensor, return_dict: bool = True, **kwargs) -> torch.FloatTensor:
+    def encode(
+        self, x: torch.FloatTensor, return_dict: bool = True, **kwargs: Dict[str, Any]
+    ) -> Union[torch.FloatTensor, AutoencoderKLOutput]:
+        """
+        Encode an input image into a latent representation.
+
+        Args:
+            x: The input image to encode.
+            return_dict:
+                Whether to return output as a dictionary. Defaults to True.
+            kwargs: Additional arguments to pass to the encoder.
+
+        Returns:
+            The latent representation or AutoencoderKLOutput if return_dict=True
+        """
         posterior = self.encoder.encode(x)
         if not return_dict:
             return (posterior,)
         return AutoencoderKLOutput(latent_dist=posterior)
 
-    def decode(self, z: torch.FloatTensor, return_dict: bool = True, **kwargs) -> torch.FloatTensor:
+    def decode(
+        self, z: torch.FloatTensor, return_dict: bool = True, **kwargs: Dict[str, Any]
+    ) -> Union[torch.FloatTensor, DecoderOutput]:
+        """
+        Decode a latent representation into an image.
+
+        Args:
+            z: The latent representation to decode.
+            return_dict:
+                Whether to return output as a dictionary. Defaults to True.
+            kwargs: Additional arguments to pass to the decoder.
+
+        Returns:
+            The decoded image or DecoderOutput if return_dict=True
+        """
         dec = self.decoder.decode(z)
         if not return_dict:
             return (dec,)

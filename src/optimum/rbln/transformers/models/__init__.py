@@ -85,11 +85,19 @@ _import_structure = {
         "RBLNQwen2_5_VLForConditionalGeneration",
         "RBLNQwen2_5_VLForConditionalGenerationConfig",
     ],
+    "qwen2_vl": [
+        "RBLNQwen2VisionTransformerPretrainedModel",
+        "RBLNQwen2VisionTransformerPretrainedModelConfig",
+        "RBLNQwen2VLForConditionalGeneration",
+        "RBLNQwen2VLForConditionalGenerationConfig",
+    ],
     "decoderonly": [
         "RBLNDecoderOnlyModelConfig",
         "RBLNDecoderOnlyModel",
         "RBLNDecoderOnlyModelForCausalLM",
         "RBLNDecoderOnlyModelForCausalLMConfig",
+        "RBLNLoRAAdapterConfig",
+        "RBLNLoRAConfig",
     ],
     "depth_anything": ["RBLNDepthAnythingForDepthEstimationConfig", "RBLNDepthAnythingForDepthEstimation"],
     "dpt": [
@@ -104,6 +112,7 @@ _import_structure = {
         "RBLNGemma3ForConditionalGeneration",
         "RBLNGemma3ForConditionalGenerationConfig",
     ],
+    "gpt_oss": ["RBLNGptOssForCausalLM", "RBLNGptOssForCausalLMConfig"],
     "gpt2": ["RBLNGPT2LMHeadModel", "RBLNGPT2LMHeadModelConfig", "RBLNGPT2Model", "RBLNGPT2ModelConfig"],
     "idefics3": [
         "RBLNIdefics3VisionTransformer",
@@ -235,6 +244,8 @@ if TYPE_CHECKING:
         RBLNDecoderOnlyModelConfig,
         RBLNDecoderOnlyModelForCausalLM,
         RBLNDecoderOnlyModelForCausalLMConfig,
+        RBLNLoRAAdapterConfig,
+        RBLNLoRAConfig,
     )
     from .depth_anything import RBLNDepthAnythingForDepthEstimation, RBLNDepthAnythingForDepthEstimationConfig
     from .distilbert import RBLNDistilBertForQuestionAnswering, RBLNDistilBertForQuestionAnsweringConfig
@@ -248,6 +259,7 @@ if TYPE_CHECKING:
         RBLNGemma3ForConditionalGenerationConfig,
     )
     from .gpt2 import RBLNGPT2LMHeadModel, RBLNGPT2LMHeadModelConfig, RBLNGPT2Model, RBLNGPT2ModelConfig
+    from .gpt_oss import RBLNGptOssForCausalLM, RBLNGptOssForCausalLMConfig
     from .grounding_dino import (
         RBLNGroundingDinoDecoder,
         RBLNGroundingDinoDecoderConfig,
@@ -284,6 +296,12 @@ if TYPE_CHECKING:
         RBLNQwen2_5_VLForConditionalGenerationConfig,
     )
     from .qwen2_moe import RBLNQwen2MoeForCausalLM, RBLNQwen2MoeForCausalLMConfig
+    from .qwen2_vl import (
+        RBLNQwen2VisionTransformerPretrainedModel,
+        RBLNQwen2VisionTransformerPretrainedModelConfig,
+        RBLNQwen2VLForConditionalGeneration,
+        RBLNQwen2VLForConditionalGenerationConfig,
+    )
     from .qwen3 import RBLNQwen3ForCausalLM, RBLNQwen3ForCausalLMConfig, RBLNQwen3Model, RBLNQwen3ModelConfig
     from .qwen3_moe import RBLNQwen3MoeForCausalLM, RBLNQwen3MoeForCausalLMConfig
     from .resnet import RBLNResNetForImageClassification, RBLNResNetForImageClassificationConfig

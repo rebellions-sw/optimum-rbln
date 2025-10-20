@@ -15,7 +15,7 @@ def main(
     tensor_parallel_size: typing.Optional[int] = 1,
     kvcache_partition_len: typing.Optional[int] = None,
     diff: bool = False,
-    n_layers: int = 1
+    n_layers: int = 1,
 ):
     if from_transformers:
         model = RBLNQwen3MoeForCausalLM.from_pretrained(
@@ -97,6 +97,7 @@ def main(
 
     if diff:
         from scipy import stats
+
         for i, (r, g) in enumerate(zip(logits, golden_logits)):
             print(
                 f"step {i} : {stats.pearsonr(r.detach().numpy().reshape(-1), g.detach().numpy().reshape(-1)).statistic}"

@@ -12,10 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Optional
+
 import torch
 from torch import nn
 from transformers.activations import ACT2FN
 
+from ..decoderonly.configuration_decoderonly import RBLNLoRAConfig
 from ..decoderonly.decoderonly_architecture import DecoderOnlyAttention, DecoderOnlyLayer, DecoderOnlyWrapper
 
 
@@ -25,10 +28,16 @@ class QWEN2MoeWrapper(DecoderOnlyWrapper):
 
 
 class Qwen2MoeLayer(DecoderOnlyLayer):
-    def __init__(self, layer, self_attn: "DecoderOnlyAttention"):
-        super().__init__(layer, self_attn)
-        if self.mlp.__class__.__name__ == "Qwen2MoeSparseMoeBlock":
-            self.mlp = Qwen2MoeSparseMoeBlock(self.mlp)
+    def __init__(self, layer, self_attn: DecoderOnlyAttention, lora_config: Optional[RBLNLoRAConfig] = None):
+        super().__init__(layer, self_attn, lora_config)
+        self.mlp = (
+            Qwen2MoeSparseMoeBlock(self._original_mod.mlp)
+            if self._original_mod.mlp.__class__.__name__ == "Qwen2MoeSparseMoeBlock"
+            else self._original_mod.mlp
+        )
+
+    def get_mlp(self) -> nn.Module:
+        return self.mlp
 
 
 class Qwen2MoeSparseMoeBlock(nn.Module):
@@ -104,13 +113,12 @@ class Qwen2MoeMLP(nn.Module):
         self.down_proj.weight.data = torch.stack([expert.down_proj.weight.data for expert in expert_list], dim=0)
 
     def forward(self, x, masked_routing_weights, expert_select_count):
-
         return torch.ops.rbln_custom_ops.custom_moe_glu(
             x,
             self.gate_proj.weight,
             self.up_proj.weight,
             self.down_proj.weight,
             masked_routing_weights,
-            expert_select_count, # count for each expert
+            expert_select_count,  # count for each expert
             # self.act_fn_name,
         )

@@ -29,7 +29,7 @@ class RBLNPixtralVisionModelConfig(RBLNModelConfig):
         Args:
             max_image_size (Tuple): The size of max input images. A tuple (max_height, max_width)
             batch_size (Optional[int]): The batch size for image processing. Defaults to 1.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If batch_size is not a positive integer.

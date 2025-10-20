@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 import rebel
 import torch
 from rebel.compile_context import CompileContext
-from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, PretrainedConfig, PreTrainedModel
+from transformers import AutoModel, AutoModelForCausalLM, PretrainedConfig, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPast
 from transformers.modeling_utils import no_init_weights
 
@@ -33,7 +33,7 @@ from ...modeling_attention_utils import (
     validate_sliding_window,
 )
 from ...modeling_outputs import RBLNDecoderOnlyOutput
-from ...utils.rbln_quantization import prepare_model_for_quantization
+from ...utils.rbln_quantization import get_quantized_model
 from .configuration_decoderonly import RBLNDecoderOnlyModelConfig, RBLNDecoderOnlyModelForCausalLMConfig
 from .decoderonly_architecture import DecoderOnlyWrapper
 from .decoderonly_runtime_utils import RBLNPageTableManager, RBLNRuntimeModel
@@ -57,7 +57,6 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     1. Converting pre-trained transformer models to RBLN-optimized format
     2. Handling the compilation process for RBLN devices
     3. Managing inference operations for decoder-only architectures
-
     This class inherits from RBLNModel and implements specific methods required for
     decoder-only architectures.
 
@@ -68,10 +67,13 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         - The class handles RBLN-specific optimizations automatically during compilation
     """
 
+    _tp_support = True
+
     main_input_name = "input_ids"
     auto_model_class = AutoModel
     _decoder_wrapper_cls = DecoderOnlyWrapper
     _use_rotary_emb = True
+    _supports_non_fp32 = True
 
     def __post_init__(self, **kwargs):
         if self.rbln_config.use_inputs_embeds:
@@ -86,10 +88,8 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     def setup_runtime(self):
         # Initialize resources to be used across Runtime instances (prefill and decode phases)
         page_table_manager = RBLNPageTableManager(self.rbln_config)
-        dec_attn_mask = torch.zeros(
-            self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=torch.float32
-        )
-        out_buffers = [torch.empty(self.prefill_output_size, dtype=torch.float32, device="cpu")]
+        dec_attn_mask = torch.zeros(self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=self.dtype)
+        out_buffers = [torch.empty(self.prefill_output_size, dtype=self.dtype)]
 
         common_kwargs = {
             "main_input_name": "inputs_embeds" if self.rbln_config.use_inputs_embeds else "input_ids",
@@ -143,35 +143,17 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     ):
         kwargs = cls.update_kwargs(kwargs)
 
-        if config is None:
-            config = AutoConfig.from_pretrained(
-                model_id,
-                use_auth_token=use_auth_token,
-                revision=revision,
-                force_download=force_download,
-                cache_dir=cache_dir,
-                trust_remote_code=trust_remote_code,
-                **kwargs,
-            )
-            if config.torch_dtype == torch.bfloat16:
-                # FIXME: bfloat16 is not supported by rebel-compiler
-                config.torch_dtype = torch.float32
-
-        with no_init_weights():
-            model = cls.auto_model_class.from_config(config)
-
-        model = prepare_model_for_quantization(
-            model,
+        return get_quantized_model(
+            cls.auto_model_class,
             model_id,
-            kwargs.get("num_hidden_layers"),
             use_auth_token=use_auth_token,
             revision=revision,
             cache_dir=cache_dir,
             force_download=force_download,
             local_files_only=local_files_only,
             rbln_quantization=rbln_config.quantization,
+            **kwargs,
         )
-        return model
 
     def __getattr__(self, __name: str) -> Any:
         # Special method to delegate attribute access to the original Huggingface LM class.
@@ -365,7 +347,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
         input_info = []
         if rbln_config.use_inputs_embeds:
-            input_info.append(("inputs_embeds", [batch_size, query_length, hidden_size], "float32"))
+            input_info.append(("inputs_embeds", [batch_size, query_length, hidden_size], rbln_config.torch_dtype))
         else:
             input_info.append(("input_ids", [batch_size, query_length], "int64"))
 
@@ -384,16 +366,19 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
         if rbln_config.use_attention_mask:
             if rbln_config.use_position_ids:
-                input_info.append(("attention_mask", [batch_size, rbln_config.max_seq_len], "float32"))
+                input_info.append(("attention_mask", [batch_size, rbln_config.max_seq_len], rbln_config.torch_dtype))
             else:
                 input_info.append(
-                    ("attention_mask", [batch_size, 1, query_length, rbln_config.max_seq_len], "float32")
+                    ("attention_mask", [batch_size, 1, query_length, rbln_config.max_seq_len], rbln_config.torch_dtype)
                 )
 
         if rbln_config.use_position_ids:
             input_info.append(("position_ids", [batch_size, query_length], "int32"))
 
-        kvcache_dtype = "float32"
+        if rbln_config.use_lora:
+            input_info.append(("lora_int_ids", [batch_size], "int32"))
+
+        kvcache_dtype = rbln_config.torch_dtype
         if rbln_config.quantization and rbln_config.quantization.kv_caches == "fp8":
             kvcache_dtype = "float8_e4m3fn"
 
@@ -653,23 +638,26 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
 class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGenerationMixin):
     """
-    A base class for decoder-only transformer models optimized for causal language modeling tasks on RBLN devices.
-    This class serves as the foundation for various decoder-only architectures like GPT, LLaMA, etc.
+        A base class for decoder-only transformer models optimized for causal language modeling tasks on RBLN devices.
+        This class serves as the foundation for various decoder-only architectures like GPT, LLaMA, etc.
 
-    The class provides core functionality for:
+        The class provides core functionality for:
 
-    1. Converting pre-trained transformer models to RBLN-optimized format
-    2. Handling the compilation process for RBLN devices
-    3. Managing inference operations for causal language modeling
+        1. Converting pre-trained transformer models to RBLN-optimized format
+        2. Handling the compilation process for RBLN devices
+        3. Managing inference operations for causal language modeling
+    <<<<<<< HEAD
 
-    This class inherits from RBLNModel and implements specific methods required for
-    decoder-only architectures and causal language modeling tasks.
+    =======
+    >>>>>>> origin/main
+        This class inherits from RBLNModel and implements specific methods required for
+        decoder-only architectures and causal language modeling tasks.
 
-    Note:
-        - This class is designed to be subclassed by specific model implementations
-          (e.g., RBLNLlamaForCausalLM, RBLNGPT2LMHeadModel)
-        - Subclasses should implement model-specific conversion logic.
-        - The class handles RBLN-specific optimizations automatically during compilation
+        Note:
+            - This class is designed to be subclassed by specific model implementations
+              (e.g., RBLNLlamaForCausalLM, RBLNGPT2LMHeadModel)
+            - Subclasses should implement model-specific conversion logic.
+            - The class handles RBLN-specific optimizations automatically during compilation
     """
 
     auto_model_class = AutoModelForCausalLM
@@ -686,6 +674,53 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
     def use_query_position(cls, use_local_attention: bool, is_prefill: bool = True):
         return is_prefill
 
+    def set_lora_int_ids(self, lora_int_ids: Optional[torch.Tensor]):
+        if isinstance(lora_int_ids, int):
+            lora_int_ids = torch.tensor([lora_int_ids], dtype=torch.int32)
+        elif isinstance(lora_int_ids, list):
+            lora_int_ids = torch.tensor(lora_int_ids, dtype=torch.int32)
+
+        self.lora_int_ids = lora_int_ids
+
+        self.prefill_decoder.lora_int_ids = lora_int_ids
+        if self.rbln_config.can_generate:
+            for batch_size in self.rbln_config.decoder_batch_sizes:
+                self.decoders[batch_size].lora_int_ids = lora_int_ids
+
+    def set_adapter(self, adapter_name: Union[str, List[str]]) -> None:
+        """
+        Sets the active adapter(s) for the model using adapter name(s).
+
+        Args:
+            adapter_name (Union[str, List[str]]): The name(s) of the adapter(s) to be activated.
+                Can be a single adapter name or a list of adapter names.
+
+        Raises:
+            ValueError: If the model is not configured with LoRA or if the adapter name is not found.
+        """
+        if not hasattr(self.rbln_config, "lora_config") or self.rbln_config.lora_config is None:
+            raise ValueError("Model is not configured with LoRA. Cannot set adapter.")
+
+        # Convert single adapter name to list for uniform processing
+        if isinstance(adapter_name, str):
+            adapter_names = [adapter_name]
+        else:
+            adapter_names = adapter_name
+
+        # Validate that all adapter names exist
+        available_adapters = {
+            adapter.lora_name: adapter.lora_int_id for adapter in self.rbln_config.lora_config.adapters
+        }
+        missing_adapters = [name for name in adapter_names if name not in available_adapters]
+        if missing_adapters:
+            raise ValueError(
+                f"Adapter(s) {missing_adapters} not found. Available adapters: {list(available_adapters.keys())}"
+            )
+
+        # Get the adapter IDs and set them
+        lora_int_ids = [available_adapters[name] for name in adapter_names]
+        self.set_lora_int_ids(torch.tensor(lora_int_ids, dtype=torch.int32))
+
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
@@ -696,6 +731,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
         padded_cache_lengths: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
+        lora_int_ids: Optional[torch.Tensor] = None,
         return_dict: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
@@ -703,6 +739,13 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
         # For continuous batching, the prefill stage processes one batch at a time and updates the KV cache using batch_idx.
         # A for-loop ensures synchronization with the HuggingFace generate API.
         # The decoder stage operates as usual, processing inputs in batch mode.
+        if self.rbln_config.use_lora and lora_int_ids is None:
+            if self.lora_int_ids is None:
+                raise ValueError(
+                    "lora_int_id is required when using LoRA. "
+                    "You should call set_lora_int_ids() before forward() or pass lora_int_id to forward()."
+                )
+            lora_int_ids = self.lora_int_ids
 
         # for only use forward
         if generate_idx is None:
@@ -727,6 +770,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
                     cache_position=cache_position,
                     batch_idx=b_idx,
                     token_type_ids=token_type_ids[b_idx : b_idx + 1] if token_type_ids is not None else None,
+                    lora_int_ids=lora_int_ids[b_idx : b_idx + 1] if lora_int_ids is not None else None,
                 )
                 padded_cache_lengths[b_idx] += output.padded_cache_lengths
                 logits.append(output.logits)
@@ -746,6 +790,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
                 position_ids=position_ids if self.rbln_config.use_position_ids else None,
+                lora_int_ids=lora_int_ids,
             ).logits
 
         if not return_dict:

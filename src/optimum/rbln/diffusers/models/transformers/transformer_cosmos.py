@@ -94,7 +94,15 @@ class CosmosTransformer3DModelWrapper(torch.nn.Module):
 
 
 class RBLNCosmosTransformer3DModel(RBLNModel):
-    """RBLN wrapper for the Cosmos Transformer model."""
+    """
+    RBLN implementation of CosmosTransformer3DModel for diffusion models like Cosmos.
+
+    The CosmosTransformer3DModel takes text and/or image embeddings from encoders (like CLIP) and
+    maps them to a shared latent space that guides the diffusion process to generate the desired image.
+
+    This class inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods
+    the library implements for all its models.
+    """
 
     hf_library_name = "diffusers"
     auto_model_class = CosmosTransformer3DModel

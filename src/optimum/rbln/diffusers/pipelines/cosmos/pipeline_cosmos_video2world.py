@@ -89,6 +89,36 @@ class RBLNCosmosVideoToWorldPipeline(RBLNDiffusionMixin, CosmosVideoToWorldPipel
         rbln_config: Dict[str, Any] = {},
         **kwargs: Any,
     ):
+        """
+        Load a pretrained diffusion pipeline from a model checkpoint, with optional compilation for RBLN NPUs.
+
+        This method has two distinct operating modes:
+            - When `export=True`: Takes a PyTorch-based diffusion model, compiles it for RBLN NPUs, and loads the compiled model
+            - When `export=False`: Loads an already compiled RBLN model from `model_id` without recompilation
+
+        It supports various diffusion pipelines including Stable Diffusion, Kandinsky, ControlNet, and other diffusers-based models.
+
+        Args:
+            model_id (`str`):
+                The model ID or path to the pretrained model to load. Can be either:
+
+                - A model ID from the HuggingFace Hub
+                - A local path to a saved model directory
+            export:
+                If True, takes a PyTorch model from `model_id` and compiles it for RBLN NPU execution.
+                If False, loads an already compiled RBLN model from `model_id` without recompilation.
+            safety_checker:
+                Optional custom safety checker to use instead of the default one. Only used when `export=True`.
+            rbln_config:
+                Configuration options for RBLN compilation. Can include settings for specific submodules
+                such as `text_encoder`, `unet`, and `vae`. Configuration can be tailored to the specific
+                pipeline being compiled.
+            kwargs:
+                Additional arguments to pass to the underlying diffusion pipeline constructor or the
+                RBLN compilation process. These may include parameters specific to individual submodules
+                or the particular diffusion pipeline being used.
+        """
+
         rbln_config, kwargs = cls.get_rbln_config_class().initialize_from_kwargs(rbln_config, **kwargs)
         if safety_checker is None and export:
             safety_checker = RBLNCosmosSafetyChecker(rbln_config=rbln_config.safety_checker)
