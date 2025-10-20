@@ -20,12 +20,34 @@ import torch.nn.functional as F
 from torch import nn
 
 from ..decoderonly.configuration_decoderonly import RBLNLoRAConfig
-from ..decoderonly.decoderonly_architecture import DecoderOnlyAttention, DecoderOnlyLayer, DecoderOnlyWrapper
+from ..decoderonly.decoderonly_architecture import (
+    DecoderOnlyAttention,
+    DecoderOnlyLayer,
+    DecoderOnlyWrapper,
+    DecoderOnlyAttention,
+)
 
 
 class RBLNGptOssWrapper(DecoderOnlyWrapper):
+    def get_rbln_attn_class(self):
+        return RBLNGptOssAttention
+
     def get_rbln_layer_class(self):
         return RBLNGptOssLayer
+
+
+class RBLNGptOssAttention(DecoderOnlyAttention):
+    def __post_init__(self):
+        # Initialize LoRA weights if configured, which will replace linear layers
+        if self.lora_config:
+            self._init_lora_weights()
+        else:
+            # Use original linear layers if no LoRA
+            self.q_proj = self._original_mod.q_proj
+            self.k_proj = self._original_mod.k_proj
+            self.v_proj = self._original_mod.v_proj
+            self.o_proj = self._original_mod.o_proj
+            self.sinks = self._original_mod.sinks.data[:, None]
 
 
 class RBLNGptOssLayer(DecoderOnlyLayer):
@@ -98,13 +120,13 @@ class RBLNGptOssExperts(nn.Module):
         hidden_states = hidden_states.repeat(num_experts, 1)
         hidden_states = hidden_states.view(num_experts, -1, self.hidden_size)
 
-        gate_up = torch.bmm(hidden_states, self.gate_up_proj) + self.gate_up_proj_bias[..., None, :]
+        gate_up = torch.bmm(hidden_states, self.gate_up_proj.to(hidden_states.dtype)) + self.gate_up_proj_bias[..., None, :].to(hidden_states.dtype)
         gate, up = gate_up[..., ::2], gate_up[..., 1::2]
         gate = gate.clamp(min=None, max=self.limit)
         up = up.clamp(min=-self.limit, max=self.limit)
         glu = gate * torch.sigmoid(gate * self.alpha)
-        next_states = torch.bmm(((up + 1) * glu), self.down_proj)
-        next_states = next_states + self.down_proj_bias[..., None, :]
+        next_states = torch.bmm(((up + 1.0) * glu), self.down_proj.to(hidden_states.dtype))
+        next_states = next_states + self.down_proj_bias[..., None, :].to(hidden_states.dtype)
         next_states = next_states.view(num_experts, batch_size, -1, self.hidden_size)
         next_states = next_states * routing_weights.transpose(0, 1).view(num_experts, batch_size, -1)[..., None]
         next_states = next_states.sum(dim=0)
