@@ -120,13 +120,13 @@ class RBLNGptOssExperts(nn.Module):
         hidden_states = hidden_states.repeat(num_experts, 1)
         hidden_states = hidden_states.view(num_experts, -1, self.hidden_size)
 
-        gate_up = torch.bmm(hidden_states, self.gate_up_proj) + self.gate_up_proj_bias[..., None, :]
+        gate_up = torch.bmm(hidden_states, self.gate_up_proj.to(hidden_states.dtype)) + self.gate_up_proj_bias[..., None, :].to(hidden_states.dtype)
         gate, up = gate_up[..., ::2], gate_up[..., 1::2]
         gate = gate.clamp(min=None, max=self.limit)
         up = up.clamp(min=-self.limit, max=self.limit)
         glu = gate * torch.sigmoid(gate * self.alpha)
-        next_states = torch.bmm(((up + 1.0) * glu), self.down_proj)
-        next_states = next_states + self.down_proj_bias[..., None, :]
+        next_states = torch.bmm(((up + 1.0) * glu), self.down_proj.to(hidden_states.dtype))
+        next_states = next_states + self.down_proj_bias[..., None, :].to(hidden_states.dtype)
         next_states = next_states.view(num_experts, batch_size, -1, self.hidden_size)
         next_states = next_states * routing_weights.transpose(0, 1).view(num_experts, batch_size, -1)[..., None]
         next_states = next_states.sum(dim=0)
