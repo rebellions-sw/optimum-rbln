@@ -30,6 +30,7 @@ from optimum.rbln.transformers.models.decoderonly.decoderonly_architecture impor
 from optimum.rbln.transformers.models.decoderonly.modeling_decoderonly import (
     set_default_values,
     validate_attention_method,
+    RBLNDecoderOnlyModel
 )
 from optimum.rbln.transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     RBLNQwen2_5_VLForConditionalGeneration,
@@ -54,13 +55,16 @@ if TYPE_CHECKING:
 
 from .colqwen2_architecture import ColQwen2LanguageModelWrapper
 
-class RBLNColQwen2ForRetrieval(RBLNModel):
+# TODO(si): inherit from RBLNDecoderOnlyModel
+class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
     main_input_name = "inputs_embeds"
     auto_model_class = None
     # _rbln_submodules = [
     #     {"name": "visual"},
     # ]                                                       # property로 지원중
+    _rbln_submodules = []
     _rbln_submodule_prefix = "vlm"
+    _decoder_wrapper_cls = ColQwen2LanguageModelWrapper
     _use_rotary_emb = False
 
     def __post_init__(self, **kwargs):
@@ -79,6 +83,17 @@ class RBLNColQwen2ForRetrieval(RBLNModel):
         self.block_tables = torch.arange(
             self.rbln_config.kvcache_num_blocks, dtype=torch.int16
         )
+        
+    def can_generate(self):
+        return False
+    
+    @classmethod
+    def get_pytorch_model(cls, *args, **kwargs):
+        model = super().get_pytorch_model(*args, **kwargs)
+        model.model.lm_head = model.lm_head
+        model.lm_head = None
+        del model.lm_head
+        return model
     
     def _create_embedding_layer(self):
         with no_init_weights():
@@ -90,14 +105,13 @@ class RBLNColQwen2ForRetrieval(RBLNModel):
         return embed_tokens
 
     @classmethod
-    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNColQwen2ForRetrievalConfig):
-        return ColQwen2LanguageModelWrapper(
-            model=model.vlm,
-            embedding_proj_layer=model.embedding_proj_layer,
-            rbln_config=rbln_config,
-            # max_seq_len=max(rbln_config.max_seq_lens),
-            # output_hidden_states=rbln_config.output_hidden_states,
+    def update_kwargs(cls, kwargs):
+        kwargs.update(
+            {
+                "_attn_implementation": "eager",
+            }
         )
+        return super().update_kwargs(kwargs)
     
     @classmethod
     def get_input_info(
@@ -107,14 +121,23 @@ class RBLNColQwen2ForRetrieval(RBLNModel):
         rbln_config: RBLNColQwen2ForRetrievalConfig,
         model_config: PretrainedConfig,
     ):
-        # input_info = super().get_input_info(
-        #     batch_size,
-        #     query_length,
-        #     rbln_config=rbln_config,
-        #     model_config=model_config,
-        # )
-        input_info = {}
+        input_info = super().get_input_info(
+            batch_size,
+            query_length,
+            rbln_config=rbln_config,
+            model_config=model_config.vlm_config.text_config,
+        )
 
+        pos_idx = 3
+        input_info.insert(
+            pos_idx,
+            (
+                "position_emb",
+                [2, batch_size, 1, query_length, model_config.vlm_config.text_config.hidden_size // model_config.vlm_config.text_config.num_attention_heads],
+                "float32",
+            ),
+        )
+        
         # remove query postion from input_info
         query_position = input_info.pop(4)
         assert query_position[0] == "query_position", print(
@@ -166,27 +189,26 @@ class RBLNColQwen2ForRetrieval(RBLNModel):
         if rbln_config.kvcache_num_blocks is None:
             rbln_config.kvcache_num_blocks = max_num_blocks
 
-        # prefill_input_info = cls.get_input_info(
-        #     batch_size=1,
-        #     query_length=rbln_config.prefill_chunk_size,
-        #     rbln_config=rbln_config,
-        #     model_config=model_config,
-        # )
+        input_info = cls.get_input_info(
+            batch_size=1,
+            query_length=rbln_config.prefill_chunk_size,
+            rbln_config=rbln_config,
+            model_config=model_config,
+        )
         
-        # TODO(si) : support output_hidden_states
-        # if rbln_config.output_hidden_states is None:
-        #     rbln_config.output_hidden_states = model_config.vlm_config.text_config.output_hidden_states
+        if rbln_config.output_hidden_states is None:
+            rbln_config.output_hidden_states = model_config.vlm_config.text_config.output_hidden_states
 
-        input_info = [
-            # ("inputs_embeds", [rbln_config.visual.batch_size, rbln_config.max_seq_len, hidden_size], "float32"),
-            # ("attention_mask", [rbln_config.visual.batch_size, rbln_config.max_seq_len], "float32"),
-            # ("position_ids", [rbln_config.visual.batch_size, rbln_config.max_seq_len], "int32"),
+        # input_info = [
+        #     # ("inputs_embeds", [rbln_config.visual.batch_size, rbln_config.max_seq_len, hidden_size], "float32"),
+        #     # ("attention_mask", [rbln_config.visual.batch_size, rbln_config.max_seq_len], "float32"),
+        #     # ("position_ids", [rbln_config.visual.batch_size, rbln_config.max_seq_len], "int32"),
             
-            # FIXME(si) : temp patch
-            ("inputs_embeds", [1, rbln_config.max_seq_len, hidden_size], "float32"),
-            ("attention_mask", [1, rbln_config.max_seq_len], "float32"),
-            ("position_ids", [1, rbln_config.max_seq_len], "int32"),
-        ]
+        #     # FIXME(si) : temp patch
+        #     ("inputs_embeds", [1, rbln_config.max_seq_len, hidden_size], "float32"),
+        #     ("attention_mask", [1, rbln_config.max_seq_len], "float32"),
+        #     ("position_ids", [1, rbln_config.max_seq_len], "int32"),
+        # ]
 
         prefill_compile_config = RBLNCompileConfig(
             compiled_model_name="prefill", input_info=input_info
