@@ -3,7 +3,7 @@ import typing
 
 import torch
 import fire
-from transformers import AutoTokenizer, GptOssForCausalLM
+from transformers import AutoTokenizer, GptOssForCausalLM, AutoConfig
 
 from optimum.rbln import RBLNGptOssForCausalLM
 
@@ -96,11 +96,14 @@ def main(
     logits = rbln_outputs.logits
 
     if diff:
+        config = AutoConfig.from_pretrained(model_id)
+        config.num_hidden_layers= n_layers
+        config.layer_types = ["sliding_attention" for _ in range(n_layers)]
+        config._attn_implementation = "eager"
+
         golden_model = GptOssForCausalLM.from_pretrained(
             model_id,
-            num_hidden_layers=n_layers,
-            _attn_implementation="eager",
-            layer_types = ["sliding_attention" for _ in range(n_layers)]
+            config=config
         )
         golden_outputs = golden_model.generate(
             **inputs,
