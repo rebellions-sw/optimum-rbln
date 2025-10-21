@@ -43,6 +43,11 @@ from transformers import (
 )
 from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     Qwen2_5_VLRotaryEmbedding,
+    Qwen2_5_VLModel,
+)
+from transformers.models.qwen2_vl.modeling_qwen2_vl import (
+    Qwen2VLRotaryEmbedding,
+    Qwen2VLModel,
 )
 
 if TYPE_CHECKING:
@@ -59,33 +64,47 @@ from .colqwen2_architecture import ColQwen2LanguageModelWrapper
 class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
     main_input_name = "inputs_embeds"
     auto_model_class = None
-    # _rbln_submodules = [
-    #     {"name": "visual"},
-    # ]                                                       # property로 지원중
-    _rbln_submodules = []
+    _rbln_submodules = [
+        {"name": "visual"},
+    ]
     _rbln_submodule_prefix = "vlm"
     _decoder_wrapper_cls = ColQwen2LanguageModelWrapper
     _use_rotary_emb = False
 
     def __post_init__(self, **kwargs):
+        self.config = self.config.vlm_config
+        
         artifacts = torch.load(
             self.model_save_dir / self.subfolder / "torch_artifacts.pth",
             weights_only=False,
         )
         self.embed_tokens = self._create_embedding_layer()
         self.embed_tokens.load_state_dict(artifacts["embed_tokens"])
-        
         self.visual = self.rbln_submodules[0]
         self.prefill_runtime = self.model[0]
         
         self.mrope_section = self.config.rope_scaling["mrope_section"]
-        self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config)
+        if self.config.model_type == "qwen2_vl":
+            self.rotary_emb = Qwen2VLRotaryEmbedding(self.config.text_config)
+        else :
+            self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config.text_config)
         self.block_tables = torch.arange(
             self.rbln_config.kvcache_num_blocks, dtype=torch.int16
         )
         
+        
     def can_generate(self):
         return False
+    
+    @classmethod
+    def wrap_model_if_needed(cls, model: PreTrainedModel, rbln_config: "RBLNDecoderOnlyModelConfig"):
+        return cls._decoder_wrapper_cls(model, rbln_config, cls._use_rotary_emb).eval()
+    
+    # @classmethod
+    # @torch.inference_mode()
+    # def get_compiled_model(cls, model: PreTrainedModel, rbln_config: RBLNColQwen2ForRetrievalConfig):
+    #     compiled_models = super().get_compiled_model(model, rbln_config)
+    #     return compiled_models
     
     @classmethod
     def get_pytorch_model(cls, *args, **kwargs):
@@ -139,10 +158,11 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
         )
         
         # remove query postion from input_info
-        query_position = input_info.pop(4)
-        assert query_position[0] == "query_position", print(
-            query_position[0], "is deleted."
-        )
+        if "query_position" in input_info:
+            query_position = input_info.pop(4)
+            assert query_position[0] == "query_position", print(
+                query_position[0], "is deleted."
+            )
         return input_info
 
     @classmethod
@@ -156,7 +176,6 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
         rbln_config: Optional[RBLNColQwen2ForRetrievalConfig] = None,
     ) -> RBLNColQwen2ForRetrievalConfig:
 
-        hidden_size = model_config.vlm_config.text_config.hidden_size
         if rbln_config.max_seq_len is None:
             rbln_config.max_seq_len = getattr(
                 model_config, "max_position_embeddings", None
@@ -199,17 +218,6 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
         if rbln_config.output_hidden_states is None:
             rbln_config.output_hidden_states = model_config.vlm_config.text_config.output_hidden_states
 
-        # input_info = [
-        #     # ("inputs_embeds", [rbln_config.visual.batch_size, rbln_config.max_seq_len, hidden_size], "float32"),
-        #     # ("attention_mask", [rbln_config.visual.batch_size, rbln_config.max_seq_len], "float32"),
-        #     # ("position_ids", [rbln_config.visual.batch_size, rbln_config.max_seq_len], "int32"),
-            
-        #     # FIXME(si) : temp patch
-        #     ("inputs_embeds", [1, rbln_config.max_seq_len, hidden_size], "float32"),
-        #     ("attention_mask", [1, rbln_config.max_seq_len], "float32"),
-        #     ("position_ids", [1, rbln_config.max_seq_len], "int32"),
-        # ]
-
         prefill_compile_config = RBLNCompileConfig(
             compiled_model_name="prefill", input_info=input_info
         )
@@ -239,8 +247,97 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
             ),
         ]
 
+    def _get_position_embeddings(self, hidden_states, position_ids):
+        cos, sin = self.rotary_emb(hidden_states, position_ids)
+        mrope_section = self.mrope_section * 2
+        cos = torch.cat([m[i % 3] for i, m in enumerate(cos.split(mrope_section, dim=-1))], dim=-1).unsqueeze(1)
+        sin = torch.cat([m[i % 3] for i, m in enumerate(sin.split(mrope_section, dim=-1))], dim=-1).unsqueeze(1)
+        return torch.stack([cos, sin])
+    
     def get_rope_index(self, *args, **kwargs):
-        return Qwen2_5_VLForConditionalGeneration.get_rope_index(self, *args, **kwargs)
+        if self.config.model_type == "qwen2_vl":
+            return Qwen2VLModel.get_rope_index(self, *args, **kwargs)
+        else :
+            return Qwen2_5_VLModel.get_rope_index(self, *args, **kwargs)
+
+    def _preprocess_prefill(
+        self,
+        input_ids: torch.LongTensor = None,
+        attention_mask: torch.Tensor = None,
+        pixel_values: torch.Tensor = None,
+        pixel_values_videos: torch.FloatTensor = None,
+        image_grid_thw: torch.LongTensor = None,
+        video_grid_thw: torch.LongTensor = None,
+        second_per_grid_ts: torch.Tensor = None,
+    ):
+        batch_size = input_ids.shape[0]
+        inputs_embeds = self.embed_tokens(input_ids)
+
+        if pixel_values is not None:
+            image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
+            n_image_tokens = (input_ids == self.config.image_token_id).sum().item()
+            n_image_features = image_embeds.shape[0]
+            if n_image_tokens != n_image_features:
+                raise ValueError(
+                    f"Image features and image tokens do not match: tokens: {n_image_tokens}, features {n_image_features}"
+                )
+
+            mask = input_ids == self.config.image_token_id
+            mask_unsqueezed = mask.unsqueeze(-1)
+            mask_expanded = mask_unsqueezed.expand_as(inputs_embeds)
+
+            image_embeds = image_embeds.to(inputs_embeds.device, inputs_embeds.dtype)
+            inputs_embeds = inputs_embeds.masked_scatter(mask_expanded, image_embeds)
+
+        if pixel_values_videos is not None:
+            video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
+            n_video_tokens = (input_ids == self.config.video_token_id).sum().item()
+            n_video_features = video_embeds.shape[0]
+            if n_video_tokens != n_video_features:
+                raise ValueError(
+                    f"Video features and video tokens do not match: tokens: {n_video_tokens}, features {n_video_features}"
+                )
+
+            mask = input_ids == self.config.video_token_id
+            mask_unsqueezed = mask.unsqueeze(-1)
+            mask_expanded = mask_unsqueezed.expand_as(inputs_embeds)
+            inputs_embeds = inputs_embeds.masked_scatter(mask_expanded, video_embeds)
+
+        max_inputs_len = input_ids.shape[1]
+
+        head_dim = getattr(self.config, "head_dim", None) or self.config.hidden_size // self.config.num_attention_heads
+        all_position_embeds = torch.zeros(2, batch_size, 1, max_inputs_len, head_dim)
+        all_rope_deltas = []
+
+        image_token_id = self.config.image_token_id
+        video_token_id = self.config.video_token_id
+        vision_start_token_id = self.config.vision_start_token_id
+        image_idx, video_idx = 0, 0
+
+        for b_idx in range(batch_size):
+            input_id = input_ids[b_idx : b_idx + 1][:, attention_mask[b_idx].bool()]
+            vision_start_indices = torch.argwhere(input_id == vision_start_token_id).squeeze(1)
+            vision_tokens = input_id[0][vision_start_indices + 1]
+            image_nums = (vision_tokens == image_token_id).sum()
+            video_nums = (vision_tokens == video_token_id).sum()
+            position_ids, rope_deltas = self.get_rope_index(
+                # self,
+                input_id,
+                image_grid_thw[image_idx : image_idx + image_nums] if image_grid_thw is not None else None,
+                video_grid_thw[video_idx : video_idx + video_nums] if video_grid_thw is not None else None,
+                # second_per_grid_ts[video_idx : video_idx + video_nums] if second_per_grid_ts is not None else None,
+            )
+            image_idx += image_nums
+            video_idx += video_nums
+
+            position_embed = self._get_position_embeddings(inputs_embeds, position_ids)
+            mask_indices = torch.nonzero(attention_mask[b_idx], as_tuple=True)[0]
+            all_position_embeds[:, b_idx : b_idx + 1].index_copy_(dim=-2, index=mask_indices, source=position_embed)
+            all_rope_deltas.append(rope_deltas)
+
+        rope_deltas = torch.stack(all_rope_deltas)
+
+        return inputs_embeds, all_position_embeds, rope_deltas
 
     def _preprocess_chunked_prefill(
         self, inputs_embeds, attention_mask, position_embed
@@ -354,7 +451,7 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
                 dim=0,
             )
 
-        # Preprocess of Qwen2_5_VLForConditionalGeneration
+        # Preprocess of Qwen2VLForConditionalGeneration
         inputs_embeds, position_embed, _ = self._preprocess_prefill(
             input_ids,
             attention_mask,
@@ -388,7 +485,7 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
     
         # return ColQwen2ForRetrievalOutput(
         #     embeddings=embeddings,
-        #     past_key_values=vlm_output.past_key_values,
+        #     # past_key_values=vlm_output.past_key_values,
         #     hidden_states=vlm_hidden_states,
-        #     attentions=vlm_output.attentions, # need to attentions?
+        #     # attentions=vlm_output.attentions, # need to attentions?
         # )

@@ -76,28 +76,29 @@ def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
 
 class ColQwen2LanguageModelWrapper(DecoderOnlyWrapper):
     def __init__(self, model: PreTrainedModel, rbln_config: "RBLNDecoderOnlyModelConfig", use_rotary_emb: bool = True):
+        model.config = model.config.vlm_config
         super().__init__(model, rbln_config, use_rotary_emb)
-        self.config = model.config
-        self.rbln_config = rbln_config
+        # self.config = model.config
+        # self.rbln_config = rbln_config
 
-        if use_rotary_emb:
-            rotary_embs = self.get_rotary_emb(max_seq_len=rbln_config.max_seq_len)
-            if isinstance(rotary_embs, tuple):
-                self.rotary_emb_global, self.rotary_emb_local = rotary_embs
-            else:
-                self.rotary_emb = rotary_embs
-        else:
-            self.rotary_emb = None
+        # if use_rotary_emb:
+        #     rotary_embs = self.get_rotary_emb(max_seq_len=rbln_config.max_seq_len)
+        #     if isinstance(rotary_embs, tuple):
+        #         self.rotary_emb_global, self.rotary_emb_local = rotary_embs
+        #     else:
+        #         self.rotary_emb = rotary_embs
+        # else:
+        #     self.rotary_emb = None
 
-        if rbln_config.kvcache_partition_len and rbln_config.kvcache_partition_len > rbln_config.max_seq_len:
-            raise ValueError(
-                f"kvcache_partition_len({rbln_config.kvcache_partition_len}) should be lower"
-                f" or equal to max_seq_len({rbln_config.max_seq_len})!"
-            )
+        # if rbln_config.kvcache_partition_len and rbln_config.kvcache_partition_len > rbln_config.max_seq_len:
+        #     raise ValueError(
+        #         f"kvcache_partition_len({rbln_config.kvcache_partition_len}) should be lower"
+        #         f" or equal to max_seq_len({rbln_config.max_seq_len})!"
+        #     )
 
-        self.language_model = self.convert_to_rbln_class(model, rbln_config.max_seq_len)
-        self.num_hidden_layers = getattr(self.config, "num_hidden_layers", None) or getattr(self.config, "n_layer")
-        self._phase = "prefill"
+        # self.language_model = self.convert_to_rbln_class(model, rbln_config.max_seq_len)
+        # self.num_hidden_layers = getattr(self.config, "num_hidden_layers", None) or getattr(self.config, "n_layer")
+        # self._phase = "prefill"
 
         # embedding_proj_layer from original model
         self.embedding_proj_layer = model.embedding_proj_layer
@@ -192,13 +193,13 @@ class ColQwen2LanguageModelWrapper(DecoderOnlyWrapper):
             global_block_tables=global_block_tables,
             local_block_tables=local_block_tables,
         )
-        last_hidden_states = self.language_model(
-            inputs_embeds=inputs_embeds,
-            attention_mask=attention_mask,
-            position_ids=position_ids,
-            rotary_emb=self.rotary_emb,
-        )
-        proj = self.embedding_proj_layer(last_hidden_states)
+        # last_hidden_states = self.model(
+        #     inputs_embeds=inputs_embeds,
+        #     attention_mask=attention_mask,
+        #     position_ids=position_ids,
+        #     rotary_emb=self.rotary_emb,
+        # )
+        proj = self.embedding_proj_layer(last_hidden_states[0])
 
         return proj
         # return last_hidden_states
@@ -375,8 +376,13 @@ class RBLNColQwen2LanguageModel(DecoderOnlyModel):
 
         # get cos,sin vector if needed
         position_ids = position_ids if position_ids is not None else cache_position
-        cos, sin = rotary_emb(hidden_states, self.max_seq_len)  # dtype carrier, max_seq_len
-        cos, sin = slice_and_unsqueeze_cos_sin(cos, sin, position_ids)
+        if rotary_emb is not None:
+            if isinstance(rotary_emb, torch.Tensor):
+                cos = rotary_emb[0]
+                sin = rotary_emb[1]
+            else:
+                cos, sin = rotary_emb(hidden_states, self.max_seq_len)  # dtype carrier, max_seq_len
+                cos, sin = slice_and_unsqueeze_cos_sin(cos, sin, position_ids)
 
         # Get sequence positions for flash attention
         if self.attn_impl == "flash_attn":

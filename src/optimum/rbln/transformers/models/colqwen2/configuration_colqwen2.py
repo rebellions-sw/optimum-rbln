@@ -14,20 +14,20 @@
 
 from typing import Optional
 
-# from optimum.rbln.configuration_utils import RBLNModelConfig
+from optimum.rbln.configuration_utils import RBLNModelConfig
 # from optimum.rbln.transformers.models.qwen2_5_vl.configuration_qwen2_5_vl import (
 #     RBLNQwen2_5_VLForConditionalGenerationConfig,
 # )
 
-from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
+from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelConfig
 
 
-class RBLNColQwen2ForRetrievalConfig(RBLNDecoderOnlyModelForCausalLMConfig):
-    # submodules = ["visual"]
+class RBLNColQwen2ForRetrievalConfig(RBLNDecoderOnlyModelConfig):
+    submodules = ["visual"]
 
     def __init__(
         self,
-        # visual: Optional[RBLNModelConfig] = None,
+        visual: Optional[RBLNModelConfig] = None,
         batch_size: Optional[int] = None,
         use_inputs_embeds: bool = True,
         output_hidden_states: Optional[bool] = True,
@@ -44,5 +44,5 @@ class RBLNColQwen2ForRetrievalConfig(RBLNDecoderOnlyModelForCausalLMConfig):
                 "batch_size is not supported for RBLNColQwen2ForRetrievalConfig"
             )
 
-        # self.visual = visual
+        self.visual = visual
         self.output_hidden_states = output_hidden_states
