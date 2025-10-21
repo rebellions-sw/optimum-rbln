@@ -48,7 +48,7 @@ def main(
     tensor_parallel_size: typing.Optional[int] = 1,
     kvcache_partition_len: typing.Optional[int] = None,
     diff: bool = False,
-    n_layers: int = 2,
+    n_layers: int = 1,
 ):
     if from_transformers:
         model = RBLNGptOssForCausalLM.from_pretrained(
@@ -100,7 +100,6 @@ def main(
         config.num_hidden_layers = n_layers
         config._attn_implementation="eager"
         config.layer_types = ["full_attention" for _ in range(n_layers)]
-        breakpoint()
         golden_model = GptOssForCausalLM.from_pretrained(
             model_id,
             config=config
