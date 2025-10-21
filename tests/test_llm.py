@@ -556,7 +556,6 @@ class TestQwen2VLForConditionalGeneration(LLMTest.TestLLM):
         "rbln_config": {
             "visual": {"max_seq_lens": 512},
             "tensor_parallel_size": 1,
-            "kvcache_partition_len": 16_384,
             "max_seq_len": 32_768,
         }
     }
