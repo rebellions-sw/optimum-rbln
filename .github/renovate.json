@@ -1,5 +1,6 @@
 {
     "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "dependencyDashboard": true,
     "prHourlyLimit": 0,
     "extends": [
         ":semanticCommitsDisabled"
@@ -26,6 +27,7 @@
                 "diffusers"
             ],
             "enabled": true,
+            "vulnerabilityFixStrategy": "latest",
             "groupName": "huggingface-diffusers"
         },
         {
@@ -35,6 +37,7 @@
             "matchPackageNames": [
                 "transformers"
             ],
+            "vulnerabilityFixStrategy": "latest",
             "enabled": true,
             "groupName": "huggingface-transformers"
         }
