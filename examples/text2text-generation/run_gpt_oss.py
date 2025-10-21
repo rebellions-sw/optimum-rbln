@@ -48,7 +48,7 @@ def main(
     tensor_parallel_size: typing.Optional[int] = 1,
     kvcache_partition_len: typing.Optional[int] = None,
     diff: bool = False,
-    n_layers: int = 2,
+    n_layers: int = 1,
 ):
     if from_transformers:
         model = RBLNGptOssForCausalLM.from_pretrained(
@@ -100,6 +100,7 @@ def main(
             model_id,
             num_hidden_layers=n_layers,
             _attn_implementation="eager",
+            layer_types = ["sliding_attention" for _ in range(n_layers)]
         )
         golden_outputs = golden_model.generate(
             **inputs,
