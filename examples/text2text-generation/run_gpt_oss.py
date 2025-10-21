@@ -100,6 +100,7 @@ def main(
             model_id,
             num_hidden_layers=n_layers,
             _attn_implementation="eager",
+            layer_types = ["full_attention" for _ in range(n_layers)]
         )
         golden_outputs = golden_model.generate(
             **inputs,
