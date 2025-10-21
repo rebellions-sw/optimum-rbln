@@ -78,29 +78,6 @@ class ColQwen2LanguageModelWrapper(DecoderOnlyWrapper):
     def __init__(self, model: PreTrainedModel, rbln_config: "RBLNDecoderOnlyModelConfig", use_rotary_emb: bool = True):
         model.config = model.config.vlm_config
         super().__init__(model, rbln_config, use_rotary_emb)
-        # self.config = model.config
-        # self.rbln_config = rbln_config
-
-        # if use_rotary_emb:
-        #     rotary_embs = self.get_rotary_emb(max_seq_len=rbln_config.max_seq_len)
-        #     if isinstance(rotary_embs, tuple):
-        #         self.rotary_emb_global, self.rotary_emb_local = rotary_embs
-        #     else:
-        #         self.rotary_emb = rotary_embs
-        # else:
-        #     self.rotary_emb = None
-
-        # if rbln_config.kvcache_partition_len and rbln_config.kvcache_partition_len > rbln_config.max_seq_len:
-        #     raise ValueError(
-        #         f"kvcache_partition_len({rbln_config.kvcache_partition_len}) should be lower"
-        #         f" or equal to max_seq_len({rbln_config.max_seq_len})!"
-        #     )
-
-        # self.language_model = self.convert_to_rbln_class(model, rbln_config.max_seq_len)
-        # self.num_hidden_layers = getattr(self.config, "num_hidden_layers", None) or getattr(self.config, "n_layer")
-        # self._phase = "prefill"
-
-        # embedding_proj_layer from original model
         self.embedding_proj_layer = model.embedding_proj_layer
 
     def get_decoder_layers(self, model: PreTrainedModel):
@@ -166,9 +143,6 @@ class ColQwen2LanguageModelWrapper(DecoderOnlyWrapper):
             position_embeds,
         )
 
-    # def forward(self, inputs_embeds: torch.Tensor, attention_mask: torch.Tensor, position_ids: torch.Tensor):
-    #     attention_mask = (1.0 - attention_mask) * torch.finfo(torch.float32).min
-    #     attention_mask = attention_mask[:, None, None, None, :]
     def forward(self, *args):
         (
             input_ids,
@@ -193,148 +167,13 @@ class ColQwen2LanguageModelWrapper(DecoderOnlyWrapper):
             global_block_tables=global_block_tables,
             local_block_tables=local_block_tables,
         )
-        # last_hidden_states = self.model(
-        #     inputs_embeds=inputs_embeds,
-        #     attention_mask=attention_mask,
-        #     position_ids=position_ids,
-        #     rotary_emb=self.rotary_emb,
-        # )
+
         proj = self.embedding_proj_layer(last_hidden_states[0])
+        all_hidden_states = last_hidden_states[1] if self.rbln_config.output_hidden_states else None
+        
+        return proj, all_hidden_states
 
-        return proj
-        # return last_hidden_states
 
-# class ColQwen2AttentionOp(nn.Module):
-#     def __init__(self, self_attn):
-#         super().__init__()
-#         self._original_mod = self_attn
-#         self.head_dim = self_attn.head_dim
-#         self.num_key_value_groups = self_attn.num_key_value_groups
-#         self.scaling = self.head_dim**-0.5
-
-#     def forward(
-#         self,
-#         query_states: torch.Tensor,
-#         key_states: torch.Tensor,
-#         value_states: torch.Tensor,
-#         attention_mask: torch.Tensor,
-#     ):
-#         batch_size, _, _, query_length, _ = query_states.size()
-
-#         key_states = repeat_kv(key_states, self.num_key_value_groups)
-#         value_states = repeat_kv(value_states, self.num_key_value_groups)
-
-#         attn_weights = torch.matmul(query_states, key_states.transpose(3, 4)) * self.scaling
-#         attn_weights = attn_weights + attention_mask
-#         attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32)
-#         attn_output = torch.matmul(attn_weights, value_states)
-#         attn_output = attn_output.transpose(1, 3)
-#         attn_output = attn_output.reshape(batch_size, query_length, -1)
-
-#         return attn_output
-
-# class ColQwen2Attention(nn.Module):
-#     def __init__(self, self_attn):
-#         super().__init__()
-#         self._original_mod = self_attn
-#         self.num_heads = getattr(self._original_mod, "num_heads", None) or getattr(
-#             self._original_mod.config, "num_attention_heads"
-#         )
-#         self.head_dim = self._original_mod.head_dim
-#         self.scaling = self.head_dim**-0.5
-
-#         if hasattr(self._original_mod, "num_key_value_heads"):
-#             self.num_key_value_heads = self._original_mod.num_key_value_heads
-#         elif hasattr(self._original_mod, "config") and hasattr(self._original_mod.config, "num_key_value_heads"):
-#             self.num_key_value_heads = self._original_mod.config.num_key_value_heads
-#         else:
-#             self.num_key_value_heads = self.num_heads
-
-#         self.__post_init__()
-
-#     def __post_init__(self):
-#         self.q_proj = self._original_mod.q_proj
-#         self.k_proj = self._original_mod.k_proj
-#         self.v_proj = self._original_mod.v_proj
-#         self.o_proj = self._original_mod.o_proj
-
-#     def projection(self, hidden_states) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-#         query_states = self.q_proj(hidden_states)
-#         key_states = self.k_proj(hidden_states)
-#         value_states = self.v_proj(hidden_states)
-
-#         return query_states, key_states, value_states
-
-#     def forward(
-#         self,
-#         hidden_states: torch.Tensor,
-#         attention_mask: torch.Tensor,
-#         cos: Optional[torch.Tensor] = None,
-#         sin: Optional[torch.Tensor] = None,
-#     ):
-#         batch_size, query_length, _ = hidden_states.size()
-
-#         query_states, key_states, value_states = self.projection(hidden_states=hidden_states)
-
-#         query_states = query_states.view(batch_size, query_length, 1, self.num_heads, self.head_dim).transpose(1, 3)
-#         key_states = key_states.view(batch_size, query_length, 1, self.num_key_value_heads, self.head_dim).transpose(
-#             1, 3
-#         )
-#         value_states = value_states.view(
-#             batch_size, query_length, 1, self.num_key_value_heads, self.head_dim
-#         ).transpose(1, 3)
-
-#         if cos is not None and sin is not None:
-#             query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
-
-#         # key_states = repeat_kv(key_states, self.num_heads // self.num_key_value_heads)
-#         # value_states = repeat_kv(value_states, self.num_heads // self.num_key_value_heads)
-
-#         # FIXME(seinpark) : broadcast?
-#         attn_weights = torch.matmul(query_states, key_states.transpose(3, 4)) * self.scaling
-#         attn_weights = attn_weights + attention_mask
-#         attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32)
-#         attn_output = torch.matmul(attn_weights, value_states)
-#         attn_output = attn_output.transpose(1, 3)
-
-#         attn_output = attn_output.reshape(batch_size, query_length, -1)
-#         attn_output = self.o_proj(attn_output)
-
-#         return attn_output
-
-# class ColQwen2Layer(DecoderOnlyLayer):
-#     def __init__(self, layer, self_attn):
-#         super().__init__(layer, self_attn)
-
-#     def forward(
-#         self,
-#         hidden_states: torch.Tensor,
-#         attention_mask: torch.Tensor,
-#         seq_positions: torch.LongTensor,
-
-#         cos: Optional[torch.Tensor] = None,
-#         sin: Optional[torch.Tensor] = None,
-#     ):
-#         residual = hidden_states
-#         hidden_states = self.get_pre_attention_layernorm()(hidden_states)
-#         hidden_states = self.self_attn(
-#             hidden_states=hidden_states,
-#             attention_mask=attention_mask,
-#             # seq_positions=seq_positions,
-#             cos=cos,
-#             sin=sin,
-#         )
-#         hidden_states = residual + hidden_states
-
-#         # Fully Connected
-#         residual = hidden_states
-#         hidden_states = self.get_post_attention_layernorm()(hidden_states)
-#         hidden_states = self.forward_mlp(hidden_states)
-#         hidden_states = residual + hidden_states
-
-#         return hidden_states
-
-# TODO(seinpark) : 그냥 DecoderOnly 를 사용하는걸로!
 class RBLNColQwen2LanguageModel(DecoderOnlyModel):
     def __init__(
         self,
@@ -345,8 +184,7 @@ class RBLNColQwen2LanguageModel(DecoderOnlyModel):
     ):
         super().__init__(model, layers, rbln_config, use_learned_pos_emb)
         
-        # self.output_hidden_states = rbln_config.output_hidden_states
-        self.output_hidden_states = False
+        self.output_hidden_states = rbln_config.output_hidden_states
     
     def forward(
         self,
@@ -416,7 +254,6 @@ class RBLNColQwen2LanguageModel(DecoderOnlyModel):
 
         hidden_states = self.get_last_layernorm()(hidden_states)
         if self.output_hidden_states:
-                all_hidden_states += (hidden_states,)
+            all_hidden_states += (hidden_states,)
 
         return hidden_states, all_hidden_states
-        # return hidden_states

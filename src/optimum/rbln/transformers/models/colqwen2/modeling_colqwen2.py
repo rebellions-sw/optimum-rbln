@@ -23,23 +23,15 @@ from .configuration_colqwen2 import (
     RBLNColQwen2ForRetrievalConfig,
 )
 from optimum.rbln.configuration_utils import RBLNCompileConfig
-from optimum.rbln.modeling import RBLNModel
-from optimum.rbln.transformers.models.decoderonly.decoderonly_architecture import (
-    DecoderOnlyWrapper,
-)
 from optimum.rbln.transformers.models.decoderonly.modeling_decoderonly import (
     set_default_values,
     validate_attention_method,
     RBLNDecoderOnlyModel
 )
-from optimum.rbln.transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
-    RBLNQwen2_5_VLForConditionalGeneration,
-)
 from rebel.compile_context import CompileContext
 from transformers import (
     PretrainedConfig,
     PreTrainedModel,
-    Qwen2_5_VLForConditionalGeneration,
 )
 from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     Qwen2_5_VLRotaryEmbedding,
@@ -49,6 +41,7 @@ from transformers.models.qwen2_vl.modeling_qwen2_vl import (
     Qwen2VLRotaryEmbedding,
     Qwen2VLModel,
 )
+from transformers.models.colqwen2.modeling_colqwen2 import ColQwen2ForRetrievalOutput
 
 if TYPE_CHECKING:
     from transformers import (
@@ -72,7 +65,7 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
     _use_rotary_emb = False
 
     def __post_init__(self, **kwargs):
-        self.config = self.config.vlm_config
+        self.config = self.config.vlm_config if hasattr(self.config, "vlm_config") else self.config
         
         artifacts = torch.load(
             self.model_save_dir / self.subfolder / "torch_artifacts.pth",
@@ -99,12 +92,6 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
     @classmethod
     def wrap_model_if_needed(cls, model: PreTrainedModel, rbln_config: "RBLNDecoderOnlyModelConfig"):
         return cls._decoder_wrapper_cls(model, rbln_config, cls._use_rotary_emb).eval()
-    
-    # @classmethod
-    # @torch.inference_mode()
-    # def get_compiled_model(cls, model: PreTrainedModel, rbln_config: RBLNColQwen2ForRetrievalConfig):
-    #     compiled_models = super().get_compiled_model(model, rbln_config)
-    #     return compiled_models
     
     @classmethod
     def get_pytorch_model(cls, *args, **kwargs):
@@ -260,7 +247,7 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
         else :
             return Qwen2_5_VLModel.get_rope_index(self, *args, **kwargs)
 
-    def _preprocess_prefill(
+    def _preprocess_visual(
         self,
         input_ids: torch.LongTensor = None,
         attention_mask: torch.Tensor = None,
@@ -390,6 +377,7 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
 
         # chunked prefill
         projs = []
+        all_hidden_states = [] if self.rbln_config.output_hidden_states else None
         for step in range(0, query_length, self.rbln_config.prefill_chunk_size):
             # Extract the current chunk of inputs and cache positions
             input_chunk = padded_inputs_embeds[
@@ -409,10 +397,19 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
                 block_tables=self.block_tables,
                 position_emb=position_embed_chunk,
             )
-            projs.append(proj)
+            projs.append(proj[0])
+            if self.rbln_config.output_hidden_states:
+                all_hidden_states.append(proj[1:])
         projs = torch.concat(projs, dim=-2)[:, :query_length]
+        if self.rbln_config.output_hidden_states:
+            # Concatenate chunks for each layer
+            concatenated_hidden_states = [
+                torch.concat(hs_chunks, dim=-2)[:, :query_length]
+                for hs_chunks in list(zip(*all_hidden_states))
+            ]
+            all_hidden_states = tuple(concatenated_hidden_states)
 
-        return self._postprocess_chunked_prefill(projs, attention_mask)
+        return self._postprocess_chunked_prefill(projs, attention_mask), all_hidden_states
 
     def _postprocess_chunked_prefill(self, projs, attention_mask):
         # index copy for attention mask
@@ -438,8 +435,27 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
         image_grid_thw: Optional[torch.LongTensor] = None,
         video_grid_thw: Optional[torch.LongTensor] = None,
         second_per_grid_ts: Optional[torch.Tensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
         **kwargs,
     ) -> torch.Tensor:
+        output_attentions = output_attentions if output_attentions is not None else self.rbln_config.output_attentions
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.rbln_config.output_hidden_states
+        )
+
+        if output_attentions != self.rbln_config.output_attentions:
+            raise ValueError(
+                f"Variable output_attentions {output_attentions} is not equal to rbln_config.output_attentions {self.rbln_config.output_attentions} "
+                f"Please compile again with the correct argument."
+            )
+
+        if output_hidden_states != self.rbln_config.output_hidden_states:
+            raise ValueError(
+                f"Variable output_hidden_states {output_hidden_states} is not equal to rbln_config.output_hidden_states {self.rbln_config.output_hidden_states} "
+                f"Please compile again with the correct argument."
+            )
+        
         # Handle the custom "pixel_values" input obtained with `ColQwen2Processor` through unpadding
         if pixel_values is not None and image_grid_thw is not None:
             offsets = image_grid_thw[:, 1] * image_grid_thw[:, 2]  # (batch_size,)
@@ -452,7 +468,7 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
             )
 
         # Preprocess of Qwen2VLForConditionalGeneration
-        inputs_embeds, position_embed, _ = self._preprocess_prefill(
+        inputs_embeds, position_embed, _ = self._preprocess_visual(
             input_ids,
             attention_mask,
             pixel_values,
@@ -470,7 +486,8 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
                 attention_mask[b_idx] if attention_mask is not None else None,
                 position_embed[:, b_idx : b_idx + 1],
             )
-            projs.append(proj)
+            projs.append(proj[0])
+            all_hidden_states = proj[1] if output_hidden_states else ()
 
         # post process
         projs = torch.cat(projs, dim=0)
@@ -481,11 +498,18 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
             -1
         )  # (batch_size, sequence_length, dim)
 
-        return projs
+        # return projs
+        return ColQwen2ForRetrievalOutput(
+            embeddings=projs,
+            # past_key_values=vlm_output.past_key_values,
+            hidden_states=all_hidden_states,
+            # attentions=vlm_output.attentions, # need to attentions?
+        )
     
-        # return ColQwen2ForRetrievalOutput(
-        #     embeddings=embeddings,
-        #     # past_key_values=vlm_output.past_key_values,
-        #     hidden_states=vlm_hidden_states,
-        #     # attentions=vlm_output.attentions, # need to attentions?
-        # )
+    # def _prepare_output(self, output, return_dict):
+    #     return ColQwen2ForRetrievalOutput(
+    #         embeddings=embeddings,
+    #         # past_key_values=vlm_output.past_key_values,
+    #         hidden_states=vlm_hidden_states,
+    #         # attentions=vlm_output.attentions, # need to attentions?
+    #     )
