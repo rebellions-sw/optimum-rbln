@@ -96,10 +96,11 @@ def main(
     logits = rbln_outputs.logits
 
     if diff:
-        config = AutoConfig.from_pretranied(model_id)
+        config = AutoConfig.from_pretrained(model_id)
         config.num_hidden_layers = n_layers
         config._attn_implementation="eager"
         config.layer_types = ["full_attention" for _ in range(n_layers)]
+        breakpoint()
         golden_model = GptOssForCausalLM.from_pretrained(
             model_id,
             config=config
