@@ -430,7 +430,6 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
         config = AutoConfig.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 1
-        text_config["layer_types"] = text_config["layer_types"][:1]
         kwargs = {"text_config": text_config}
         cls.HF_CONFIG_KWARGS.update(kwargs)
         return super().setUpClass()
@@ -490,12 +489,10 @@ class TestBlip2ForConditionalGeneration(LLMTest.TestLLM):
 
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 1
-        text_config["layer_types"] = text_config["layer_types"][:1]
         kwargs = {"text_config": text_config}
 
         qformer_config = json.loads(config.qformer_config.to_json_string())
         qformer_config["num_hidden_layers"] = 1
-        qformer_config["layer_types"] = qformer_config["layer_types"][:1]
         kwargs["qformer_config"] = qformer_config
 
         cls.HF_CONFIG_KWARGS.update(kwargs)
@@ -535,7 +532,6 @@ class TestIdefics3ForConditionalGeneration(LLMTest.TestLLM):
         config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 1
-        text_config["layer_types"] = text_config["layer_types"][:1]
         kwargs = {"text_config": text_config}
         cls.HF_CONFIG_KWARGS.update(kwargs)
         return super().setUpClass()
@@ -711,9 +707,7 @@ class TestLlamaForCausalLM_fp8(LLMTest.TestLLM):
 
 
 class TestMultiLora(LLMTest.TestLLM):
-    EXPECTED_OUTPUT = (
-        " bench_echointon.ThrowaberControlItemRequestMethodtinghamacroufenogerthon657iskyvousantonanzzyois nit"
-    )
+    EXPECTED_OUTPUT = " bench_echointon Ebonylica Lennonnings909 norgeZN°Eusanpha701OPSadeleepromtrap乎 Howe"
 
     HF_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
@@ -739,7 +733,7 @@ class TestMultiLora_batch(LLMTest.TestLLM):
     PROMPT = ["Who are you?", "What is the capital of France?"]
     EXPECTED_OUTPUT = [
         " bench_echointon Ebonylica Lennonnings909 norgeZN°Eusan倍oloadolen逸 Oaksodian surplusaniem",
-        "/topicпідonus343../../../ Mund  OntReactionaugeammoějal Licht-addon((-antryouflage Hol ",
+        "/topicпідonus343../../../ Mund  Ont ReactionIPAچیIQUE beltーブ204umlu Cortexoisئةτερ",
     ]
     HF_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}

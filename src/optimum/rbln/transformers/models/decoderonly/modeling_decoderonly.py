@@ -328,12 +328,14 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             model = cls.get_quantized_model(*args, rbln_config=rbln_config, **kwargs)
         else:
             if num_hidden_layers is not None:
+                trust_remote_code = kwargs.get("trust_remote_code", None)
                 config, kwargs = AutoConfig.from_pretrained(
                     model_id, return_unused_kwargs=True, num_hidden_layers=num_hidden_layers, **kwargs
                 )
                 if hasattr(config, "layer_types"):
                     config.layer_types = config.layer_types[:num_hidden_layers]
                 kwargs["config"] = config
+                kwargs["trust_remote_code"] = trust_remote_code
 
             model = super().get_pytorch_model(model_id, *args, **kwargs)
 
