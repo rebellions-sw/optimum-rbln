@@ -89,11 +89,6 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
     @classmethod
     def get_pytorch_model(cls, *args, **kwargs):
         model = super().get_pytorch_model(*args, **kwargs)
-
-        # FIXME(si): temporary workaround to avoid lm_head being included in the compiled model
-        model.model.lm_head = model.lm_head
-        model.lm_head = None
-        del model.lm_head
         return model
 
     def _create_embedding_layer(self):

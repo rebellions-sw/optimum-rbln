@@ -57,7 +57,7 @@ class ColQwen2LanguageModelWrapper(DecoderOnlyWrapper):
     def __init__(
         self, model: PreTrainedModel, rbln_config: "RBLNColQwen2ForRetrievalConfig", use_rotary_emb: bool = True
     ):
-        model.config = model.config.vlm_config
+        model.config = model.config.vlm_config.text_config
         super().__init__(model, rbln_config, use_rotary_emb)
         self.embedding_proj_layer = model.embedding_proj_layer
 
