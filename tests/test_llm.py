@@ -564,7 +564,6 @@ class TestQwen2VLForConditionalGeneration(LLMTest.TestLLM):
         "rbln_config": {
             "visual": {"max_seq_lens": 512},
             "tensor_parallel_size": 1,
-            "kvcache_partition_len": 16_384,
             "max_seq_len": 32_768,
         }
     }
@@ -650,6 +649,7 @@ class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
     HF_CONFIG_KWARGS = {"revision": "e1f4b0516ec80f86ed75c8cb1d45ede72526ad24"}
     HF_CONFIG_KWARGS_PREPROCESSOR = {"revision": "e1f4b0516ec80f86ed75c8cb1d45ede72526ad24"}
     TEST_LEVEL = TestLevel.FULL
+    IS_MULTIMODAL = True
 
     # override
     @classmethod
