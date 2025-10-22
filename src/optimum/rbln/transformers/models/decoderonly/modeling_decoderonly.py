@@ -325,7 +325,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         **kwargs,
     ) -> PreTrainedModel:
         if rbln_config and rbln_config.quantization:
-            model = cls.get_quantized_model(*args, rbln_config=rbln_config, **kwargs)
+            model = cls.get_quantized_model(model_id, *args, rbln_config=rbln_config, **kwargs)
         else:
             if num_hidden_layers is not None:
                 trust_remote_code = kwargs.get("trust_remote_code", None)
