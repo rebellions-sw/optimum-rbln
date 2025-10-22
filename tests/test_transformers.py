@@ -392,6 +392,7 @@ class TestColPaliModel(BaseTest.TestModel):
         "pixel_values": torch.randn(1, 3, 448, 448, generator=torch.manual_seed(42)),
     }
 
+
 class TestColQwen2Model(BaseTest.TestModel):
     RBLN_AUTO_CLASS = None
     RBLN_CLASS = RBLNColQwen2ForRetrieval
@@ -427,7 +428,7 @@ class TestColQwen2Model(BaseTest.TestModel):
 
         processor = ColQwen2Processor.from_pretrained(self.HF_MODEL_ID)
         return processor
-    
+
     def get_inputs(self):
         processor = self.get_processor()
         img_path = f"{os.path.dirname(__file__)}/../assets/rbln_logo.png"
