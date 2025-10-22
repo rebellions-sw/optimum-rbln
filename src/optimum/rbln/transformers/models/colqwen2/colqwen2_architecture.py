@@ -12,46 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, List, Optional, Union, Tuple
+from typing import TYPE_CHECKING, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
+from transformers import PreTrainedModel
+
+from optimum.rbln.transformers.models.decoderonly.decoderonly_architecture import (
+    DecoderOnlyLayer,
+    DecoderOnlyModel,
+    DecoderOnlyWrapper,
+)
+
 from .configuration_colqwen2 import (
     RBLNColQwen2ForRetrievalConfig,
 )
-from optimum.rbln.configuration_utils import RBLNCompileConfig
-from optimum.rbln.modeling import RBLNModel
-from optimum.rbln.transformers.models.decoderonly.decoderonly_architecture import (
-    DecoderOnlyWrapper,
-    DecoderOnlyModel,
-    DecoderOnlyLayer,
-    DecoderOnlyAttention,
-    apply_rotary_pos_emb,
-)
-from optimum.rbln.transformers.models.decoderonly.modeling_decoderonly import (
-    set_default_values,
-    validate_attention_method,
-)
-from optimum.rbln.transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
-    RBLNQwen2_5_VLForConditionalGeneration,
-)
-from rebel.compile_context import CompileContext
-from transformers import (
-    PretrainedConfig,
-    PreTrainedModel,
-    Qwen2_5_VLForConditionalGeneration,
-)
-from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
-    Qwen2_5_VLRotaryEmbedding,
-)
+
 
 if TYPE_CHECKING:
-    from transformers import (
-        AutoFeatureExtractor,
-        AutoProcessor,
-        AutoTokenizer,
-        PretrainedConfig,
-    )
+    pass
 
 
 def slice_and_unsqueeze_cos_sin(cos, sin, position_ids):
@@ -75,7 +54,9 @@ def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
 
 
 class ColQwen2LanguageModelWrapper(DecoderOnlyWrapper):
-    def __init__(self, model: PreTrainedModel, rbln_config: "RBLNDecoderOnlyModelConfig", use_rotary_emb: bool = True):
+    def __init__(
+        self, model: PreTrainedModel, rbln_config: "RBLNColQwen2ForRetrievalConfig", use_rotary_emb: bool = True
+    ):
         model.config = model.config.vlm_config
         super().__init__(model, rbln_config, use_rotary_emb)
         self.embedding_proj_layer = model.embedding_proj_layer
@@ -170,8 +151,11 @@ class ColQwen2LanguageModelWrapper(DecoderOnlyWrapper):
 
         proj = self.embedding_proj_layer(last_hidden_states[0])
         all_hidden_states = last_hidden_states[1] if self.rbln_config.output_hidden_states else None
-        
-        return proj, all_hidden_states
+
+        if self.rbln_config.output_hidden_states:
+            return proj, all_hidden_states
+        else:
+            return proj
 
 
 class RBLNColQwen2LanguageModel(DecoderOnlyModel):
@@ -179,13 +163,13 @@ class RBLNColQwen2LanguageModel(DecoderOnlyModel):
         self,
         model,
         layers: List["DecoderOnlyLayer"],
-        rbln_config: "RBLNDecoderOnlyModelConfig",
+        rbln_config: "RBLNColQwen2ForRetrievalConfig",
         use_learned_pos_emb=None,
     ):
         super().__init__(model, layers, rbln_config, use_learned_pos_emb)
-        
+
         self.output_hidden_states = rbln_config.output_hidden_states
-    
+
     def forward(
         self,
         input_ids: torch.Tensor = None,
@@ -239,7 +223,7 @@ class RBLNColQwen2LanguageModel(DecoderOnlyModel):
         for layer_idx, layer in enumerate(self.layers):
             if self.output_hidden_states:
                 all_hidden_states += (hidden_states,)
-            
+
             is_sliding = True if layer_idx in self.sliding_window_layers else False
             hidden_states = layer(
                 hidden_states=hidden_states,

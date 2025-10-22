@@ -15,9 +15,6 @@
 from typing import Optional
 
 from optimum.rbln.configuration_utils import RBLNModelConfig
-# from optimum.rbln.transformers.models.qwen2_5_vl.configuration_qwen2_5_vl import (
-#     RBLNQwen2_5_VLForConditionalGenerationConfig,
-# )
 
 from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelConfig
 
@@ -31,7 +28,6 @@ class RBLNColQwen2ForRetrievalConfig(RBLNDecoderOnlyModelConfig):
         batch_size: Optional[int] = None,
         use_inputs_embeds: bool = True,
         output_hidden_states: Optional[bool] = False,
-        output_attentions: Optional[bool] = False,
         **kwargs,
     ):
         super().__init__(use_inputs_embeds=use_inputs_embeds, **kwargs)
@@ -41,10 +37,7 @@ class RBLNColQwen2ForRetrievalConfig(RBLNDecoderOnlyModelConfig):
                 "as RBLNColQwen2ForRetrieval accepts only `inputs_embeds` as input."
             )
         if batch_size is not None and batch_size != 1:
-            raise ValueError(
-                "batch_size is not supported for RBLNColQwen2ForRetrievalConfig"
-            )
+            raise ValueError("batch_size is not supported for RBLNColQwen2ForRetrievalConfig")
 
         self.visual = visual
         self.output_hidden_states = output_hidden_states
-        self.output_attentions = output_attentions
