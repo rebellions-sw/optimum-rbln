@@ -32,6 +32,7 @@ from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...utils.rbln_runtime_wrapper import LoopProcessor
+from ..decoderonly.generation_decoderonly import RBLNDecoderOnlyGenerationMixin
 from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyOutput
 
 
@@ -87,7 +88,7 @@ class LoopProjector(LoopProcessor):
         return output[0]
 
 
-class RBLNLlavaNextForConditionalGeneration(RBLNModel):
+class RBLNLlavaNextForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixin):
     """
     RBLNLlavaNextForConditionalGeneration is a multi-modal model that combines vision and language processing capabilities,
     optimized for RBLN NPUs. It is designed for conditional generation tasks that involve both image and text inputs.
