@@ -123,7 +123,7 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
                     model_config.vlm_config.text_config.hidden_size
                     // model_config.vlm_config.text_config.num_attention_heads,
                 ],
-                "float32",
+                rbln_config.torch_dtype,
             ),
         )
 
