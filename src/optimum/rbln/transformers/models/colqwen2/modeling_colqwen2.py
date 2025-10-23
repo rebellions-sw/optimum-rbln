@@ -83,11 +83,6 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
             self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config.text_config)
         self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
 
-    @classmethod
-    def get_pytorch_model(cls, *args, **kwargs):
-        model = super().get_pytorch_model(*args, **kwargs).to(torch.float32)
-        return model
-
     def _create_embedding_layer(self):
         with no_init_weights():
             embed_tokens = torch.nn.Embedding(
@@ -96,15 +91,6 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
                 self.config.text_config.pad_token_id,
             )
         return embed_tokens
-
-    @classmethod
-    def update_kwargs(cls, kwargs):
-        kwargs.update(
-            {
-                "_attn_implementation": "eager",
-            }
-        )
-        return super().update_kwargs(kwargs)
 
     @classmethod
     def get_input_info(
