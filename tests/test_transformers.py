@@ -407,8 +407,7 @@ class TestColQwen2Model(BaseTest.TestModel):
     HF_CONFIG_KWARGS = {}
     HF_CONFIG_KWARGS_PREPROCESSOR = {"max_pixels": 64 * 14 * 14}
     IS_MULTIMODAL = True
-    # PROMPT = "Describe the image."
-    EXPECTED_OUTPUT = torch.tensor([[50257, 50257, 50257, 50257, 50257]])
+    # EXPECTED_OUTPUT = torch.tensor([[50257, 50257, 50257, 50257, 50257]])
 
     @classmethod
     def setUpClass(cls):
@@ -431,31 +430,13 @@ class TestColQwen2Model(BaseTest.TestModel):
 
     def get_inputs(self):
         processor = self.get_processor()
-        # img_path = f"{os.path.dirname(__file__)}/../assets/rbln_logo.png"
-        # image = Image.open(img_path)
         images = [
             Image.new("RGB", (64, 32), color="black"),
         ]
         inputs_image = processor(images=images)
         return inputs_image
 
-    def postprocess(self, inputs, output):
-        import pdb; pdb.set_trace()
-        return output.embeddings
-    # def test_generate(self):
-    #     inputs = self.get_inputs()    
-    #     output = self.model(**inputs).
 
-    #     output = self.postprocess(inputs, output)
-    #     if self.EXPECTED_OUTPUT:
-    #         from simphile import jaccard_similarity
-
-            
-    #         for o, e_o in zip(output, self.EXPECTED_OUTPUT):
-    #             similarity = jaccard_similarity(o, e_o)
-    #             self.assertGreater(similarity, 0.9)
-    
-    
 class TestWav2VecModel(BaseTest.TestModel):
     RBLN_AUTO_CLASS = RBLNAutoModelForCTC
     RBLN_CLASS = RBLNWav2Vec2ForCTC
