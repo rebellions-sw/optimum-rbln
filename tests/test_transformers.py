@@ -404,10 +404,7 @@ class TestColQwen2Model(BaseTest.TestModel):
             "max_seq_len": 32_768,
         }
     }
-    HF_CONFIG_KWARGS = {}
     HF_CONFIG_KWARGS_PREPROCESSOR = {"max_pixels": 64 * 14 * 14}
-    IS_MULTIMODAL = True
-    # EXPECTED_OUTPUT = torch.tensor([[50257, 50257, 50257, 50257, 50257]])
 
     @classmethod
     def setUpClass(cls):
