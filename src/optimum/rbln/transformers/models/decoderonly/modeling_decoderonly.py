@@ -322,22 +322,30 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         *args,
         rbln_config: Optional[RBLNDecoderOnlyModelConfig] = None,
         num_hidden_layers: Optional[int] = None,
+        trust_remote_code: Optional[bool] = None,
+        torch_dtype: Optional[torch.dtype] = None,
+        dtype: Optional[torch.dtype] = None,
         **kwargs,
     ) -> PreTrainedModel:
         if rbln_config and rbln_config.quantization:
             model = cls.get_quantized_model(model_id, *args, rbln_config=rbln_config, **kwargs)
         else:
+            # TODO : resolve how to control PreTrainedConfig for hf_kwargs
             if num_hidden_layers is not None:
-                trust_remote_code = kwargs.get("trust_remote_code", None)
                 config, kwargs = AutoConfig.from_pretrained(
-                    model_id, return_unused_kwargs=True, num_hidden_layers=num_hidden_layers, **kwargs
+                    model_id,
+                    return_unused_kwargs=True,
+                    trust_remote_code=trust_remote_code,
+                    num_hidden_layers=num_hidden_layers,
+                    **kwargs,
                 )
                 if hasattr(config, "layer_types"):
                     config.layer_types = config.layer_types[:num_hidden_layers]
                 kwargs["config"] = config
-                kwargs["trust_remote_code"] = trust_remote_code
 
-            model = super().get_pytorch_model(model_id, *args, **kwargs)
+            model = super().get_pytorch_model(
+                model_id, *args, trust_remote_code=trust_remote_code, torch_dtype=torch_dtype, dtype=dtype, **kwargs
+            )
 
         return model
 
