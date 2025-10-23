@@ -31,11 +31,8 @@ from transformers.models.qwen2_vl.modeling_qwen2_vl import (
     Qwen2VLRotaryEmbedding,
 )
 
-from optimum.rbln.configuration_utils import RBLNCompileConfig
 from optimum.rbln.transformers.models.decoderonly.modeling_decoderonly import (
     RBLNDecoderOnlyModel,
-    set_default_values,
-    validate_attention_method,
 )
 
 from .configuration_colqwen2 import (
@@ -88,7 +85,7 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
         # FIXME: temporary fix for ColQwen2ForRetrieval dtype issue
         model = super().get_pytorch_model(*args, **kwargs).to(torch.float32)
         return model
-    
+
     def _create_embedding_layer(self):
         with no_init_weights():
             embed_tokens = torch.nn.Embedding(
@@ -144,56 +141,12 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
         model_config: Optional["PretrainedConfig"] = None,
         rbln_config: Optional[RBLNColQwen2ForRetrievalConfig] = None,
     ) -> RBLNColQwen2ForRetrievalConfig:
-
         if rbln_config.output_hidden_states is None:
             rbln_config.output_hidden_states = model_config.vlm_config.text_config.output_hidden_states
 
-        if rbln_config.max_seq_len is None:
-            rbln_config.max_seq_len = getattr(model_config, "max_position_embeddings", None) or getattr(
-                model_config, "n_positions", None
-            )
-
-        if rbln_config.max_seq_len is None:
-            raise ValueError("`max_seq_len` should be specified.")
-
-        (
-            rbln_config.attn_impl,
-            rbln_config.kvcache_partition_len,
-            rbln_config.kvcache_block_size,
-        ) = set_default_values(
-            attn_impl=rbln_config.attn_impl,
-            kvcache_partition_len=rbln_config.kvcache_partition_len,
-            kvcache_block_size=rbln_config.kvcache_block_size,
-            max_seq_len=rbln_config.max_seq_len,
+        return super()._update_rbln_config(
+            preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
         )
-
-        validate_attention_method(
-            attn_impl=rbln_config.attn_impl,
-            kvcache_partition_len=rbln_config.kvcache_partition_len,
-            kvcache_block_size=rbln_config.kvcache_block_size,
-            max_seq_len=rbln_config.max_seq_len,
-        )
-
-        required_num_blocks = rbln_config.max_seq_len // rbln_config.kvcache_block_size
-        max_num_blocks = required_num_blocks
-
-        if rbln_config.kvcache_num_blocks is None:
-            rbln_config.kvcache_num_blocks = max_num_blocks
-
-        input_info = cls.get_input_info(
-            batch_size=1,
-            query_length=rbln_config.prefill_chunk_size,
-            rbln_config=rbln_config,
-            model_config=model_config,
-        )
-
-        if rbln_config.output_hidden_states is None:
-            rbln_config.output_hidden_states = model_config.vlm_config.text_config.output_hidden_states
-
-        prefill_compile_config = RBLNCompileConfig(compiled_model_name="prefill", input_info=input_info)
-        rbln_config.set_compile_cfgs([prefill_compile_config])
-
-        return rbln_config
 
     @classmethod
     def _create_runtimes(
