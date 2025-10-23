@@ -83,7 +83,7 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
     @classmethod
     def get_pytorch_model(cls, *args, **kwargs):
         # FIXME: temporary fix for ColQwen2ForRetrieval dtype issue
-        model = super().get_pytorch_model(*args, **kwargs).to(torch.float32)
+        model = super().get_pytorch_model(*args, **kwargs)
         return model
 
     def _create_embedding_layer(self):
