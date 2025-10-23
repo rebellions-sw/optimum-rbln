@@ -18,7 +18,7 @@ def main(
     n_layers: int = 1,
     compiled_model_path: typing.Optional[str] = None,
 ):
-    if compiled_model_path is not None:
+    if compiled_model_path is None:
         compiled_model_path = os.path.basename(model_id)
 
     if from_transformers:
