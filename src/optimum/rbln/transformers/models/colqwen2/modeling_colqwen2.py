@@ -83,9 +83,6 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
             self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config.text_config)
         self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
 
-    def can_generate(self):
-        return False
-
     @classmethod
     def get_pytorch_model(cls, *args, **kwargs):
         model = super().get_pytorch_model(*args, **kwargs).to(torch.float32)
@@ -348,7 +345,7 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
             inputs_embeds, attention_mask, position_embed
         )
 
-        # chunked prefill
+        # Chunked prefill
         projs = []
         all_hidden_states = [] if output_hidden_states else None
         for step in range(0, query_length, self.rbln_config.prefill_chunk_size):
@@ -448,12 +445,11 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
             projs.append(proj[0])
             all_hidden_states = proj[1] if output_hidden_states else ()
 
-        # post-process
+        # postprocess
         projs = torch.cat(projs, dim=0)
         projs = projs / projs.norm(dim=-1, keepdim=True)
         projs = projs * attention_mask.unsqueeze(-1)
 
-        # return projs
         return ColQwen2ForRetrievalOutput(
             embeddings=projs,
             hidden_states=all_hidden_states,
