@@ -249,37 +249,11 @@ class RBLNModel(RBLNBaseModel):
         trust_remote_code: bool = False,
         # Some rbln-config should be applied before loading torch module (i.e. quantized llm)
         rbln_config: Optional[RBLNModelConfig] = None,
-        dtype: Optional[Union[str, torch.dtype, dict]] = None,
         **kwargs,
     ) -> "PreTrainedModel":
         kwargs = cls.update_kwargs(kwargs)
 
-        hf_class = cls.get_hf_class()
-
-        if dtype is not None:
-            config = hf_class.config_class.from_pretrained(
-                model_id,
-                subfolder=subfolder,
-                revision=revision,
-                cache_dir=cache_dir,
-                use_auth_token=use_auth_token,
-                local_files_only=local_files_only,
-                force_download=force_download,
-                trust_remote_code=trust_remote_code,
-            )
-
-            config, processed_dtype, dtype_orig = _get_dtype(
-                cls=hf_class,
-                dtype=dtype,
-                config=config,
-            )
-
-            kwargs["torch_dtype"] = processed_dtype
-
-            if dtype_orig is not None:
-                hf_class._set_default_dtype(dtype_orig)
-
-        return hf_class.from_pretrained(
+        return cls.get_hf_class().from_pretrained(
             model_id,
             subfolder=subfolder,
             revision=revision,
