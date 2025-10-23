@@ -57,7 +57,7 @@ tests = [
     "soundfile>=0.13.1",
     "librosa>=0.11.0",
     "simphile>=1.0.2",
-    "torchcodec==0.5",
+    "torchcodec==0.7",
 ]
 quality = [
     "ruff>=0.3.3",
