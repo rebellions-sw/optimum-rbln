@@ -83,6 +83,12 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
             self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config.text_config)
         self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
 
+    @classmethod
+    def get_pytorch_model(cls, *args, **kwargs):
+        # FIXME: temporary fix for ColQwen2ForRetrieval dtype issue
+        model = super().get_pytorch_model(*args, **kwargs).to(torch.float32)
+        return model
+    
     def _create_embedding_layer(self):
         with no_init_weights():
             embed_tokens = torch.nn.Embedding(
@@ -138,6 +144,10 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
         model_config: Optional["PretrainedConfig"] = None,
         rbln_config: Optional[RBLNColQwen2ForRetrievalConfig] = None,
     ) -> RBLNColQwen2ForRetrievalConfig:
+
+        if rbln_config.output_hidden_states is None:
+            rbln_config.output_hidden_states = model_config.vlm_config.text_config.output_hidden_states
+
         if rbln_config.max_seq_len is None:
             rbln_config.max_seq_len = getattr(model_config, "max_position_embeddings", None) or getattr(
                 model_config, "n_positions", None
