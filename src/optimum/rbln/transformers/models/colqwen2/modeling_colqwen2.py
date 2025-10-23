@@ -65,7 +65,7 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
     _use_rotary_emb = False
 
     def __post_init__(self, **kwargs):
-        self.config = self.config.vlm_config if hasattr(self.config, "vlm_config") else self.config
+        # self.config = self.config.vlm_config if hasattr(self.config, "vlm_config") else self.config
 
         artifacts = torch.load(
             self.model_save_dir / self.subfolder / "torch_artifacts.pth",
@@ -75,12 +75,11 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
         self.embed_tokens.load_state_dict(artifacts["embed_tokens"])
         self.visual = self.rbln_submodules[0]
         self.prefill_runtime = self.model[0]
-
-        self.mrope_section = self.config.rope_scaling["mrope_section"]
-        if self.config.model_type == "qwen2_vl":
-            self.rotary_emb = Qwen2VLRotaryEmbedding(self.config.text_config)
+        self.mrope_section = self.config.vlm_config.text_config.rope_scaling["mrope_section"]
+        if self.config.vlm_config.model_type == "qwen2_vl":
+            self.rotary_emb = Qwen2VLRotaryEmbedding(self.config.vlm_config.text_config)
         else:
-            self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config.text_config)
+            self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config.vlm_config.text_config)
         self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
 
     def can_generate(self):
@@ -88,15 +87,15 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
 
     @classmethod
     def get_pytorch_model(cls, *args, **kwargs):
-        model = super().get_pytorch_model(*args, **kwargs)
+        model = super().get_pytorch_model(*args, **kwargs).to(torch.float32)
         return model
 
     def _create_embedding_layer(self):
         with no_init_weights():
             embed_tokens = torch.nn.Embedding(
-                self.config.text_config.vocab_size,
-                self.config.text_config.hidden_size,
-                self.config.text_config.pad_token_id,
+                self.config.vlm_config.text_config.vocab_size,
+                self.config.vlm_config.text_config.hidden_size,
+                self.config.vlm_config.text_config.pad_token_id,
             )
         return embed_tokens
 
@@ -229,7 +228,7 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
         return torch.stack([cos, sin])
 
     def get_rope_index(self, *args, **kwargs):
-        if self.config.model_type == "qwen2_vl":
+        if self.config.vlm_config.model_type == "qwen2_vl":
             return Qwen2VLModel.get_rope_index(self, *args, **kwargs)
         else:
             return Qwen2_5_VLModel.get_rope_index(self, *args, **kwargs)
@@ -249,14 +248,14 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
 
         if pixel_values is not None:
             image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
-            n_image_tokens = (input_ids == self.config.image_token_id).sum().item()
+            n_image_tokens = (input_ids == self.config.vlm_config.image_token_id).sum().item()
             n_image_features = image_embeds.shape[0]
             if n_image_tokens != n_image_features:
                 raise ValueError(
                     f"Image features and image tokens do not match: tokens: {n_image_tokens}, features {n_image_features}"
                 )
 
-            mask = input_ids == self.config.image_token_id
+            mask = input_ids == self.config.vlm_config.image_token_id
             mask_unsqueezed = mask.unsqueeze(-1)
             mask_expanded = mask_unsqueezed.expand_as(inputs_embeds)
 
@@ -265,27 +264,26 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
 
         if pixel_values_videos is not None:
             video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
-            n_video_tokens = (input_ids == self.config.video_token_id).sum().item()
+            n_video_tokens = (input_ids == self.config.vlm_config.video_token_id).sum().item()
             n_video_features = video_embeds.shape[0]
             if n_video_tokens != n_video_features:
                 raise ValueError(
                     f"Video features and video tokens do not match: tokens: {n_video_tokens}, features {n_video_features}"
                 )
 
-            mask = input_ids == self.config.video_token_id
+            mask = input_ids == self.config.vlm_config.video_token_id
             mask_unsqueezed = mask.unsqueeze(-1)
             mask_expanded = mask_unsqueezed.expand_as(inputs_embeds)
             inputs_embeds = inputs_embeds.masked_scatter(mask_expanded, video_embeds)
 
         max_inputs_len = input_ids.shape[1]
-
-        head_dim = getattr(self.config, "head_dim", None) or self.config.hidden_size // self.config.num_attention_heads
+        head_dim = self.config.vlm_config.text_config.hidden_size // self.config.vlm_config.text_config.num_attention_heads
         all_position_embeds = torch.zeros(2, batch_size, 1, max_inputs_len, head_dim)
         all_rope_deltas = []
 
-        image_token_id = self.config.image_token_id
-        video_token_id = self.config.video_token_id
-        vision_start_token_id = self.config.vision_start_token_id
+        image_token_id = self.config.vlm_config.image_token_id
+        video_token_id = self.config.vlm_config.video_token_id
+        vision_start_token_id = self.config.vlm_config.text_config.vision_start_token_id
         image_idx, video_idx = 0, 0
 
         for b_idx in range(batch_size):
@@ -299,7 +297,7 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
                 image_grid_thw[image_idx : image_idx + image_nums] if image_grid_thw is not None else None,
                 video_grid_thw[video_idx : video_idx + video_nums] if video_grid_thw is not None else None,
             ]
-            if self.config.model_type == "qwen2_5_vl":
+            if self.config.vlm_config.model_type == "qwen2_5_vl":
                 args.append(
                     second_per_grid_ts[video_idx : video_idx + video_nums] if second_per_grid_ts is not None else None
                 )
