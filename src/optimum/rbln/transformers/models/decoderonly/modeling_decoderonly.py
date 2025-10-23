@@ -328,7 +328,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         **kwargs,
     ) -> PreTrainedModel:
         if rbln_config and rbln_config.quantization:
-            model = cls.get_quantized_model(*args, rbln_config=rbln_config, **kwargs)
+            model = cls.get_quantized_model(model_id, *args, rbln_config=rbln_config, **kwargs)
         else:
             # TODO : resolve how to control PreTrainedConfig for hf_kwargs
             if num_hidden_layers is not None:

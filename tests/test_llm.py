@@ -29,7 +29,6 @@ from optimum.rbln import (
     RBLNLoRAAdapterConfig,
     RBLNMistralForCausalLM,
     RBLNMistralModel,
-    RBLNModel,
     RBLNOPTForCausalLM,
     RBLNOPTModel,
     RBLNPegasusForConditionalGeneration,
@@ -61,12 +60,6 @@ class LLMTest:
         PROMPT = "Who are you?"
         IS_MULTIMODAL = False
         HF_CONFIG_KWARGS_PREPROCESSOR = {}
-
-        @classmethod
-        def setUpClass(cls):
-            if issubclass(cls.RBLN_CLASS, RBLNModel) and cls.RBLN_CLASS._supports_non_fp32:
-                cls.HF_CONFIG_KWARGS["torch_dtype"] = "auto"
-            super().setUpClass()
 
         def get_tokenizer(self):
             PreProcessor = AutoProcessor if self.IS_MULTIMODAL else AutoTokenizer
@@ -435,7 +428,6 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
     @classmethod
     def setUpClass(cls):
         config = AutoConfig.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
-
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 1
         kwargs = {"text_config": text_config}
@@ -578,6 +570,7 @@ class TestQwen2VLForConditionalGeneration(LLMTest.TestLLM):
         vision_config = json.loads(config.vision_config.to_json_string())
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 1
+        text_config["layer_types"] = text_config["layer_types"][:1]
         vision_config["depth"] = 1  # To make the test faster
         kwargs = {"vision_config": vision_config, "text_config": text_config}
         cls.HF_CONFIG_KWARGS.update(kwargs)
@@ -623,6 +616,7 @@ class TestQwen2_5_VLForConditionalGeneration(LLMTest.TestLLM):
         vision_config = json.loads(config.vision_config.to_json_string())
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 1
+        text_config["layer_types"] = text_config["layer_types"][:1]
         vision_config["depth"] = 8
         vision_config["fullatt_block_indexes"] = [7]
         kwargs = {"vision_config": vision_config, "text_config": text_config}
@@ -657,6 +651,7 @@ class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
         config = AutoConfig.from_pretrained(cls.HF_MODEL_ID, revision=cls.HF_CONFIG_KWARGS["revision"])
         text_config = json.loads(config.text_config.to_json_string())
         text_config["num_hidden_layers"] = 2
+        text_config["layer_types"] = ["full_attention", "sliding_attention"]
         text_config["sliding_window_pattern"] = 2
         vision_config = json.loads(config.vision_config.to_json_string())
         vision_config["num_hidden_layers"] = 1
@@ -711,9 +706,7 @@ class TestLlamaForCausalLM_fp8(LLMTest.TestLLM):
 
 
 class TestMultiLora(LLMTest.TestLLM):
-    EXPECTED_OUTPUT = (
-        " bench_echointon.ThrowaberControlItemRequestMethodtinghamacroufenogerthon657iskyvousantonanzzyois nit"
-    )
+    EXPECTED_OUTPUT = " bench_echointon Ebonylica Lennonnings909 norgeZN°Eusanpha701OPSadeleepromtrap乎 Howe"
 
     HF_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
@@ -739,7 +732,7 @@ class TestMultiLora_batch(LLMTest.TestLLM):
     PROMPT = ["Who are you?", "What is the capital of France?"]
     EXPECTED_OUTPUT = [
         " bench_echointon Ebonylica Lennonnings909 norgeZN°Eusan倍oloadolen逸 Oaksodian surplusaniem",
-        "/topicпідonus343../../../ Mund  OntReactionaugeammoějal Licht-addon((-antryouflage Hol ",
+        "/topicпідonus343../../../ Mund  Ont ReactionIPAچیIQUE beltーブ204umlu Cortexoisئةτερ",
     ]
     HF_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}

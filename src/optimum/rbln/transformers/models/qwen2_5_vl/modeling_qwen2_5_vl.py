@@ -401,15 +401,6 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         return model
 
     @classmethod
-    def update_kwargs(cls, kwargs):
-        kwargs.update(
-            {
-                "_attn_implementation": "eager",
-            }
-        )
-        return super().update_kwargs(kwargs)
-
-    @classmethod
     def get_input_info(
         cls,
         batch_size: int,
