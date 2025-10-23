@@ -142,7 +142,9 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
         rbln_config: Optional[RBLNColQwen2ForRetrievalConfig] = None,
     ) -> RBLNColQwen2ForRetrievalConfig:
         if rbln_config.output_hidden_states is None:
-            rbln_config.output_hidden_states = model_config.vlm_config.text_config.output_hidden_states
+            rbln_config.output_hidden_states = getattr(
+                model_config.vlm_config.text_confing, "output_hidden_states", False
+            )
 
         return super()._update_rbln_config(
             preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
