@@ -28,6 +28,7 @@ from ....modeling import RBLNModel
 from ...modeling_outputs import RBLNDecoderOnlyOutput
 from ...utils.rbln_runtime_wrapper import LoopProcessor
 from ..decoderonly.decoderonly_runtime_utils import RBLNPageTableManager
+from ..decoderonly.generation_decoderonly import RBLNDecoderOnlyGenerationMixin
 from ..decoderonly.modeling_decoderonly import (
     RBLNDecoderOnlyModelForCausalLM,
 )
@@ -77,7 +78,7 @@ class LoopProjector(LoopProcessor):
         return output[0]
 
 
-class RBLNGemma3ForConditionalGeneration(RBLNModel):
+class RBLNGemma3ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixin):
     auto_model_class = AutoModelForImageTextToText
     _rbln_submodules = [
         {"name": "vision_tower"},
