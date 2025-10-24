@@ -12,9 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, List, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
-import rebel
 import torch
 from transformers import (
     PretrainedConfig,
@@ -149,25 +148,6 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
         return super()._update_rbln_config(
             preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
         )
-
-    @classmethod
-    def _create_runtimes(
-        cls,
-        compiled_models: List[rebel.RBLNCompiledModel],
-        rbln_config: RBLNColQwen2ForRetrievalConfig,
-    ) -> List[rebel.Runtime]:
-        expected_model_names = ["prefill"]
-        if any(model_name not in rbln_config.device_map for model_name in expected_model_names):
-            cls._raise_missing_compiled_file_error(expected_model_names)
-
-        return [
-            rebel.Runtime(
-                compiled_models[0],
-                tensor_type="pt",
-                device=rbln_config.device_map["prefill"],
-                activate_profiler=rbln_config.activate_profiler,
-            ),
-        ]
 
     def _get_position_embeddings(self, hidden_states, position_ids):
         cos, sin = self.rotary_emb(hidden_states, position_ids)
