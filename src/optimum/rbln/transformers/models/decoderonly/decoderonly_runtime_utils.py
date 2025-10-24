@@ -420,6 +420,16 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             inputs, cache_position, attention_mask, position_embed, token_type_ids=token_type_ids
         )
 
+        # Assumed that prefix caching was performed externally if cache_position doesn't start from 0.
+        prefix_cached_len = cache_position[0][0].item()
+        if prefix_cached_len > 0:
+            if prefix_cached_len % self.rbln_config.prefill_chunk_size != 0:
+                raise NotImplementedError(
+                    "Prefix Caching is not supported yet for non-multiple of prefill_chunk_size."
+                )
+            if self.rbln_config.use_attention_mask:
+                chunked_attention_mask[:, :, :, :prefix_cached_len] = 1
+
         # Process input in chunks of size `prefill_chunk_size`
         output_logits = []
         for step in range(0, query_length, self.rbln_config.prefill_chunk_size):
@@ -434,9 +444,14 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             if self.rbln_config.use_attention_mask and not self.rbln_config.use_position_ids:
                 if step > 0:  # update previous chunk
                     chunked_attention_mask[
-                        :, :, :, s - self.rbln_config.prefill_chunk_size : e - self.rbln_config.prefill_chunk_size
+                        :,
+                        :,
+                        :,
+                        s - self.rbln_config.prefill_chunk_size + prefix_cached_len : e
+                        - self.rbln_config.prefill_chunk_size
+                        + prefix_cached_len,
                     ] = 1
-                chunked_attention_mask[:, :, :, s:e] = self.causal_mask
+                chunked_attention_mask[:, :, :, s + prefix_cached_len : e + prefix_cached_len] = self.causal_mask
 
             # Calculate query position if needed
             if self.rbln_config.use_local_attention or self.rbln_config.logits_to_keep > 0:
