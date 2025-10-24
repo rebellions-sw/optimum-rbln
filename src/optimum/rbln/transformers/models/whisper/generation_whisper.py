@@ -56,7 +56,14 @@ class RBLNWhisperGenerationMixin(WhisperGenerationMixin, GenerationMixin):
         return super().generate(*args, **kwargs)
 
     def _postprocess_outputs(
-        self, seek_outputs, decoder_input_ids, return_token_timestamps, generation_config, *args, **kwargs
+        self,
+        seek_outputs,
+        decoder_input_ids,
+        return_token_timestamps,
+        generation_config,
+        is_shortform,
+        seek,
+        batch_idx_map,
     ):
         # remove all previously passed decoder input ids
         # should happen only if it is the first generated segment
@@ -74,6 +81,11 @@ class RBLNWhisperGenerationMixin(WhisperGenerationMixin, GenerationMixin):
 
         if return_token_timestamps and hasattr(generation_config, "alignment_heads"):
             num_frames = getattr(generation_config, "num_frames", None)
+
+            if num_frames is not None:
+                num_frames = num_frames - seek
+                num_frames = num_frames[batch_idx_map]
+
             if version.parse(transformers.__version__) >= version.parse("4.46.0"):
                 seek_outputs["token_timestamps"] = self._extract_token_timestamps(
                     seek_outputs,
