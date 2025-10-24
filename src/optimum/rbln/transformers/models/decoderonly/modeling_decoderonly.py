@@ -260,10 +260,12 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
         # Mark static tensors (self kv states)
         static_tensors = {}
+        idx = 0
         for (name, _, _), tensor in zip(compile_config.input_info, example_inputs):
             if "past_key_values" in name:
                 static_tensors[name] = tensor
-                context.mark_static_address(tensor)
+                context.mark_static_address(tensor, f"kv_cache_{idx}")
+                idx += 1
 
         return context, static_tensors
 
