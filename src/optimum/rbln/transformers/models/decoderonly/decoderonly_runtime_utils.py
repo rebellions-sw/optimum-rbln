@@ -420,7 +420,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             inputs, cache_position, attention_mask, position_embed, token_type_ids=token_type_ids
         )
 
-        # Prefix Caching
+        # Assumed that prefix caching was performed externally if cache_position doesn't start from 0.
         prefix_cached_len = cache_position[0][0].item()
         if prefix_cached_len > 0:
             if prefix_cached_len % self.rbln_config.prefill_chunk_size != 0:
