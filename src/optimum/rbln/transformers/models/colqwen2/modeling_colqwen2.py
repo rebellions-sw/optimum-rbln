@@ -56,7 +56,6 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
     _rbln_submodules = [
         {"name": "visual"},
     ]
-    _rbln_submodule_prefix = "vlm"
     _decoder_wrapper_cls = ColQwen2LanguageModelWrapper
     _use_rotary_emb = False
 
@@ -83,6 +82,8 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
     def get_pytorch_model(cls, *args, **kwargs):
         # FIXME: temporary fix for ColQwen2ForRetrieval dtype issue
         model = super().get_pytorch_model(*args, **kwargs).to(torch.float32)
+        model.visual = model.vlm.visual
+        model.language_model = model.vlm.language_model
         return model
 
     def _create_embedding_layer(self):
@@ -102,11 +103,14 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
         rbln_config: RBLNColQwen2ForRetrievalConfig,
         model_config: PretrainedConfig,
     ):
+        text_config = (
+            model_config.vlm_config.text_config if hasattr(model_config, "vlm_config") else model_config.text_config
+        )
         input_info = super().get_input_info(
             batch_size,
             query_length,
             rbln_config=rbln_config,
-            model_config=model_config.vlm_config.text_config,
+            model_config=text_config,
         )
 
         pos_idx = 3
@@ -119,8 +123,7 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
                     batch_size,
                     1,
                     query_length,
-                    model_config.vlm_config.text_config.hidden_size
-                    // model_config.vlm_config.text_config.num_attention_heads,
+                    text_config.hidden_size // text_config.num_attention_heads,
                 ],
                 rbln_config.torch_dtype,
             ),

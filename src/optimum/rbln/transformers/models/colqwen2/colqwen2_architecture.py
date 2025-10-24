@@ -45,16 +45,17 @@ class ColQwen2LanguageModelWrapper(DecoderOnlyWrapper):
     def __init__(
         self, model: PreTrainedModel, rbln_config: "RBLNColQwen2ForRetrievalConfig", use_rotary_emb: bool = True
     ):
-        model.config = model.config.vlm_config.text_config
+        model.config = (
+            model.config.vlm_config.text_config if hasattr(model.config, "vlm_config") else model.config.text_config
+        )
         super().__init__(model, rbln_config, use_rotary_emb)
-        self.embedding_proj_layer = model.embedding_proj_layer
 
     def get_decoder_layers(self, model: PreTrainedModel):
         return model.language_model.layers
 
     def convert_to_rbln_class(self, model: PreTrainedModel, max_seq_len: int):
         new_layers = []
-        for layer_idx, layer in enumerate(model.vlm.language_model.layers):
+        for layer_idx, layer in enumerate(self.get_decoder_layers(model)):
             is_sliding = layer_idx in self.rbln_config.sliding_window_layers
             new_self_attn = self.get_rbln_attn_class()(
                 self.get_attn_layer(layer),
@@ -65,10 +66,15 @@ class ColQwen2LanguageModelWrapper(DecoderOnlyWrapper):
             new_layers.append(new_layer)
 
         new_model = self.get_rbln_model_class()(
-            model.vlm.language_model,
+            model.language_model,
             new_layers,
             self.rbln_config,
             use_learned_pos_emb=self.__class__._use_learned_pos_emb,
+        )
+
+        # text_projection layer from model
+        self.embedding_proj_layer = (
+            model.embedding_proj_layer if hasattr(model, "embedding_proj_layer") else model.custom_text_proj
         )
         return new_model
 
