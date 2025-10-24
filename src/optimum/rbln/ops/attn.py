@@ -257,8 +257,6 @@ def paged_causal_attn_decode_fake(
 )
 def paged_causal_attn_prefill(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     kcache: Tensor,
     vcache: Tensor,
     seq: Tensor,
@@ -279,8 +277,6 @@ def paged_causal_attn_prefill(
 
     Expected tensor shapes:
     - q: [batch=1, n_heads, n_groups, seq_len, head_dim] - Query states for multiple tokens
-    - k: [batch=1, n_heads, 1, seq_len, head_dim] - Key states for current input
-    - v: [batch=1, n_heads, 1, seq_len, head_dim] - Value states for current input
     - kcache: [batch_size, n_heads, 1, max_seq_len, head_dim] - Key cache
     - vcache: [batch_size, n_heads, 1, max_seq_len, head_dim] - Value cache
     - batch: [1] - Batch index for cache access
@@ -300,8 +296,6 @@ def paged_causal_attn_prefill(
 @paged_causal_attn_prefill.register_fake
 def paged_causal_attn_prefill_fake(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     kcache: Tensor,
     vcache: Tensor,
     seq: Tensor,
@@ -320,8 +314,6 @@ def paged_causal_attn_prefill_fake(
 )
 def paged_causal_attn_decode_kv_fp8(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     kcache: Tensor,
     vcache: Tensor,
     seq: Tensor,
@@ -338,8 +330,6 @@ def paged_causal_attn_decode_kv_fp8(
 @paged_causal_attn_decode_kv_fp8.register_fake
 def paged_causal_attn_decode_kv_fp8_fake(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     kcache: Tensor,
     vcache: Tensor,
     seq: Tensor,
@@ -359,8 +349,6 @@ def paged_causal_attn_decode_kv_fp8_fake(
 )
 def paged_causal_attn_prefill_kv_fp8(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     kcache: Tensor,
     vcache: Tensor,
     seq: Tensor,
@@ -378,8 +366,6 @@ def paged_causal_attn_prefill_kv_fp8(
 @paged_causal_attn_prefill_kv_fp8.register_fake
 def paged_causal_attn_prefill_kv_fp8_fake(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     kcache: Tensor,
     vcache: Tensor,
     seq: Tensor,
@@ -400,8 +386,6 @@ def paged_causal_attn_prefill_kv_fp8_fake(
 )
 def paged_add_softmax_attn_decode(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     mask: Tensor,
     kcache: Tensor,
     vcache: Tensor,
@@ -442,8 +426,6 @@ def paged_add_softmax_attn_decode(
 @paged_add_softmax_attn_decode.register_fake
 def paged_add_softmax_attn_decode_fake(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     mask: Tensor,
     kcache: Tensor,
     vcache: Tensor,
