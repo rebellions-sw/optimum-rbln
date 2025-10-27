@@ -61,7 +61,6 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
 
     def __post_init__(self, **kwargs):
         self.config = self.config.vlm_config if hasattr(self.config, "vlm_config") else self.config
-        self.config.vision_start_token_id = self.config.text_config.vision_start_token_id
 
         artifacts = torch.load(
             self.model_save_dir / self.subfolder / "torch_artifacts.pth",
