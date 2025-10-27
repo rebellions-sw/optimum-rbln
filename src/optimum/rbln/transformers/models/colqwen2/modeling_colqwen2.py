@@ -80,12 +80,13 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
         self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
 
     @classmethod
-    def get_pytorch_model(cls, *args, **kwargs):
+    def _reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
+        if hasattr(model, "vlm"):
+            model.visual = model.vlm.visual
+            model.language_model = model.vlm.language_model
+
         # FIXME: temporary fix for ColQwen2ForRetrieval dtype issue
-        model = super().get_pytorch_model(*args, **kwargs).to(torch.float32)
-        model.visual = model.vlm.visual
-        model.language_model = model.vlm.language_model
-        return model
+        return model.to(torch.float32)
 
     def _create_embedding_layer(self):
         with no_init_weights():
