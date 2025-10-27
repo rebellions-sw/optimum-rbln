@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -27,10 +27,6 @@ from optimum.rbln.transformers.models.decoderonly.decoderonly_architecture impor
 from .configuration_colqwen2 import (
     RBLNColQwen2ForRetrievalConfig,
 )
-
-
-if TYPE_CHECKING:
-    pass
 
 
 def slice_and_unsqueeze_cos_sin(cos, sin, position_ids):
