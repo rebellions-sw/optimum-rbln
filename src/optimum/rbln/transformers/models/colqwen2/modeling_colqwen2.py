@@ -71,7 +71,7 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
         self.visual = self.rbln_submodules[0]
         self.prefill_runtime = self.model[0]
         self.mrope_section = self.config.text_config.rope_scaling["mrope_section"]
-        self.is_colqwen2_5 = self.config.model_type == "qwen2_5_vl"
+        self.is_colqwen2_5 = "qwen2_5_vl" in self.config.model_type
 
         if self.is_colqwen2_5:
             self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config.text_config)
