@@ -217,7 +217,7 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
 
         image_token_id = self.config.image_token_id
         video_token_id = self.config.video_token_id
-        vision_start_token_id = self.config.text_config.vision_start_token_id
+        vision_start_token_id = self.config.vision_start_token_id
         image_idx, video_idx = 0, 0
 
         for b_idx in range(batch_size):
