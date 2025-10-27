@@ -1,10 +1,12 @@
+import json
 import os
 import shutil
 import unittest
 
 import torch
+from PIL import Image
 from rebel.core.exception import RBLNRuntimeError
-from transformers import T5EncoderModel
+from transformers import AutoConfig, T5EncoderModel
 
 from optimum.rbln import (
     RBLNASTForAudioClassification,
@@ -14,6 +16,7 @@ from optimum.rbln import (
     RBLNBertModel,
     RBLNCLIPTextModel,
     RBLNColPaliForRetrieval,
+    RBLNColQwen2ForRetrieval,
     RBLNDistilBertForQuestionAnswering,
     RBLNDPTForDepthEstimation,
     RBLNGroundingDinoForObjectDetection,
@@ -388,6 +391,48 @@ class TestColPaliModel(BaseTest.TestModel):
         "attention_mask": torch.ones((1, 1024), dtype=torch.int32),
         "pixel_values": torch.randn(1, 3, 448, 448, generator=torch.manual_seed(42)),
     }
+
+
+class TestColQwen2Model(BaseTest.TestModel):
+    RBLN_AUTO_CLASS = None
+    RBLN_CLASS = RBLNColQwen2ForRetrieval
+    HF_MODEL_ID = "vidore/colqwen2-v1.0-hf"
+    RBLN_CLASS_KWARGS = {
+        "rbln_config": {
+            "visual": {"max_seq_lens": 512},
+            "tensor_parallel_size": 1,
+            "max_seq_len": 32_768,
+        }
+    }
+    HF_CONFIG_KWARGS_PREPROCESSOR = {"max_pixels": 64 * 14 * 14}
+
+    @classmethod
+    def setUpClass(cls):
+        config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
+
+        # Reduce model size for faster testing
+        vision_config = json.loads(config.vlm_config.vision_config.to_json_string())
+        text_config = json.loads(config.vlm_config.text_config.to_json_string())
+        vision_config["depth"] = 1
+        text_config["num_hidden_layers"] = 1
+        text_config["layer_types"] = text_config["layer_types"][:1]
+
+        cls.HF_CONFIG_KWARGS.update({"vlm_config": {"vision_config": vision_config, "text_config": text_config}})
+        return super().setUpClass()
+
+    def get_processor(self):
+        from transformers import ColQwen2Processor
+
+        processor = ColQwen2Processor.from_pretrained(self.HF_MODEL_ID)
+        return processor
+
+    def get_inputs(self):
+        processor = self.get_processor()
+        images = [
+            Image.new("RGB", (64, 32), color="black"),
+        ]
+        inputs_image = processor(images=images)
+        return inputs_image
 
 
 class TestWav2VecModel(BaseTest.TestModel):
