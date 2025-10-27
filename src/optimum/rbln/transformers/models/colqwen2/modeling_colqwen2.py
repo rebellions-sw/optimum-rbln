@@ -105,9 +105,7 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
         rbln_config: RBLNColQwen2ForRetrievalConfig,
         model_config: PretrainedConfig,
     ):
-        text_config = (
-            model_config.vlm_config.text_config if hasattr(model_config, "vlm_config") else model_config.text_config
-        )
+        text_config = model_config.text_config
         input_info = super().get_input_info(
             batch_size,
             query_length,
@@ -145,10 +143,9 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
         model_config: Optional["PretrainedConfig"] = None,
         rbln_config: Optional[RBLNColQwen2ForRetrievalConfig] = None,
     ) -> RBLNColQwen2ForRetrievalConfig:
+        model_config = model_config.vlm_config if hasattr(model_config, "vlm_config") else model_config
         if rbln_config.output_hidden_states is None:
-            rbln_config.output_hidden_states = getattr(
-                model_config.vlm_config.text_confing, "output_hidden_states", False
-            )
+            rbln_config.output_hidden_states = getattr(model_config.text_config, "output_hidden_states", False)
 
         return super()._update_rbln_config(
             preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
