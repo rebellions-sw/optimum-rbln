@@ -71,10 +71,12 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
         self.visual = self.rbln_submodules[0]
         self.prefill_runtime = self.model[0]
         self.mrope_section = self.config.text_config.rope_scaling["mrope_section"]
-        if self.config.model_type == "qwen2_vl":
-            self.rotary_emb = Qwen2VLRotaryEmbedding(self.config.text_config)
-        else:
+        self.is_colqwen2_5 = self.config.model_type == "qwen2_5_vl"
+
+        if self.is_colqwen2_5:
             self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config.text_config)
+        else:
+            self.rotary_emb = Qwen2VLRotaryEmbedding(self.config.text_config)
         self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
 
     @classmethod
@@ -159,10 +161,10 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
         return torch.stack([cos, sin])
 
     def get_rope_index(self, *args, **kwargs):
-        if self.config.model_type == "qwen2_vl":
-            return Qwen2VLModel.get_rope_index(self, *args, **kwargs)
-        else:
+        if self.is_colqwen2_5:
             return Qwen2_5_VLModel.get_rope_index(self, *args, **kwargs)
+        else:
+            return Qwen2VLModel.get_rope_index(self, *args, **kwargs)
 
     def _preprocess_visual(
         self,
