@@ -415,6 +415,7 @@ class TestColQwen2Model(BaseTest.TestModel):
         text_config = json.loads(config.vlm_config.text_config.to_json_string())
         vision_config["depth"] = 1
         text_config["num_hidden_layers"] = 1
+        text_config["layer_types"] = text_config["layer_types"][:1]
 
         cls.HF_CONFIG_KWARGS.update({"vlm_config": {"vision_config": vision_config, "text_config": text_config}})
         return super().setUpClass()
