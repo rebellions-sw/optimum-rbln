@@ -43,6 +43,9 @@ Homepage = "https://rebellions.ai"
 Documentation = "https://docs.rbln.ai"
 Repository = "https://github.com/rebellions-sw/optimum-rbln"
 
+[project.scripts]
+optimum-rbln-cli = "optimum.rbln.cli:main"
+
 [dependency-groups]
 tests = [
     "pytest>=8.1.1",
