@@ -276,7 +276,7 @@ class RBLNModelForDepthEstimation(RBLNImageModel):
                 self.rbln_config = rbln_config
 
             def forward(self, *args, **kwargs):
-                output = self.model(*args, **kwargs)
+                output = self.model(*args, return_dict=True, **kwargs)
                 return output.predicted_depth
 
         return ImageModelWrapper(model, rbln_config).eval()
