@@ -1,4 +1,4 @@
-name: Optimum-rbln / Tests
+name: Optimum-rbln / PR / Pytest
 
 on:
   workflow_call:
@@ -40,8 +40,8 @@ env:
   HF_AUTH_TOKEN: ${{ inputs.enable_hf_hub_tests && secrets.HF_AUTH_TOKEN || '' }}
 
 jobs:
-  test:
-    name: Test (${{ matrix.test_type }})
+  pytest:
+    name: Pytest (${{ matrix.test_type }})
     runs-on: vm-ci-0
     strategy:
       fail-fast: ${{ inputs.fail_fast }}

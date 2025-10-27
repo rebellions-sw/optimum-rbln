@@ -39,7 +39,7 @@ jobs:
       compiler_version: ${{ needs.load-version.outputs.compiler_version }}
     secrets: inherit
 
-  optimum-rbln-tests:
+  optimum-rbln-pytest:
     needs: [load-version, check-compiler]
     if: ${{ needs.check-compiler.outputs.compiler_version_check == 'true' }}
     uses: ./.github/workflows/rbln_optimum_pytest.yaml
