@@ -112,6 +112,7 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
 
     This model inherits from [`RBLNModel`]. It implements the methods to convert and run
     pre-trained transformers based Whisper model on RBLN devices by:
+
     - transferring the checkpoint weights of the original into an optimized RBLN graph,
     - compiling the resulting graph using the RBLN compiler.
 
@@ -149,7 +150,8 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
     """
 
     auto_model_class = AutoModelForSpeechSeq2Seq
-    main_input_name = "input_ids"
+    main_input_name = "input_features"
+    _is_stateful = False
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)

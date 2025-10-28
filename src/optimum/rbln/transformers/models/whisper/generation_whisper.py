@@ -39,14 +39,31 @@ from transformers.models.whisper.generation_whisper import WhisperGenerationMixi
 
 
 class RBLNWhisperGenerationMixin(WhisperGenerationMixin, GenerationMixin):
-    """
-    This class is based on transformers version 4.44.2.
-    It uses the same generate() method, so it's crucial to maintain the inheritance order.
-    Ensure WhisperGenerationMixin is listed before GenerationMixin.
-    """
+    def generate(self, *args, generation_config=None, **kwargs):
+        num_beams = kwargs.get(
+            "num_beams",
+            generation_config.num_beams
+            if hasattr(generation_config, "num_beams") and generation_config.num_beams is not None
+            else 1,
+        )
+        if num_beams > 1:
+            raise ValueError(
+                f"Beam search is not supported in RBLNWhisperGenerationMixin. "
+                f"Received num_beams={num_beams}, but only num_beams=1 is allowed. "
+                f"Please set num_beams=1 for greedy search or adjust your configuration."
+            )
+
+        return super().generate(*args, **kwargs)
 
     def _postprocess_outputs(
-        self, seek_outputs, decoder_input_ids, return_token_timestamps, generation_config, *args, **kwargs
+        self,
+        seek_outputs,
+        decoder_input_ids,
+        return_token_timestamps,
+        generation_config,
+        is_shortform,
+        seek,
+        batch_idx_map,
     ):
         # remove all previously passed decoder input ids
         # should happen only if it is the first generated segment
@@ -64,6 +81,11 @@ class RBLNWhisperGenerationMixin(WhisperGenerationMixin, GenerationMixin):
 
         if return_token_timestamps and hasattr(generation_config, "alignment_heads"):
             num_frames = getattr(generation_config, "num_frames", None)
+
+            if num_frames is not None:
+                num_frames = num_frames - seek
+                num_frames = num_frames[batch_idx_map]
+
             if version.parse(transformers.__version__) >= version.parse("4.46.0"):
                 seek_outputs["token_timestamps"] = self._extract_token_timestamps(
                     seek_outputs,

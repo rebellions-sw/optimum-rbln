@@ -24,11 +24,11 @@ class RBLNColPaliForRetrievalWrapper(nn.Module):
         output_hidden_states: bool = False,
     ):
         super().__init__()
-        self.text_config = causal_lm.config
+        self.text_config = causal_lm.config.text_config
         self.rotary_emb = self.get_rotary_emb(max_seq_len=max_seq_len)
 
         self.output_hidden_states = output_hidden_states
-        self.language_model = self.convert_to_rbln_language_model(causal_lm.model, max_seq_len)
+        self.language_model = self.convert_to_rbln_language_model(causal_lm.model.language_model, max_seq_len)
 
         self.num_hidden_layers = getattr(self.text_config, "num_hidden_layers", None)
         self.embedding_proj_layer = embedding_proj_layer

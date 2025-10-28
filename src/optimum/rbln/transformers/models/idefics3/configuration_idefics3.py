@@ -15,10 +15,29 @@
 from typing import Any, Optional
 
 from ....configuration_utils import RBLNModelConfig
+from ....utils.logging import get_logger
+
+
+logger = get_logger(__name__)
 
 
 class RBLNIdefics3VisionTransformerConfig(RBLNModelConfig):
-    pass
+    """
+    Configuration class for RBLNIdefics3VisionTransformer.
+
+    This configuration class stores the configuration parameters specific to
+    RBLN-optimized Idefics3 vision transformer.
+    """
+
+    def __init__(
+        self,
+        batch_size: Optional[int] = None,
+        **kwargs: Any,
+    ):
+        super().__init__(**kwargs)
+        self.batch_size = batch_size or 1
+        if not isinstance(self.batch_size, int) or self.batch_size < 0:
+            raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
 
 class RBLNIdefics3ForConditionalGenerationConfig(RBLNModelConfig):
@@ -45,11 +64,15 @@ class RBLNIdefics3ForConditionalGenerationConfig(RBLNModelConfig):
         Args:
             batch_size (Optional[int]): The batch size for inference. Defaults to 1.
             vision_model (Optional[RBLNModelConfig]): Configuration for the vision transformer component.
+                This can include settings specific to the vision encoder, such as input resolution or other vision-related parameters.
+                If not provided, default settings will be used.
             text_model (Optional[RBLNModelConfig]): Configuration for the text model component.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+                This can include settings specific to the language model, such as tensor parallelism or other text-related parameters.
+                If not provided, default settings will be used.
+            kwargs: Additional arguments passed to the parent `RBLNModelConfig`.
 
         Raises:
-            ValueError: If batch_size is not a positive integer.
+            ValueError: If `batch_size` is not a positive integer.
         """
 
         super().__init__(**kwargs)
@@ -57,5 +80,10 @@ class RBLNIdefics3ForConditionalGenerationConfig(RBLNModelConfig):
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
-        self.vision_model = vision_model
-        self.text_model = text_model
+        if self.batch_size != 1:
+            logger.warning("Ignore batch_size for Idefics3 vision transformer. It will be set to 1.")
+
+        self.vision_model = self.initialize_submodule_config(
+            submodule_config=vision_model, batch_size=1, force_kwargs=True
+        )
+        self.text_model = self.initialize_submodule_config(submodule_config=text_model)

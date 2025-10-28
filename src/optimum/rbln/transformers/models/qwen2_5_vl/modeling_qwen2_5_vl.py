@@ -23,6 +23,7 @@ from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     Qwen2_5_VisionPatchEmbed,
     Qwen2_5_VisionRotaryEmbedding,
     Qwen2_5_VisionTransformerPretrainedModel,
+    Qwen2_5_VLModel,
     Qwen2_5_VLRotaryEmbedding,
 )
 
@@ -392,13 +393,12 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         return True
 
     @classmethod
-    def update_kwargs(cls, kwargs):
-        kwargs.update(
-            {
-                "_attn_implementation": "eager",
-            }
-        )
-        return super().update_kwargs(kwargs)
+    def get_pytorch_model(cls, *args, **kwargs):
+        model = super().get_pytorch_model(*args, **kwargs)
+        model.model.lm_head = model.lm_head
+        model.lm_head = None
+        del model.lm_head
+        return model
 
     @classmethod
     def get_input_info(
@@ -532,7 +532,8 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             vision_tokens = input_id[0][vision_start_indices + 1]
             image_nums = (vision_tokens == image_token_id).sum()
             video_nums = (vision_tokens == video_token_id).sum()
-            position_ids, rope_deltas = self.get_rope_index(
+            position_ids, rope_deltas = Qwen2_5_VLModel.get_rope_index(
+                self,
                 input_id,
                 image_grid_thw[image_idx : image_idx + image_nums] if image_grid_thw is not None else None,
                 video_grid_thw[video_idx : video_idx + video_nums] if video_grid_thw is not None else None,
