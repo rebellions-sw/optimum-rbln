@@ -113,13 +113,13 @@ class TestQwen2ForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen2ForCausalLM
     HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
     EXPECTED_OUTPUT = "?:雨成名ylonclaimer淡elsinki一角一角一角一角一角一角一角一角一角一角一角一角一角"
-    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "layer_types": ["full_attention"], "max_position_embeddings": 1024}
 
 
 class TestQwen2Model(LLMTest.TestLLMWithoutLMHead):
     RBLN_CLASS = RBLNQwen2Model
     HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
-    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "layer_types": ["full_attention"], "max_position_embeddings": 1024}
 
 
 class TestQwen3ForCausalLM(LLMTest.TestLLM):
@@ -130,6 +130,7 @@ class TestQwen3ForCausalLM(LLMTest.TestLLM):
     )
     HF_CONFIG_KWARGS = {
         "num_hidden_layers": 1,
+        "layer_types": ["full_attention"],
         "max_position_embeddings": 1024,
         "revision": "397c180b0ded9c45c33bbce7f88df86bb2d571d4",
     }
@@ -144,7 +145,7 @@ class TestQwen3Model(LLMTest.TestLLMWithoutLMHead):
     RBLN_AUTO_CLASS = RBLNAutoModel
     RBLN_CLASS = RBLNQwen3Model
     HF_MODEL_ID = "trl-internal-testing/tiny-Qwen3ForCausalLM"
-    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "layer_types": ["full_attention"], "max_position_embeddings": 1024}
 
 
 class TestQwen3Model_UAM(TestQwen3Model):
