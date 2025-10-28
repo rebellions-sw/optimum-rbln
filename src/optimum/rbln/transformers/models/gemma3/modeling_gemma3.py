@@ -100,7 +100,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMix
     
     
     @classmethod
-    def reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
+    def _reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
         
         with no_init_weights():
             model_cls_name = model.model.language_model.__class__.__name__

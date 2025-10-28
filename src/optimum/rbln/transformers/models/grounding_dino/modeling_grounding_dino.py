@@ -207,7 +207,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         
     
     @classmethod
-    def reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
+    def _reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
         model.encoder = model.model.encoder
         model.decoder = model.model.decoder
         model.text_backbone = model.model.text_backbone

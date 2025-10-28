@@ -236,7 +236,7 @@ class RBLNColPaliForRetrieval(RBLNModel):
         return rbln_config
 
     @classmethod
-    def reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
+    def _reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
         if hasattr(model, "vlm"):
             model.vision_tower = model.vlm.vision_tower
             del model.vlm.model.vision_tower

@@ -240,7 +240,7 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationM
         return True
 
     @classmethod
-    def reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
+    def _reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
         with no_init_weights():
             model_cls_name = model.model.text_model.__class__.__name__
             causal_model_cls_name = model_cls_name.replace("Model", "ForCausalLM")
