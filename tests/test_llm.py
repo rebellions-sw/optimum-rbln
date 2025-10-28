@@ -675,11 +675,19 @@ class TestGemma3ForCausalLM(LLMTest.TestLLM):
     HF_MODEL_ID = "google/gemma-3-1b-it"
     EXPECTED_OUTPUT = "1st L L L L L L L L L L L L L L L L L L"
     HF_CONFIG_KWARGS = {
-        "num_hidden_layers": 2,
-        "sliding_window_pattern": 2,
-        "max_position_embeddings": 1024,
         "trust_remote_code": True,
     }
+
+    @classmethod
+    def setUpClass(cls):
+        hf_config = AutoConfig.from_pretrained(cls.HF_MODEL_ID)
+        hf_config.num_hidden_layers = 2
+        hf_config.layer_types = ["full_attention", "sliding_attention"]
+        hf_config.sliding_window_pattern = 2
+        hf_config.max_position_embeddings = 1024
+        kwargs = {"config": hf_config}
+        cls.HF_CONFIG_KWARGS.update(kwargs)
+        return super().setUpClass()
 
 
 class TestLlamaForCausalLM_fp8(LLMTest.TestLLM):
