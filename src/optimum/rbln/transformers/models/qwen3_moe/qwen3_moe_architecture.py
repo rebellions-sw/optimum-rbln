@@ -65,19 +65,22 @@ class Qwen3MoeSparseMoeBlock(nn.Module):
         self.experts = Qwen3MoeMLP(model.experts)
 
     def get_masked_routing_weights(self, router_logits):
-        # routing_weights: (batch * sequence_length, n_experts)
-        routing_weights = torch.nn.functional.softmax(router_logits, dim=1, dtype=torch.float)
+        if self.norm_topk_prob:
+            selected_weights, selected_experts = torch.topk(router_logits, k=self.top_k, dim=-1)
+            selected_weights = torch.nn.functional.softmax(selected_weights, dim=1, dtype=torch.float)
+            masked_routing_weights = torch.zeros_like(router_logits, dtype=torch.float32)
+            masked_routing_weights.scatter_(1, selected_experts, selected_weights)
+        else:
+            # routing_weights: (batch * sequence_length, n_experts)
+            routing_weights = torch.nn.functional.softmax(router_logits, dim=1, dtype=torch.float)
 
-        # selected_experts: (batch * sequence_length, top_k)
-        selected_weights, selected_experts = torch.topk(routing_weights, k=self.top_k, dim=-1)
-        mask = torch.zeros_like(routing_weights, dtype=torch.float32)
-        un_mask = torch.ones_like(selected_experts, dtype=torch.float32)
-        mask.scatter_(1, selected_experts, un_mask)
+            # selected_experts: (batch * sequence_length, top_k)
+            selected_weights, selected_experts = torch.topk(routing_weights, k=self.top_k, dim=-1)
+            mask = torch.zeros_like(routing_weights, dtype=torch.float32)
+            un_mask = torch.ones_like(selected_experts, dtype=torch.float32)
+            mask.scatter_(1, selected_experts, un_mask)
+            masked_routing_weights = routing_weights * mask
 
-        if self.norm_topk_prob:  # only diff with mixtral sparse moe block!
-            routing_weights /= selected_weights.sum(dim=-1, keepdim=True)
-
-        masked_routing_weights = routing_weights * mask
 
         ## get size per expert
         expert = router_logits.shape[1]
