@@ -204,10 +204,10 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         save_dict["bbox_embed"] = model.bbox_embed.state_dict()
 
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
-
+        
+    
     @classmethod
-    def get_pytorch_model(cls, *args, **kwargs):
-        model = super().get_pytorch_model(*args, **kwargs)
+    def _reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
         model.encoder = model.model.encoder
         model.decoder = model.model.decoder
         model.text_backbone = model.model.text_backbone
