@@ -88,7 +88,7 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
     @classmethod
-    def wrap_model_if_needed(
+    def _wrap_model_if_needed(
         cls, model: "PreTrainedModel", rbln_config: RBLNQwen2_5_VisionTransformerPretrainedModelConfig
     ):
         return Qwen2_5_VisionTransformerWrapper(model).eval()
@@ -393,7 +393,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         return True
 
     @classmethod
-    def reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
+    def _reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
         model.model.lm_head = model.lm_head
         model.lm_head = None
         del model.lm_head
