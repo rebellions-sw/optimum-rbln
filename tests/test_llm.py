@@ -560,9 +560,7 @@ class TestQwen2VLForConditionalGeneration(LLMTest.TestLLM):
         }
     }
     EXPECTED_OUTPUT = " finishing Flight旅馆ジ eventual Rivers Ủy#! Bilderbroker WageאוגוסTransactionإبد.operator офис lives #-}\n voltage"
-    HF_CONFIG_KWARGS = {
-        "num_hidden_layers": 1,
-    }
+    HF_CONFIG_KWARGS = {"num_hidden_layers": 1}
 
     @classmethod
     def setUpClass(cls):
