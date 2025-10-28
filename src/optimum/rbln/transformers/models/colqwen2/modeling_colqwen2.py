@@ -69,7 +69,7 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
 
     Examples:
         ```python
-        from optimum.rbln import RBLNColPaliForRetrieval
+        from optimum.rbln import RBLNColQwen2ForRetrieval
 
         # Using a config dictionary
         rbln_config = {
