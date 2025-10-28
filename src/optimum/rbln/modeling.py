@@ -34,49 +34,6 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def _get_dtype(
-    cls,
-    dtype: Optional[Union[str, torch.dtype, dict]],
-    config: PretrainedConfig,
-) -> tuple[PretrainedConfig, Optional[torch.dtype], Optional[torch.dtype]]:
-    dtype_orig = None
-
-    if dtype is not None:
-        if isinstance(dtype, str):
-            if dtype == "auto":
-                if hasattr(config, "dtype") and config.dtype is not None:
-                    dtype = config.dtype
-                else:
-                    dtype = torch.get_default_dtype()
-            elif hasattr(torch, dtype):
-                dtype = getattr(torch, dtype)
-                config.dtype = dtype
-        elif isinstance(dtype, torch.dtype):
-            config.dtype = dtype
-        elif isinstance(dtype, dict):
-            for key, curr_dtype in dtype.items():
-                if hasattr(config, key):
-                    value = getattr(config, key)
-                    curr_dtype = curr_dtype if not isinstance(curr_dtype, str) else getattr(torch, curr_dtype)
-                    value.dtype = curr_dtype
-            # main torch dtype for modules that aren't part of any sub-config
-            dtype = dtype.get("")
-            dtype = dtype if not isinstance(dtype, str) else getattr(torch, dtype)
-            config.dtype = dtype
-            if dtype is None:
-                dtype = torch.float32
-        else:
-            raise ValueError(f"Invalid dtype: {dtype}")
-
-        dtype_orig = cls._set_default_dtype(dtype)
-    else:
-        # Use default dtype
-        default_dtype = torch.get_default_dtype()
-        config.dtype = default_dtype
-
-    return config, dtype, dtype_orig
-
-
 class RBLNModel(RBLNBaseModel):
     @classmethod
     def update_kwargs(cls, kwargs):
