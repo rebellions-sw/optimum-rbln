@@ -83,6 +83,7 @@ class TestSDXLModel(BaseTest.TestModel):
             },
         }
     }
+    TEST_LEVEL = TestLevel.DISABLED  # Should be enabled after compiler issue is fixed
 
 
 class TestSDImg2ImgModel(BaseTest.TestModel):
@@ -109,7 +110,6 @@ class TestSDImg2ImgModel(BaseTest.TestModel):
         "rbln_img_width": 64,
         "rbln_img_height": 64,
     }
-    TEST_LEVEL = TestLevel.DISABLED  # Should be enabled after compiler issue is fixed
 
 
 class TestSDControlNetModel(BaseTest.TestModel):
