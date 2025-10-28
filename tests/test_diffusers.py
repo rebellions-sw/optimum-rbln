@@ -18,7 +18,7 @@ from optimum.rbln import (
     RBLNStableDiffusionXLPipeline,
 )
 
-from .test_base import BaseHubTest, BaseTest
+from .test_base import BaseHubTest, BaseTest, TestLevel
 
 
 class TestSDModel(BaseTest.TestModel, BaseHubTest.TestHub):
@@ -109,6 +109,7 @@ class TestSDImg2ImgModel(BaseTest.TestModel):
         "rbln_img_width": 64,
         "rbln_img_height": 64,
     }
+    TEST_LEVEL = TestLevel.DISABLED  # Should be enabled after compiler issue is fixed
 
 
 class TestSDControlNetModel(BaseTest.TestModel):
@@ -164,6 +165,8 @@ class TestSDXLControlNetModel(BaseTest.TestModel):
             },
         },
     }
+
+    TEST_LEVEL = TestLevel.DISABLED  # Should be enabled after compiler issue is fixed
 
     @classmethod
     def setUpClass(cls):
@@ -262,6 +265,7 @@ class TestKandinskyV22Model(BaseTest.TestModel):
             "decoder_pipe": {"unet": {"batch_size": 2}},
         },
     }
+    TEST_LEVEL = TestLevel.DISABLED  # Should be enabled after compiler issue is fixed
 
     def test_complicate_config(self):
         rbln_config = {
@@ -312,6 +316,7 @@ class TestKandinskyV22Img2ImgModel(BaseTest.TestModel):
             "decoder_pipe": {"unet": {"batch_size": 2}},
         },
     }
+    TEST_LEVEL = TestLevel.DISABLED  # Should be enabled after compiler issue is fixed
 
 
 if __name__ == "__main__":
