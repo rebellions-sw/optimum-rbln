@@ -20,6 +20,37 @@ from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelConfig
 
 
 class RBLNColQwen2ForRetrievalConfig(RBLNDecoderOnlyModelConfig):
+    """
+    Configuration class for RBLN ColQwen2 models for document retrieval.
+
+    This class extends RBLNModelConfig with specific configurations for ColQwen2 models,
+    including vision tower settings and multi-sequence length support.
+
+    Example usage:
+        ```python
+        from optimum.rbln import RBLNColQwen2ForRetrievalConfig, RBLNColQwen2ForRetrievalConfig
+
+        # Create a configuration object
+        config = RBLNColQwen2ForRetrievalConfig(
+            visual={
+                "max_seq_lens": 6400,
+                "device": 0,
+            },
+            max_seq_len=32_768,
+            tensor_parallel_size=4,
+            device=[0, 1, 2, 3],
+            output_hidden_states=False,
+        )
+
+        # Use the configuration with from_pretrained
+        model = RBLNColQwen2ForRetrieval.from_pretrained(
+            "vidore/colqwen2-v1.0-hf",
+            export=True,
+            rbln_config=config
+        )
+        ```
+    """
+
     submodules = ["visual"]
 
     def __init__(
