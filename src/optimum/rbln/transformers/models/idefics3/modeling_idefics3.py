@@ -110,7 +110,7 @@ class RBLNIdefics3VisionTransformer(RBLNModel):
         return self.embeddings
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
+    def _wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
         class Idefics3VisionTransformerWrapper(torch.nn.Module):
             def __init__(self, model: "Idefics3VisionTransformer"):
                 super().__init__()
@@ -269,7 +269,7 @@ class RBLNIdefics3ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationM
         return self.text_model.get_input_embeddings()
 
     @classmethod
-    def wrap_model_if_needed(cls, model, rbln_config):
+    def _wrap_model_if_needed(cls, model, rbln_config):
         return model.model.connector
 
     @classmethod

@@ -217,7 +217,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         return model
 
     @classmethod
-    def wrap_model_if_needed(
+    def _wrap_model_if_needed(
         cls, model: torch.nn.Module, rbln_config: RBLNGroundingDinoForObjectDetectionConfig
     ) -> torch.nn.Module:
         return model.model.text_projection
@@ -663,7 +663,7 @@ class RBLNGroundingDinoEncoder(RBLNModel):
         self.encoder_runtime = RBLNPytorchRuntime(self.model[0])
 
     @classmethod
-    def wrap_model_if_needed(
+    def _wrap_model_if_needed(
         cls, model: torch.nn.Module, rbln_config: RBLNGroundingDinoForObjectDetectionConfig
     ) -> torch.nn.Module:
         model = _GroundingDinoEncoder(model, rbln_config).eval()
@@ -861,7 +861,7 @@ class RBLNGroundingDinoDecoder(RBLNModel):
         self.decoder_runtime = RBLNPytorchRuntime(self.model[0])
 
     @classmethod
-    def wrap_model_if_needed(
+    def _wrap_model_if_needed(
         cls, model: torch.nn.Module, rbln_config: RBLNGroundingDinoForObjectDetectionConfig
     ) -> torch.nn.Module:
         return _GroundingDinoDecoder(model, rbln_config).eval()

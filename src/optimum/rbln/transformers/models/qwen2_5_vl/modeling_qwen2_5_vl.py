@@ -88,7 +88,7 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
     @classmethod
-    def wrap_model_if_needed(
+    def _wrap_model_if_needed(
         cls, model: "PreTrainedModel", rbln_config: RBLNQwen2_5_VisionTransformerPretrainedModelConfig
     ):
         return Qwen2_5_VisionTransformerWrapper(model).eval()

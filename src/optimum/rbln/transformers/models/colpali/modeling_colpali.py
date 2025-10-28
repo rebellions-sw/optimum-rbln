@@ -182,7 +182,7 @@ class RBLNColPaliForRetrieval(RBLNModel):
         return multi_modal_projector
 
     @classmethod
-    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
+    def _wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
         return RBLNColPaliForRetrievalWrapper(
             causal_lm=model.vlm,
             embedding_proj_layer=model.embedding_proj_layer,
