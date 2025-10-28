@@ -76,22 +76,15 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
             "visual": {
                 "max_seq_lens": 6400,
             },
-            "max_seq_lens": 32_768,
+            "max_seq_len": 32_768,
+            "tensor_parallel_size": 4,
+            "device": [0, 1, 2, 3],
             "output_hidden_states": False,
         }
         model = RBLNColQwen2ForRetrieval.from_pretrained(
             "vidore/colqwen2-v1.0-hf",
             export=True,
-            rbln_config = {
-                "visual": {
-                    "max_seq_lens": 6400,
-                    "device": 0,
-                },
-                "tensor_parallel_size": 4,
-                "max_seq_lens": 32_768,
-                "output_hidden_states": False,
-                "device": [0, 1, 2, 3],
-            },
+            rbln_config=rbln_config
         )
 
         # Using a RBLNColQwen2ForRetrievalConfig instance (recommended for type checking)
@@ -102,10 +95,10 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
                 "max_seq_lens": 6400,
                 "device": 0,
             },
+            max_seq_len=32_768,
             tensor_parallel_size=4,
-            max_seq_lens=32_768,
-            output_hidden_states=False,
             device=[0, 1, 2, 3],
+            output_hidden_states=False,
         )
         model = RBLNColQwen2ForRetrieval.from_pretrained(
             "vidore/colqwen2-v1.0-hf",
