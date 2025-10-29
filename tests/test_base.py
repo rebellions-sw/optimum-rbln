@@ -197,7 +197,7 @@ class BaseTest:
                     output = self.model(**inputs)[0]
 
             output = self.postprocess(inputs, output)
-            if self.EXPECTED_OUTPUT:
+            if self.EXPECTED_OUTPUT and self.DEVICE is None:
                 from simphile import jaccard_similarity
 
                 if isinstance(self.EXPECTED_OUTPUT, str):

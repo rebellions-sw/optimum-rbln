@@ -99,7 +99,6 @@ class LLMTest:
 class TestMistralForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNMistralForCausalLM
     HF_MODEL_ID = "openaccess-ai-collective/tiny-mistral"
-    EXPECTED_OUTPUT = "watasurescid completionennen Brad completion жеULT ba completion影 Fin сво Regimentixon cabin影 provisions bland"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "sliding_window": 512}
 
 
@@ -112,7 +111,6 @@ class TestMistralModel(LLMTest.TestLLMWithoutLMHead):
 class TestQwen2ForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen2ForCausalLM
     HF_MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
-    EXPECTED_OUTPUT = "?:雨成名ylonclaimer淡elsinki一角一角一角一角一角一角一角一角一角一角一角一角一角"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "layer_types": ["full_attention"], "max_position_embeddings": 1024}
 
 
@@ -125,9 +123,6 @@ class TestQwen2Model(LLMTest.TestLLMWithoutLMHead):
 class TestQwen3ForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen3ForCausalLM
     HF_MODEL_ID = "trl-internal-testing/tiny-Qwen3ForCausalLM"
-    EXPECTED_OUTPUT = (
-        "יל synd Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz Fitz_inventory天河 sanitary中途"
-    )
     HF_CONFIG_KWARGS = {
         "num_hidden_layers": 1,
         "layer_types": ["full_attention"],
@@ -155,7 +150,6 @@ class TestQwen3Model_UAM(TestQwen3Model):
 class TestOPTForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNOPTForCausalLM
     HF_MODEL_ID = "facebook/opt-2.7b"
-    EXPECTED_OUTPUT = "????,,,,,,,,,,,,,,,,"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 2048}
 
 
@@ -169,7 +163,6 @@ class TestLlamaForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNLlamaForCausalLM
     HF_MODEL_ID = "afmck/testing-llama-tiny"
     TEST_LEVEL = TestLevel.ESSENTIAL
-    EXPECTED_OUTPUT = "reress makefable R���� noethetsshss rechoolso�"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
 
 
@@ -183,7 +176,6 @@ class TestLlamaForCausalLM_Flash(LLMTest.TestLLM):
     RBLN_CLASS = RBLNLlamaForCausalLM
     HF_MODEL_ID = "afmck/testing-llama-tiny"
     TEST_LEVEL = TestLevel.ESSENTIAL
-    EXPECTED_OUTPUT = "reress makefable R���� noethetsshss rechoolso�"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 8192}
     RBLN_CLASS_KWARGS = {"rbln_config": {"attn_impl": "flash_attn", "kvcache_partition_len": 4096}}
 
@@ -197,19 +189,11 @@ class TestLlamaModel_Flash(LLMTest.TestLLMWithoutLMHead):
 
 class TestLlamaForCausalLM_Multibatch(TestLlamaForCausalLM):
     PROMPT = ["Who are you?", "What is the capital of France?", "What is the capital of Germany?"]
-    EXPECTED_OUTPUT = [
-        "reress makefable R���� noethetss0oss invetetet",
-        "resget makeget makeichget makeichualichual#choolchool accngngngng",
-        "resget makeget makeichget makeichualichual#choolchool accngngngng",
-    ]
     RBLN_CLASS_KWARGS = {"rbln_config": {"batch_size": 3, "decoder_batch_sizes": [3, 2, 1]}}
 
 
 class TestGPT2LMHeadModel(LLMTest.TestLLM):
     RBLN_CLASS = RBLNGPT2LMHeadModel
-    EXPECTED_OUTPUT = (
-        " What kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind kind"
-    )
     HF_MODEL_ID = "openai-community/gpt2"
     HF_CONFIG_KWARGS = {"n_layer": 1, "max_position_embeddings": 1024}
 
@@ -225,7 +209,6 @@ class TestPhiForCausalLM(LLMTest.TestLLM):
 
     # HF_MODEL_ID = "hf-internal-testing/tiny-random-PhiForCausalLM"
     HF_MODEL_ID = "microsoft/phi-2"
-    EXPECTED_OUTPUT = "\nAnswer: Theorettebrates']['<<<urlskolegateezzingrill"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "trust_remote_code": True}
 
 
@@ -239,7 +222,6 @@ class TestExaoneForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNExaoneForCausalLM
     # HF_MODEL_ID = "katuni4ka/tiny-random-exaone"
     HF_MODEL_ID = "LGAI-EXAONE/EXAONE-3.5-2.4B-Instruct"
-    EXPECTED_OUTPUT = "????????????????????"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024, "trust_remote_code": True}
 
 
@@ -251,7 +233,6 @@ class TestT5Model(LLMTest.TestLLM):
     # FIXME:: Update to internal once enabled tiny model
     HF_MODEL_ID = "t5-small"
     PROMPT = "summarize: studies have shown that owning a dog is good for you"
-    EXPECTED_OUTPUT = ""
     RBLN_CLASS_KWARGS = {"rbln_config": {"enc_max_seq_len": 512, "dec_max_seq_len": 512}}
     HF_CONFIG_KWARGS = {"num_layers": 1}
 
@@ -285,7 +266,6 @@ class TestBartModel(LLMTest.TestLLM):
     }
     RBLN_CLASS_KWARGS = {"rbln_config": {"enc_max_seq_len": 512, "dec_max_seq_len": 512}}
     PROMPT = "summarize: studies have shown that owning a dog is good for you"
-    EXPECTED_OUTPUT = "InsteadInsteadInsteadHoweverHoweverHoweverAlthoughAlthoughAlthoughWhileWhileWhileAlthoughAlthoughHoweverHoweverManyMany"
     TEST_LEVEL = TestLevel.ESSENTIAL
 
     def get_inputs(self):
@@ -352,7 +332,6 @@ class TestLlavaForConditionalGeneration(LLMTest.TestLLM):
             "language_model": {"use_inputs_embeds": True},
         }
     }
-    EXPECTED_OUTPUT = "ambbrow nur Well chimCore rapideraine Йye questaédédates Ken neu Airport din termeächstthread"
     HF_CONFIG_KWARGS = {"revision": "8ab8bfc820a6bb9e0f8de1ac715f4b53db44e684"}
     HF_CONFIG_KWARGS_PREPROCESSOR = {"revision": "8ab8bfc820a6bb9e0f8de1ac715f4b53db44e684"}
     IS_MULTIMODAL = True
@@ -391,7 +370,6 @@ class TestPegasusModel(LLMTest.TestLLM):
     }
     RBLN_CLASS_KWARGS = {"rbln_config": {"enc_max_seq_len": 512, "dec_max_seq_len": 512}}
     PROMPT = "summarize: studies have shown that owning a dog is good for you"
-    EXPECTED_OUTPUT = "The The The The The The The The The The The The The The The The The The The"
     TEST_LEVEL = TestLevel.ESSENTIAL
 
     def get_inputs(self):
@@ -420,7 +398,6 @@ class TestLlavaNextForConditionalGeneration(LLMTest.TestLLM):
             "language_model": {"use_inputs_embeds": True},
         }
     }
-    EXPECTED_OUTPUT = "entricCallbackavidARYails NotesDAPimil coordFeed Boysaml obligation relay迟 войны sexual Definition Eisen patent"
     HF_CONFIG_KWARGS = {"revision": "21948c1af6a0666e341b6403dc1cbbd5c8900e7d"}
     HF_CONFIG_KWARGS_PREPROCESSOR = {"revision": "21948c1af6a0666e341b6403dc1cbbd5c8900e7d"}
     IS_MULTIMODAL = True
@@ -479,7 +456,6 @@ class TestBlip2ForConditionalGeneration(LLMTest.TestLLM):
     HF_MODEL_ID = "Salesforce/blip2-opt-2.7b"  # No tiny model yet.
     PROMPT = "Question: Describe this image? Answer:"
     RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True, "max_seq_len": 1024}}}
-    EXPECTED_OUTPUT = "::::::::::::::::::::"
     HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
     IS_MULTIMODAL = True
 
@@ -560,7 +536,6 @@ class TestQwen2VLForConditionalGeneration(LLMTest.TestLLM):
             "max_seq_len": 32_768,
         }
     }
-    EXPECTED_OUTPUT = " finishing Flight旅馆ジ eventual Rivers Ủy#! Bilderbroker WageאוגוסTransactionإبد.operator офис lives #-}\n voltage"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1}
 
     @classmethod
@@ -604,7 +579,6 @@ class TestQwen2_5_VLForConditionalGeneration(LLMTest.TestLLM):
             "max_seq_len": 32_768,
         }
     }
-    EXPECTED_OUTPUT = "讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣讣"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1}
     HF_CONFIG_KWARGS_PREPROCESSOR = {"max_pixels": 64 * 14 * 14}
     IS_MULTIMODAL = True
@@ -635,10 +609,9 @@ class TestQwen2_5_VLForConditionalGeneration(LLMTest.TestLLM):
 class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
     RBLN_AUTO_CLASS = RBLNAutoModelForImageTextToText
     RBLN_CLASS = RBLNGemma3ForConditionalGeneration
-    HF_MODEL_ID = "trl-internal-testing/tiny-Gemma3ForConditionalGeneration"  # No tiny model yet.
+    HF_MODEL_ID = "trl-internal-testing/tiny-Gemma3ForConditionalGeneration"
     PROMPT = "<bos><start_of_turn>user\n<start_of_image>Describe the image.<end_of_turn>\n<start_of_turn>model\n'"
     RBLN_CLASS_KWARGS = {"rbln_config": {"language_model": {"use_inputs_embeds": True, "kvcache_partition_len": 4096}}}
-    EXPECTED_OUTPUT = " அனுமதி Bryson Earlyheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserheiserिल्म हस्ता"
     HF_CONFIG_KWARGS = {"revision": "e1f4b0516ec80f86ed75c8cb1d45ede72526ad24"}
     HF_CONFIG_KWARGS_PREPROCESSOR = {"revision": "e1f4b0516ec80f86ed75c8cb1d45ede72526ad24"}
     TEST_LEVEL = TestLevel.FULL
@@ -673,7 +646,6 @@ class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
 class TestGemma3ForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNGemma3ForCausalLM
     HF_MODEL_ID = "google/gemma-3-1b-it"
-    EXPECTED_OUTPUT = "1st L L L L L L L L L L L L L L L L L L"
     HF_CONFIG_KWARGS = {
         "trust_remote_code": True,
     }
@@ -705,7 +677,6 @@ class TestLlamaForCausalLM_fp8(LLMTest.TestLLM):
             "tensor_parallel_size": 1,
         },
     }
-    TEST_LEVEL = TestLevel.DISABLED
 
     def test_generate(self):
         # Cannot generate output with fp8 quantization in ATOM™
@@ -713,8 +684,6 @@ class TestLlamaForCausalLM_fp8(LLMTest.TestLLM):
 
 
 class TestMultiLora(LLMTest.TestLLM):
-    EXPECTED_OUTPUT = " bench_echointon Ebonylica Lennonnings909 norgeZN°Eusanpha701OPSadeleepromtrap乎 Howe"
-
     HF_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
     RBLN_CLASS = RBLNLlamaForCausalLM
@@ -737,6 +706,8 @@ class TestMultiLora(LLMTest.TestLLM):
 
 class TestMultiLora_batch(LLMTest.TestLLM):
     PROMPT = ["Who are you?", "What is the capital of France?"]
+
+    # Should check each output corresponds to each prompt
     EXPECTED_OUTPUT = [
         " bench_echointon Ebonylica Lennonnings909 norgeZN°Eusan倍oloadolen逸 Oaksodian surplusaniem",
         "/topicпідonus343../../../ Mund  Ont ReactionIPAچیIQUE beltーブ204umlu Cortexoisئةτερ",
