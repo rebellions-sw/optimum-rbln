@@ -107,6 +107,12 @@ def main(
                 f"step {i} : {stats.pearsonr(r.detach().numpy().reshape(-1), g.detach().numpy().reshape(-1)).statistic}"
             )
 
+            #per batch
+            for j in range(r.shape[0]):
+                print(
+                    f"step {i}, batch {j} : {stats.pearsonr(r[j].detach().numpy().reshape(-1), g[j].detach().numpy().reshape(-1)).statistic}"
+                )
+
 
 if __name__ == "__main__":
     fire.Fire(main)
