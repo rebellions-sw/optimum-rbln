@@ -709,8 +709,8 @@ class TestMultiLora_batch(LLMTest.TestLLM):
 
     # Should check each output corresponds to each prompt
     EXPECTED_OUTPUT = [
-        " bencherais(InputStream(InputStream autoplay]<(InputStreamvote autoplay حاصل حاصل.ru autoplay autoplay１０１０oom Bris ridicule１０",
-        "/topic(InputStream(InputStreamỗ(InputStream حاصل حاصلDub]<manager(InputStream(InputStream حاصلludefarm(InputStream حاصلlude926(InputStream",
+        " bench_echointon Ebonylica Lennonnings909 norgeZN°Eusan倍oloadolen逸 Oaksodian surplusaniem",
+        "/topicпідonus343../../../ Mund  Ont ReactionIPAچیIQUE beltーブ204umlu Cortexoisئةτερ",
     ]
     HF_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
