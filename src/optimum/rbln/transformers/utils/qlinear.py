@@ -15,6 +15,7 @@ class QLinear(nn.Module):
         # FIXME(jongho): Make it only holds k_scale or v_scale
         k_scale: Optional[torch.Tensor] = None,
         v_scale: Optional[torch.Tensor] = None,
+        dynamic: bool = False,
     ):
         super().__init__()
 
@@ -24,6 +25,7 @@ class QLinear(nn.Module):
         self.input_scale = input_scale
         self.k_scale = k_scale
         self.v_scale = v_scale
+        self.dynamic = dynamic
 
         if weight_scale is None:
             raise ValueError("weight_scale is required")
@@ -37,11 +39,24 @@ class QLinear(nn.Module):
 
 class QIntLinear(QLinear):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if self.input_scale:
-            x = (x / self.input_scale).clamp(min=-128, max=127)
+        iinfo = torch.iinfo(self.dtype())
+        if self.dynamic:
+            if self.input_scale:
+                raise NotImplementedError("Dynamic quantization with input_scale is not supported.")
+            x_max = x.abs().max(dim=-1, keepdim=True).values
+            x_scale = x_max / iinfo.max
+            x = (x / x_scale).clamp(min=iinfo.min, max=iinfo.max)
+        else:
+            if self.input_scale:
+                x = (x / self.input_scale).clamp(min=iinfo.min, max=iinfo.max)
 
         weight = self.weight * self.weight_scale
-        return F.linear(x, weight, self.bias)
+        qact = F.linear(x, weight, self.bias)
+
+        if self.dynamic:  # Dequantize
+            qact = qact * x_scale
+
+        return qact
 
 
 class QFloatLinear(QLinear):

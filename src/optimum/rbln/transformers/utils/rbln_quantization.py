@@ -68,6 +68,7 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
         weights: Optional[str] = None,
         activations: Optional[str] = None,
         kv_caches: Optional[str] = None,
+        dynamic: Optional[bool] = None,
         *,
         precision: Optional[str] = None,
     ):
@@ -89,6 +90,8 @@ class RBLNQuantizationConfig(RBLNSerializableConfigProtocol):
         self.weights = weights or "fp16"
         self.activations = activations or "fp16"
         self.kv_caches = kv_caches or "fp16"
+        self.dynamic = dynamic if dynamic is not None else False
+
         self._validate()
 
     def _validate(self):
@@ -515,16 +518,21 @@ def convert_to_qint_linear(
     Converts a standard linear layer to a quantized linear (qlinear) layer with a custom forward pass.
     """
 
-    # assign here to free weight from the original layer
     layer.weight = Parameter(layer.weight.to(torch.int8), requires_grad=False)
     weight_scale = Parameter(torch.ones(layer.out_features, 1, dtype=scale_dtype), requires_grad=False)
     input_scale = None
 
-    if rbln_quantization.activations == "int8":
+    if rbln_quantization.activations == "int8" and not rbln_quantization.dynamic:
         # Keep non-scalar shape for consistency with fp path
         input_scale = Parameter(torch.ones(1, dtype=scale_dtype), requires_grad=False)
 
-    return QIntLinear(weight=layer.weight, bias=layer.bias, weight_scale=weight_scale, input_scale=input_scale)
+    return QIntLinear(
+        weight=layer.weight,
+        bias=layer.bias,
+        weight_scale=weight_scale,
+        input_scale=input_scale,
+        dynamic=rbln_quantization.dynamic,
+    )
 
 
 def convert_to_qfloat_linear(
