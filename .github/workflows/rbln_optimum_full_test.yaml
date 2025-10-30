@@ -10,6 +10,7 @@ on:
             description: "ref to checkout"
             required: false
             type: string
+            default: "main"
 
 env:
   HF_USER_ID: ${{ secrets.HF_USER_ID }}
