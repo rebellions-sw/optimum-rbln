@@ -12,7 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .prior_transformer import RBLNPriorTransformer
-from .transformer_cosmos import RBLNCosmosTransformer3DModel
-from .transformer_flux import RBLNFluxTransformer2DModel
-from .transformer_sd3 import RBLNSD3Transformer2DModel
+from diffusers import FluxPipeline
+
+from ...configurations.pipelines import RBLNFluxPipelineConfig
+from ...modeling_diffusers import RBLNDiffusionMixin
+
+
+class RBLNFluxPipeline(RBLNDiffusionMixin, FluxPipeline):
+    original_class = FluxPipeline
+    _rbln_config_class = RBLNFluxPipelineConfig
+    # _submodules = ["transformer", "text_encoder", "text_encoder_2", "vae"]
+    # _submodules = ["text_encoder", "text_encoder_2", "vae"]
+    _submodules = ["transformer"]

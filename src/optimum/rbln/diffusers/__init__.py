@@ -57,6 +57,7 @@ _import_structure = {
         "RBLNSD3Transformer2DModelConfig",
         "RBLNUNet2DConditionModelConfig",
         "RBLNVQModelConfig",
+        "RBLNFluxTransformer2DModelConfig",
     ],
     "pipelines": [
         "RBLNAutoPipelineForImage2Image",
@@ -86,6 +87,7 @@ _import_structure = {
         "RBLNStableDiffusion3Pipeline",
         "RBLNStableDiffusion3Img2ImgPipeline",
         "RBLNStableDiffusion3InpaintPipeline",
+        "RBLNFluxPipeline",
     ],
     "models": [
         "RBLNAutoencoderKL",
@@ -96,6 +98,7 @@ _import_structure = {
         "RBLNSD3Transformer2DModel",
         "RBLNPriorTransformer",
         "RBLNVQModel",
+        "RBLNFluxTransformer2DModel",
     ],
     "modeling_diffusers": [
         "RBLNDiffusionMixin",
@@ -110,6 +113,7 @@ if TYPE_CHECKING:
         RBLNCosmosTextToWorldPipelineConfig,
         RBLNCosmosTransformer3DModelConfig,
         RBLNCosmosVideoToWorldPipelineConfig,
+        RBLNFluxTransformer2DModelConfig,
         RBLNKandinskyV22CombinedPipelineConfig,
         RBLNKandinskyV22Img2ImgCombinedPipelineConfig,
         RBLNKandinskyV22Img2ImgPipelineConfig,
@@ -141,6 +145,7 @@ if TYPE_CHECKING:
         RBLNAutoencoderKLCosmos,
         RBLNControlNetModel,
         RBLNCosmosTransformer3DModel,
+        RBLNFluxTransformer2DModel,
         RBLNPriorTransformer,
         RBLNSD3Transformer2DModel,
         RBLNUNet2DConditionModel,
@@ -153,6 +158,7 @@ if TYPE_CHECKING:
         RBLNCosmosSafetyChecker,
         RBLNCosmosTextToWorldPipeline,
         RBLNCosmosVideoToWorldPipeline,
+        RBLNFluxPipeline,
         RBLNKandinskyV22CombinedPipeline,
         RBLNKandinskyV22Img2ImgCombinedPipeline,
         RBLNKandinskyV22Img2ImgPipeline,

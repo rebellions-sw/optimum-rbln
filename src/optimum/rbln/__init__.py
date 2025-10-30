@@ -250,6 +250,9 @@ _import_structure = {
         "RBLNUNet2DConditionModelConfig",
         "RBLNVQModel",
         "RBLNVQModelConfig",
+        "RBLNFluxTransformer2DModel",
+        "RBLNFluxTransformer2DModelConfig",
+        "RBLNFluxPipeline",
     ],
 }
 
@@ -273,6 +276,9 @@ if TYPE_CHECKING:
         RBLNCosmosVideoToWorldPipeline,
         RBLNCosmosVideoToWorldPipelineConfig,
         RBLNDiffusionMixin,
+        RBLNFluxPipeline,
+        RBLNFluxTransformer2DModel,
+        RBLNFluxTransformer2DModelConfig,
         RBLNKandinskyV22CombinedPipeline,
         RBLNKandinskyV22CombinedPipelineConfig,
         RBLNKandinskyV22Img2ImgCombinedPipeline,

@@ -59,6 +59,9 @@ _import_structure = {
         "RBLNStableDiffusion3Img2ImgPipeline",
         "RBLNStableDiffusion3InpaintPipeline",
     ],
+    "flux": [
+        "RBLNFluxPipeline",
+    ],
 }
 if TYPE_CHECKING:
     from .auto_pipeline import (
@@ -74,6 +77,7 @@ if TYPE_CHECKING:
         RBLNStableDiffusionXLControlNetPipeline,
     )
     from .cosmos import RBLNCosmosSafetyChecker, RBLNCosmosTextToWorldPipeline, RBLNCosmosVideoToWorldPipeline
+    from .flux import RBLNFluxPipeline
     from .kandinsky2_2 import (
         RBLNKandinskyV22CombinedPipeline,
         RBLNKandinskyV22Img2ImgCombinedPipeline,
