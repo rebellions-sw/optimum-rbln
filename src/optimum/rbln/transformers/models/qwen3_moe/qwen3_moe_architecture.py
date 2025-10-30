@@ -68,18 +68,14 @@ class Qwen3MoeSparseMoeBlock(nn.Module):
         if self.norm_topk_prob:
             selected_weights, selected_experts = torch.topk(router_logits, k=self.top_k, dim=-1)
             selected_weights = torch.nn.functional.softmax(selected_weights, dim=1, dtype=torch.float)
-            masked_routing_weights = torch.zeros_like(router_logits, dtype=torch.float32)
-            masked_routing_weights.scatter_(1, selected_experts, selected_weights)
         else:
             # routing_weights: (batch * sequence_length, n_experts)
             routing_weights = torch.nn.functional.softmax(router_logits, dim=1, dtype=torch.float)
-
             # selected_experts: (batch * sequence_length, top_k)
             selected_weights, selected_experts = torch.topk(routing_weights, k=self.top_k, dim=-1)
-            mask = torch.zeros_like(routing_weights, dtype=torch.float32)
-            un_mask = torch.ones_like(selected_experts, dtype=torch.float32)
-            mask.scatter_(1, selected_experts, un_mask)
-            masked_routing_weights = routing_weights * mask
+
+        masked_routing_weights = torch.zeros_like(router_logits, dtype=torch.float32)
+        masked_routing_weights.scatter_(1, selected_experts, selected_weights)
 
 
         ## get size per expert
