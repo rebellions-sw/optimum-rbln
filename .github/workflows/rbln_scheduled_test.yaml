@@ -40,7 +40,7 @@ jobs:
       - name: Check if PR needed
         id: check_pr_needed
         run: |
-          if [ "${{ steps.get_version.outputs.cur_version }}" = "${{ steps.get_version.outputs.compiler_version }}" ]; then
+          if [ "${{ steps.get_version.outputs.cur_version }}" == "${{ steps.get_version.outputs.compiler_version }}" ]; then
             NEED_PR=false
           else
             NEED_PR=true
