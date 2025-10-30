@@ -69,7 +69,6 @@ class RBLNGptOssTopKRouter(nn.Module):
         self.bias = model.bias
 
     def forward(self, hidden_states):
-        hidden_states = hidden_states.reshape(-1, self.hidden_dim)
         router_logits = F.linear(hidden_states, self.weight, self.bias)  # (seq_len, num_experts)
         router_top_value, router_indices = torch.topk(router_logits, self.top_k, dim=-1)  # (seq_len, top_k)
         router_top_value = torch.nn.functional.softmax(router_top_value, dim=1, dtype=router_top_value.dtype)
@@ -126,6 +125,8 @@ class RBLNGptOssMLP(nn.Module):
         self.experts = RBLNGptOssExperts(model.experts)
 
     def forward(self, hidden_states):
+        batch_size, sequence_length, hidden_dim = hidden_states.shape
+        hidden_states = hidden_states.reshape(-1, hidden_dim)
         router_scores, router_indices, expert_select_count = self.router(hidden_states)
         routed_out = self.experts(
             hidden_states,
@@ -133,4 +134,5 @@ class RBLNGptOssMLP(nn.Module):
             routing_weights=router_scores,
             expert_select_count=expert_select_count,
         )
+        routed_out = routed_out.reshape(batch_size, sequence_length, hidden_dim)
         return routed_out  # , router_scores
