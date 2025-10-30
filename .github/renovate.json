@@ -5,6 +5,9 @@
     "extends": [
         ":semanticCommitsDisabled"
     ],
+    "schedule": [
+        "* 17-18 * * *"
+    ],
     "commitMessagePrefix": "dependency:",
     "repositories": [
         "rebellions-sw/optimum-rbln"
