@@ -71,11 +71,12 @@ jobs:
         run: |
           PR_TITLE="${{ github.event.pull_request.title }}"
           LAST_COMMIT_MSG=$(git log -1 --pretty=format:%s)
+          DEP_UPDATE_PATTERN="dependency: Update dependency"
 
           echo "PR Title: $PR_TITLE"
           echo "Last Commit: $LAST_COMMIT_MSG"
 
-          if [[ "$PR_TITLE" == *"dependency: Update dependency"* && "$LAST_COMMIT_MSG" == *"dependency: Update dependency"* ]]; then
+          if [[ "$PR_TITLE" == *"$DEP_UPDATE_PATTERN"* && "$LAST_COMMIT_MSG" == *"$DEP_UPDATE_PATTERN"* ]]; then
             echo "result=true" >> $GITHUB_OUTPUT
           else
             echo "result=false" >> $GITHUB_OUTPUT
