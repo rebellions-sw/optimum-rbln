@@ -48,7 +48,7 @@ jobs:
     runs-on: rebel-k8s-runner
     outputs:
         transformers_version: ${{ steps.transformers.version}}
-        diffusers_version: ${{ steps.diffusers.version}}
+        diffusers_version: ${{ steps.diffusers.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
