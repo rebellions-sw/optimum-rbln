@@ -130,5 +130,6 @@ jobs:
     uses: ./.github/workflows/rbln_optimum_full_test.yaml
     with:
       rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
+      ref: ${{ github.event.pull_request.head.sha }}
     secrets: inherit
  

@@ -6,6 +6,10 @@ on:
             description: "rebel_compiler version to run"
             required: true
             type: string
+        ref:
+            description: "ref to checkout"
+            required: false
+            type: string
 
 env:
   HF_USER_ID: ${{ secrets.HF_USER_ID }}
@@ -24,7 +28,7 @@ jobs:
   optimum-rbln-pytest:
     uses: ./.github/workflows/rbln_optimum_pytest.yaml
     with:
-        ref: main
+        ref: ${{ inputs.ref }}
         rebel_compiler_version: ${{ inputs.rebel_compiler_version }}
         test_level: "full"
         enable_hf_hub_tests: true
@@ -34,15 +38,40 @@ jobs:
   optimum-rbln-inference-test:
     uses: ./.github/workflows/rbln_optimum_inference_test.yaml
     with:
-        ref: main
+        ref: ${{ inputs.ref }}
         rebel_compiler_version: ${{ inputs.rebel_compiler_version }}
     secrets: inherit
 
-  summary_and_report:
-    if: always()
+  get-hf-package-version:
     needs: [optimum-rbln-pytest, check-compiler]
     runs-on: rebel-k8s-runner
+    outputs:
+        transformers_version: ${{ steps.transformers.version}}
+        diffusers_version: ${{ steps.diffusers.version}}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+            ref: ${{ inputs.ref }}
+      - name: Get Transformers Version
+        id: transformers
+        run: |
+            VERSION=$(grep -m 1 '"transformers==' pyproject.toml | sed -E 's/.*transformers[<>=]{2}([^",]+).*/\1/' || echo "not_found")
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Get Diffusers Version
+        id: diffusers
+        run: |
+            VERSION=$(grep -m 1 '"diffusers==' pyproject.toml | sed -E 's/.*diffusers[<>=]{2}([^",]+).*/\1/' || echo "not_found")
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+
+  summary_and_report:
+    if: always()
+    needs: [optimum-rbln-pytest, check-compiler, get-hf-package-version]
+    runs-on: rebel-k8s-runner
+    steps:
+
       - name: Get failed test details
         id: get_failed_tests
         if: needs.optimum-rbln-pytest.result == 'failure'
@@ -108,6 +137,8 @@ jobs:
             commit="*Commit*\n<https://github.com/rebellions-sw/optimum-rbln/commit/${{github.sha}}|${{github.sha}}>"
             action_link="*CI Report*\n<https://github.com/rebellions-sw/optimum-rbln/actions/runs/${{ github.run_id }}|View Details>"
             compiler_version="${{ inputs.rebel_compiler_version }}"
+            transformers_version="${{ needs.get-hf-package-version.outputs.transformers_version }}"
+            diffusers_version="${{ needs.get-hf-package-version.outputs.diffusers_version }}"
 
             payload=$(jq -n \
             --arg channel "${{ secrets.SLACK_CI_REPORTER_CHANNEL }}" \
@@ -115,6 +146,8 @@ jobs:
             --arg commit "$commit" \
             --arg action_link "$action_link" \
             --arg compiler_version "$compiler_version" \
+            --arg transformers_version "$transformers_version" \
+            --arg diffusers_version "$diffusers_version" \
             --arg compiler_status "${{ steps.test_results.outputs.compiler_status }}" \
             --arg pytest_status "${{ steps.test_results.outputs.pytest_status }}" \
             '{
