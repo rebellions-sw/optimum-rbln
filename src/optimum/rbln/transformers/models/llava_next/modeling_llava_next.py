@@ -139,9 +139,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
         return True
 
     @classmethod
-    def get_pytorch_model(cls, *args, **kwargs):
-        model = super().get_pytorch_model(*args, **kwargs)
-
+    def _reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
         with no_init_weights():
             model_cls_name = model.model.language_model.__class__.__name__
             causal_model_cls_name = model_cls_name.replace("Model", "ForCausalLM")
@@ -192,7 +190,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
         return self.language_model.get_input_embeddings()
 
     @classmethod
-    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
+    def _wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
         return model.multi_modal_projector
 
     @classmethod
