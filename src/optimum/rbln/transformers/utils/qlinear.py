@@ -40,11 +40,14 @@ class QLinear(nn.Module):
 class QIntLinear(QLinear):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         iinfo = torch.iinfo(self.dtype())
+        finfo = torch.finfo(x.dtype)
         if self.dynamic:
             if self.input_scale:
                 raise NotImplementedError("Dynamic quantization with input_scale is not supported.")
             x_max = x.abs().max(dim=-1, keepdim=True).values
             x_scale = x_max / iinfo.max
+            x_scale = torch.clamp(x_scale, min=finfo.eps)
+
             x = (x / x_scale).clamp(min=iinfo.min, max=iinfo.max)
         else:
             if self.input_scale:
