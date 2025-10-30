@@ -127,10 +127,8 @@ jobs:
     if: |
       needs.check-if-dependency-pr.outputs.result == 'true' &&
       needs.check-team-member.outputs.is_team_member == 'true'
-    uses: ./.github/workflows/rbln_optimum_pytest.yaml
+    uses: ./.github/workflows/rbln_optimum_full_test.yaml
     with:
-      ref: ${{ github.event.pull_request.head.sha }}
       rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
-      test_level: "full"
-      fail_fast: false
     secrets: inherit
+ 
