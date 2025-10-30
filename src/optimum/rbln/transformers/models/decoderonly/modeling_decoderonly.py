@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 import rebel
 import torch
 from rebel.compile_context import CompileContext
-from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, PretrainedConfig, PreTrainedModel
+from transformers import AutoModel, AutoModelForCausalLM, PretrainedConfig, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPast
 from transformers.modeling_utils import no_init_weights
 
@@ -260,10 +260,12 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
         # Mark static tensors (self kv states)
         static_tensors = {}
+        idx = 0
         for (name, _, _), tensor in zip(compile_config.input_info, example_inputs):
             if "past_key_values" in name:
                 static_tensors[name] = tensor
-                context.mark_static_address(tensor)
+                context.mark_static_address(tensor, f"kv_cache_{idx}")
+                idx += 1
 
         return context, static_tensors
 
@@ -317,35 +319,12 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
     @classmethod
     def get_pytorch_model(
-        cls,
-        model_id: str,
-        *args,
-        rbln_config: Optional[RBLNDecoderOnlyModelConfig] = None,
-        num_hidden_layers: Optional[int] = None,
-        trust_remote_code: Optional[bool] = None,
-        torch_dtype: Optional[torch.dtype] = None,
-        dtype: Optional[torch.dtype] = None,
-        **kwargs,
+        cls, *args, rbln_config: Optional[RBLNDecoderOnlyModelConfig] = None, **kwargs
     ) -> PreTrainedModel:
         if rbln_config and rbln_config.quantization:
-            model = cls.get_quantized_model(model_id, *args, rbln_config=rbln_config, **kwargs)
+            model = cls.get_quantized_model(*args, rbln_config=rbln_config, **kwargs)
         else:
-            # TODO : resolve how to control PreTrainedConfig for hf_kwargs
-            if num_hidden_layers is not None:
-                config, kwargs = AutoConfig.from_pretrained(
-                    model_id,
-                    return_unused_kwargs=True,
-                    trust_remote_code=trust_remote_code,
-                    num_hidden_layers=num_hidden_layers,
-                    **kwargs,
-                )
-                if hasattr(config, "layer_types"):
-                    config.layer_types = config.layer_types[:num_hidden_layers]
-                kwargs["config"] = config
-
-            model = super().get_pytorch_model(
-                model_id, *args, trust_remote_code=trust_remote_code, torch_dtype=torch_dtype, dtype=dtype, **kwargs
-            )
+            model = super().get_pytorch_model(*args, **kwargs)
 
         return model
 
