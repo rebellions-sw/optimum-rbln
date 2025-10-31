@@ -8,9 +8,8 @@ on:
             type: string
         ref:
             description: "ref to checkout"
-            required: false
+            required: true
             type: string
-            default: "main"
 
 env:
   HF_USER_ID: ${{ secrets.HF_USER_ID }}
@@ -47,8 +46,8 @@ jobs:
     needs: [optimum-rbln-pytest, check-compiler]
     runs-on: rebel-k8s-runner
     outputs:
-        transformers_version: ${{ steps.transformers.version}}
-        diffusers_version: ${{ steps.diffusers.version }}
+        transformers_version: ${{ steps.transformers.outputs.version }}
+        diffusers_version: ${{ steps.diffusers.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -174,6 +173,20 @@ jobs:
                     fields: [
                     { type: "mrkdwn", text: "*Compiler Version*" },
                     { type: "mrkdwn", text: ("`" + $compiler_version + "`") }
+                    ]
+                },
+                {
+                    type: "section",
+                    fields: [
+                    { type: "mrkdwn", text: "*Transformers Version*" },
+                    { type: "mrkdwn", text: ("`" + $transformers_version + "`") }
+                    ]
+                },
+                {
+                    type: "section",
+                    fields: [
+                    { type: "mrkdwn", text: "*Diffusers Version*" },
+                    { type: "mrkdwn", text: ("`" + $diffusers_version + "`") }
                     ]
                 },
                 { type: "divider" },
