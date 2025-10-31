@@ -10,7 +10,7 @@
         "rebellions-sw/optimum-rbln"
     ],
     "lockFileMaintenance": {
-        "enabled": true
+        "enabled": false
     },
     "packageRules": [
         {
