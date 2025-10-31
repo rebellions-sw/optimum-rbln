@@ -22,5 +22,4 @@ class RBLNFluxPipeline(RBLNDiffusionMixin, FluxPipeline):
     original_class = FluxPipeline
     _rbln_config_class = RBLNFluxPipelineConfig
     # _submodules = ["transformer", "text_encoder", "text_encoder_2", "vae"]
-    # _submodules = ["text_encoder", "text_encoder_2", "vae"]
     _submodules = ["transformer"]

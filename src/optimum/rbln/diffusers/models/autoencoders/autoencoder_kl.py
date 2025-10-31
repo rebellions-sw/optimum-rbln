@@ -107,7 +107,11 @@ class RBLNAutoencoderKL(RBLNModel):
             )
 
         if sample_size is None:
-            sample_size = noise_module.config.sample_size
+            if hasattr(noise_module.config, "sample_size"):
+                sample_size = noise_module.config.sample_size
+            elif hasattr(pipe, "default_sample_size"):
+                sample_size = pipe.default_sample_size
+
             if isinstance(sample_size, int):
                 sample_size = (sample_size, sample_size)
             sample_size = (sample_size[0] * vae_scale_factor, sample_size[1] * vae_scale_factor)
