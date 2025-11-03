@@ -34,10 +34,6 @@ def stable_diffusion_model():
                 "batch_size": 1,
                 "npu": "RBLN-CA22",
                 "create_runtimes": False,
-                "optimize_host_memory": False,
-            },
-            "text_encoder": {
-                "optimize_host_memory": False,
             },
         },
     )
@@ -50,7 +46,6 @@ def test_stable_diffusion_config(stable_diffusion_model):
     assert model.unet.rbln_config.batch_size == 1
     assert model.unet.rbln_config.npu == "RBLN-CA22"
     assert model.unet.rbln_config.create_runtimes is False
-    assert model.unet.rbln_config.optimize_host_memory is False
     assert model.unet.compiled_models[0]._meta["npu"] == "RBLN-CA22"
 
     npu = rebel.get_npu_name()
@@ -69,7 +64,7 @@ def test_explicit_config_parameters(model_id):
 
 def test_config_dict(model_id):
     """Test loading model with configuration passed as a dictionary."""
-    rbln_config = {"create_runtimes": False, "optimize_host_memory": True, "image_size": 64}
+    rbln_config = {"create_runtimes": False, "image_size": 64}
 
     model = RBLNResNetForImageClassification.from_pretrained(model_id, rbln_config=rbln_config)
     assert model is not None

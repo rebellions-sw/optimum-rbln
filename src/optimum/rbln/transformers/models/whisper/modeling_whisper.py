@@ -150,7 +150,8 @@ class RBLNWhisperForConditionalGeneration(RBLNModel, RBLNWhisperGenerationMixin)
     """
 
     auto_model_class = AutoModelForSpeechSeq2Seq
-    main_input_name = "input_ids"
+    main_input_name = "input_features"
+    _is_stateful = False
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)

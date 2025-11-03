@@ -46,7 +46,7 @@ jobs:
     strategy:
       fail-fast: ${{ inputs.fail_fast }}
       matrix:
-        test_type: [config, transformers, diffusers, llm]
+        test_type: [config, transformers, diffusers, llm, cli-basic, cli-argument-parsing, cli-error-handling]
     steps:
       - name: Checkout the optimum-rbln repository
         uses: actions/checkout@v4
@@ -86,6 +86,15 @@ jobs:
                 SKIP=true
               fi
               ;;
+            cli-*)
+              if [[ "$COMMIT_MESSAGE" == *"[skip-cli]"* ]]; then
+                SKIP=true
+              fi
+              # Skip advanced CLI tests if test_level is default
+              if [[ "${{ inputs.test_level }}" == "default" && "${{ matrix.test_type }}" != "cli-basic" ]]; then
+                SKIP=true
+              fi
+              ;;
           esac
           
           echo "skip=$SKIP" >> $GITHUB_OUTPUT
@@ -99,7 +108,7 @@ jobs:
 
       - name: Setup Python
         if: steps.should_skip.outputs.skip != 'true'
-        run: uv python install 3.9
+        run: uv python install 3.12
 
       - name: Install optimum-rbln with tests group dependencies
         if: steps.should_skip.outputs.skip != 'true'
@@ -112,7 +121,7 @@ jobs:
           PYPI_URL=$(echo ${{ env.REBEL_PYPI_ENDPOINT }} | sed "s/\/\//\0${{ env.REBEL_PYPI_USERNAME}}:${{ env.REBEL_PYPI_PASSWORD}}@/")
           uv pip install --extra-index-url $PYPI_URL rebel-compiler==${{ inputs.rebel_compiler_version }}
 
-      - name: Run pytest
+      - name: Run tests
         if: steps.should_skip.outputs.skip != 'true'
         env:
           OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
@@ -129,6 +138,22 @@ jobs:
               ;;
             "llm")
               uv run --no-sync pytest tests/test_llm.py -vv --durations 0
+              ;;
+            cli-*)
+              # Extract test type from matrix
+              case "${{ matrix.test_type }}" in
+                "cli-basic")
+                  CLI_TEST_TYPE="basic"
+                  ;;
+                "cli-argument-parsing")
+                  CLI_TEST_TYPE="argument-parsing"
+                  ;;
+                "cli-error-handling")
+                  CLI_TEST_TYPE="error-handling"
+                  ;;
+              esac
+              echo "Running CLI test: $CLI_TEST_TYPE"
+              uv run --no-sync .github/scripts/test_cli.py "$CLI_TEST_TYPE"
               ;;
           esac
 

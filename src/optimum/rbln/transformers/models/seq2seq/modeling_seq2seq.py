@@ -20,6 +20,7 @@ import rebel
 import torch
 from rebel.compile_context import CompileContext
 from transformers import AutoModelForSeq2SeqLM, PretrainedConfig, PreTrainedModel
+from transformers.generation.utils import GenerationMixin
 from transformers.modeling_outputs import BaseModelOutput, Seq2SeqLMOutput
 
 from ....configuration_utils import RBLNCompileConfig
@@ -101,7 +102,7 @@ class RBLNRuntimeDecoder(RBLNPytorchRuntime):
         return Seq2SeqLMOutput(logits=lm_logits)
 
 
-class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
+class RBLNModelForSeq2SeqLM(RBLNModel, GenerationMixin, ABC):
     """
     This is a generic model class that will be instantiated as one of the model classes of the library (with a sequence-to-sequence language modeling head) when created with the from_pretrained() class method.
     This model inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
@@ -117,6 +118,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, ABC):
     main_input_name = "input_ids"
     auto_model_class = AutoModelForSeq2SeqLM
     support_causal_attn = None
+    _is_stateful = False
 
     def __post_init__(self, **kwargs):
         batch_size = self.rbln_config.batch_size
