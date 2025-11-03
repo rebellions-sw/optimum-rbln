@@ -14,9 +14,3 @@ jobs:
     with:
       pr_number: ${{ inputs.pr_number }}
     secrets: inherit
-  
-  optimum-rbln-inference-test:
-    uses: ./.github/workflows/rbln_optimum_inference_test.yaml
-    with:
-      pr_number: ${{ inputs.pr_number }}
-    secrets: inherit

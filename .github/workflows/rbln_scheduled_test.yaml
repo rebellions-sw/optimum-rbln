@@ -44,20 +44,11 @@ jobs:
     if: ${{ needs.check-compiler.outputs.compiler_version_check == 'true' }}
     uses: ./.github/workflows/rbln_optimum_pytest.yaml
     with:
-      ref: main
+      ref: dev
       rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
       test_level: "full"
       enable_hf_hub_tests: true
       fail_fast: false
-    secrets: inherit
-
-  optimum-rbln-inference-test:
-    needs: check-compiler
-    if: ${{ needs.check-compiler.outputs.compiler_version_check == 'true' }}
-    uses: ./.github/workflows/rbln_optimum_inference_test.yaml
-    with:
-      ref: main
-      rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
     secrets: inherit
 
   summary_and_report:

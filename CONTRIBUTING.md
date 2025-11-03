@@ -20,6 +20,21 @@ If you then still feel the need to ask a question and need clarification, we rec
 
 We will then take care of the issue as soon as possible.
 
+## Branching Strategy
+
+We use a two-branch development workflow to maintain code quality:
+
+- **`main` branch**: Stable, production-ready code that has been thoroughly tested and verified as bug-free.
+- **`dev` branch**: Active development branch where new features are integrated and tested before merging to `main`.
+
+### Guidelines:
+- ✅ **New features and enhancements**: Create feature branches from `dev` and merge back to `dev`
+- ✅ **Bug fixes**: 
+  - For bugs in `dev`: Create a bugfix branch from `dev` and merge to `dev`
+  - For critical bugs in `main`: Create a hotfix branch from `main` and merge to both `main` and `dev`
+- ❌ **Do not** directly push to `main` or `dev` branches
+- ❌ **Do not** create feature branches from `main` (unless it's a critical hotfix)
+
 ## How to create a Pull Request?
 1. Fork the [repository](https://github.com/rebellions-sw/optimum-rbln) by clicking on the 'Fork' button on the repository's page. This creates a copy of the code under your GitHub user account.
 
@@ -34,10 +49,14 @@ We will then take care of the issue as soon as possible.
 3. Create a new branch to hold your development changes:
 
 	```bash
-	git checkout -b a-descriptive-name-for-my-changes
+	# First, fetch the latest changes
+	git fetch upstream
+	
+	# Create your feature branch from dev
+	git checkout -b a-descriptive-name-for-my-changes upstream/dev
 	```
 
-	**do not** work on the `main` branch.
+	**Important**: Always branch from `dev` for new features. Only create branches from `main` for critical hotfixes.
 
 4. Set up a development environment by running the following command in a virtual environment:
 
