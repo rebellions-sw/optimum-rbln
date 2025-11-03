@@ -69,8 +69,6 @@ class Qwen2MoeSparseMoeBlock(nn.Module):
         ones = torch.ones_like(selected_experts.view(-1), dtype=torch.int32)
         expert_select_count = torch.scatter_add(zeros, dim=0, index=selected_experts.view(-1), src=ones)
 
-        breakpoint()
-
         return masked_routing_weights, expert_select_count
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
