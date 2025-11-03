@@ -75,6 +75,10 @@ _import_structure = {
         "RBLNColPaliForRetrieval",
         "RBLNColPaliForRetrievalConfig",
     ],
+    "colqwen2": [
+        "RBLNColQwen2ForRetrieval",
+        "RBLNColQwen2ForRetrievalConfig",
+    ],
     "distilbert": [
         "RBLNDistilBertForQuestionAnswering",
         "RBLNDistilBertForQuestionAnsweringConfig",
@@ -239,6 +243,7 @@ if TYPE_CHECKING:
         RBLNCLIPVisionModelWithProjectionConfig,
     )
     from .colpali import RBLNColPaliForRetrieval, RBLNColPaliForRetrievalConfig
+    from .colqwen2 import RBLNColQwen2ForRetrieval, RBLNColQwen2ForRetrievalConfig
     from .decoderonly import (
         RBLNDecoderOnlyModel,
         RBLNDecoderOnlyModelConfig,
