@@ -140,7 +140,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, GenerationMixin, ABC):
     @classmethod
     @torch.inference_mode()
     def get_compiled_model(cls, model: PreTrainedModel, rbln_config: RBLNModelForSeq2SeqLMConfig):
-        wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
+        wrapped_model = cls._wrap_model_if_needed(model, rbln_config)
 
         enc_compile_config = rbln_config.compile_cfgs[0]
         dec_compile_config = rbln_config.compile_cfgs[1]
