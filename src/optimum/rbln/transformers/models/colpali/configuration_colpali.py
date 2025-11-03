@@ -28,23 +28,23 @@ class RBLNColPaliForRetrievalConfig(RBLNModelConfig):
     including vision tower settings and multi-sequence length support.
 
     Example usage:
-    ```python
-    from optimum.rbln import RBLNColPaliForRetrieval, RBLNColPaliForRetrievalConfig
+        ```python
+        from optimum.rbln import RBLNColPaliForRetrieval, RBLNColPaliForRetrievalConfig
 
-    # Create a configuration object
-    config = RBLNColPaliForRetrievalConfig(
-        max_seq_lens=1152,
-        output_hidden_states=False,
-        tensor_parallel_size=4
-    )
+        # Create a configuration object
+        config = RBLNColPaliForRetrievalConfig(
+            max_seq_lens=1152,
+            output_hidden_states=False,
+            tensor_parallel_size=4
+        )
 
-    # Use the configuration with from_pretrained
-    model = RBLNColPaliForRetrieval.from_pretrained(
-        "vidore/colpali-v1.3-hf",
-        export=True,
-        rbln_config=config
-    )
-    ```
+        # Use the configuration with from_pretrained
+        model = RBLNColPaliForRetrieval.from_pretrained(
+            "vidore/colpali-v1.3-hf",
+            export=True,
+            rbln_config=config
+        )
+        ```
     """
 
     submodules = ["vision_tower"]

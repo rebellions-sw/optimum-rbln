@@ -28,6 +28,7 @@ from ....modeling import RBLNModel
 from ...modeling_outputs import RBLNDecoderOnlyOutput
 from ...utils.rbln_runtime_wrapper import LoopProcessor
 from ..decoderonly.decoderonly_runtime_utils import RBLNPageTableManager
+from ..decoderonly.generation_decoderonly import RBLNDecoderOnlyGenerationMixin
 from ..decoderonly.modeling_decoderonly import (
     RBLNDecoderOnlyModelForCausalLM,
 )
@@ -77,7 +78,7 @@ class LoopProjector(LoopProcessor):
         return output[0]
 
 
-class RBLNGemma3ForConditionalGeneration(RBLNModel):
+class RBLNGemma3ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixin):
     auto_model_class = AutoModelForImageTextToText
     _rbln_submodules = [
         {"name": "vision_tower"},
@@ -96,11 +97,11 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
 
     def can_generate(self):
         return True
-
+    
+    
     @classmethod
-    def get_pytorch_model(cls, *args, **kwargs):
-        model = super().get_pytorch_model(*args, **kwargs)
-
+    def _reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
+        
         with no_init_weights():
             model_cls_name = model.model.language_model.__class__.__name__
             causal_model_cls_name = model_cls_name.replace("TextModel", "ForCausalLM")
@@ -134,7 +135,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         return self.language_model.get_input_embeddings()
 
     @classmethod
-    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
+    def _wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
         return model.multi_modal_projector
 
     @classmethod
@@ -481,7 +482,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     @classmethod
     @torch.inference_mode()
     def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNGemma3ForCausalLMConfig):
-        wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
+        wrapped_model = cls._wrap_model_if_needed(model, rbln_config)
 
         rbln_compile_configs = rbln_config.compile_cfgs
         prefill_compile_config = rbln_compile_configs[0]

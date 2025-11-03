@@ -216,7 +216,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         return self.rbln_config.kvcache_num_blocks
 
     @classmethod
-    def wrap_model_if_needed(cls, model: PreTrainedModel, rbln_config: "RBLNDecoderOnlyModelConfig"):
+    def _wrap_model_if_needed(cls, model: PreTrainedModel, rbln_config: "RBLNDecoderOnlyModelConfig"):
         return cls._decoder_wrapper_cls(model, rbln_config, cls._use_rotary_emb).eval()
 
     @classmethod
@@ -260,17 +260,19 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
         # Mark static tensors (self kv states)
         static_tensors = {}
+        idx = 0
         for (name, _, _), tensor in zip(compile_config.input_info, example_inputs):
             if "past_key_values" in name:
                 static_tensors[name] = tensor
-                context.mark_static_address(tensor)
+                context.mark_static_address(tensor, f"kv_cache_{idx}")
+                idx += 1
 
         return context, static_tensors
 
     @classmethod
     @torch.inference_mode()
     def get_compiled_model(cls, model: PreTrainedModel, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig):
-        wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
+        wrapped_model = cls._wrap_model_if_needed(model, rbln_config)
         prefill_compile_config = rbln_config.compile_cfgs[0]
 
         # Here we use meta tensor, for the memory efficiency.

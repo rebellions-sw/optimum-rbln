@@ -27,6 +27,7 @@ from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...modeling_outputs import RBLNDecoderOnlyOutput
 from ...utils.rbln_runtime_wrapper import LoopProcessor
+from ..decoderonly.generation_decoderonly import RBLNDecoderOnlyGenerationMixin
 
 
 logger = get_logger(__name__)
@@ -103,7 +104,7 @@ class LoopProjector(LoopProcessor):
         return output[0]
 
 
-class RBLNLlavaForConditionalGeneration(RBLNModel):
+class RBLNLlavaForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixin):
     """
     RBLNLlavaForConditionalGeneration is a multi-modal model that combines vision and language processing capabilities,
     optimized for RBLN NPUs. It is designed for conditional generation tasks that involve both image and text inputs.
@@ -173,9 +174,7 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
         return True
 
     @classmethod
-    def get_pytorch_model(cls, *args, **kwargs):
-        model = super().get_pytorch_model(*args, **kwargs)
-
+    def _reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
         with no_init_weights():
             model_cls_name = model.model.language_model.__class__.__name__
             causal_model_cls_name = model_cls_name.replace("Model", "ForCausalLM")
@@ -206,7 +205,7 @@ class RBLNLlavaForConditionalGeneration(RBLNModel):
         return self.language_model.get_input_embeddings()
 
     @classmethod
-    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
+    def _wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
         return model.multi_modal_projector
 
     @classmethod

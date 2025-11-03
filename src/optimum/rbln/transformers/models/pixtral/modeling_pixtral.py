@@ -229,7 +229,7 @@ class RBLNPixtralVisionModel(RBLNModel):
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
     @classmethod
-    def wrap_model_if_needed(
+    def _wrap_model_if_needed(
         cls, model: torch.nn.Module, rbln_config: RBLNPixtralVisionModelConfig
     ) -> torch.nn.Module:
         wrapper_cfg = {
