@@ -1,6 +1,7 @@
 import os
 import typing
 
+import torch
 import fire
 import torch
 from transformers import AutoConfig, AutoTokenizer, GptOssForCausalLM

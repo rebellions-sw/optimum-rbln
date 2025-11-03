@@ -101,8 +101,8 @@ class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     def _update_rbln_config(
         cls,
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
-        model: Optional[PreTrainedModel] = None,
-        model_config: Optional[PretrainedConfig] = None,
+        model: Optional["PreTrainedModel"] = None,
+        model_config: Optional["PretrainedConfig"] = None,
         rbln_config: Optional[RBLNDecoderOnlyModelForCausalLMConfig] = None,
     ) -> RBLNDecoderOnlyModelForCausalLMConfig:
         rbln_config = super()._update_rbln_config(preprocessors, model, model_config, rbln_config)
