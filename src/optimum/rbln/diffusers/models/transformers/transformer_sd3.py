@@ -77,7 +77,7 @@ class RBLNSD3Transformer2DModel(RBLNModel):
         super().__post_init__(**kwargs)
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
+    def _wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
         return SD3Transformer2DModelWrapper(model).eval()
 
     @classmethod
