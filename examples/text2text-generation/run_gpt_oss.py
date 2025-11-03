@@ -2,7 +2,8 @@ import os
 import typing
 
 import fire
-from transformers import AutoTokenizer, GptOssForCausalLM
+import torch
+from transformers import AutoConfig, AutoTokenizer, GptOssForCausalLM
 
 from optimum.rbln import RBLNGptOssForCausalLM
 
@@ -49,6 +50,12 @@ def main(
     diff: bool = False,
     n_layers: int = 2,
 ):
+    target_config = AutoConfig.from_pretrained(model_id)
+    target_config._attn_implementation = "eager"
+    target_config.num_hidden_layers = n_layers
+    target_config.layer_types = target_config.layer_types[:n_layers]
+    # target_config.dtype = torch.float32
+
     if from_transformers:
         model = RBLNGptOssForCausalLM.from_pretrained(
             model_id,
@@ -57,8 +64,8 @@ def main(
             rbln_max_seq_len=max_seq_len,
             rbln_tensor_parallel_size=tensor_parallel_size,
             rbln_kvcache_partition_len=kvcache_partition_len,
-            num_hidden_layers=n_layers,
-            dtype="float32",
+            config=target_config,
+            dtype=torch.float32,
         )
         model.save_pretrained(os.path.basename(model_id))
     else:
@@ -95,11 +102,7 @@ def main(
     logits = rbln_outputs.logits
 
     if diff:
-        golden_model = GptOssForCausalLM.from_pretrained(
-            model_id,
-            num_hidden_layers=n_layers,
-            _attn_implementation="eager",
-        )
+        golden_model = GptOssForCausalLM.from_pretrained(model_id, config=target_config, dtype=torch.float32)
         golden_outputs = golden_model.generate(
             **inputs,
             do_sample=False,
