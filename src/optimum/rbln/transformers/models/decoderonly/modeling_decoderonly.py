@@ -216,7 +216,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         return self.rbln_config.kvcache_num_blocks
 
     @classmethod
-    def wrap_model_if_needed(cls, model: PreTrainedModel, rbln_config: "RBLNDecoderOnlyModelConfig"):
+    def _wrap_model_if_needed(cls, model: PreTrainedModel, rbln_config: "RBLNDecoderOnlyModelConfig"):
         return cls._decoder_wrapper_cls(model, rbln_config, cls._use_rotary_emb).eval()
 
     @classmethod
@@ -272,7 +272,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     @classmethod
     @torch.inference_mode()
     def get_compiled_model(cls, model: PreTrainedModel, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig):
-        wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
+        wrapped_model = cls._wrap_model_if_needed(model, rbln_config)
         prefill_compile_config = rbln_config.compile_cfgs[0]
 
         # Here we use meta tensor, for the memory efficiency.
@@ -511,7 +511,6 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
                     f" than the required number of blocks ({num_full_blocks})."
                     "This can cause a failure during model compilation."
                 )
-
         logger.info(f"[KVCache] Compiling with num_blocks: {rbln_config.kvcache_num_blocks}")
 
         return rbln_config
