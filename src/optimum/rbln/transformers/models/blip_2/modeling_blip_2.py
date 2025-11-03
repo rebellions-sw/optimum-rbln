@@ -71,7 +71,7 @@ class RBLNBlip2VisionModel(RBLNModel):
         return self.embeddings
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
+    def _wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
         class Blip2VisionModelWrapper(torch.nn.Module):
             def __init__(self, model: "Blip2VisionModel") -> None:
                 super().__init__()
@@ -151,7 +151,7 @@ class RBLNBlip2QFormerModel(RBLNModel):
         return self.embeddings.word_embeddings
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
+    def _wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
         class Blip2QFormerModelWrapper(torch.nn.Module):
             def __init__(self, model: "Blip2QFormerModel"):
                 super().__init__()
@@ -349,7 +349,7 @@ class RBLNBlip2ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixi
         return self.language_model.get_input_embeddings()
 
     @classmethod
-    def wrap_model_if_needed(cls, model, rbln_config):
+    def _wrap_model_if_needed(cls, model, rbln_config):
         return model.language_projection
 
     @classmethod
