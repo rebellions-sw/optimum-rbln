@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - dev
+      - dep/pr_ci 
 
 env:
   REBEL_PYPI_ENDPOINT: ${{ vars.REBEL_PYPI_INTERNAL_ENDPOINT }}
