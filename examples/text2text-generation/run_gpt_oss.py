@@ -66,7 +66,7 @@ def main(
             rbln_tensor_parallel_size=tensor_parallel_size,
             rbln_kvcache_partition_len=kvcache_partition_len,
             config=target_config,
-            dtype=torch.float32,
+            # dtype=torch.float32,
         )
         model.save_pretrained(os.path.basename(model_id))
     else:

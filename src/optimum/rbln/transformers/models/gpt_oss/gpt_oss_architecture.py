@@ -68,11 +68,17 @@ class RBLNGptOssTopKRouter(nn.Module):
         self.weight = model.weight
         self.bias = model.bias
 
+    def casted_top_K(self, router_logits, hidden_states):
+        logits = router_logits.to(torch.float32)
+        router_top_value, router_indices = torch.topk(logits, self.top_k, dim=-1)
+
+        return router_top_value.to(hidden_states.dtype), router_indices
+
     def forward(self, hidden_states):
         hidden_states = hidden_states.reshape(-1, self.hidden_dim)
         router_logits = F.linear(hidden_states, self.weight, self.bias)  # (seq_len, num_experts)
-        router_top_value, router_indices = torch.topk(router_logits, self.top_k, dim=-1)  # (seq_len, top_k)
-        router_top_value = torch.nn.functional.softmax(router_top_value, dim=1, dtype=router_top_value.dtype)
+        router_top_value, router_indices = self.casted_top_K(router_logits, hidden_states)
+        router_top_value = torch.nn.functional.softmax(router_top_value, dim=1, dtype=hidden_states.dtype)
         router_scores = torch.zeros_like(router_logits).scatter_(1, router_indices, router_top_value)
 
         return router_scores, router_indices
@@ -120,7 +126,9 @@ class RBLNGptOssExperts(nn.Module):
         hidden_states = hidden_states.repeat(num_experts, 1)
         hidden_states = hidden_states.view(num_experts, -1, self.hidden_size)
 
-        gate_up = torch.bmm(hidden_states, self.gate_up_proj.to(hidden_states.dtype)) + self.gate_up_proj_bias[..., None, :].to(hidden_states.dtype)
+        gate_up = torch.bmm(hidden_states, self.gate_up_proj.to(hidden_states.dtype)) + self.gate_up_proj_bias[
+            ..., None, :
+        ].to(hidden_states.dtype)
         gate, up = gate_up[..., ::2], gate_up[..., 1::2]
         gate = gate.clamp(min=None, max=self.limit)
         up = up.clamp(min=-self.limit, max=self.limit)
