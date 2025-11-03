@@ -67,6 +67,8 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: check if pr is dependency check
         id: check_title
@@ -83,6 +85,8 @@ jobs:
           else
             echo "result=false" >> $GITHUB_OUTPUT
           fi
+
+          echo $result
 
   check-team-member:
     runs-on: rebel-k8s-runner
