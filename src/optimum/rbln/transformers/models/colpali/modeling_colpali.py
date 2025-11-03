@@ -14,8 +14,7 @@
 
 import bisect
 from pathlib import Path
-from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import torch
 from transformers import PretrainedConfig, PreTrainedModel

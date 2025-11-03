@@ -35,6 +35,11 @@ def read_checklist_from_template():
     return checklist_items
 
 
+def is_release_pr(pr):
+    """Check if this is a release PR (dev -> main)"""
+    return pr.base.ref == "main" and pr.head.ref == "dev"
+
+
 def validate_checklist(body, expected_items):
     for item in expected_items:
         if f"- [x] {item}" not in body:
@@ -55,6 +60,12 @@ def main():
     g = Github(github_token)
     repo = g.get_repo(repo_name)
     pr = repo.get_pull(int(pr_number))
+
+    # Skip checklist validation for release PRs (dev -> main)
+    if is_release_pr(pr):
+        print("This is a release PR (dev -> main). Skipping checklist validation.")
+        print("Release PRs follow a different approval process.")
+        sys.exit(0)
 
     expected_items = read_checklist_from_template()
 
