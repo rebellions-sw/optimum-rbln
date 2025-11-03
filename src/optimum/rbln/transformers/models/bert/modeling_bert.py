@@ -12,15 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ....utils.logging import get_logger
+import torch
+
 from ...modeling_generic import (
     RBLNModelForMaskedLM,
     RBLNModelForQuestionAnswering,
     RBLNTransformerEncoderForFeatureExtraction,
 )
-
-
-logger = get_logger(__name__)
+from .bert_architecture import BertModelWrapper
+from .configuration_bert import RBLNBertModelConfig
 
 
 class RBLNBertModel(RBLNTransformerEncoderForFeatureExtraction):
@@ -33,6 +33,10 @@ class RBLNBertModel(RBLNTransformerEncoderForFeatureExtraction):
     """
 
     rbln_model_input_names = ["input_ids", "attention_mask"]
+
+    @classmethod
+    def _wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNBertModelConfig) -> torch.nn.Module:
+        return BertModelWrapper(model, rbln_config)
 
 
 class RBLNBertForMaskedLM(RBLNModelForMaskedLM):

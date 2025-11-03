@@ -59,7 +59,7 @@ class RBLNPriorTransformer(RBLNModel):
     """
     RBLN implementation of PriorTransformer for diffusion models like Kandinsky V2.2.
 
-    The Prior Transformer takes text and/or image embeddings from encoders (like CLIP) and
+    The PriorTransformer takes text and/or image embeddings from encoders (like CLIP) and
     maps them to a shared latent space that guides the diffusion process to generate the desired image.
 
     This class inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods
@@ -77,7 +77,7 @@ class RBLNPriorTransformer(RBLNModel):
         self.clip_std = artifacts["clip_std"]
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
+    def _wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
         return _PriorTransformer(model).eval()
 
     @classmethod

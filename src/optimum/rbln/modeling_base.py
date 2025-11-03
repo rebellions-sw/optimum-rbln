@@ -34,7 +34,7 @@ from .utils.submodule import SubModulesMixin
 
 
 if TYPE_CHECKING:
-    from transformers import PreTrainedModel
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PreTrainedModel
 
 logger = get_logger(__name__)
 
@@ -53,6 +53,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     config_class = AutoConfig
     config_name = "config.json"
     hf_library_name = "transformers"
+    _supports_non_fp32 = False
 
     def __init__(
         self,
@@ -91,7 +92,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
         self.device = torch.device("cpu")
         self.training = False
-        self.dtype = torch.float32
+        self.dtype = rbln_config.torch_dtype
 
         # FIXME :: model_save_dir is not used after initialized. (This can be used when save/load)
         # This attribute is needed to keep one reference on the temporary directory, since garbage collecting it
@@ -314,7 +315,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             rbln_config,
             model_save_dir=model_save_dir,
             subfolder=subfolder,
-            rbln_compiled_models=(None if rbln_config.optimize_host_memory else rbln_compiled_models),
+            rbln_compiled_models=rbln_compiled_models,
             rbln_submodules=rbln_submodules,
             **kwargs,
         )
@@ -343,10 +344,36 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         return rbln_config, kwargs
 
     @classmethod
+    def _is_compiled(
+        cls,
+        model_id: Union[str, Path],
+        token: Optional[Union[bool, str]] = None,
+        revision: Optional[str] = None,
+        force_download: bool = False,
+        cache_dir: Optional[str] = None,
+        subfolder: str = "",
+        local_files_only: bool = False,
+    ) -> bool:
+        # Check if the model is already compiled.
+        try:
+            cls._load_compiled_model_dir(
+                model_id=model_id,
+                token=token,
+                revision=revision,
+                force_download=force_download,
+                cache_dir=cache_dir,
+                subfolder=subfolder,
+                local_files_only=local_files_only,
+            )
+            return True
+        except (FileNotFoundError, KeyError):
+            return False
+
+    @classmethod
     def from_pretrained(
         cls: Type["RBLNBaseModel"],
         model_id: Union[str, Path],
-        export: bool = False,
+        export: Optional[bool] = None,
         rbln_config: Optional[Union[Dict, RBLNModelConfig]] = None,
         **kwargs: Any,
     ) -> "RBLNBaseModel":
@@ -355,19 +382,33 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         User can use this function to load a pre-trained model from the HuggingFace library and convert it to a RBLN model to be run on RBLN NPUs.
 
         Args:
-            model_id: The model id of the pre-trained model to be loaded. It can be downloaded from the HuggingFace model hub or a local path, or a model id of a compiled model using the RBLN Compiler.
-            export: A boolean flag to indicate whether the model should be compiled.
-            rbln_config: Configuration for RBLN model compilation and runtime. This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNLlamaForCausalLMConfig` for Llama models).
+            model_id (Union[str, Path]): The model id of the pre-trained model to be loaded.
+                It can be downloaded from the HuggingFace model hub or a local path, or a model id of a compiled model using the RBLN Compiler.
+            export (Optional[bool]): A boolean flag to indicate whether the model should be compiled.
+                If None, it will be determined based on the existence of the compiled model files in the model_id.
+            rbln_config (Optional[Union[Dict, RBLNModelConfig]]): Configuration for RBLN model compilation and runtime.
+                This can be provided as a dictionary or an instance of the model's configuration class (e.g., `RBLNLlamaForCausalLMConfig` for Llama models).
                 For detailed configuration options, see the specific model's configuration class documentation.
-
-            kwargs: Additional keyword arguments. Arguments with the prefix 'rbln_' are passed to rbln_config, while the remaining arguments are passed to the HuggingFace library.
+            kwargs: Additional keyword arguments. Arguments with the prefix `rbln_` are passed to rbln_config, while the remaining arguments are passed to the HuggingFace library.
 
         Returns:
-            A RBLN model instance ready for inference on RBLN NPU devices.
+            (RBLNModel): A RBLN model instance ready for inference on RBLN NPU devices.
         """
 
         if isinstance(model_id, Path):
             model_id = model_id.as_posix()
+
+        if export is None:
+            export = not cls._is_compiled(
+                model_id=model_id,
+                token=kwargs.get("token"),
+                revision=kwargs.get("revision"),
+                force_download=kwargs.get("force_download", False),
+                cache_dir=kwargs.get("cache_dir"),
+                subfolder=kwargs.get("subfolder", ""),
+                local_files_only=kwargs.get("local_files_only", False),
+            )
+
         from_pretrained_method = cls._export if export else cls._from_pretrained
         return from_pretrained_method(model_id=model_id, **kwargs, rbln_config=rbln_config)
 
@@ -392,7 +433,6 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         compiled_model = rebel.compile_from_torch(
             model,
             input_info=rbln_compile_config.input_info,
-            fusion=rbln_compile_config.fusion,
             npu=rbln_compile_config.npu,
             tensor_parallel_size=rbln_compile_config.tensor_parallel_size,
             **kwargs,
@@ -400,8 +440,21 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         return compiled_model
 
     @classmethod
-    def update_rbln_config(cls, **others) -> RBLNModelConfig:
-        rbln_config = cls._update_rbln_config(**others)
+    def update_rbln_config(
+        cls,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+        model: "PreTrainedModel",
+        model_config: "PretrainedConfig",
+        rbln_config: RBLNModelConfig,
+    ) -> RBLNModelConfig:
+        rbln_config.torch_dtype = model.dtype
+        if not cls._supports_non_fp32 and rbln_config.torch_dtype != torch.float32:
+            raise NotImplementedError(
+                f"Currently, {cls.__name__} does not support non-fp32 dtype. Please use float32 dtype."
+            )
+        rbln_config = cls._update_rbln_config(
+            preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
+        )
         rbln_config.freeze()
         if rbln_config.rbln_model_cls_name != cls.__name__:
             raise NameError(
@@ -444,12 +497,12 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
         # This method mimics the interface of torch.nn.Module.parameters()
         # specifically for code that uses `next(model.parameters())` to infer
-        # the device or dtype. It yields a single dummy tensor on CPU with float32 dtype.
+        # the device or dtype. It yields a single dummy tensor on CPU with model dtype.
 
         # Warning:
         #     This does NOT yield the actual model parameters used by the RBLN runtime.
         #     Code relying on iterating through all model parameters will not work as expected.
-        yield torch.tensor([1.0], dtype=torch.float32, device=torch.device("cpu"))
+        yield torch.tensor([1.0], dtype=self.dtype, device=torch.device("cpu"))
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
@@ -484,9 +537,9 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         [`~optimum.rbln.modeling_base.RBLNBaseModel.from_pretrained`] class method.
 
         Args:
-            save_directory (`Union[str, Path]`):
+            save_directory (Union[str, Path]):
                 Directory where to save the model file.
-            push_to_hub (`bool`, *optional*, defaults to `False`):
+            push_to_hub (bool):
                 Whether or not to push your model to the HuggingFace model hub after saving it.
 
         """
@@ -525,13 +578,30 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
             # If everything succeeded, move files to target directory
             if os.path.exists(save_directory_path):
-                # Move files from tmp_dir to existing directory (overwrite existing files)
-                for item in os.listdir(tmp_dir):
-                    src_path = os.path.join(tmp_dir, item)
-                    dst_path = os.path.join(save_directory_path, item)
-                    shutil.move(src_path, dst_path)
-                # Clean up empty tmp_dir
-                os.rmdir(tmp_dir)
+                # Merge files from tmp_dir into existing directory
+                def _merge_dir(src_root: str, dst_root: str):
+                    for name in os.listdir(src_root):
+                        src_item = os.path.join(src_root, name)
+                        dst_item = os.path.join(dst_root, name)
+
+                        if os.path.islink(src_item) or os.path.isfile(src_item):
+                            os.makedirs(os.path.dirname(dst_item), exist_ok=True)
+                            if os.path.isdir(dst_item) and not os.path.islink(dst_item):
+                                shutil.rmtree(dst_item)
+                            os.replace(src_item, dst_item)
+                        elif os.path.isdir(src_item):
+                            if os.path.islink(dst_item) or os.path.isfile(dst_item):
+                                os.remove(dst_item)
+                            os.makedirs(dst_item, exist_ok=True)
+                            _merge_dir(src_item, dst_item)
+                        else:
+                            # Fallback for special file types
+                            os.replace(src_item, dst_item)
+
+                _merge_dir(tmp_dir, str(save_directory_path))
+
+                # Remove the temporary directory tree after merge
+                shutil.rmtree(tmp_dir)
             else:
                 # If target doesn't exist, just rename tmp_dir to target
                 os.rename(tmp_dir, save_directory_path)

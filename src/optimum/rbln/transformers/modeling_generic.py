@@ -23,6 +23,7 @@ different model architectures.
 import inspect
 from typing import TYPE_CHECKING, Optional, Union
 
+from torch import nn
 from transformers import (
     AutoModel,
     AutoModelForAudioClassification,
@@ -56,6 +57,28 @@ class RBLNTransformerEncoder(RBLNModel):
     auto_model_class = AutoModel
     rbln_model_input_names = ["input_ids", "attention_mask", "token_type_ids"]
     rbln_dtype = "int64"
+
+    @classmethod
+    def _wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNTransformerEncoderConfig) -> nn.Module:
+        class TransformerEncoderWrapper(nn.Module):
+            # Parameters to disable for RBLN compilation
+            DISABLED_PARAMS = {"return_dict", "use_cache"}
+
+            def __init__(self, model: "PreTrainedModel", rbln_config: RBLNTransformerEncoderConfig):
+                super().__init__()
+                self.model = model
+                self.rbln_config = rbln_config
+                self._forward_signature = inspect.signature(model.forward)
+
+            def forward(self, *args, **kwargs):
+                # Disable parameters that are not compatible with RBLN compilation
+                for param_name in self.DISABLED_PARAMS:
+                    if param_name in self._forward_signature.parameters:
+                        kwargs[param_name] = False
+
+                return self.model(*args, **kwargs)
+
+        return TransformerEncoderWrapper(model, rbln_config).eval()
 
     @classmethod
     def _update_rbln_config(
@@ -127,10 +150,18 @@ class RBLNTransformerEncoder(RBLNModel):
                 "This is an internal error. Please report it to the developers."
             )
 
-        input_info = [
-            (model_input_name, [rbln_config.batch_size, rbln_config.max_seq_len], cls.rbln_dtype)
-            for model_input_name in rbln_config.model_input_names
-        ]
+        if rbln_config.model_input_shapes is None:
+            input_info = [
+                (model_input_name, [rbln_config.batch_size, rbln_config.max_seq_len], cls.rbln_dtype)
+                for model_input_name in rbln_config.model_input_names
+            ]
+        else:
+            input_info = [
+                (model_input_name, model_input_shape, cls.rbln_dtype)
+                for model_input_name, model_input_shape in zip(
+                    rbln_config.model_input_names, rbln_config.model_input_shapes
+                )
+            ]
 
         rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
         return rbln_config
@@ -200,7 +231,6 @@ class RBLNModelForQuestionAnswering(RBLNTransformerEncoder):
 
     def _prepare_output(self, output, return_dict):
         # Prepare QuestionAnswering specific output format.
-
         start_logits, end_logits = output
 
         if not return_dict:
@@ -237,6 +267,20 @@ class RBLNModelForImageClassification(RBLNImageModel):
 class RBLNModelForDepthEstimation(RBLNImageModel):
     auto_model_class = AutoModelForDepthEstimation
 
+    @classmethod
+    def _wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNImageModelConfig):
+        class ImageModelWrapper(nn.Module):
+            def __init__(self, model: "PreTrainedModel", rbln_config: RBLNImageModelConfig):
+                super().__init__()
+                self.model = model
+                self.rbln_config = rbln_config
+
+            def forward(self, *args, **kwargs):
+                output = self.model(*args, return_dict=True, **kwargs)
+                return output.predicted_depth
+
+        return ImageModelWrapper(model, rbln_config).eval()
+
 
 class RBLNModelForAudioClassification(RBLNModel):
     """
@@ -245,6 +289,7 @@ class RBLNModelForAudioClassification(RBLNModel):
 
     A class to convert and run pre-trained transformers based AudioClassification models on RBLN devices.
     It implements the methods to convert a pre-trained transformers AudioClassification model into a RBLN transformer model by:
+
     - transferring the checkpoint weights of the original into an optimized RBLN graph,
     - compiling the resulting graph using the RBLN compiler.
 

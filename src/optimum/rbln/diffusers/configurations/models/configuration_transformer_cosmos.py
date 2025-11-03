@@ -18,7 +18,12 @@ from ....configuration_utils import RBLNModelConfig
 
 
 class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
-    """Configuration class for RBLN Cosmos Transformer models."""
+    """
+    Configuration class for RBLN Cosmos Transformer models.
+
+    This class inherits from RBLNModelConfig and provides specific configuration options
+    for Transformer models used in diffusion models like Cosmos.
+    """
 
     def __init__(
         self,
@@ -46,7 +51,7 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
             num_channels_latents (Optional[int]): The number of channels in latent space.
             latent_height (Optional[int]): The height in pixels in latent space.
             latent_width (Optional[int]): The width in pixels in latent space.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If batch_size is not a positive integer.

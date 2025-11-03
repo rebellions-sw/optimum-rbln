@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import importlib
 import inspect
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -25,7 +26,9 @@ from transformers.models.gemma3.modeling_gemma3 import Gemma3TextScaledWordEmbed
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ...modeling_outputs import RBLNDecoderOnlyOutput
+from ...utils.rbln_runtime_wrapper import LoopProcessor
 from ..decoderonly.decoderonly_runtime_utils import RBLNPageTableManager
+from ..decoderonly.generation_decoderonly import RBLNDecoderOnlyGenerationMixin
 from ..decoderonly.modeling_decoderonly import (
     RBLNDecoderOnlyModelForCausalLM,
 )
@@ -38,61 +41,44 @@ if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, Gemma3ForConditionalGeneration
 
 
-class LoopVisionTower:
-    def __init__(self, vision_tower: RBLNModel) -> None:
-        self.vision_tower = vision_tower
+class LoopVisionTower(LoopProcessor):
+    def __init__(self, vision_tower: "RBLNModel"):
+        super().__init__(model=vision_tower)
 
-    def forward(self, *args, **kwargs):
-        # Loop instead of batch
-        # shape of pixel_values : [batch, num_channel, height, width]
-        pixel_values = args[0]
+    def _get_batch_size(self, pixel_values, **kwargs):
+        return pixel_values.shape[0]
 
-        batch_size = pixel_values.shape[0]
-        outputs = []
-        for i in range(batch_size):
-            outputs.append(self.vision_tower(pixel_values=pixel_values[i : i + 1], return_dict=True))
+    def _prepare_inputs_for_iteration(self, index, common_inputs, pixel_values, **kwargs):
+        pixel_values_item = pixel_values[index : index + 1]
+        out_buffer = [tensor[index : index + 1] for tensor in kwargs["out"]]
+        return ([pixel_values_item], {"out": out_buffer})
 
-        last_hidden_states = [output.last_hidden_state for output in outputs]
-
-        # FIXME:: This can be optimized using out= API of rbln runtime.
-        last_hidden_states = torch.cat(last_hidden_states, dim=0)
+    def _process_outputs(self, outputs: list, **kwargs) -> "BaseModelOutputWithPooling":
+        output = kwargs["out"]
 
         return BaseModelOutputWithPooling(
-            last_hidden_state=last_hidden_states,
+            last_hidden_state=output[0],
         )
 
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
-        return self.forward(*args, **kwds)
 
-    def __repr__(self) -> str:
-        return repr(self.vision_tower)
+class LoopProjector(LoopProcessor):
+    def __init__(self, multi_modal_projector: "RBLNModel"):
+        super().__init__(model=multi_modal_projector)
 
+    def _get_batch_size(self, image_feature, **kwargs):
+        return image_feature.shape[0]
 
-class LoopProjector:
-    def __init__(self, multi_modal_projector) -> None:
-        self.multi_modal_projector = multi_modal_projector
+    def _prepare_inputs_for_iteration(self, index, common_inputs, image_feature, **kwargs):
+        image_feature_item = image_feature[index : index + 1]
+        out_buffer = [tensor[index : index + 1] for tensor in kwargs["out"]]
+        return ([image_feature_item], {"out": out_buffer})
 
-    def forward(self, *args, **kwargs):
-        # Loop instead of batch
-        image_feature = args[0]
-
-        batch_size = image_feature.shape[0]
-        outputs = []
-        for i in range(batch_size):
-            outputs.append(self.multi_modal_projector(image_feature[i : i + 1]))
-
-        # FIXME:: This can be optimized using out= API of rbln runtime.
-        outputs = torch.cat(outputs, dim=0)
-        return outputs
-
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
-        return self.forward(*args, **kwds)
-
-    def __repr__(self) -> str:
-        return repr(self.multi_modal_projector)
+    def _process_outputs(self, outputs: list, **kwargs):
+        output = kwargs["out"]
+        return output[0]
 
 
-class RBLNGemma3ForConditionalGeneration(RBLNModel):
+class RBLNGemma3ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixin):
     auto_model_class = AutoModelForImageTextToText
     _rbln_submodules = [
         {"name": "vision_tower"},
@@ -111,6 +97,21 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
 
     def can_generate(self):
         return True
+
+    @classmethod
+    def _reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
+        with no_init_weights():
+            model_cls_name = model.model.language_model.__class__.__name__
+            causal_model_cls_name = model_cls_name.replace("TextModel", "ForCausalLM")
+            causal_model_cls = getattr(importlib.import_module("transformers"), causal_model_cls_name)
+            new_language_model = causal_model_cls(model.model.language_model.config)
+
+        new_language_model.lm_head = model.lm_head
+        new_language_model.model = model.model.language_model
+        model.model.language_model = new_language_model
+        model.lm_head = None
+        del model.lm_head
+        return model
 
     def __post_init__(self, **kwargs):
         self.vision_tower = LoopVisionTower(self.rbln_submodules[0])
@@ -132,7 +133,7 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         return self.language_model.get_input_embeddings()
 
     @classmethod
-    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
+    def _wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
         return model.multi_modal_projector
 
     @classmethod
@@ -201,18 +202,30 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel):
         return model_kwargs
 
     def get_image_features(self, pixel_values: torch.Tensor) -> torch.Tensor:
-        """
-        Projects the last hidden state from the vision model into language model space.
+        # Projects the last hidden state from the vision model into language model space.
 
-        Args:
-            pixel_values: (`torch.FloatTensor` of shape `(batch_size, channels, height, width)`)
-                The tensors corresponding to the input images.
+        # Args:
+        #     pixel_values: (`torch.FloatTensor` of shape `(batch_size, channels, height, width)`)
+        #         The tensors corresponding to the input images.
 
-        Returns:
-            Image feature tensor of shape `(num_images, image_length, embed_dim)`.
-        """
-        vision_outputs = self.vision_tower(pixel_values).last_hidden_state
-        image_features = self.multi_modal_projector(vision_outputs)
+        # Returns:
+        #     Image feature tensor of shape `(num_images, image_length, embed_dim)`.
+
+        vision_out_buffer = []
+        vision_out_size = [
+            pixel_values.shape[0],
+            (self.config.vision_config.image_size // self.config.vision_config.patch_size) ** 2,
+            self.config.vision_config.hidden_size,
+        ]
+        projector_out_size = [
+            pixel_values.shape[0],
+            self.config.mm_tokens_per_image,
+            self.config.text_config.hidden_size,
+        ]
+        vision_out_buffer.append(torch.empty(size=vision_out_size, dtype=torch.float32, device="cpu"))
+        projector_out_buffer = [torch.empty(size=projector_out_size, dtype=torch.float32, device="cpu")]
+        vision_outputs = self.vision_tower(pixel_values, out=vision_out_buffer).last_hidden_state
+        image_features = self.multi_modal_projector(vision_outputs, out=projector_out_buffer)
         return image_features
 
     def _preprocess_prefill(
@@ -345,6 +358,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     """
 
     _decoder_wrapper_cls = Gemma3ForCausalLMWrapper
+    _supports_non_fp32 = False
 
     def setup_runtime(self):
         # Initialize shared resources to be used across Runtime instances (prefill and decode phases)
@@ -393,6 +407,13 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     def _update_sliding_window_config(cls, model_config: PretrainedConfig, rbln_config: RBLNGemma3ForCausalLMConfig):
         sliding_window = getattr(model_config, "sliding_window", None)
         sliding_window_pattern = getattr(model_config, "sliding_window_pattern", None)
+        if sliding_window_pattern is None:
+            if hasattr(model_config, "layer_types"):
+                first_full_attention_index = model_config.layer_types.index("full_attention")
+                sliding_window_pattern = first_full_attention_index + 1
+            else:
+                raise ValueError("Cannot determine sliding_window_pattern from model_config")
+
         if sliding_window_pattern <= model_config.num_hidden_layers:
             rbln_config.cache_impl = "hybrid"
             rbln_config.sliding_window = sliding_window
@@ -403,7 +424,12 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         return rbln_config
 
     @classmethod
-    def _update_submodule_config(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
+    def _update_submodule_config(
+        cls,
+        model: "PreTrainedModel",
+        rbln_config: RBLNModelConfig,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+    ):
         if rbln_config.image_prefill_chunk_size is None:
             rbln_config.image_prefill_chunk_size = model.config.mm_tokens_per_image
 
@@ -454,7 +480,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     @classmethod
     @torch.inference_mode()
     def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNGemma3ForCausalLMConfig):
-        wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
+        wrapped_model = cls._wrap_model_if_needed(model, rbln_config)
 
         rbln_compile_configs = rbln_config.compile_cfgs
         prefill_compile_config = rbln_compile_configs[0]
