@@ -16,7 +16,7 @@ import os
 import re
 import sys
 
-from github import Github, Auth
+from github import Auth, Github
 
 
 def read_checklist_from_template():
