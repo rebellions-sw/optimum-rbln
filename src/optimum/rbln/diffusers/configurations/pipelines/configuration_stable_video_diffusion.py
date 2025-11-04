@@ -72,17 +72,17 @@ class RBLNStableVideoDiffusionPipelineConfig(RBLNModelConfig):
             width = self.get_default_values_for_original_cls("__call__", ["width"])["width"]
             image_size = (height, width)
 
-        self.image_encoder = self.init_submodule_config(
-            RBLNCLIPVisionModelWithProjectionConfig, image_encoder, batch_size=batch_size
+        self.image_encoder = self.initialize_submodule_config(
+            image_encoder, cls_name="RBLNCLIPVisionModelWithProjectionConfig", batch_size=batch_size
         )
-        self.unet = self.init_submodule_config(
-            RBLNUNetSpatioTemporalConditionModelConfig,
+        self.unet = self.initialize_submodule_config(
             unet,
+            cls_name="RBLNUNetSpatioTemporalConditionModelConfig",
             num_frames=num_frames,
         )
-        self.vae = self.init_submodule_config(
-            RBLNAutoencoderKLTemporalDecoderConfig,
+        self.vae = self.initialize_submodule_config(
             vae,
+            cls_name="RBLNAutoencoderKLTemporalDecoderConfig",
             batch_size=batch_size,
             num_frames=num_frames,
             decode_chunk_size=decode_chunk_size,
