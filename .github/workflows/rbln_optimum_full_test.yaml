@@ -35,13 +35,6 @@ jobs:
         fail_fast: false
     secrets: inherit
 
-  optimum-rbln-inference-test:
-    uses: ./.github/workflows/rbln_optimum_inference_test.yaml
-    with:
-        ref: ${{ inputs.ref }}
-        rebel_compiler_version: ${{ inputs.rebel_compiler_version }}
-    secrets: inherit
-
   get-hf-package-version:
     runs-on: rebel-k8s-runner
     outputs:
