@@ -306,16 +306,12 @@ class RBLNModelForAudioClassification(RBLNModel):
         model_config: "PretrainedConfig" = None,
         rbln_config: Optional[RBLNModelForAudioClassificationConfig] = None,
     ) -> RBLNModelForAudioClassificationConfig:
-        if rbln_config.num_mel_bins is None:
-            rbln_config.num_mel_bins = getattr(model_config, "num_mel_bins", None)
-            if rbln_config.num_mel_bins is None:
-                for feature_extractor in preprocessors:
-                    if hasattr(feature_extractor, "num_mel_bins"):
-                        rbln_config.num_mel_bins = feature_extractor.num_mel_bins
-                        break
-
-        if rbln_config.num_mel_bins is None:
-            raise ValueError("`num_mel_bins` should be specified!")
+        num_mel_bins = getattr(model_config, "num_mel_bins", None)
+        if num_mel_bins is None:
+            for feature_extractor in preprocessors:
+                if hasattr(feature_extractor, "num_mel_bins"):
+                    num_mel_bins = feature_extractor.num_mel_bins
+                    break
 
         if rbln_config.max_length is None:
             rbln_config.max_length = getattr(model_config, "max_length", None)
@@ -330,7 +326,7 @@ class RBLNModelForAudioClassification(RBLNModel):
         input_info = [
             (
                 "input_values",
-                [rbln_config.batch_size, rbln_config.max_length, rbln_config.num_mel_bins],
+                [rbln_config.batch_size, rbln_config.max_length, num_mel_bins],
                 "float32",
             ),
         ]
