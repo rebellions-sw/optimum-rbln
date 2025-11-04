@@ -55,7 +55,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: "main"
+          ref: "dev"
 
       - name: Change version.yaml
         run: |
@@ -68,7 +68,7 @@ jobs:
           token: ${{ env.TOKEN }}
           commit-message: "dependency: Update dependency rebel-compiler to ${{ needs.fetch-version.outputs.compiler_version }}"
           title: "dependency: Update dependency rebel-compiler to ${{ needs.fetch-version.outputs.compiler_version }}"
-          base: main
+          base: dev
           team-reviewers: rebellions-sw/sw-generalization, rebel-jongho
 
   rbln-full-test:
@@ -77,5 +77,5 @@ jobs:
     uses: ./.github/workflows/rbln_optimum_full_test.yaml
     with:
       rebel_compiler_version: ${{ needs.fetch-version.outputs.compiler_version }}
-      ref: "main"
+      ref: "dev"
     secrets: inherit

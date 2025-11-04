@@ -43,7 +43,6 @@ jobs:
     secrets: inherit
 
   get-hf-package-version:
-    needs: [optimum-rbln-pytest, check-compiler]
     runs-on: rebel-k8s-runner
     outputs:
         transformers_version: ${{ steps.transformers.outputs.version }}
