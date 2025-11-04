@@ -511,7 +511,6 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
                     f" than the required number of blocks ({num_full_blocks})."
                     "This can cause a failure during model compilation."
                 )
-
         logger.info(f"[KVCache] Compiling with num_blocks: {rbln_config.kvcache_num_blocks}")
 
         return rbln_config
@@ -759,6 +758,16 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
             logits = []
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
             batch_size = inputs.shape[0]
+            input_len = inputs.shape[1]
+            if batch_size > self.rbln_config.batch_size:
+                raise ValueError(
+                    f"Input's batch({batch_size}) exceeds compiled batch_size({self.rbln_config.batch_size})"
+                )
+            if input_len > self.rbln_config.max_seq_len:
+                raise ValueError(
+                    f"Input's length({input_len}) exceeds compiled max_seq_len({self.rbln_config.max_seq_len})."
+                )
+
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
                 output = self.prefill_decoder(
@@ -783,6 +792,15 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
                     f"Available batch sizes are: {list(self.decoders.keys())}. "
                     f"Please run your model with one of these batch sizes or add support for batch size {batch_size}."
                 )
+            if max(cache_position.reshape(-1)) >= self.rbln_config.max_seq_len:
+                raise ValueError(
+                    f"Cache position exceeds the maximum sequence length.\n"
+                    f"  - Current max cache position: {int(torch.max(cache_position).item())}\n"
+                    f"  - Allowed max_seq_len: {self.rbln_config.max_seq_len}\n"
+                    f"Solution: Reduce the generation length by adjusting `max_new_tokens` "
+                    f"or `max_length` in the generation config."
+                )
+
             logits = self.decoders[batch_size](
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
