@@ -148,8 +148,8 @@ if TYPE_CHECKING:
     from .modeling_diffusers import RBLNDiffusionMixin
     from .models import (
         RBLNAutoencoderKL,
-        RBLNAutoencoderKLTemporalDecoder,
         RBLNAutoencoderKLCosmos,
+        RBLNAutoencoderKLTemporalDecoder,
         RBLNControlNetModel,
         RBLNCosmosTransformer3DModel,
         RBLNPriorTransformer,
