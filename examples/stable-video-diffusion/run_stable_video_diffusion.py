@@ -9,7 +9,8 @@ from optimum.rbln import RBLNStableVideoDiffusionPipeline
 
 
 def main(
-    model_id: str = "stabilityai/stable-video-diffusion-img2vid-xt-1-1",
+    # model_id: str = "stabilityai/stable-video-diffusion-img2vid-xt-1-1",
+    model_id: str = "stabilityai/stable-video-diffusion-img2vid",
     from_diffusers: bool = False,
     width: int = 1024,
     height: int = 576,
@@ -31,7 +32,7 @@ def main(
             rbln_config={
                 "unet": {"device": 0},
                 "image_encoder": {"device": 0},
-                "vae": {"device": 1},
+                "vae": {"device": 0},
             },
         )
         pipe.save_pretrained(os.path.basename(model_id))
@@ -42,7 +43,7 @@ def main(
             rbln_config={
                 "unet": {"device": 0},
                 "image_encoder": {"device": 0},
-                "vae": {"device": 1},
+                "vae": {"device": 0},
             },
         )
 
