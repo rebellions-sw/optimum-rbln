@@ -404,6 +404,7 @@ class TestColQwen2Model(BaseTest.TestModel):
             "max_seq_len": 32_768,
         }
     }
+    HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
     HF_CONFIG_KWARGS_PREPROCESSOR = {"max_pixels": 64 * 14 * 14}
 
     @classmethod

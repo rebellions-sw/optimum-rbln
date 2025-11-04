@@ -153,7 +153,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
             return redirect(val)
 
     @classmethod
-    def wrap_model_if_needed(
+    def _wrap_model_if_needed(
         self, model: "PreTrainedModel", rbln_config: RBLNTimeSeriesTransformerForPredictionConfig
     ):
         return TimeSeriesTransformersWrapper(model, rbln_config.num_parallel_samples)
@@ -161,7 +161,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
     @classmethod
     @torch.inference_mode()
     def get_compiled_model(cls, model, rbln_config: RBLNTimeSeriesTransformerForPredictionConfig):
-        wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
+        wrapped_model = cls._wrap_model_if_needed(model, rbln_config)
 
         enc_compile_config = rbln_config.compile_cfgs[0]
         dec_compile_config = rbln_config.compile_cfgs[1]

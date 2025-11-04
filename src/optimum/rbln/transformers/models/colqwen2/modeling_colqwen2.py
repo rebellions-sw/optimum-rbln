@@ -51,6 +51,63 @@ from .colqwen2_architecture import ColQwen2LanguageModelWrapper
 
 
 class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
+    """
+    The ColQwen Model transformer for document retrieval using vision-language models.
+    This model inherits from [`RBLNDecoderOnlyModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    A class to convert and run pre-trained transformers based `ColQwen2ForRetrieval` model on RBLN devices.
+    It implements the methods to convert a pre-trained transformers `ColQwen2ForRetrieval` model into a RBLN transformer model by:
+
+    - transferring the checkpoint weights of the original into an optimized RBLN graph,
+    - compiling the resulting graph using the RBLN compiler.
+
+    **Configuration:**
+    This model uses [`RBLNColQwen2ForRetrievalConfig`] for configuration. When calling methods like `from_pretrained` or `from_model`,
+    the `rbln_config` parameter should be an instance of [`RBLNColQwen2ForRetrievalConfig`] or a dictionary conforming to its structure.
+
+    See the [`RBLNColQwen2ForRetrievalConfig`] class for all available configuration options.
+
+    Examples:
+        ```python
+        from optimum.rbln import RBLNColQwen2ForRetrieval
+
+        # Using a config dictionary
+        rbln_config = {
+            "visual": {
+                "max_seq_lens": 6400,
+            },
+            "max_seq_len": 32_768,
+            "tensor_parallel_size": 4,
+            "device": [0, 1, 2, 3],
+            "output_hidden_states": False,
+        }
+        model = RBLNColQwen2ForRetrieval.from_pretrained(
+            "vidore/colqwen2-v1.0-hf",
+            export=True,
+            rbln_config=rbln_config
+        )
+
+        # Using a RBLNColQwen2ForRetrievalConfig instance (recommended for type checking)
+        from optimum.rbln import RBLNColQwen2ForRetrievalConfig
+
+        config = RBLNColQwen2ForRetrievalConfig(
+            visual={
+                "max_seq_lens": 6400,
+                "device": 0,
+            },
+            max_seq_len=32_768,
+            tensor_parallel_size=4,
+            device=[0, 1, 2, 3],
+            output_hidden_states=False,
+        )
+        model = RBLNColQwen2ForRetrieval.from_pretrained(
+            "vidore/colqwen2-v1.0-hf",
+            export=True,
+            rbln_config=config
+        )
+        ```
+    """
+
     main_input_name = "inputs_embeds"
     auto_model_class = None
     _rbln_submodules = [
