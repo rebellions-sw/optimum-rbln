@@ -52,7 +52,6 @@ def main(
     n_layers: int = 2,
 ):
     target_config = AutoConfig.from_pretrained(model_id)
-    target_config._attn_implementation = "eager"
     target_config.num_hidden_layers = n_layers
     target_config.layer_types = target_config.layer_types[:n_layers]
     # target_config.dtype = torch.float32
@@ -103,7 +102,8 @@ def main(
     logits = rbln_outputs.logits
 
     if diff:
-        golden_model = GptOssForCausalLM.from_pretrained(model_id, config=target_config, dtype=torch.float32)
+        target_config._attn_implementation = "eager"
+        golden_model = GptOssForCausalLM.from_pretrained(model_id, config=target_config)
         golden_outputs = golden_model.generate(
             **inputs,
             do_sample=False,
