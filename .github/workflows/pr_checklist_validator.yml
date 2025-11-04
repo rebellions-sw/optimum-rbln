@@ -2,7 +2,7 @@ name: PR Checklist Validator
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - "src/**/*.py"
       - "tests/**/*.py"
