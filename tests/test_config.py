@@ -34,10 +34,6 @@ def stable_diffusion_model():
                 "batch_size": 1,
                 "npu": "RBLN-CA22",
                 "create_runtimes": False,
-                "optimize_host_memory": False,
-            },
-            "text_encoder": {
-                "optimize_host_memory": False,
             },
         },
     )
@@ -50,7 +46,6 @@ def test_stable_diffusion_config(stable_diffusion_model):
     assert model.unet.rbln_config.batch_size == 1
     assert model.unet.rbln_config.npu == "RBLN-CA22"
     assert model.unet.rbln_config.create_runtimes is False
-    assert model.unet.rbln_config.optimize_host_memory is False
     assert model.unet.compiled_models[0]._meta["npu"] == "RBLN-CA22"
 
     npu = rebel.get_npu_name()
@@ -60,7 +55,7 @@ def test_stable_diffusion_config(stable_diffusion_model):
 def test_explicit_config_parameters(model_id):
     """Test loading model with explicit configuration parameters."""
     model = RBLNResNetForImageClassification.from_pretrained(
-        model_id, export=True, rbln_image_size=224, rbln_batch_size=2, rbln_create_runtimes=False
+        model_id, rbln_image_size=224, rbln_batch_size=2, rbln_create_runtimes=False
     )
     assert model is not None
     assert hasattr(model, "rbln_config")
@@ -69,9 +64,9 @@ def test_explicit_config_parameters(model_id):
 
 def test_config_dict(model_id):
     """Test loading model with configuration passed as a dictionary."""
-    rbln_config = {"create_runtimes": False, "optimize_host_memory": True, "image_size": 64}
+    rbln_config = {"create_runtimes": False, "image_size": 64}
 
-    model = RBLNResNetForImageClassification.from_pretrained(model_id, export=True, rbln_config=rbln_config)
+    model = RBLNResNetForImageClassification.from_pretrained(model_id, rbln_config=rbln_config)
     assert model is not None
     assert hasattr(model, "rbln_config")
     assert model.rbln_config.image_size == 64
@@ -88,7 +83,7 @@ def test_config_object(model_id):
     compile_cfg = RBLNCompileConfig(input_info=[("pixel_values", (1, 3, 224, 224), "float32")])
     config.set_compile_cfgs([compile_cfg])
 
-    model = RBLNResNetForImageClassification.from_pretrained(model_id, export=True, rbln_config=config)
+    model = RBLNResNetForImageClassification.from_pretrained(model_id, rbln_config=config)
     assert model is not None
     assert hasattr(model, "rbln_config")
     # Pre-configured object should be properly applied
@@ -125,7 +120,7 @@ def test_config_persistence_after_reload(model_id, tmp_path):
 
     # Use distinctive values to ensure we can detect them
     original_model = RBLNResNetForImageClassification.from_pretrained(
-        model_id, export=True, rbln_image_size=112, rbln_batch_size=3, rbln_create_runtimes=False
+        model_id, rbln_image_size=112, rbln_batch_size=3, rbln_create_runtimes=False
     )
     original_model.save_pretrained(save_dir)
 
@@ -173,7 +168,7 @@ def test_config_priority(model_id):
 def test_invalid_config_parameters(model_id, invalid_param):
     """Test robust handling of various invalid configuration parameters."""
     with pytest.raises((ValueError, TypeError)):
-        _ = RBLNResNetForImageClassification.from_pretrained(model_id, export=True, **invalid_param)
+        _ = RBLNResNetForImageClassification.from_pretrained(model_id, **invalid_param)
 
 
 def test_custom_class(model_id):
@@ -203,7 +198,7 @@ def test_custom_class(model_id):
 
     RBLNAutoModel.register(RBLNResNetModel)
     RBLNAutoConfig.register(RBLNResNetModelConfig)
-    my_model = RBLNResNetModel.from_pretrained(model_id, export=True, rbln_device=-1)
+    my_model = RBLNResNetModel.from_pretrained(model_id, rbln_device=-1)
     random_image_input = torch.randn(1, 3, 64, 64)
     _ = my_model(random_image_input)
 

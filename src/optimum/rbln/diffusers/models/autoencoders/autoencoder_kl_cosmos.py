@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Dict, List, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Union
 
 import rebel
 import torch
@@ -68,7 +68,7 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
         self.image_size = self.rbln_config.image_size
 
     @classmethod
-    def wrap_model_if_needed(
+    def _wrap_model_if_needed(
         cls, model: torch.nn.Module, rbln_config: RBLNAutoencoderKLCosmosConfig
     ) -> torch.nn.Module:
         decoder_model = _VAECosmosDecoder(model)
@@ -98,7 +98,7 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
 
             compiled_models = {}
             if rbln_config.uses_encoder:
-                encoder_model, decoder_model = cls.wrap_model_if_needed(model, rbln_config)
+                encoder_model, decoder_model = cls._wrap_model_if_needed(model, rbln_config)
                 enc_compiled_model = cls.compile(
                     encoder_model,
                     rbln_compile_config=rbln_config.compile_cfgs[0],
@@ -107,7 +107,7 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
                 )
                 compiled_models["encoder"] = enc_compiled_model
             else:
-                decoder_model = cls.wrap_model_if_needed(model, rbln_config)
+                decoder_model = cls._wrap_model_if_needed(model, rbln_config)
             dec_compiled_model = cls.compile(
                 decoder_model,
                 rbln_compile_config=rbln_config.compile_cfgs[-1],
@@ -205,13 +205,38 @@ class RBLNAutoencoderKLCosmos(RBLNModel):
             for compiled_model, device_val in zip(compiled_models, device_vals)
         ]
 
-    def encode(self, x: torch.FloatTensor, return_dict: bool = True, **kwargs) -> torch.FloatTensor:
+    def encode(
+        self, x: torch.FloatTensor, return_dict: bool = True, **kwargs: Dict[str, Any]
+    ) -> Union[torch.FloatTensor, AutoencoderKLOutput]:
+        """
+        Encode an input video into a latent representation.
+
+        Args:
+            x: The input video to encode.
+            return_dict:
+                Whether to return output as a dictionary. Defaults to True.
+            kwargs: Additional arguments to pass to the encoder.
+
+        Returns:
+            The latent representation or AutoencoderKLOutput if return_dict=True
+        """
         posterior = self.encoder.encode(x)
         if not return_dict:
             return (posterior,)
         return AutoencoderKLOutput(latent_dist=posterior)
 
-    def decode(self, z: torch.FloatTensor, return_dict: bool = True) -> torch.FloatTensor:
+    def decode(self, z: torch.FloatTensor, return_dict: bool = True) -> Union[torch.FloatTensor, DecoderOutput]:
+        """
+        Decode a latent representation into a video.
+
+        Args:
+            z: The latent representation to decode.
+            return_dict:
+                Whether to return output as a dictionary. Defaults to True.
+
+        Returns:
+            The decoded video or DecoderOutput if return_dict=True
+        """
         decoded = self.decoder.decode(z)
 
         if not return_dict:

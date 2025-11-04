@@ -141,10 +141,13 @@ class _UNet_Kandinsky(torch.nn.Module):
 
 class RBLNUNet2DConditionModel(RBLNModel):
     """
-    Configuration class for RBLN UNet2DCondition models.
+    RBLN implementation of UNet2DConditionModel for diffusion models.
 
-    This class inherits from RBLNModelConfig and provides specific configuration options
-    for UNet2DCondition models used in diffusion-based image generation.
+    This model is used to accelerate UNet2DCondition models from diffusers library on RBLN NPUs.
+    It is a key component in diffusion-based image generation models like Stable Diffusion.
+
+    This class inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods
+    the library implements for all its models.
     """
 
     hf_library_name = "diffusers"
@@ -168,7 +171,7 @@ class RBLNUNet2DConditionModel(RBLNModel):
             self.add_embedding = ADDEMBEDDING(LINEAR1(self.in_features))
 
     @classmethod
-    def wrap_model_if_needed(
+    def _wrap_model_if_needed(
         cls, model: torch.nn.Module, rbln_config: RBLNUNet2DConditionModelConfig
     ) -> torch.nn.Module:
         if model.config.addition_embed_type == "text_time":

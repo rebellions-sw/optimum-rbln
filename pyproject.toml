@@ -7,7 +7,7 @@ It provides a set of tools enabling easy model loading and inference on single a
 authors = [
     {name = "Rebellions Inc.", email = "support@rebellions.ai"},
 ]
-requires-python = ">=3.9,<3.13"
+requires-python = ">=3.9,<3.14"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
@@ -24,16 +24,17 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 keywords = ["transformers", "diffusers", "inference", "rbln", "atom", "rebel"]
 dependencies = [
-    "torch==2.7.0",
-    "torchaudio<=2.7.0",
-    "torchvision<=0.22.0",
+    "torch==2.8.0",
+    "torchaudio<=2.8.0",
+    "torchvision<=0.23.0",
     "accelerate>=1.0.1",
-    "transformers==4.51.3",
-    "diffusers==0.34.0",
+    "transformers==4.57.1",
+    "diffusers==0.35.2",
     "packaging>=24.1",
 ]
 
@@ -41,6 +42,9 @@ dependencies = [
 Homepage = "https://rebellions.ai"
 Documentation = "https://docs.rbln.ai"
 Repository = "https://github.com/rebellions-sw/optimum-rbln"
+
+[project.scripts]
+optimum-rbln-cli = "optimum.rbln.cli:main"
 
 [dependency-groups]
 tests = [
@@ -56,6 +60,7 @@ tests = [
     "soundfile>=0.13.1",
     "librosa>=0.11.0",
     "simphile>=1.0.2",
+    "torchcodec==0.7",
 ]
 quality = [
     "ruff>=0.3.3",

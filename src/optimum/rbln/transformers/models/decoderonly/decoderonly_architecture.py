@@ -22,6 +22,8 @@ from transformers import PretrainedConfig, PreTrainedModel
 from ....utils import logging
 from ...modeling_rope_utils import ROPE_INIT_FUNCTIONS
 from ...utils.rbln_quantization import RBLNQuantizationConfig
+from .configuration_lora import RBLNLoRAConfig
+from .lora_architecture import LoRALinear
 
 
 if TYPE_CHECKING:
@@ -52,12 +54,7 @@ class DecoderOnlyWrapper(nn.Module):
 
     _use_learned_pos_emb = False
 
-    def __init__(
-        self,
-        model: PreTrainedModel,
-        rbln_config: "RBLNDecoderOnlyModelConfig",
-        use_rotary_emb: bool,
-    ):
+    def __init__(self, model: PreTrainedModel, rbln_config: "RBLNDecoderOnlyModelConfig", use_rotary_emb: bool):
         super().__init__()
         self.quantization = rbln_config.quantization
         self.config = model.config
@@ -114,7 +111,7 @@ class DecoderOnlyWrapper(nn.Module):
             new_self_attn = self.get_rbln_attn_class()(
                 self.get_attn_layer(layer), self.rbln_config, is_sliding=is_sliding
             )
-            new_layer = self.get_rbln_layer_class()(layer, new_self_attn)
+            new_layer = self.get_rbln_layer_class()(layer, new_self_attn, lora_config=self.rbln_config.lora_config)
             new_layers.append(new_layer)
 
         new_model = self.get_rbln_model_class()(
@@ -154,6 +151,7 @@ class DecoderOnlyWrapper(nn.Module):
         )
         attention_mask = args.pop(0) if self.rbln_config.use_attention_mask else None
         position_ids = args.pop(0) if self.rbln_config.use_position_ids else None
+        lora_int_id = args.pop(0) if self.rbln_config.lora_config else None
         past_key_values = args
 
         if len(past_key_values) != 2 * self.num_hidden_layers:
@@ -185,6 +183,7 @@ class DecoderOnlyWrapper(nn.Module):
             query_position,
             attention_mask,
             position_ids,
+            lora_int_id,
             past_key_values,
             rotary_emb,
         )
@@ -199,6 +198,7 @@ class DecoderOnlyWrapper(nn.Module):
             query_position,
             attention_mask,
             position_ids,
+            lora_int_id,
             past_key_values,
             rotary_emb,
         ) = self.prepare_forward_args(*args)
@@ -214,6 +214,7 @@ class DecoderOnlyWrapper(nn.Module):
             rotary_emb=rotary_emb,
             global_block_tables=global_block_tables,
             local_block_tables=local_block_tables,
+            lora_int_id=lora_int_id,
         )
 
         return logit
@@ -270,6 +271,7 @@ class DecoderOnlyForCausalLM(nn.Module):
         rotary_emb: nn.Module = None,
         global_block_tables: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
+        lora_int_id: Optional[torch.Tensor] = None,
     ):
         # outputs
         hidden_states = self.model(
@@ -283,6 +285,7 @@ class DecoderOnlyForCausalLM(nn.Module):
             rotary_emb=rotary_emb,
             global_block_tables=global_block_tables,
             local_block_tables=local_block_tables,
+            lora_int_id=lora_int_id,
         )
 
         if "prefill" in self.phase:
@@ -394,6 +397,7 @@ class DecoderOnlyModel(nn.Module):
         rotary_emb: Optional[Union[nn.Module, torch.Tensor]] = None,
         global_block_tables: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
+        lora_int_id: Optional[torch.Tensor] = None,
     ):
         # retrieve input_ids and inputs_embeds
         if (input_ids is None) ^ (inputs_embeds is not None):
@@ -466,6 +470,7 @@ class DecoderOnlyModel(nn.Module):
                 cos=cos,
                 sin=sin,
                 block_tables=local_block_tables if is_sliding else global_block_tables,
+                lora_int_id=lora_int_id,
             )
 
         hidden_states = self.get_last_layernorm()(hidden_states)
@@ -497,11 +502,27 @@ class DecoderOnlyLayer(nn.Module):
         phase: Current operation phase ("prefill" or "decode")
     """
 
-    def __init__(self, layer, self_attn: "DecoderOnlyAttention"):
+    def __init__(self, layer, self_attn: "DecoderOnlyAttention", lora_config: Optional[RBLNLoRAConfig] = None):
         super().__init__()
         self._original_mod = layer
         self.self_attn = self_attn
         self._phase = "prefill"
+        self.lora_config = lora_config
+
+        # Replace target Linear modules in MLP with LoRALinear if configured
+        if self.lora_config:
+            mlp = self.get_mlp()
+            for proj_name in ["gate_proj", "up_proj", "down_proj"]:
+                if hasattr(mlp, proj_name):
+                    original_linear = getattr(mlp, proj_name)
+                    if isinstance(original_linear, nn.Linear):
+                        lora_linear = LoRALinear(
+                            original_linear=original_linear,
+                            lora_config=self.lora_config,
+                            projection_name=proj_name,
+                            layer_idx=self.self_attn.layer_idx,
+                        )
+                        setattr(mlp, proj_name, lora_linear)
 
     @property
     def phase(self):
@@ -518,6 +539,25 @@ class DecoderOnlyLayer(nn.Module):
     def get_post_attention_layernorm(self) -> nn.LayerNorm:
         return self._original_mod.post_attention_layernorm
 
+    def get_mlp(self) -> nn.Module:
+        return self._original_mod.mlp
+
+    def forward_mlp(self, hidden_states: torch.Tensor, lora_int_id: Optional[torch.Tensor] = None) -> torch.Tensor:
+        mlp = self.get_mlp()
+        if self.lora_config and lora_int_id is not None:
+            gate = mlp.gate_proj(hidden_states, lora_int_id)
+            up = mlp.up_proj(hidden_states, lora_int_id)
+            act_fn = getattr(mlp, "act_fn", None) or getattr(mlp, "activation_fn", None)
+            if act_fn is None:
+                gate = torch.nn.functional.silu(gate)
+            else:
+                gate = act_fn(gate)
+            fused = gate * up
+            hidden_states = mlp.down_proj(fused, lora_int_id)
+        else:
+            hidden_states = mlp(hidden_states)
+        return hidden_states
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -527,6 +567,7 @@ class DecoderOnlyLayer(nn.Module):
         cos: Optional[torch.Tensor] = None,
         sin: Optional[torch.Tensor] = None,
         block_tables: Optional[torch.Tensor] = None,
+        lora_int_id: Optional[torch.Tensor] = None,
     ):
         residual = hidden_states
         hidden_states = self.get_pre_attention_layernorm()(hidden_states)
@@ -539,13 +580,14 @@ class DecoderOnlyLayer(nn.Module):
             cos=cos,
             sin=sin,
             block_tables=block_tables,
+            lora_int_id=lora_int_id,
         )
         hidden_states = residual + hidden_states
 
         # Fully Connected
         residual = hidden_states
         hidden_states = self.get_post_attention_layernorm()(hidden_states)
-        hidden_states = self._original_mod.mlp(hidden_states)
+        hidden_states = self.forward_mlp(hidden_states, lora_int_id)
         hidden_states = residual + hidden_states
 
         return hidden_states
@@ -579,7 +621,7 @@ class DecoderOnlyAttention(nn.Module):
         )
         self.head_dim = self._original_mod.head_dim
         self._phase = "prefill"
-        self.scale = torch.tensor(self.get_attn_scale())
+        self.scale = torch.nn.Parameter(torch.tensor(self.get_attn_scale()))
         self.quantization = rbln_config.quantization
 
         if hasattr(self._original_mod, "num_key_value_heads"):
@@ -595,9 +637,22 @@ class DecoderOnlyAttention(nn.Module):
         self.attn_impl = rbln_config.attn_impl if not is_sliding else "eager"
         self.kvcache_partition_len = getattr(rbln_config, "kvcache_partition_len", None)
         self.kvcache_block_size = rbln_config.sliding_window if is_sliding else rbln_config.kvcache_block_size
+        self.lora_config = rbln_config.lora_config
 
         setattr(self, self.get_attention_name(), self.create_attention_op())
         self.__post_init__()
+
+    def _init_lora_weights(self):
+        """Initialize LoRA adapter weights by replacing linear layers with LoRALinear."""
+        for proj_name in ["q_proj", "k_proj", "v_proj", "o_proj"]:
+            original_linear = getattr(self._original_mod, proj_name)
+            lora_linear = LoRALinear(
+                original_linear=original_linear,
+                lora_config=self.lora_config,
+                projection_name=proj_name,
+                layer_idx=self.layer_idx,
+            )
+            setattr(self, proj_name, lora_linear)
 
     def get_attention_name(self):
         if self.is_sliding:
@@ -651,23 +706,40 @@ class DecoderOnlyAttention(nn.Module):
             raise NotImplementedError(f"Unknown attention implementation: {self.attn_impl}")
 
     def __post_init__(self):
-        self.q_proj = self._original_mod.q_proj
-        self.k_proj = self._original_mod.k_proj
-        self.v_proj = self._original_mod.v_proj
-        self.o_proj = self._original_mod.o_proj
+        # Initialize LoRA weights if configured, which will replace linear layers
+        if self.lora_config:
+            self._init_lora_weights()
+        else:
+            # Use original linear layers if no LoRA
+            self.q_proj = self._original_mod.q_proj
+            self.k_proj = self._original_mod.k_proj
+            self.v_proj = self._original_mod.v_proj
+            self.o_proj = self._original_mod.o_proj
 
-    def projection(self, hidden_states) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def projection(
+        self, hidden_states, lora_int_id: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Projects input hidden states into query, key, and value representations.
 
         Args:
             hidden_states: Input tensor of shape [batch_size, seq_len, hidden_dim]
+            lora_int_id: Adapter ID tensor for LoRA selection [batch_size]
 
         Returns:
             Tuple of (query_states, key_states, value_states)
         """
-        query_states = self.q_proj(hidden_states)
-        key_states = self.k_proj(hidden_states)
-        value_states = self.v_proj(hidden_states)
+        # Check if using LoRALinear (which accepts lora_int_id) or standard linear layers
+        if self.lora_config:
+            # LoRALinear handles both base projection and LoRA in one forward pass
+            query_states = self.q_proj(hidden_states, lora_int_id)
+            key_states = self.k_proj(hidden_states, lora_int_id)
+            value_states = self.v_proj(hidden_states, lora_int_id)
+        else:
+            # Standard linear projection without LoRA
+            query_states = self.q_proj(hidden_states)
+            key_states = self.k_proj(hidden_states)
+            value_states = self.v_proj(hidden_states)
+
         return query_states, key_states, value_states
 
     def apply_rotary_pos_embed(self, query_states, key_states, cos, sin):
@@ -695,10 +767,11 @@ class DecoderOnlyAttention(nn.Module):
         cos: Optional[torch.Tensor] = None,
         sin: Optional[torch.Tensor] = None,
         block_tables: Optional[torch.Tensor] = None,
+        lora_int_id: Optional[torch.Tensor] = None,
     ):
         batch_size, query_length, _ = hidden_states.size()
 
-        query_states, key_states, value_states = self.projection(hidden_states=hidden_states)
+        query_states, key_states, value_states = self.projection(hidden_states=hidden_states, lora_int_id=lora_int_id)
 
         query_states = query_states.view(batch_size, query_length, self.num_heads, self.head_dim).transpose(1, 2)
         key_states = key_states.view(batch_size, query_length, self.num_key_value_heads, self.head_dim).transpose(1, 2)
@@ -732,7 +805,14 @@ class DecoderOnlyAttention(nn.Module):
             v_scale=v_scale,
         )
 
-        attn_outputs = self.o_proj(attn_output)
+        # Check if using LoRALinear (which accepts lora_int_id) or standard linear layers
+        if self.lora_config:
+            # LoRALinear handles both base projection and LoRA in one forward pass
+            attn_outputs = self.o_proj(attn_output, lora_int_id)
+        else:
+            # Standard linear projection without LoRA
+            attn_outputs = self.o_proj(attn_output)
+
         return attn_outputs
 
 

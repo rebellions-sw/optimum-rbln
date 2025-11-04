@@ -38,6 +38,7 @@ class RBLNWav2Vec2ForCTC(RBLNModelForMaskedLM):
     library implements for all its model.
 
     It implements the methods to convert a pre-trained Wav2Vec2 model into a RBLN Wav2Vec2 model by:
+
     - transferring the checkpoint weights of the original into an optimized RBLN graph,
     - compiling the resulting graph using the RBLN compiler.
     """
@@ -47,5 +48,5 @@ class RBLNWav2Vec2ForCTC(RBLNModelForMaskedLM):
     rbln_dtype = "float32"
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNWav2Vec2ForCTCConfig) -> torch.nn.Module:
+    def _wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNWav2Vec2ForCTCConfig) -> torch.nn.Module:
         return _Wav2Vec2(model).eval()

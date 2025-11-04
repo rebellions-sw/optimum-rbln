@@ -19,7 +19,7 @@ from optimum.rbln import (
     RBLNStableVideoDiffusionPipeline,
 )
 
-from .test_base import BaseHubTest, BaseTest
+from .test_base import BaseHubTest, BaseTest, TestLevel
 
 
 class TestSDModel(BaseTest.TestModel, BaseHubTest.TestHub):
@@ -84,6 +84,7 @@ class TestSDXLModel(BaseTest.TestModel):
             },
         }
     }
+    TEST_LEVEL = TestLevel.DISABLED  # Should be enabled after compiler issue is fixed
 
 
 class TestSDImg2ImgModel(BaseTest.TestModel):
@@ -165,6 +166,8 @@ class TestSDXLControlNetModel(BaseTest.TestModel):
             },
         },
     }
+
+    TEST_LEVEL = TestLevel.DISABLED  # Should be enabled after compiler issue is fixed
 
     @classmethod
     def setUpClass(cls):
@@ -263,6 +266,7 @@ class TestKandinskyV22Model(BaseTest.TestModel):
             "decoder_pipe": {"unet": {"batch_size": 2}},
         },
     }
+    TEST_LEVEL = TestLevel.DISABLED  # Should be enabled after compiler issue is fixed
 
     def test_complicate_config(self):
         rbln_config = {
@@ -282,11 +286,7 @@ class TestKandinskyV22Model(BaseTest.TestModel):
         rbln_class_kwargs_copy = self.RBLN_CLASS_KWARGS.copy()
         rbln_class_kwargs_copy["rbln_config"] = rbln_config
         with self.subTest():
-            _ = self.RBLN_CLASS.from_pretrained(
-                model_id=self.HF_MODEL_ID,
-                export=True,
-                **rbln_class_kwargs_copy,
-            )
+            _ = self.RBLN_CLASS.from_pretrained(model_id=self.HF_MODEL_ID, **rbln_class_kwargs_copy)
         with self.subTest():
             self.assertEqual(_.prior_text_encoder.rbln_config.batch_size, 2)
             self.assertEqual(_.prior_prior.rbln_config.batch_size, 4)
@@ -317,6 +317,7 @@ class TestKandinskyV22Img2ImgModel(BaseTest.TestModel):
             "decoder_pipe": {"unet": {"batch_size": 2}},
         },
     }
+    TEST_LEVEL = TestLevel.DISABLED  # Should be enabled after compiler issue is fixed
 
 
 class TestSVDImg2VidModel(BaseTest.TestModel):

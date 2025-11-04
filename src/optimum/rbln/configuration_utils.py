@@ -33,13 +33,15 @@ logger = get_logger(__name__)
 
 
 DEFAULT_COMPILED_MODEL_NAME = "compiled_model"
-DEFAULT_MOD_NAME = "default"
 TypeInputInfo = List[Tuple[str, Tuple[int], str]]
 
 
 @runtime_checkable
 class RBLNSerializableConfigProtocol(Protocol):
     def _prepare_for_serialization(self) -> Dict[str, Any]: ...
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self._prepare_for_serialization()})"
 
 
 @dataclass
@@ -49,17 +51,13 @@ class RBLNCompileConfig:
 
     Attributes:
         compiled_model_name (str): Name of the compiled model.
-        mod_name (str): Name of the RBLN module.
         input_info (Union[List[TypeInputInfo], TypeInputInfo]): Information about input tensors.
-        fusion (Optional[bool]): Whether to use fusion optimization.
         npu (Optional[str]): NPU configuration.
         tensor_parallel_size (Optional[int]): Size for tensor parallelism.
     """
 
     compiled_model_name: str = DEFAULT_COMPILED_MODEL_NAME
-    mod_name: str = DEFAULT_MOD_NAME
     input_info: Union[List[TypeInputInfo], TypeInputInfo] = None
-    fusion: Optional[bool] = None
     npu: Optional[str] = None
     tensor_parallel_size: Optional[int] = None
 
@@ -113,9 +111,7 @@ class RBLNCompileConfig:
 
     def update(self, kwargs: Dict[str, Any]):
         self.compiled_model_name = kwargs.get("compiled_model_name", self.compiled_model_name)
-        self.mod_name = kwargs.get("mod_name", self.mod_name)
         self.input_info = kwargs.get("input_info", self.input_info)
-        self.fusion = kwargs.get("fusion", self.fusion)
         self.npu = kwargs.get("npu", self.npu)
         self.tensor_parallel_size = kwargs.get("tensor_parallel_size", self.tensor_parallel_size)
         return self
@@ -149,7 +145,7 @@ class RBLNCompileConfig:
         return asdict(self)
 
 
-RUNTIME_KEYWORDS = ["create_runtimes", "optimize_host_memory", "device", "device_map", "activate_profiler", "timeout"]
+RUNTIME_KEYWORDS = ["create_runtimes", "device", "device_map", "activate_profiler", "timeout"]
 CONFIG_MAPPING: Dict[str, Type["RBLNModelConfig"]] = {}
 
 
@@ -185,6 +181,15 @@ def load_config(path: str) -> Tuple[Type["RBLNModelConfig"], Dict[str, Any]]:
 
 
 class RBLNAutoConfig:
+    """
+    Resolver and factory for RBLN model configurations.
+
+    This class selects the concrete `RBLNModelConfig` subclass, validates the
+    provided data, and returns a frozen configuration object that serves as the
+    single source of truth during export and load. It does not define the schema
+    or control model behavior.
+    """
+
     def __new__(cls, **kwargs):
         cls_name = kwargs.get("cls_name")
         if cls_name is None:
@@ -194,6 +199,33 @@ class RBLNAutoConfig:
 
     @staticmethod
     def load_from_dict(config_dict: Dict[str, Any]) -> "RBLNModelConfig":
+        """
+        Build a `RBLNModelConfig` from a plain dictionary.
+
+        The dictionary must contain `cls_name`, which identifies the concrete
+        configuration class to instantiate. All other keys are forwarded to the
+        target class initializer. This method does not mutate `config_dict`.
+
+        Args:
+            config_dict: Mapping typically created by `json.load` or `yaml.safe_load`.
+                For example, the parsed contents of `rbln_config.json`.
+
+        Returns:
+            RBLNModelConfig: A configuration instance. The specific subclass is
+            selected by `config_dict["cls_name"]`.
+
+        Raises:
+            ValueError: If `cls_name` is missing.
+            Exception: Any error raised by the target config class during init.
+
+        Examples:
+            >>> data = {
+            ...     "cls_name": "RBLNLlamaForCausalLMConfig",
+            ...     "create_runtimes": False,
+            ...     "tensor_parallel_size": 4
+            ... }
+            >>> cfg = RBLNAutoConfig.load_from_dict(data)
+        """
         cls_name = config_dict.get("cls_name")
         if cls_name is None:
             raise ValueError("`cls_name` is required.")
@@ -206,7 +238,8 @@ class RBLNAutoConfig:
         Register a new configuration for this class.
 
         Args:
-            config ([`RBLNModelConfig`]): The config to register.
+            config (RBLNModelConfig): The config to register.
+            exist_ok (bool): Whether to allow registering an already registered model.
         """
         if not issubclass(config, RBLNModelConfig):
             raise ValueError("`config` must be a subclass of RBLNModelConfig.")
@@ -248,9 +281,6 @@ class RBLNAutoConfig:
             if key[5:] not in RUNTIME_KEYWORDS and key[5:] not in cls.submodules
         }
 
-        if len(rbln_kwargs) > 0:
-            raise ValueError(f"Cannot set the following arguments: {list(rbln_kwargs.keys())}")
-
         # Process submodule's rbln_config
         for submodule in cls.submodules:
             if submodule not in config_file:
@@ -265,6 +295,16 @@ class RBLNAutoConfig:
 
         config_file.update(rbln_runtime_kwargs)
 
+        rbln_config = cls(**config_file)
+
+        if len(rbln_kwargs) > 0:
+            for key, value in rbln_kwargs.items():
+                if getattr(rbln_config, key) != value:
+                    raise ValueError(
+                        f"Cannot set the following arguments: {list(rbln_kwargs.keys())} "
+                        f"Since the value is already set to {getattr(rbln_config, key)}"
+                    )
+
         if return_unused_kwargs:
             return cls(**config_file), kwargs
         else:
@@ -275,6 +315,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
     """Base configuration class for RBLN models that handles compilation settings, runtime options, and submodules.
 
     This class provides functionality for:
+
     1. Managing compilation configurations for RBLN devices
     2. Configuring runtime behavior such as device placement
     3. Handling nested configuration objects for complex model architectures
@@ -480,7 +521,6 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         "npu",
         "tensor_parallel_size",
         "create_runtimes",
-        "optimize_host_memory",
         "device",
         "device_map",
         "activate_profiler",
@@ -489,17 +529,17 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
     submodules: List[str] = []
     subclass_non_save_attributes = []
 
-    def init_submodule_config(
+    def initialize_submodule_config(
         self,
-        submodule_config_cls: Type["RBLNModelConfig"],
         submodule_config: Optional[Union[Dict[str, Any], "RBLNModelConfig"]] = None,
+        force_kwargs: bool = False,
         **kwargs: Any,
     ) -> "RBLNModelConfig":
-        # Initialize a submodule config from a dict or a RBLNModelConfig.
-        # kwargs is specified from the predecessor config.
-
         if submodule_config is None:
             submodule_config = {}
+
+        if isinstance(submodule_config, RBLNModelConfig):
+            return submodule_config
 
         if isinstance(submodule_config, dict):
             from_predecessor = self._runtime_options.copy()
@@ -514,12 +554,59 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
 
             init_kwargs = from_predecessor
             init_kwargs.update(submodule_config)
-            submodule_config = submodule_config_cls(**init_kwargs)
 
-        if not isinstance(submodule_config, submodule_config_cls):
+            if force_kwargs:
+                for key, value in kwargs.items():
+                    if key in init_kwargs:
+                        if init_kwargs[key] != value:
+                            raise ValueError(
+                                f"Parameter conflict for '{key}': submodule_config has {init_kwargs[key]}, "
+                                f"but kwargs has {value}. Using kwargs value: {value}"
+                            )
+                        init_kwargs[key] = value
+
+            if "cls_name" in init_kwargs:
+                config_cls = get_rbln_config_class(init_kwargs["cls_name"])
+            else:
+                return init_kwargs
+
+            submodule_config = config_cls(**init_kwargs)
+
+        if not isinstance(submodule_config, RBLNModelConfig):
             raise TypeError(f"Invalid submodule config type: {type(submodule_config)}")
 
         return submodule_config
+
+    def filter_parameters(self, config_cls: Type["RBLNModelConfig"], parameters: Dict[str, Any]) -> Dict[str, Any]:
+        import importlib
+
+        model_cls_name = config_cls.__name__.replace("Config", "")
+        modeling_module_name = config_cls.__module__.replace("configuration_", "modeling_")
+
+        model_cls = None
+        try:
+            modeling_module = importlib.import_module(modeling_module_name)
+            if hasattr(modeling_module, model_cls_name):
+                model_cls = getattr(modeling_module, model_cls_name)
+        except ImportError:
+            logger.debug(f"Could not import modeling module: {modeling_module_name}")
+
+        filtered_out_params = set()
+
+        if model_cls is not None:
+            if not getattr(model_cls, "_tp_support", False):
+                filtered_out_params.add("tensor_parallel_size")
+
+        filtered_params = {}
+        for key, value in parameters.items():
+            if key in filtered_out_params:
+                logger.debug(
+                    f"Parameter '{key}' filtered out for {config_cls.__name__} (not supported by model flags)."
+                )
+            else:
+                filtered_params[key] = value
+
+        return filtered_params
 
     def __setattr__(self, key, value):
         if (
@@ -559,7 +646,6 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         self,
         cls_name: Optional[str] = None,
         create_runtimes: Optional[bool] = None,
-        optimize_host_memory: Optional[bool] = None,
         device: Optional[Union[int, List[int]]] = None,
         device_map: Optional[Dict[str, Union[int, List[int]]]] = None,
         activate_profiler: Optional[bool] = None,
@@ -569,6 +655,8 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         optimum_rbln_version: Optional[str] = None,
         _torch_dtype: Optional[str] = None,
         _compile_cfgs: List[RBLNCompileConfig] = [],
+        *,
+        optimize_host_memory: Optional[bool] = None,
         **kwargs: Any,
     ):
         """
@@ -577,7 +665,6 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         Args:
             cls_name (Optional[str]): The class name of the configuration. Defaults to the current class name.
             create_runtimes (Optional[bool]): Whether to create RBLN runtimes. Defaults to True.
-            optimize_host_memory (Optional[bool]): Whether to optimize host memory usage. Defaults to True.
             device (Optional[Union[int, List[int]]]): The device(s) to load the model onto. Can be a single device ID or a list.
             device_map (Optional[Dict[str, Union[int, List[int]]]]): Mapping from compiled model names to device IDs.
             activate_profiler (Optional[bool]): Whether to activate the profiler for performance analysis.
@@ -587,7 +674,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
             optimum_rbln_version (Optional[str]): The optimum-rbln version used for this configuration.
             _torch_dtype (Optional[str]): The data type to use for the model.
             _compile_cfgs (List[RBLNCompileConfig]): List of compilation configurations for the model.
-            **kwargs: Additional keyword arguments.
+            kwargs: Additional keyword arguments.
 
         Raises:
             ValueError: If unexpected keyword arguments are provided.
@@ -603,11 +690,13 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
 
         self._runtime_options = {}
         self._runtime_options["create_runtimes"] = create_runtimes
-        self._runtime_options["optimize_host_memory"] = optimize_host_memory
         self._runtime_options["device"] = device
         self._runtime_options["device_map"] = device_map
         self._runtime_options["activate_profiler"] = activate_profiler
         self._runtime_options["timeout"] = timeout
+
+        if optimize_host_memory is not None:
+            logger.warning("`optimize_host_memory` is deprecated and will be removed in future versions.")
 
         # Automatically pass npu, tensor_parallel_size to compile_cfgs
         self.npu = npu
@@ -754,7 +843,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
 
         Args:
             path (str): Path to the RBLNModelConfig file or directory containing the config file.
-            **kwargs: Additional keyword arguments to override configuration values.
+            kwargs: Additional keyword arguments to override configuration values.
                       Keys starting with 'rbln_' will have the prefix removed and be used
                       to update the configuration.
 
@@ -825,19 +914,6 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
     @create_runtimes.setter
     def create_runtimes(self, create_runtimes: bool):
         self._runtime_options["create_runtimes"] = create_runtimes
-
-    @property
-    def optimize_host_memory(self):
-        context = ContextRblnConfig.get_current_context()["optimize_host_memory"]
-        if context is not None:
-            return context
-        elif self._runtime_options["optimize_host_memory"] is None:
-            return True
-        return self._runtime_options["optimize_host_memory"]
-
-    @optimize_host_memory.setter
-    def optimize_host_memory(self, optimize_host_memory: bool):
-        self._runtime_options["optimize_host_memory"] = optimize_host_memory
 
     @property
     def device(self):

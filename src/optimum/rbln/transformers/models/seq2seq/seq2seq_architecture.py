@@ -31,7 +31,7 @@ class Seq2SeqWrapper:
     Args:
         model (nn.Module): The Seq2Seq model to wrap.
         enc_max_seq_len (int): Maximum sequence length for the encoder's position embeddings and cache sizes.
-        **kwargs: Additional arguments to pass to the decoder wrapper.
+        kwargs: Additional arguments to pass to the decoder wrapper.
     """
 
     def __init__(self, model: nn.Module, enc_max_seq_len: int, **kwargs):
@@ -125,7 +125,7 @@ class Seq2SeqDecoderWrapper(nn.Module):
 
     Args:
         model (nn.Module): The Seq2Seq model containing the decoder.
-        **kwargs: Additional arguments for decoder configuration.
+        kwargs: Additional arguments for decoder configuration.
     """
 
     def __init__(self, model: nn.Module, use_attention_mask: bool = True, **kwargs):
