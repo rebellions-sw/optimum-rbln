@@ -39,6 +39,7 @@ _import_structure = {
         "RBLNAutoModelForTextEncoding",
         "RBLNAutoModelForZeroShotObjectDetection",
     ],
+    "AXV42": ["RBLNAXv42ForCausalLM", "RBLNAXv42ForCausalLMConfig"],
     "bart": [
         "RBLNBartForConditionalGeneration",
         "RBLNBartModel",
@@ -207,6 +208,7 @@ if TYPE_CHECKING:
         RBLNAutoModelForVision2Seq,
         RBLNAutoModelForZeroShotObjectDetection,
     )
+    from .AXv42 import RBLNAXv42ForCausalLM, RBLNAXv42ForCausalLMConfig
     from .bart import (
         RBLNBartForConditionalGeneration,
         RBLNBartForConditionalGenerationConfig,
