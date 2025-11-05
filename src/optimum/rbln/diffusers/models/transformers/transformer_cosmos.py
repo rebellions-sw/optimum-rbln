@@ -185,7 +185,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         )
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
+    def _wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
         num_latent_frames = rbln_config.num_latent_frames
         latent_height = rbln_config.latent_height
         latent_width = rbln_config.latent_width
