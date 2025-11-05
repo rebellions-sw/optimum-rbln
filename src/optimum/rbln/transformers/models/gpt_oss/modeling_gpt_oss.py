@@ -12,12 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Union
 
 from transformers import PretrainedConfig
 from transformers.modeling_utils import PreTrainedModel
 
-from ....utils import logging
 from ...models.decoderonly import (
     RBLNDecoderOnlyModelConfig,
     RBLNDecoderOnlyModelForCausalLM,
@@ -25,9 +24,9 @@ from ...models.decoderonly import (
 )
 from .gpt_oss_architecture import RBLNGptOssWrapper
 
+
 if TYPE_CHECKING:
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
-    from transformers import PreTrainedModel
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PreTrainedModel
 
 
 class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
@@ -141,6 +140,7 @@ class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         model.load_state_dict(state_dict, strict=False)
 
         return model
+
     def _update_rbln_config(
         cls,
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,

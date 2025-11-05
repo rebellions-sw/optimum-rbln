@@ -13,9 +13,10 @@
 # limitations under the License.
 
 
+from typing import Optional
+
 import torch
 from torch import Tensor
-from typing import Optional
 
 
 @torch.library.custom_op(

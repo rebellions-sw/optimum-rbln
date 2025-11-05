@@ -24,7 +24,6 @@ from ..decoderonly.decoderonly_architecture import (
     DecoderOnlyAttention,
     DecoderOnlyLayer,
     DecoderOnlyWrapper,
-    DecoderOnlyAttention,
 )
 
 
