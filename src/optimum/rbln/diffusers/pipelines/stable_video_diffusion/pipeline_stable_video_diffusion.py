@@ -25,14 +25,10 @@ logger = get_logger(__name__)
 
 class RBLNStableVideoDiffusionPipeline(RBLNDiffusionMixin, StableVideoDiffusionPipeline):
     """
-    Pipeline for image-to-video generation using Stable Video Diffusion.
+    RBLN-accelerated implementation of Stable Video Diffusion pipeline for image-to-video generation.
 
-    This model inherits from [`StableVideoDiffusionPipeline`]. Check the superclass documentation for the generic methods
-    implemented for all pipelines (downloading, saving, running on a particular device, etc.).
-
-    It implements the methods to convert a pre-trained Stable Video Diffusion pipeline into a RBLNStableVideoDiffusion pipeline by:
-    - transferring the checkpoint weights of the original into an optimized RBLN graph,
-    - compiling the resulting graph using the RBLN compiler.
+    This pipeline compiles Stable Video Diffusion models to run efficiently on RBLN NPUs, enabling high-performance
+    inference for generating videos from images with optimized memory usage and throughput.
     """
 
     original_class = StableVideoDiffusionPipeline

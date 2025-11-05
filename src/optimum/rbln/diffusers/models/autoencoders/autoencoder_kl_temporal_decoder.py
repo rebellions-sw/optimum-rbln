@@ -234,8 +234,20 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
         ]
 
     def encode(
-        self, x: torch.FloatTensor, return_dict=True, **kwargs
+        self, x: torch.FloatTensor, return_dict: bool = True
     ) -> Union[AutoencoderKLOutput, Tuple[DiagonalGaussianDistribution]]:
+        """
+        Encode an input image into a latent representation.
+
+        Args:
+            x: The input image to encode.
+            return_dict:
+                Whether to return output as a dictionary. Defaults to True.
+            kwargs: Additional arguments to pass to the encoder.
+
+        Returns:
+            The latent representation or AutoencoderKLOutput if return_dict=True
+        """
         posterior = self.encoder.encode(x)
 
         if not return_dict:
@@ -243,7 +255,18 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
 
         return AutoencoderKLOutput(latent_dist=posterior)
 
-    def decode(self, z: torch.FloatTensor, return_dict=True, **kwargs) -> torch.FloatTensor:
+    def decode(self, z: torch.FloatTensor, return_dict: bool = True) -> torch.FloatTensor:
+        """
+        Decode a latent representation into a video.
+
+        Args:
+            z: The latent representation to decode.
+            return_dict:
+                Whether to return output as a dictionary. Defaults to True.
+
+        Returns:
+            The decoded video or DecoderOutput if return_dict=True
+        """
         decoded = self.decoder.decode(z)
 
         if not return_dict:
