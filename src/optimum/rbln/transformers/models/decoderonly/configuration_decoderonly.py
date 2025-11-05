@@ -58,6 +58,7 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
         sliding_window_layers: Optional[List[int]] = None,
         phases: Optional[List[PhaseType]] = None,
         logits_to_keep: Optional[int] = None,
+        optimization: Optional[bool] = None,
         **kwargs,
     ):
         """
@@ -224,6 +225,7 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
         self.cache_impl = cache_impl or "static"
         self.sliding_window = sliding_window
         self.sliding_window_layers = sliding_window_layers or []
+        self.optimization = optimization
 
         if phases is not None:
             self.validate_phases_type(phases)

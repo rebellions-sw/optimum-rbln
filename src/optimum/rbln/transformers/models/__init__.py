@@ -39,7 +39,7 @@ _import_structure = {
         "RBLNAutoModelForTextEncoding",
         "RBLNAutoModelForZeroShotObjectDetection",
     ],
-    "AXV42": ["RBLNAXv42ForCausalLM", "RBLNAXv42ForCausalLMConfig"],
+    "AXv42": ["RBLNAXv42ForCausalLM", "RBLNAXv42ForCausalLMConfig"],
     "bart": [
         "RBLNBartForConditionalGeneration",
         "RBLNBartModel",

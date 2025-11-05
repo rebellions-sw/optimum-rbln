@@ -236,6 +236,11 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
                 quantization.maybe_set_quantization_env()
             original_linear = torch.nn.functional.linear
             torch.nn.functional.linear = torch.ops.rbln_custom_ops.linear
+
+            kwargs = {}
+            if rbln_config.optimization is not None:
+                kwargs["optimization"] = rbln_config.optimization
+
             compiled_model = cls.compile(
                 wrapped_model,
                 compile_config,
@@ -243,6 +248,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
                 device=rbln_config.device,
                 example_inputs=example_inputs,
                 compile_context=compile_context,
+                **kwargs,
             )
             return compiled_model
         finally:

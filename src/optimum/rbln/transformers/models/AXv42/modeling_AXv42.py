@@ -96,6 +96,17 @@ class RBLNAXv42ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         rbln_config.sliding_window_layers = list(range(model_config.num_hidden_layers))
         return rbln_config
 
+    @classmethod
+    def get_hf_class(cls):
+        import importlib
+
+        if "_hf_class" not in cls.__dict__ or cls._hf_class is None:
+            hf_cls_name = "Qwen3ForCausalLM"
+            library = importlib.import_module(cls.hf_library_name)
+            cls._hf_class = getattr(library, hf_cls_name, None)
+
+        return cls._hf_class
+
     def forward(self, *args, **kwargs):
         kwargs["return_dict"] = True
         return super().forward(*args, **kwargs)
