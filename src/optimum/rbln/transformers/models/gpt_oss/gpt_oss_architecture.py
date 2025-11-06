@@ -68,7 +68,6 @@ class RBLNGptOssTopKRouter(nn.Module):
         self.bias = model.bias
 
     def forward(self, hidden_states):
-        hidden_states = hidden_states.reshape(-1, self.hidden_dim)
         router_logits = F.linear(hidden_states, self.weight, self.bias)  # (seq_len, num_experts)
         router_top_value, router_indices = torch.topk(router_logits, self.top_k, dim=-1)  # (seq_len, top_k)
         router_top_value = torch.nn.functional.softmax(router_top_value, dim=1, dtype=router_top_value.dtype)
@@ -88,21 +87,22 @@ class RBLNGptOssExperts(nn.Module):
         self.num_experts = model.num_experts
         self.hidden_size = model.hidden_size
 
-        self.gate_proj_blocks = model.gate_up_proj_blocks.data[:, ::2, :, :].reshape(
+        self.register_buffer("gate_proj_blocks", model.gate_up_proj_blocks.data[:, ::2, :, :].reshape(
             self.num_experts, self.intermediate_size, -1
-        )
-        self.gate_proj_scales = model.gate_up_proj_scales.data[:, ::2, :]
-        self.gate_proj_bias = model.gate_up_proj_bias.data[:, ::2].reshape(self.num_experts, self.intermediate_size)
+        ))
+        self.register_buffer("gate_proj_scales", model.gate_up_proj_scales.data[:, ::2, :])
+        self.register_buffer("gate_proj_bias", model.gate_up_proj_bias.data[:, ::2].reshape(self.num_experts, self.intermediate_size))
 
-        self.up_proj_blocks = model.gate_up_proj_blocks[:, 1::2, :, :].reshape(
+        self.register_buffer("up_proj_blocks", model.gate_up_proj_blocks.data[:, 1::2, :, :].reshape(
             self.num_experts, self.intermediate_size, -1
-        )
-        self.up_proj_scales = model.gate_up_proj_scales[:, 1::2, :]
-        self.up_proj_bias = model.gate_up_proj_bias[:, 1::2].reshape(self.num_experts, self.intermediate_size)
+        ))
+        self.register_buffer("up_proj_scales", model.gate_up_proj_scales.data[:, 1::2, :])
+        self.register_buffer("up_proj_bias", model.gate_up_proj_bias.data[:, 1::2].reshape(self.num_experts, self.intermediate_size))
 
-        self.down_proj_blocks = model.down_proj_blocks.data.reshape(self.num_experts, self.hidden_size, -1)
-        self.down_proj_scales = model.down_proj_scales.data
-        self.down_proj_bias = model.down_proj_bias.data
+        self.register_buffer("down_proj_blocks", model.down_proj_blocks.data.reshape(self.num_experts, self.hidden_size, -1))
+        self.register_buffer("down_proj_scales", model.down_proj_scales.data)
+        self.register_buffer("down_proj_bias", model.down_proj_bias.data)
+
         self.alpha = model.alpha  # 1.702
         self.limit = model.limit  # 7.0
 
@@ -137,6 +137,9 @@ class RBLNGptOssMLP(nn.Module):
         self.experts = RBLNGptOssExperts(model.experts)
 
     def forward(self, hidden_states):
+        batch_size, sequence_length, hidden_dim = hidden_states.shape
+        hidden_states = hidden_states.view(-1, hidden_dim)
+
         router_scores, router_indices, expert_select_count = self.router(hidden_states)
         routed_out = self.experts(
             hidden_states,
@@ -144,4 +147,5 @@ class RBLNGptOssMLP(nn.Module):
             routing_weights=router_scores,
             expert_select_count=expert_select_count,
         )
+        routed_out = routed_out.reshape(batch_size, sequence_length, hidden_dim)
         return routed_out
