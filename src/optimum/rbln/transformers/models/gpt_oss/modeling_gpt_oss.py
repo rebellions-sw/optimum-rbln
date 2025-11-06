@@ -104,7 +104,7 @@ class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
     @classmethod
     def get_pytorch_model(
-        cls, model_id: str, *args, rbln_config: Optional[RBLNDecoderOnlyModelConfig] = None, **kwargs
+        cls, model_id: str, *args, rbln_config: Optional[RBLNDecoderOnlyModelConfig] = None, config: Optional[PretrainedConfig] = None, **kwargs
     ) -> PreTrainedModel:
         from safetensors.torch import load_file
         from transformers import AutoConfig, AutoModelForCausalLM
@@ -126,7 +126,9 @@ class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         safetensor_files = load_weight_files(model_id)
         safetensors = [load_file(safetensor_file) for safetensor_file in safetensor_files]
 
-        config = AutoConfig.from_pretrained(model_id)
+
+        if config is None:
+            config = AutoConfig.from_pretrained(model_id)
 
         with no_init_weights():
             model = AutoModelForCausalLM.from_config(config)
