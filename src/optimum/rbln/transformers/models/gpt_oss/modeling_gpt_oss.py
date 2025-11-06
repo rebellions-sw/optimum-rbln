@@ -141,6 +141,7 @@ class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
         return model
 
+    @classmethod
     def _update_rbln_config(
         cls,
         preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
