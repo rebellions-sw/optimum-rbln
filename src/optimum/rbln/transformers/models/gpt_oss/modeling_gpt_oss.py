@@ -14,19 +14,26 @@
 
 from typing import TYPE_CHECKING, Optional, Union
 
-from transformers import PretrainedConfig
-from transformers.modeling_utils import PreTrainedModel
+import torch
+from safetensors.torch import load_file
+from transformers import AutoConfig, AutoModelForCausalLM, PretrainedConfig
+from transformers.integrations.mxfp4 import Mxfp4GptOssExperts
+from transformers.modeling_utils import PreTrainedModel, no_init_weights
 
+from ....utils.logging import get_logger
 from ...models.decoderonly import (
     RBLNDecoderOnlyModelConfig,
     RBLNDecoderOnlyModelForCausalLM,
     RBLNDecoderOnlyModelForCausalLMConfig,
 )
+from ...utils.rbln_quantization import load_weight_files
 from .gpt_oss_architecture import RBLNGptOssWrapper
 
 
 if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PreTrainedModel
+
+logger = get_logger(__name__)
 
 
 class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
@@ -102,43 +109,47 @@ class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
         return rbln_config
 
+    # FIXME(thkim): workaround patch for dtype
+    @staticmethod
+    def _get_dtype(dtype: Union[str, torch.dtype] = None, torch_dtype: Union[str, torch.dtype] = None):
+        # For BC on torch_dtype argument
+        if torch_dtype is not None:
+            logger.warning_once("`torch_dtype` is deprecated! Use `dtype` instead!")
+            # If both kwargs are provided, use `dtype`
+            dtype = dtype if dtype is not None else torch_dtype
+
+        # As mxfp4_quantizer's default dtype
+        if dtype is None or dtype == "auto":
+            dtype = torch.bfloat16
+
+        return dtype
+
     @classmethod
     def get_pytorch_model(
-        cls, model_id: str, *args, rbln_config: Optional[RBLNDecoderOnlyModelConfig] = None, config: Optional[PretrainedConfig] = None, **kwargs
+        cls,
+        model_id: str,
+        *args,
+        rbln_config: Optional[RBLNDecoderOnlyModelConfig] = None,
+        dtype: Union[str, torch.dtype] = None,
+        torch_dtype: Union[str, torch.dtype] = None,
+        config: Optional[PretrainedConfig] = None,
+        **kwargs,
     ) -> PreTrainedModel:
-        from safetensors.torch import load_file
-        from transformers import AutoConfig, AutoModelForCausalLM
-        from transformers.integrations.mxfp4 import Mxfp4GptOssExperts
-        from transformers.modeling_utils import no_init_weights
-
-        from ...utils.rbln_quantization import load_weight_files
-
-        def _replace_with_mxfp4_linear(
-            model,
-            config,
-        ):
-            for name, module in model.named_children():
-                if module.__class__.__name__ == "GptOssExperts":
-                    model._modules[name] = Mxfp4GptOssExperts(config)
-                if len(list(module.children())) > 0:
-                    _replace_with_mxfp4_linear(module, config)
-
-        safetensor_files = load_weight_files(model_id)
+        safetensor_files = load_weight_files(model_id, exception_keywords=["original"])
         safetensors = [load_file(safetensor_file) for safetensor_file in safetensor_files]
-
-
-        if config is None:
-            config = AutoConfig.from_pretrained(model_id)
-
-        with no_init_weights():
-            model = AutoModelForCausalLM.from_config(config)
-
-        _replace_with_mxfp4_linear(model, config)
-
         state_dict = {}
         for sd in safetensors[:-1]:
-            state_dict.update(sd)  # 모든 safetensors의 state_dict를 하나로 병합
+            state_dict.update(sd)
 
+        if config is None:
+            config, kwargs = AutoConfig.from_pretrained(model_id, return_unused_kwargs=True)
+            
+        dtype = cls._get_dtype(dtype, torch_dtype)
+
+        with no_init_weights():
+            model = AutoModelForCausalLM.from_config(config, dtype=dtype, **kwargs)
+        
+        _replace_with_mxfp4_linear(model, config)
         model.load_state_dict(state_dict, strict=False)
 
         return model
@@ -159,3 +170,14 @@ class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
             )
 
         return rbln_config
+
+
+def _replace_with_mxfp4_linear(
+    model,
+    config,
+):
+    for name, module in model.named_children():
+        if module.__class__.__name__ == "GptOssExperts":
+            model._modules[name] = Mxfp4GptOssExperts(config)
+        if len(list(module.children())) > 0:
+            _replace_with_mxfp4_linear(module, config)
