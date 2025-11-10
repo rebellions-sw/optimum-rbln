@@ -51,9 +51,10 @@ def custom_moe_glu(
     gate_proj_weight: Tensor,
     up_proj_weight: Tensor,
     down_proj_weight: Tensor,
-    masked_routing_weight: Tensor,
+    router_logits: Tensor,
+    k : int,
+    norm_topk_prob: bool = True,
     # act_fn: str,
-    expert_select_count: Tensor,
     gate_proj_bias: Optional[Tensor] = None,
     up_proj_bias: Optional[Tensor] = None,
     down_proj_bias: Optional[Tensor] = None,
@@ -67,15 +68,30 @@ def custom_moe_glu(
     - up_proj_weight: [num_experts, hidden_size, intermediate_size]
     - down_proj_weight: [num_experts, intermediate_size, hidden_size]
 
+    - router_logits: [batch * seq_len, num_experts]
+    - k: top k experts to select
+    - norm_topk_prob: whether to normalize the top k routing weights with softmax
+
     - gate_proj_bias: [num_experts, intermediate_size]
     - up_proj_bias: [num_experts, intermediate_size]
     - down_proj_bias: [num_experts, hidden_size]
 
-    - masked_routing_weight: [batch * seq_len, num_experts]
 
     Returns:
         Tensor: [batch * seq_len, hidden_size]
     """
+
+    # normalize routing weight
+    if norm_topk_prob:
+        selected_weights, selected_experts = torch.topk(router_logits, k=k, dim=-1)
+        selected_weights = torch.nn.functional.softmax(selected_weights, dim=1, dtype=torch.float)
+    else:
+        routing_weights = torch.nn.functional.softmax(router_logits, dim=1, dtype=torch.float)
+        selected_weights, selected_experts = torch.topk(routing_weights, k=k, dim=-1)
+
+    masked_routing_weights = torch.zeros_like(router_logits, dtype=torch.float32)
+    masked_routing_weights.scatter_(1, selected_experts, selected_weights)
+
 
     out = torch.zeros_like(hidden_states)
     expert_cnt = gate_proj_weight.shape[0]
@@ -84,7 +100,7 @@ def custom_moe_glu(
         up = torch.nn.functional.linear(hidden_states, up_proj_weight[i])
         mul = torch.nn.functional.silu(gate) * up
         down = torch.nn.functional.linear(mul, down_proj_weight[i])
-        out += down * masked_routing_weight[:, i : i + 1]
+        out += down * masked_routing_weights[:, i : i + 1]
 
     return out
 
@@ -95,17 +111,13 @@ def custom_moe_glu_fake(
     gate_proj_weight: Tensor,
     up_proj_weight: Tensor,
     down_proj_weight: Tensor,
-    masked_routing_weight: Tensor,
-    expert_select_count: Tensor,
-    # act_fn: ACT_TYPES,
+    router_logits: Tensor,
+    k : int,
+    norm_topk_prob: bool = True,
+    # act_fn: str,
     gate_proj_bias: Optional[Tensor] = None,
     up_proj_bias: Optional[Tensor] = None,
     down_proj_bias: Optional[Tensor] = None,
-
-    # gate_proj_scale: Optional[Tensor] = None,
-    # up_proj_scale: Optional[Tensor] = None,
-    # down_proj_bias: Optional[Tensor] = None,
-
 ) -> Tensor:
     return torch.empty_like(hidden_states)
 

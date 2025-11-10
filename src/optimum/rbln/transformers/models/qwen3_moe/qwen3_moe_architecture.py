@@ -62,52 +62,31 @@ class Qwen3MoeSparseMoeBlock(nn.Module):
         self.gate = model.gate
         # self.shared_expert = model.shared_expert
         # self.shared_expert_gate = model.shared_expert_gate
-        self.experts = Qwen3MoeMLP(model.experts)
+        self.experts = Qwen3MoeMLP(model.experts, self.top_k, self.norm_topk_prob)
 
-    def get_masked_routing_weights(self, router_logits):
-        if self.norm_topk_prob:
-            selected_weights, selected_experts = torch.topk(router_logits, k=self.top_k, dim=-1)
-            selected_weights = torch.nn.functional.softmax(selected_weights, dim=1, dtype=torch.float)
-        else:
-            # routing_weights: (batch * sequence_length, n_experts)
-            routing_weights = torch.nn.functional.softmax(router_logits, dim=1, dtype=torch.float)
-            # selected_experts: (batch * sequence_length, top_k)
-            selected_weights, selected_experts = torch.topk(routing_weights, k=self.top_k, dim=-1)
-
-        masked_routing_weights = torch.zeros_like(router_logits, dtype=torch.float32)
-        masked_routing_weights.scatter_(1, selected_experts, selected_weights)
-
-
-        ## get size per expert
-        expert = router_logits.shape[1]
-        zeros = torch.zeros(expert, dtype=torch.int32)
-        ones = torch.ones_like(selected_experts.view(-1), dtype=torch.int32)
-        expert_select_count = torch.scatter_add(zeros, dim=0, index=selected_experts.view(-1), src=ones)
-
-        return masked_routing_weights, expert_select_count
-
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+    def forward(self, hidden_states: torch.Tensor, ) -> torch.Tensor:
         """ """
         batch_size, sequence_length, hidden_dim = hidden_states.shape
         hidden_states = hidden_states.view(-1, hidden_dim)
 
         # router_logits: (batch * sequence_length, n_experts)
         router_logits = self.gate(hidden_states)
-        masked_routing_weights, expert_select_count = self.get_masked_routing_weights(router_logits)
-        final_hidden_states = self.experts(hidden_states, masked_routing_weights, expert_select_count)
+        final_hidden_states = self.experts(hidden_states, router_logits)
 
         final_hidden_states = final_hidden_states.reshape(batch_size, sequence_length, hidden_dim)
         return final_hidden_states
 
 
 class Qwen3MoeMLP(nn.Module):
-    def __init__(self, expert_list):
+    def __init__(self, expert_list, top_k, norm_topk_prob):
         super().__init__()
         self.config = expert_list[0].config
         self.hidden_size = expert_list[0].hidden_size
         self.intermediate_size = expert_list[0].intermediate_size
         self.act_fn = ACT2FN[self.config.hidden_act]
         self.act_fn_name = self.config.hidden_act
+        self.top_k = top_k
+        self.norm_topk_prob = norm_topk_prob
 
         # RBLN-optimized MLP
         self.num_experts = len(expert_list)
@@ -118,23 +97,13 @@ class Qwen3MoeMLP(nn.Module):
         self.up_proj.weight.data = torch.stack([expert.up_proj.weight.data for expert in expert_list], dim=0)
         self.down_proj.weight.data = torch.stack([expert.down_proj.weight.data for expert in expert_list], dim=0)
 
-    def forward(self, x, masked_routing_weights, expert_select_count):
-        # # masked_routing_weights: (batch * sequence_length, num_experts)
-        # # x: (batch * sequence_length, hidden_size)
-        # # y: (batch * sequence_length, num_experts * intermediate_size)
-        # y = self.act_fn(self.gate_proj(x)) * self.up_proj(x)
-
-        # # elementwise multiplication of y and routing_weights
-        # y = y.reshape(-1, self.num_experts, self.intermediate_size) * masked_routing_weights[:, :, None]
-        # y = y.reshape(-1, self.num_experts * self.intermediate_size)
-
-        # return self.down_proj(y)
+    def forward(self, x, router_logits):
         return torch.ops.rbln_custom_ops.custom_moe_glu(
             x,
             self.gate_proj.weight,
             self.up_proj.weight,
             self.down_proj.weight,
-            masked_routing_weights,
-            expert_select_count,  # count for each expert
-            # self.act_fn_name,
+            router_logits,
+            self.top_k,
+            self.norm_topk_prob,
         )
