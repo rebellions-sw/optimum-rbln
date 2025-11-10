@@ -181,7 +181,10 @@ class RBLNDecoderOnlyFlashAttentionMixin:
         model_config: "PretrainedConfig",
         rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
     ) -> int:
-        lm_head_nbytes = cls._get_lm_head_memory(model_config, rbln_config)
+        if model.get_output_embeddings() is None:
+            lm_head_nbytes = 0
+        else:
+            lm_head_nbytes = cls._get_lm_head_memory(model_config, rbln_config)
 
         layer_nbytes = cls._get_layer_memory(model, model_config, rbln_config)
         return lm_head_nbytes + layer_nbytes
@@ -214,10 +217,13 @@ class RBLNDecoderOnlyFlashAttentionMixin:
         num_hidden_layers = getattr(model_config, "n_layer", None) or getattr(model_config, "num_hidden_layers")
 
         n_model_params = sum(p.numel() for p in model.parameters())
-        lm_head_params = sum(p.numel() for p in model.lm_head.parameters())
+        embed_token_params = sum(p.numel() for p in model.get_input_embeddings().parameters())
 
-        # Check : Consider `embed_token`
-        params = n_model_params - 2 * lm_head_params
+        # Check : `embed_token` is same as `lm_head`
+        if model.get_output_embeddings() is not None:
+            params = n_model_params - 2 * embed_token_params
+        else:
+            params = n_model_params - embed_token_params
 
         # Assuming all layers have the same number of parameters
         # and all linear layers are quantized if quantization is enabled (This is not always true)
@@ -258,11 +264,13 @@ class RBLNDecoderOnlyFlashAttentionMixin:
         used_memory = sum(alloc_memory_by_key.values())
 
         remaining_dram = available_dram - used_memory
+
         if remaining_dram <= 0:
-            raise ValueError(
+            logger.warning(
                 "Insufficient available DRAM after accounting for kernel memory and buffer. "
-                "Cannot allocate any KV cache blocks."
+                "Model cannot allocate any KV cache blocks."
             )
+
         estimated_num_blocks = cls._estimate_num_blocks(
             remaining_dram, model_config=model_config, rbln_config=rbln_config
         )
