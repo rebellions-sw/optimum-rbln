@@ -799,7 +799,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         target_npu = self.npu or next((cfg.npu for cfg in self._compile_cfgs if cfg.npu is not None), None)
         warn_deprecated_npu(target_npu)
 
-    def freeze(self):
+    def freeze(self, allow_no_compile_cfgs: bool = False):
         if self._frozen:
             raise RuntimeError(f"`{self.__class__.__name__}` is already frozen.")
 
@@ -808,7 +808,15 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
             or len(self._compile_cfgs) == 0
             or not all(isinstance(cfg, RBLNCompileConfig) for cfg in self._compile_cfgs)
         ):
-            raise RuntimeError("`compile_cfgs` must be set before freezing.")
+            if allow_no_compile_cfgs:
+                # Allow freezing without compile_cfgs for special use cases
+                logger.debug(
+                    f"Freezing {self.__class__.__name__} without compile_cfgs "
+                    "(allow_no_compile_cfgs=True). This is typically used for models "
+                    "that don't require compilation."
+                )
+            else:
+                raise RuntimeError("`compile_cfgs` must be set before freezing.")
 
         for submodule_name in self.submodules:
             submodule_config = getattr(self, submodule_name, None)

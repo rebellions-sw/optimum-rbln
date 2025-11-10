@@ -929,6 +929,8 @@ class AttentionOp(nn.Module):
         if self.phase == "prefill" or self.phase == "image_prefill":
             if not self.use_attention_mask or self.use_position_ids:
                 op_args["is_bidirectional"] = self.phase == "image_prefill"  # FIXME, Hard-coded for Gemma3.
+            if self.use_attention_mask and self.use_position_ids:
+                op_args["is_bidirectional"] = True
 
         if self.quantization and self.quantization.kv_caches == "fp8":
             if past_key_state.dtype != torch.float8_e4m3fn:
@@ -1037,6 +1039,8 @@ class FlashAttentionOp(AttentionOp):
         if self.phase == "prefill" or self.phase == "image_prefill":
             if not self.use_attention_mask or self.use_position_ids:
                 op_args["is_bidirectional"] = self.phase == "image_prefill"  # FIXME, Hard-coded for Gemma3.
+            if self.use_attention_mask and self.use_position_ids:
+                op_args["is_bidirectional"] = True
 
         if self.quantization and self.quantization.kv_caches == "fp8":
             if past_key_state.dtype != torch.float8_e4m3fn:

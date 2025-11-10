@@ -151,8 +151,16 @@ class RBLNColPaliForRetrieval(RBLNModel):
 
     auto_model_class = None
     _rbln_submodules = [
-        {"name": "vision_tower"},
+        {"name": "vlm"},
     ]
+
+    def reconstruct_model_if_needed(self, model: "PreTrainedModel"):
+        return RBLNColPaliForRetrievalWrapper(
+            causal_lm=model.vlm,
+            embedding_proj_layer=model.embedding_proj_layer,
+            max_seq_len=max(self.rbln_config.max_seq_lens),
+            output_hidden_states=self.rbln_config.output_hidden_states,
+        )
 
     def __post_init__(self, **kwargs):
         self.vision_tower = LoopVisionTower(self.rbln_submodules[0])
