@@ -85,17 +85,6 @@ class RBLNMistralForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
     _decoder_wrapper_cls = MistralWrapper
 
-    @classmethod
-    def _update_sliding_window_config(
-        cls, model_config: PretrainedConfig, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig
-    ):
-        rbln_config.cache_impl = "sliding_window"
-        rbln_config.sliding_window = model_config.sliding_window
-        rbln_config.sliding_window_layers = list(range(model_config.num_hidden_layers))
-
-        return rbln_config
-
-
 class RBLNMistralModel(RBLNDecoderOnlyModel):
     """
     The Mistral Model transformer without a language modeling head.
@@ -103,13 +92,3 @@ class RBLNMistralModel(RBLNDecoderOnlyModel):
     """
 
     _decoder_wrapper_cls = MistralWrapper
-
-    @classmethod
-    def _update_sliding_window_config(
-        cls, model_config: PretrainedConfig, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig
-    ):
-        rbln_config.cache_impl = "sliding_window"
-        rbln_config.sliding_window = model_config.sliding_window
-        rbln_config.sliding_window_layers = list(range(model_config.num_hidden_layers))
-
-        return rbln_config

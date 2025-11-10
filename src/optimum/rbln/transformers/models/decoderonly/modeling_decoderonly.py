@@ -410,39 +410,17 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     def _update_sliding_window_config(
         cls, model_config: PretrainedConfig, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig
     ):
-        # Update the sliding window configuration for the RBLN model.
-
-        # This method must be implemented by subclasses to handle their specific sliding window configurations,
-        # as Hugging Face models use different configuration keys to represent sliding window layers.
-
-        # Args:
-        #     model_config (PretrainedConfig): The model configuration from Hugging Face.
-        #     rbln_config (RBLNDecoderOnlyModelForCausalLMConfig): The RBLN model configuration.
-
-        # Notes:
-        #     Required configuration settings:
-        #     - `cache_impl`: Must be one of:
-        #         - "static": All layers use global attention (no sliding window)
-        #         - "sliding_window": All layers use sliding window attention
-        #         - "hybrid": A mix of global and sliding window attention layers
-        #     - `sliding_window`: Width of the sliding window (required if cache_impl is "sliding_window" or "hybrid")
-        #     - `sliding_window_layers`: List of layer indices using sliding window attention (required if cache_impl is "hybrid")
-
-        #     Example implementation for a 'sliding_window' model:
-        #     ```python
-        #     rbln_config.cache_impl = "sliding_window"
-        #     rbln_config.sliding_window = model_config.sliding_window
-        #     rbln_config.sliding_window_layers = [i for i in range(model_config.num_hidden_layers)]
-        #     return rbln_config
-        #     ```
-
-        # Returns:
-        #     RBLNDecoderOnlyModelConfig: The updated RBLN model configuration.
-
-        raise NotImplementedError(
-            "Subclasses must implement _update_sliding_window_config to configure sliding window attention settings. "
-            "See method docstring for required configuration details."
-        )
+        rbln_config.sliding_window = model_config.sliding_window
+        sliding_window_layers = []
+        for i in range(model_config.num_hidden_layers):
+            if model_config.layer_types[i] == "sliding_attention":
+                sliding_window_layers.append(i)
+        rbln_config.sliding_window_layers = sliding_window_layers
+        
+        if len(sliding_window_layers) == model_config.num_hidden_layers:
+            rbln_config.cache_impl = "hybrid"
+        else:
+            rbln_config.cache_impl = "sliding_window"
 
     @classmethod
     def _update_attention_config(
