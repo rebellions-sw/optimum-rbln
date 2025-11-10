@@ -51,6 +51,7 @@ def custom_moe_glu(
     gate_proj_weight: Tensor,
     up_proj_weight: Tensor,
     down_proj_weight: Tensor,
+    expert_select_count: Tensor,
     router_logits: Tensor,
     k : int,
     norm_topk_prob: bool = True,
@@ -96,6 +97,10 @@ def custom_moe_glu(
     out = torch.zeros_like(hidden_states)
     expert_cnt = gate_proj_weight.shape[0]
     for i in range(expert_cnt):
+        # expert skip
+        if (expert_select_count[i] == 0):
+            continue
+
         gate = torch.nn.functional.linear(hidden_states, gate_proj_weight[i])
         up = torch.nn.functional.linear(hidden_states, up_proj_weight[i])
         mul = torch.nn.functional.silu(gate) * up
@@ -111,6 +116,7 @@ def custom_moe_glu_fake(
     gate_proj_weight: Tensor,
     up_proj_weight: Tensor,
     down_proj_weight: Tensor,
+    expert_select_count: Tensor,
     router_logits: Tensor,
     k : int,
     norm_topk_prob: bool = True,

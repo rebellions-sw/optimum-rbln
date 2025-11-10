@@ -64,6 +64,18 @@ class Qwen3MoeSparseMoeBlock(nn.Module):
         # self.shared_expert_gate = model.shared_expert_gate
         self.experts = Qwen3MoeMLP(model.experts, self.top_k, self.norm_topk_prob)
 
+
+    def get_masked_routing_weights(self, router_logits):
+        _, selected_experts = torch.topk(router_logits, k=self.top_k, dim=-1)
+
+        ## get size per expert
+        expert = router_logits.shape[1]
+        zeros = torch.zeros(expert, dtype=torch.int32)
+        ones = torch.ones_like(selected_experts.view(-1), dtype=torch.int32)
+        expert_select_count = torch.scatter_add(zeros, dim=0, index=selected_experts.view(-1), src=ones)
+
+        return expert_select_count
+
     def forward(self, hidden_states: torch.Tensor, ) -> torch.Tensor:
         """ """
         batch_size, sequence_length, hidden_dim = hidden_states.shape
@@ -71,7 +83,8 @@ class Qwen3MoeSparseMoeBlock(nn.Module):
 
         # router_logits: (batch * sequence_length, n_experts)
         router_logits = self.gate(hidden_states)
-        final_hidden_states = self.experts(hidden_states, router_logits)
+        expert_select_count = self.get_masked_routing_weights(router_logits)
+        final_hidden_states = self.experts(hidden_states, router_logits, expert_select_count)
 
         final_hidden_states = final_hidden_states.reshape(batch_size, sequence_length, hidden_dim)
         return final_hidden_states
@@ -97,12 +110,13 @@ class Qwen3MoeMLP(nn.Module):
         self.up_proj.weight.data = torch.stack([expert.up_proj.weight.data for expert in expert_list], dim=0)
         self.down_proj.weight.data = torch.stack([expert.down_proj.weight.data for expert in expert_list], dim=0)
 
-    def forward(self, x, router_logits):
+    def forward(self, x, router_logits, expert_select_count):
         return torch.ops.rbln_custom_ops.custom_moe_glu(
             x,
             self.gate_proj.weight,
             self.up_proj.weight,
             self.down_proj.weight,
+            expert_select_count,
             router_logits,
             self.top_k,
             self.norm_topk_prob,
