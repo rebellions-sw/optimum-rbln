@@ -122,7 +122,6 @@ class RBLNModelForDepthEstimationConfig(RBLNImageModelConfig):
 
 
 class RBLNModelForAudioClassificationConfig(RBLNModelConfig):
-    
     @deprecate_kwarg(old_name="num_mel_bins", version="0.10.0")
     def __init__(
         self,

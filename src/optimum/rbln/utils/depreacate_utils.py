@@ -170,7 +170,9 @@ def deprecate_kwarg(
                             logger.error(f"Error during deprecated value replacement for {key_to_check}: {e}")
                             message += f" Automatic replacement failed: {e}. Passing original value."
                     else:
-                        message += " Please update to provide a value of the new supported type."
+                        raise ValueError(
+                            f"value_replacer should be provided when deprecated_type is set for {key_to_check} in {func_name}"
+                        )
 
             # Scenario C: Deletion (e.g., c)
             if old_name in kwargs and new_name is None and deprecated_type is None:
