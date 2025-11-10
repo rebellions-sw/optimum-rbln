@@ -15,6 +15,7 @@
 from typing import Any, List, Optional, Tuple, Union
 
 from ..configuration_utils import RBLNModelConfig
+from ..utils.depreacate_utils import deprecate_kwarg
 
 
 class RBLNTransformerEncoderConfig(RBLNModelConfig):
@@ -121,6 +122,8 @@ class RBLNModelForDepthEstimationConfig(RBLNImageModelConfig):
 
 
 class RBLNModelForAudioClassificationConfig(RBLNModelConfig):
+    
+    @deprecate_kwarg(old_name="num_mel_bins", version="0.10.0")
     def __init__(
         self,
         batch_size: Optional[int] = None,
