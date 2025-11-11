@@ -312,6 +312,8 @@ class RBLNModelForAudioClassification(RBLNModel):
                 if hasattr(feature_extractor, "num_mel_bins"):
                     num_mel_bins = feature_extractor.num_mel_bins
                     break
+        if num_mel_bins is None:
+            raise ValueError("`num_mel_bins` should be specified!")
 
         if rbln_config.max_length is None:
             rbln_config.max_length = getattr(model_config, "max_length", None)

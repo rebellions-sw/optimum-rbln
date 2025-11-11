@@ -137,17 +137,6 @@ class RBLNModelForSeq2SeqLM(RBLNModel, GenerationMixin, ABC):
             use_attention_mask=self.use_attention_mask,
         )
 
-    @property
-    def pad_token_id(self):
-        pad_token_id = (
-            getattr(self.config, "pad_token_id", None)
-            or getattr(self.config, "bos_token_id", None)
-            or getattr(self.config, "eos_token_id", None)
-            or 0
-        )
-
-        return pad_token_id
-
     @classmethod
     @torch.inference_mode()
     def get_compiled_model(cls, model: PreTrainedModel, rbln_config: RBLNModelForSeq2SeqLMConfig):
@@ -437,7 +426,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, GenerationMixin, ABC):
         inputs_tensor = torch.nn.functional.pad(
             inputs_tensor,
             (0, self.rbln_config.enc_max_seq_len - input_len),
-            value=self.pad_token_id,
+            value=self.config.pad_token_id,
         )
         model_kwargs["attention_mask"] = torch.nn.functional.pad(
             model_kwargs["attention_mask"], (0, self.rbln_config.enc_max_seq_len - input_len)
