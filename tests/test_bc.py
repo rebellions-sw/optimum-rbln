@@ -3,7 +3,7 @@ import unittest
 import warnings
 
 from optimum.rbln import __version__
-from optimum.rbln.utils.depreacate_utils import deprecate_kwarg
+from optimum.rbln.utils.deprecation import deprecate_kwarg
 
 
 INFINITE_VERSION = "9999.0.0"
@@ -63,7 +63,7 @@ class DeprecationDecoratorTester(unittest.TestCase):
         def dummy_function(new_name=None, other_name=None):
             return new_name, other_name
 
-        with self.assertLogs("optimum.rbln.utils.depreacate_utils", level=logging.WARNING) as log:
+        with self.assertLogs("optimum.rbln.utils.deprecation", level=logging.WARNING) as log:
             value, other_value = dummy_function(deprecated_name="old_value")
             # Verify warning message content
             message = log.records[0].getMessage()
@@ -122,7 +122,7 @@ class DeprecationDecoratorTester(unittest.TestCase):
         def dummy_function(value=None):
             return value
 
-        with self.assertLogs("optimum.rbln.utils.depreacate_utils", level=logging.WARNING) as log:
+        with self.assertLogs("optimum.rbln.utils.deprecation", level=logging.WARNING) as log:
             result = dummy_function(value=True)
             # Verify warning message content
             message = log.records[0].getMessage()
@@ -143,7 +143,7 @@ class DeprecationDecoratorTester(unittest.TestCase):
         def dummy_function(deprecated_name=None):
             return deprecated_name
 
-        with self.assertLogs("optimum.rbln.utils.depreacate_utils", level=logging.WARNING) as log:
+        with self.assertLogs("optimum.rbln.utils.deprecation", level=logging.WARNING) as log:
             value = dummy_function(deprecated_name="deprecated_value")
             # Verify warning message content
             message = log.records[0].getMessage()
@@ -163,7 +163,7 @@ class DeprecationDecoratorTester(unittest.TestCase):
         def dummy_function(deprecated_name=None):
             return deprecated_name
 
-        with self.assertLogs("optimum.rbln.utils.depreacate_utils", level=logging.WARNING) as log:
+        with self.assertLogs("optimum.rbln.utils.deprecation", level=logging.WARNING) as log:
             value = dummy_function(deprecated_name="old_value")
             # Verify warning message content including additional message
             message = log.records[0].getMessage()

@@ -15,7 +15,7 @@
 from typing import Any, Optional
 
 from ....configuration_utils import RBLNModelConfig
-from ....utils.depreacate_utils import deprecate_kwarg
+from ....utils.deprecation import deprecate_kwarg
 from ....utils.logging import get_logger
 
 

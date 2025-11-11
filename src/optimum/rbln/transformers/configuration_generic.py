@@ -15,7 +15,7 @@
 from typing import Any, List, Optional, Tuple, Union
 
 from ..configuration_utils import RBLNModelConfig
-from ..utils.depreacate_utils import deprecate_kwarg
+from ..utils.deprecation import deprecate_kwarg
 
 
 class RBLNTransformerEncoderConfig(RBLNModelConfig):
