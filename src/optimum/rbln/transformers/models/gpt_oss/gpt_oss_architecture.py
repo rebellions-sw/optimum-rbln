@@ -69,19 +69,11 @@ class RBLNGptOssTopKRouter(nn.Module):
 
     def forward(self, hidden_states):
         router_logits = F.linear(hidden_states, self.weight, self.bias)  # (seq_len, num_experts)
-        router_top_value, router_indices = torch.topk(router_logits, self.top_k, dim=-1)  # (seq_len, top_k)
-        router_top_value = torch.nn.functional.softmax(router_top_value, dim=1, dtype=router_top_value.dtype)
-        router_scores = torch.zeros_like(router_logits).scatter_(1, router_indices, router_top_value)
-
-        zeros = torch.zeros(self.num_experts, dtype=torch.int32)
-        ones = torch.ones_like(router_indices.view(-1), dtype=torch.int32)
-        expert_select_count = torch.scatter_add(zeros, dim=0, index=router_indices.view(-1), src=ones)
-
-        return router_scores, router_indices, expert_select_count
+        return router_logits
 
 
 class RBLNGptOssExperts(nn.Module):
-    def __init__(self, model):
+    def __init__(self, model, k: int = 2):
         super().__init__()
         self.intermediate_size = model.intermediate_size
         self.num_experts = model.num_experts
@@ -106,8 +98,10 @@ class RBLNGptOssExperts(nn.Module):
         self.alpha = model.alpha  # 1.702
         self.limit = model.limit  # 7.0
 
+        self.k = k
+
     def forward(
-        self, hidden_states: torch.Tensor, router_indices=None, routing_weights=None, expert_select_count=None
+        self, hidden_states: torch.Tensor, router_logits: torch.Tensor
     ) -> torch.Tensor:
         next_states = torch.ops.rbln_custom_ops.custom_moe_glu_mxfp4(
             hidden_states,
@@ -120,10 +114,10 @@ class RBLNGptOssExperts(nn.Module):
             self.down_proj_blocks,
             self.down_proj_scales,
             self.down_proj_bias,
-            routing_weights,
-            expert_select_count,
+            router_logits,
             torch.tensor(self.alpha, dtype=hidden_states.dtype),
             torch.tensor(self.limit, dtype=hidden_states.dtype),
+            k=self.k,
         )
 
         return next_states
@@ -134,18 +128,17 @@ class RBLNGptOssMLP(nn.Module):
         super().__init__()
         self._original_mod = model
         self.router = RBLNGptOssTopKRouter(model.router)
-        self.experts = RBLNGptOssExperts(model.experts)
+        self.experts = RBLNGptOssExperts(model.experts, k=self.router.top_k)
 
     def forward(self, hidden_states):
         batch_size, sequence_length, hidden_dim = hidden_states.shape
         hidden_states = hidden_states.view(-1, hidden_dim)
 
-        router_scores, router_indices, expert_select_count = self.router(hidden_states)
+        router_logits = self.router(hidden_states)
+
         routed_out = self.experts(
             hidden_states,
-            router_indices=router_indices,
-            routing_weights=router_scores,
-            expert_select_count=expert_select_count,
+            router_logits=router_logits
         )
         routed_out = routed_out.reshape(batch_size, sequence_length, hidden_dim)
         return routed_out

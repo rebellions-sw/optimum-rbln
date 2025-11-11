@@ -164,10 +164,11 @@ def custom_moe_glu_mxfp4(
     down_proj_blocks: Tensor,
     down_proj_scales: Tensor,
     down_proj_bias: Tensor,
-    masked_routing_weight: Tensor,
-    expert_select_count: Tensor,
+    router_logits: Tensor,
     alpha: Tensor,
     limit: Tensor,
+    k: int = 2,
+    post_norm : bool = True,
 ) -> Tensor:
     """
     Customized MoE GLU operation.
@@ -206,9 +207,10 @@ def custom_moe_glu_mxfp4_fake(
     down_proj_blocks: Tensor,
     down_proj_scales: Tensor,
     down_proj_bias: Tensor,
-    masked_routing_weight: Tensor,
-    expert_select_count: Tensor,
+    router_logits: Tensor,
     alpha: Tensor,
     limit: Tensor,
+    k: int = 2,
+    post_norm : bool = True,
 ) -> Tensor:
     return torch.empty_like(hidden_states)
