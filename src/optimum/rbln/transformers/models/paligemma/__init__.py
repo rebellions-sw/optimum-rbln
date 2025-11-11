@@ -12,5 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .configuration_paligemma import RBLNPaliGemmaForConditionalGenerationConfig
-from .modeling_paligemma import RBLNPaliGemmaForConditionalGeneration
+from .configuration_paligemma import RBLNPaliGemmaForConditionalGenerationConfig, RBLNPaliGemmaModelConfig
+from .modeling_paligemma import RBLNPaliGemmaForConditionalGeneration, RBLNPaliGemmaModel

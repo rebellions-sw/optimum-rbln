@@ -21,7 +21,8 @@ import torch
 from transformers import AutoModelForVision2Seq, PaliGemmaForConditionalGeneration, PretrainedConfig, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPooling
 from transformers.modeling_utils import no_init_weights
-from transformers.models.paligemma.modeling_paligemma import PaliGemmaMultiModalProjector
+from transformers.models.auto import CONFIG_MAPPING
+from transformers.models.paligemma.modeling_paligemma import PaligemmaModelOutputWithPast, PaliGemmaMultiModalProjector
 
 from ....configuration_utils import RBLNModelConfig
 from ....modeling import RBLNModel
@@ -301,3 +302,153 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
                 logits=logits,
                 generate_idx=generate_idx,
             )
+
+
+class RBLNPaliGemmaModel(RBLNModel):
+    _rbln_submodules = [
+        {"name": "vision_tower"},
+        {"name": "language_model"},
+    ]
+
+    def __post_init__(self, **kwargs):
+        self.vision_tower = LoopVisionTower(self.rbln_submodules[0])
+        self.language_model = self.rbln_submodules[1]
+
+        if not isinstance(self.config.text_config, PretrainedConfig):
+            self.config.text_config = CONFIG_MAPPING[self.config.text_config["model_type"]](**self.config.text_config)
+            self.config.vision_config = CONFIG_MAPPING[self.config.vision_config["model_type"]](
+                **self.config.vision_config
+            )
+
+        artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
+        self.embed_tokens = self._create_embedding_layer()
+        self.embed_tokens.load_state_dict(artifacts["embed_tokens"])
+        self.multi_modal_projector = self._create_multi_modal_projector()
+        self.multi_modal_projector.load_state_dict(artifacts["multi_modal_projector"])
+
+        return super().__post_init__(**kwargs)
+
+    def get_input_embeddings(self):
+        return self.language_model.get_input_embeddings()
+
+    @classmethod
+    def save_torch_artifacts(
+        cls,
+        model: "PaliGemmaForConditionalGeneration",
+        save_dir_path: Path,
+        subfolder: str,
+        rbln_config: RBLNModelConfig,
+    ):
+        save_dict = {}
+        save_dict["embed_tokens"] = model.get_input_embeddings().state_dict()
+        save_dict["multi_modal_projector"] = model.multi_modal_projector.state_dict()
+        torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
+
+    def _create_embedding_layer(self):
+        with no_init_weights():
+            embed_tokens = torch.nn.Embedding(
+                self.config.text_config.vocab_size,
+                self.config.text_config.hidden_size,
+                self.config.text_config.pad_token_id,
+            )
+        return embed_tokens
+
+    def _create_multi_modal_projector(self):
+        with no_init_weights():
+            multi_modal_projector = PaliGemmaMultiModalProjector(self.config)
+        return multi_modal_projector
+
+    @classmethod
+    def _update_rbln_config(
+        cls,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+        model: Optional["PreTrainedModel"] = None,
+        model_config: Optional["PretrainedConfig"] = None,
+        rbln_config: Optional[RBLNModelConfig] = None,
+    ) -> RBLNModelConfig:
+        return rbln_config
+
+    def get_image_features(self, pixel_values: torch.Tensor):
+        vision_output_size = [
+            pixel_values.shape[0],
+            self.config.vision_config.num_image_tokens,
+            self.config.vision_config.hidden_size,
+        ]
+        vision_output = torch.empty(size=vision_output_size, dtype=torch.float32, device="cpu")
+        self.vision_tower(pixel_values, out=vision_output)
+        image_features = self.multi_modal_projector(vision_output)
+        image_features = image_features / (self.config.text_config.hidden_size**0.5)
+        return image_features
+
+    def get_placeholder_mask(
+        self, input_ids: torch.LongTensor, inputs_embeds: torch.FloatTensor, image_features: torch.FloatTensor
+    ):
+        if input_ids is None:
+            special_image_mask = inputs_embeds == self.get_input_embeddings()(
+                torch.tensor(self.config.image_token_index, dtype=torch.long, device=inputs_embeds.device)
+            )
+            special_image_mask = special_image_mask.all(-1)
+        else:
+            special_image_mask = input_ids == self.config.image_token_index
+
+        n_image_tokens = special_image_mask.sum()
+        special_image_mask = special_image_mask.unsqueeze(-1).expand_as(inputs_embeds).to(inputs_embeds.device)
+        n_image_features = image_features.shape[0] * image_features.shape[1]
+        if inputs_embeds[special_image_mask].numel() != image_features.numel():
+            raise ValueError(
+                f"Image features and image tokens do not match: tokens: {n_image_tokens}, features {n_image_features}"
+            )
+        return special_image_mask
+
+    def _preprocess_prefill(
+        self,
+        input_ids: Optional[torch.LongTensor] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        pixel_values: Optional[torch.FloatTensor] = None,
+        **kwargs,
+    ):
+        if (input_ids is None) ^ (inputs_embeds is not None):
+            raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
+
+        if input_ids is not None and self.config.image_token_index >= self.config.text_config.vocab_size:
+            special_image_mask = input_ids == self.config.image_token_index
+            llm_input_ids = input_ids.clone()
+            llm_input_ids[special_image_mask] = 0
+        else:
+            llm_input_ids = input_ids
+
+        if inputs_embeds is None:
+            inputs_embeds = self.get_input_embeddings()(llm_input_ids)
+
+        if pixel_values is not None:
+            image_features = self.get_image_features(pixel_values)
+            image_features = image_features.to(inputs_embeds.device, inputs_embeds.dtype)
+            special_image_mask = self.get_placeholder_mask(
+                input_ids, inputs_embeds=inputs_embeds, image_features=image_features
+            )
+            inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, image_features)
+
+        return inputs_embeds
+
+    def forward(
+        self,
+        input_ids: Optional[torch.LongTensor] = None,
+        pixel_values: Optional[torch.FloatTensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        token_type_ids: Optional[torch.LongTensor] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        return_dict: Optional[bool] = None,
+        **kwargs,
+    ):
+        inputs_embeds = self._preprocess_prefill(
+            input_ids=input_ids, inputs_embeds=inputs_embeds, pixel_values=pixel_values
+        )
+
+        last_hidden_states = self.language_model(
+            inputs_embeds=inputs_embeds,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+        )
+
+        return PaligemmaModelOutputWithPast(last_hidden_state=last_hidden_states[0])

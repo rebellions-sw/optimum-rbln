@@ -632,7 +632,8 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             )
             cache_position = torch.arange(query_length, dtype=torch.int32).unsqueeze(0)
             last_hidden_states = self.prefill_decoder(
-                inputs[b_idx : b_idx + 1],
+                input_ids=inputs[b_idx : b_idx + 1] if inputs_embeds is None else None,
+                inputs_embeds=inputs[b_idx : b_idx + 1] if inputs_embeds is not None else None,
                 attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                 position_embed=position_embed[b_idx : b_idx + 1] if position_embed is not None else None,
                 position_ids=position_ids[b_idx : b_idx + 1] if position_ids is not None else None,

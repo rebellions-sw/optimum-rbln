@@ -125,7 +125,12 @@ _import_structure = {
         "RBLNIdefics3VisionTransformerConfig",
     ],
     "llava": ["RBLNLlavaForConditionalGeneration", "RBLNLlavaForConditionalGenerationConfig"],
-    "paligemma": ["RBLNPaliGemmaForConditionalGeneration", "RBLNPaliGemmaForConditionalGenerationConfig"],
+    "paligemma": [
+        "RBLNPaliGemmaForConditionalGeneration",
+        "RBLNPaliGemmaForConditionalGenerationConfig",
+        "RBLNPaliGemmaModel",
+        "RBLNPaliGemmaModelConfig",
+    ],
     "llama": ["RBLNLlamaForCausalLM", "RBLNLlamaForCausalLMConfig", "RBLNLlamaModel", "RBLNLlamaModelConfig"],
     "opt": ["RBLNOPTForCausalLM", "RBLNOPTForCausalLMConfig", "RBLNOPTModel", "RBLNOPTModelConfig"],
     "pegasus": [
@@ -284,7 +289,12 @@ if TYPE_CHECKING:
     from .midm import RBLNMidmLMHeadModel, RBLNMidmLMHeadModelConfig
     from .mistral import RBLNMistralForCausalLM, RBLNMistralForCausalLMConfig, RBLNMistralModel, RBLNMistralModelConfig
     from .opt import RBLNOPTForCausalLM, RBLNOPTForCausalLMConfig, RBLNOPTModel, RBLNOPTModelConfig
-    from .paligemma import RBLNPaliGemmaForConditionalGeneration, RBLNPaliGemmaForConditionalGenerationConfig
+    from .paligemma import (
+        RBLNPaliGemmaForConditionalGeneration,
+        RBLNPaliGemmaForConditionalGenerationConfig,
+        RBLNPaliGemmaModel,
+        RBLNPaliGemmaModelConfig,
+    )
     from .pegasus import (
         RBLNPegasusForConditionalGeneration,
         RBLNPegasusForConditionalGenerationConfig,
