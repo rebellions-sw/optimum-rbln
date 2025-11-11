@@ -267,6 +267,20 @@ class RBLNModelForImageClassification(RBLNImageModel):
 class RBLNModelForDepthEstimation(RBLNImageModel):
     auto_model_class = AutoModelForDepthEstimation
 
+    @classmethod
+    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNImageModelConfig):
+        class ImageModelWrapper(nn.Module):
+            def __init__(self, model: "PreTrainedModel", rbln_config: RBLNImageModelConfig):
+                super().__init__()
+                self.model = model
+                self.rbln_config = rbln_config
+
+            def forward(self, *args, **kwargs):
+                output = self.model(*args, return_dict=True, **kwargs)
+                return output.predicted_depth
+
+        return ImageModelWrapper(model, rbln_config).eval()
+
 
 class RBLNModelForAudioClassification(RBLNModel):
     """

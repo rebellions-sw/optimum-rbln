@@ -114,6 +114,10 @@ class RBLNModel(RBLNBaseModel):
         return compiled_model
 
     @classmethod
+    def _reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
+        return model
+
+    @classmethod
     def from_model(
         cls,
         model: "PreTrainedModel",
@@ -146,6 +150,8 @@ class RBLNModel(RBLNBaseModel):
         Returns:
             (RBLNModel): A RBLN model instance ready for inference on RBLN NPU devices.
         """
+
+        model = cls._reconstruct_model_if_needed(model)
         preprocessors = kwargs.pop("preprocessors", [])
         rbln_config, kwargs = cls.prepare_rbln_config(rbln_config=rbln_config, **kwargs)
 
