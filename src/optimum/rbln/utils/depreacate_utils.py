@@ -1,8 +1,9 @@
+# Copyright 2024 The HuggingFace Team. All rights reserved.
 # Copyright 2025 Rebellions Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at:
+# You may obtain a copy of the License at
 
 #     http://www.apache.org/licenses/LICENSE-2.0
 
@@ -11,6 +12,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+# **********************************************************************************
+# * NOTE: This file has been modified from its original version in              *
+# * the Hugging Face transformers library.                                      *
+# * Original source:                                                            *
+# * https://github.com/huggingface/transformers/blob/v4.57.1/src/transformers/utils/deprecation.py
+# **********************************************************************************
+
+import inspect
+from enum import Enum
+# (이하 사용자님의 코드)
+...
 
 import inspect
 from enum import Enum
