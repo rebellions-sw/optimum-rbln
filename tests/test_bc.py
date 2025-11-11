@@ -45,15 +45,14 @@ class DeprecationDecoratorTester(unittest.TestCase):
             def dummy_function(new_name1=None, new_name2=None, other_name=None):
                 return new_name1, new_name2, other_name
 
-            value1, value2, other_value = dummy_function(
-                deprecated_name1="old_value1", deprecated_name2="old_value2"
-            )
+            value1, value2, other_value = dummy_function(deprecated_name1="old_value1", deprecated_name2="old_value2")
             self.assertEqual(value1, "old_value1")
             self.assertEqual(value2, "old_value2")
             self.assertIsNone(other_value)
 
     def test_scenario_a_warning(self):
         """Test warning is raised when using deprecated name."""
+
         @deprecate_kwarg(
             "deprecated_name",
             new_name="new_name",
@@ -73,6 +72,7 @@ class DeprecationDecoratorTester(unittest.TestCase):
 
     def test_scenario_a_raise_if_both_names(self):
         """Test ValueError is raised when both names provided and raise_if_both_names=True."""
+
         @deprecate_kwarg(
             "deprecated_name",
             new_name="new_name",
@@ -94,6 +94,7 @@ class DeprecationDecoratorTester(unittest.TestCase):
 
     def test_scenario_b_value_replacer_required(self):
         """Test ValueError is raised when deprecated_type is set without value_replacer."""
+
         @deprecate_kwarg(
             "value",
             deprecated_type=bool,
@@ -109,6 +110,7 @@ class DeprecationDecoratorTester(unittest.TestCase):
 
     def test_scenario_b_automatic_replacement(self):
         """Test value is automatically replaced when value_replacer is provided."""
+
         def bool_to_str(value):
             return "true" if value else "false"
 
@@ -135,6 +137,7 @@ class DeprecationDecoratorTester(unittest.TestCase):
 
     def test_scenario_c_deletion_warning(self):
         """Test warning is raised and deprecated arg is removed from kwargs."""
+
         @deprecate_kwarg(
             "deprecated_name",
             version=INFINITE_VERSION,
@@ -154,6 +157,7 @@ class DeprecationDecoratorTester(unittest.TestCase):
 
     def test_scenario_c_additional_message(self):
         """Test additional message is included in warning."""
+
         @deprecate_kwarg(
             "deprecated_name",
             version=INFINITE_VERSION,
@@ -177,6 +181,7 @@ class DeprecationDecoratorTester(unittest.TestCase):
 
     def test_raise_for_current_version(self):
         """Test ValueError is raised when current version >= deprecated version (default behavior)."""
+
         # Test: current version == deprecation version
         @deprecate_kwarg("deprecated_name", version=__version__)
         def dummy_function(deprecated_name=None):
