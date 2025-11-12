@@ -13,19 +13,14 @@
 # limitations under the License.
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
 import torch
-from transformers import PretrainedConfig, PreTrainedModel
 from transformers.modeling_utils import no_init_weights
 from transformers.models.colpali.modeling_colpali import ColPaliForRetrieval, ColPaliForRetrievalOutput
 
 from ....configuration_utils import RBLNModelConfig
 from ....modeling import RBLNModel
-
-
-if TYPE_CHECKING:
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
 
 
 class RBLNColPaliForRetrieval(RBLNModel):
@@ -116,37 +111,16 @@ class RBLNColPaliForRetrieval(RBLNModel):
         save_dict["embedding_proj_layer"] = model.embedding_proj_layer.state_dict()
         torch.save(save_dict, save_dir_path / subfolder / "torch_artifacts.pth")
 
-    @classmethod
-    def _update_rbln_config(
-        cls,
-        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
-        model: Optional["PreTrainedModel"] = None,
-        model_config: Optional["PretrainedConfig"] = None,
-        rbln_config: Optional[RBLNModelConfig] = None,
-    ) -> RBLNModelConfig:
-        return rbln_config
-
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
         pixel_values: Optional[torch.FloatTensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         **kwargs,
     ) -> Union[Tuple, ColPaliForRetrievalOutput]:
         if pixel_values is not None:
             pixel_values = pixel_values.to(dtype=self.dtype)
-
-        if output_attentions:
-            raise ValueError("output_attentions is not supported for RBLNColPaliForRetrieval")
-
-        if output_hidden_states is not None and output_hidden_states != self.rbln_config.output_hidden_states:
-            raise ValueError(
-                f"Variable output_hidden_states {output_hidden_states} is not equal to rbln_config.output_hidden_states {self.rbln_config.output_hidden_states} "
-                f"Please compile again with the correct argument."
-            )
 
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
@@ -157,8 +131,7 @@ class RBLNColPaliForRetrieval(RBLNModel):
             return_dict=True,
             **kwargs,
         )
-        vlm_hidden_states = vlm_output.hidden_states if output_hidden_states else None
-        # vlm_image_hidden_states = vlm_output.image_hidden_states if pixel_values is not None else None
+        vlm_image_hidden_states = vlm_output.image_hidden_states if pixel_values is not None else None
 
         last_hidden_states = vlm_output[0]
         proj_dtype = self.embedding_proj_layer.weight.dtype
@@ -171,6 +144,5 @@ class RBLNColPaliForRetrieval(RBLNModel):
 
         return ColPaliForRetrievalOutput(
             embeddings=embeddings,
-            hidden_states=vlm_hidden_states,
-            # image_hidden_states=vlm_image_hidden_states,
+            image_hidden_states=vlm_image_hidden_states,
         )

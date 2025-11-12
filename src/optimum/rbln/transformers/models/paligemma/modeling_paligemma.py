@@ -35,7 +35,7 @@ from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyOutput
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
+    from transformers import PretrainedConfig
 
 
 class LoopVisionTower(LoopProcessor):
@@ -138,16 +138,6 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
         with no_init_weights():
             multi_modal_projector = PaliGemmaMultiModalProjector(self.config)
         return multi_modal_projector
-
-    @classmethod
-    def _update_rbln_config(
-        cls,
-        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
-        model: Optional["PreTrainedModel"] = None,
-        model_config: Optional["PretrainedConfig"] = None,
-        rbln_config: Optional[RBLNModelConfig] = None,
-    ) -> RBLNModelConfig:
-        return rbln_config
 
     def prepare_inputs_for_generation(
         self,
@@ -358,16 +348,6 @@ class RBLNPaliGemmaModel(RBLNModel):
             multi_modal_projector = PaliGemmaMultiModalProjector(self.config)
         return multi_modal_projector
 
-    @classmethod
-    def _update_rbln_config(
-        cls,
-        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
-        model: Optional["PreTrainedModel"] = None,
-        model_config: Optional["PretrainedConfig"] = None,
-        rbln_config: Optional[RBLNModelConfig] = None,
-    ) -> RBLNModelConfig:
-        return rbln_config
-
     def get_image_features(self, pixel_values: torch.Tensor):
         vision_output_size = [
             pixel_values.shape[0],
@@ -428,7 +408,7 @@ class RBLNPaliGemmaModel(RBLNModel):
             )
             inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, image_features)
 
-        return inputs_embeds
+        return inputs_embeds, image_features
 
     def forward(
         self,
@@ -441,7 +421,7 @@ class RBLNPaliGemmaModel(RBLNModel):
         return_dict: Optional[bool] = None,
         **kwargs,
     ):
-        inputs_embeds = self._preprocess_prefill(
+        inputs_embeds, image_features = self._preprocess_prefill(
             input_ids=input_ids, inputs_embeds=inputs_embeds, pixel_values=pixel_values
         )
 
@@ -451,4 +431,7 @@ class RBLNPaliGemmaModel(RBLNModel):
             position_ids=position_ids,
         )
 
-        return PaligemmaModelOutputWithPast(last_hidden_state=last_hidden_states[0])
+        return PaligemmaModelOutputWithPast(
+            last_hidden_state=last_hidden_states[0],
+            image_hidden_states=image_features if pixel_values is not None else None,
+        )

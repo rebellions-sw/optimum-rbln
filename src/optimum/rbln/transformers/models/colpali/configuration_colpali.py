@@ -52,7 +52,6 @@ class RBLNColPaliForRetrievalConfig(RBLNModelConfig):
     def __init__(
         self,
         batch_size: Optional[int] = None,
-        output_hidden_states: Optional[bool] = None,
         vlm: Optional[RBLNModelConfig] = None,
         **kwargs: Any,
     ):
@@ -71,4 +70,3 @@ class RBLNColPaliForRetrievalConfig(RBLNModelConfig):
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
         self.vlm = self.initialize_submodule_config(submodule_config=vlm, batch_size=batch_size)
-        self.output_hidden_states = output_hidden_states
