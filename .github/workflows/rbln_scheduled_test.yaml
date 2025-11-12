@@ -38,23 +38,7 @@ jobs:
                             curl -s -u "${{ env.REBEL_PYPI_USERNAME }}:${{ env.REBEL_PYPI_PASSWORD }}" "${{ env.REBEL_PYPI_ENDPOINT }}/rebel-compiler/json" | \
                             jq -r '.releases | keys | .[]' | \
                             grep prod | \
-                            python3 -c "
-                                      import sys
-                                      from packaging.version import parse
-
-                                      versions = []
-                                      for line in sys.stdin:
-                                          version_str = line.strip()
-                                          if version_str:
-                                              try:
-                                                  versions.append(parse(version_str))
-                                              except Exception:
-                                                  pass
-
-                                      if versions:
-                                          latest_version = sorted(versions)[-1]
-                                          print(str(latest_version))
-                                      " \
+                            python .github/scripts/parsing_latest_version.py
                           )
           echo "compiler_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
           echo "cur_version=$CUR_VERSION" >> $GITHUB_OUTPUT
