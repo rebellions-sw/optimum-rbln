@@ -13,14 +13,6 @@ env:
   TOKEN: ${{secrets.RENOVATE_TOKEN}}
 
 jobs:
-  check-code-quality:
-    uses: ./.github/workflows/check_code_quality.yml
-    
-  test-docstrings:
-    uses: ./.github/workflows/test-docstrings.yml
-    with:
-      test_all_files: true
-
   fetch-version:
     runs-on: rebel-k8s-runner
     outputs:
