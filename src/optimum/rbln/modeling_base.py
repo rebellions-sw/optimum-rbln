@@ -128,6 +128,29 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             model_path = model_path / subfolder
             rbln_files = list(model_path.glob("*.rbln"))
             rbln_config_filenames = list(model_path.glob("rbln_config.json"))
+
+            # Check if rbln_config.json exists and if compile_cfgs is empty
+            # If compile_cfgs is empty, we don't need .rbln files
+            if len(rbln_config_filenames) > 0:
+                import json
+
+                try:
+                    with open(rbln_config_filenames[0], "r") as f:
+                        config_data = json.load(f)
+                    compile_cfgs = config_data.get("_compile_cfgs", [])
+                    if len(compile_cfgs) == 0:
+                        if len(rbln_config_filenames) == 0:
+                            raise FileNotFoundError(
+                                f"Could not find `rbln_config.json` file in directory {model_path}"
+                            )
+                        if len(rbln_config_filenames) > 1:
+                            raise FileExistsError(
+                                f"Multiple rbln_config.json files found in directory {model_path}. This is not expected."
+                            )
+                        return str(model_path)
+                except (json.JSONDecodeError, KeyError):
+                    pass
+
             validate_files(rbln_files, rbln_config_filenames, f"directory {model_path}")
         else:
             model_path = pull_compiled_model_from_hub(
@@ -222,7 +245,10 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             else:
                 rbln_submodules = []
 
-            rbln_config.freeze()
+            # Allow freezing without compile_cfgs if compile_cfgs is empty
+            # This supports models that don't require compilation (e.g., wrapper models)
+            allow_no_compile_cfgs = len(rbln_config.compile_cfgs) == 0
+            rbln_config.freeze(allow_no_compile_cfgs=allow_no_compile_cfgs)
 
             if config is None:
                 if cls.hf_library_name == "transformers":
@@ -254,8 +280,13 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
                     )
                     config = PretrainedConfig(**config)
 
-            compiled_model_names = [cfg.compiled_model_name for cfg in rbln_config.compile_cfgs]
-            rbln_compiled_models = cls._load_compiled_models(model_path_subfolder, compiled_model_names)
+            # If compile_cfgs is empty or no compiled models are provided, use UnavailableRuntime
+            if len(rbln_config.compile_cfgs) == 0:
+                compiled_model_names = []
+                rbln_compiled_models = {}
+            else:
+                compiled_model_names = [cfg.compiled_model_name for cfg in rbln_config.compile_cfgs]
+                rbln_compiled_models = cls._load_compiled_models(model_path_subfolder, compiled_model_names)
 
             if subfolder != "":
                 model_save_dir = Path(model_path_subfolder).absolute().parent
@@ -285,6 +316,20 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
     ):
         if isinstance(model_save_dir, str):
             model_save_dir = Path(model_save_dir)
+
+        # If compile_cfgs is empty or no compiled models are provided, use UnavailableRuntime
+        if len(rbln_config.compile_cfgs) == 0 or len(rbln_compiled_models) == 0:
+            models = UnavailableRuntime()
+            return cls(
+                models,
+                config,
+                rbln_config,
+                model_save_dir=model_save_dir,
+                subfolder=subfolder,
+                rbln_compiled_models=rbln_compiled_models,
+                rbln_submodules=rbln_submodules,
+                **kwargs,
+            )
 
         # FIXME:: Should we convert it?
         compiled_model_names = [cfg.compiled_model_name for cfg in rbln_config.compile_cfgs]
@@ -455,7 +500,10 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         rbln_config = cls._update_rbln_config(
             preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
         )
-        rbln_config.freeze()
+        # Allow freezing without compile_cfgs if compile_cfgs is empty
+        # This supports models that don't require compilation (e.g., wrapper models)
+        allow_no_compile_cfgs = len(rbln_config.compile_cfgs) == 0
+        rbln_config.freeze(allow_no_compile_cfgs=allow_no_compile_cfgs)
         if rbln_config.rbln_model_cls_name != cls.__name__:
             raise NameError(
                 f"Cannot get the rbln config. {cls.__name__} is not the same as {rbln_config.rbln_model_cls_name}. "
