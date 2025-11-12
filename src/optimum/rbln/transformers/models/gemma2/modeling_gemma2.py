@@ -19,7 +19,7 @@ from ...models.decoderonly import (
     RBLNDecoderOnlyModel,
     RBLNDecoderOnlyModelForCausalLM,
 )
-from .configuration_gemma2 import RBLNGemma2ForCausalLMConfig, RBLNGemma2ModelConfig
+from .configuration_gemma2 import RBLNGemma2ForCausalLMConfig
 from .gemma2_architecture import Gemma2Wrapper
 
 
@@ -87,22 +87,8 @@ class RBLNGemma2ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
     @classmethod
     def _update_sliding_window_config(cls, model_config: PretrainedConfig, rbln_config: RBLNGemma2ForCausalLMConfig):
-        sliding_window = getattr(model_config, "sliding_window", None)
-        sliding_window_pattern = getattr(model_config, "sliding_window_pattern", None)
-        if sliding_window_pattern is None:
-            if hasattr(model_config, "layer_types"):
-                first_full_attention_index = model_config.layer_types.index("full_attention")
-                sliding_window_pattern = first_full_attention_index + 1
-            else:
-                raise ValueError("Cannot determine sliding_window_pattern from model_config")
-
-        if sliding_window_pattern <= model_config.num_hidden_layers:
-            rbln_config.cache_impl = "hybrid"
-            rbln_config.sliding_window = sliding_window
-            rbln_config.sliding_window_layers = [
-                i for i in range(model_config.num_hidden_layers) if (i + 1) % sliding_window_pattern > 0
-            ]
-
+        rbln_config.cache_impl = "static"
+        rbln_config.sliding_window = None
         return rbln_config
 
 
@@ -115,21 +101,7 @@ class RBLNGemma2Model(RBLNDecoderOnlyModel):
     _decoder_wrapper_cls = Gemma2Wrapper
 
     @classmethod
-    def _update_sliding_window_config(cls, model_config: PretrainedConfig, rbln_config: RBLNGemma2ModelConfig):
-        sliding_window = getattr(model_config, "sliding_window", None)
-        sliding_window_pattern = getattr(model_config, "sliding_window_pattern", None)
-        if sliding_window_pattern is None:
-            if hasattr(model_config, "layer_types"):
-                first_full_attention_index = model_config.layer_types.index("full_attention")
-                sliding_window_pattern = first_full_attention_index + 1
-            else:
-                raise ValueError("Cannot determine sliding_window_pattern from model_config")
-
-        if sliding_window_pattern <= model_config.num_hidden_layers:
-            rbln_config.cache_impl = "hybrid"
-            rbln_config.sliding_window = sliding_window
-            rbln_config.sliding_window_layers = [
-                i for i in range(model_config.num_hidden_layers) if (i + 1) % sliding_window_pattern > 0
-            ]
-
+    def _update_sliding_window_config(cls, model_config: PretrainedConfig, rbln_config: RBLNGemma2ForCausalLMConfig):
+        rbln_config.cache_impl = "static"
+        rbln_config.sliding_window = None
         return rbln_config
