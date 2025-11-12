@@ -1,5 +1,7 @@
 import sys
+
 from packaging.version import parse
+
 
 versions = []
 for line in sys.stdin:
