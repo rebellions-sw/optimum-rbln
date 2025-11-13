@@ -88,7 +88,13 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     def setup_runtime(self):
         # Initialize resources to be used across Runtime instances (prefill and decode phases)
         page_table_manager = RBLNPageTableManager(self.rbln_config)
-        dec_attn_mask = torch.zeros(self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=self.dtype)
+        if self.rbln_config.attn_mask_type == "2D":
+            dec_attn_mask = torch.zeros(self.rbln_config.batch_size, self.rbln_config.max_seq_len, dtype=self.dtype)
+        else:
+            # 4D attention mask - default setup
+            dec_attn_mask = torch.zeros(
+                self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=self.dtype
+            )
         out_buffers = [torch.empty(self.prefill_output_size, dtype=self.dtype)]
 
         common_kwargs = {
@@ -367,7 +373,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             input_info.append(("query_position", [], "int16"))
 
         if rbln_config.use_attention_mask:
-            if rbln_config.use_position_ids:
+            if rbln_config.attn_mask_type == "2D":
                 input_info.append(("attention_mask", [batch_size, rbln_config.max_seq_len], rbln_config.torch_dtype))
             else:
                 input_info.append(
@@ -607,6 +613,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         input_ids: Optional[torch.LongTensor] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.LongTensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
         position_embed: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
@@ -625,8 +632,10 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             )
             cache_position = torch.arange(query_length, dtype=torch.int32).unsqueeze(0)
             last_hidden_states = self.prefill_decoder(
-                inputs[b_idx : b_idx + 1],
+                input_ids=inputs[b_idx : b_idx + 1] if inputs_embeds is None else None,
+                inputs_embeds=inputs[b_idx : b_idx + 1] if inputs_embeds is not None else None,
                 attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
+                position_ids=position_ids[b_idx : b_idx + 1] if position_ids is not None else None,
                 position_embed=position_embed[b_idx : b_idx + 1] if position_embed is not None else None,
                 cache_position=cache_position,
                 batch_idx=b_idx,
@@ -774,6 +783,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
                     input_ids=inputs[b_idx : b_idx + 1] if inputs_embeds is None else None,
                     inputs_embeds=inputs[b_idx : b_idx + 1] if inputs_embeds is not None else None,
                     attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
+                    position_ids=position_ids[b_idx : b_idx + 1] if position_ids is not None else None,
                     cache_position=cache_position,
                     batch_idx=b_idx,
                     token_type_ids=token_type_ids[b_idx : b_idx + 1] if token_type_ids is not None else None,
