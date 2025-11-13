@@ -820,31 +820,8 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
 
         for submodule_name in self.submodules:
             submodule_config = getattr(self, submodule_name, None)
-
-            # If submodule_config is None, dict, or not RBLNModelConfig, it means submodules haven't been initialized yet
-            # This can happen when freeze() is called before _export_submodules_from_model
-            # processes the submodule (e.g., in update_rbln_config which is called before _load_submodules)
-            # In this case, we skip freezing the submodule and let it be handled later
-            if submodule_config is None or not isinstance(submodule_config, RBLNModelConfig):
-                if isinstance(submodule_config, dict):
-                    logger.debug(
-                        f"`{submodule_name}` submodule config is still a dict. "
-                        "This usually means freeze() is being called before submodules are fully initialized. "
-                        "Skipping freeze for this submodule - it will be properly initialized and frozen later."
-                    )
-                elif submodule_config is None:
-                    logger.debug(
-                        f"`{submodule_name}` submodule config is None. "
-                        "This usually means freeze() is being called before submodules are fully initialized. "
-                        "Skipping freeze for this submodule - it will be properly initialized and frozen later."
-                    )
-                else:
-                    logger.debug(
-                        f"`{submodule_name}` submodule config is {type(submodule_config)}, not RBLNModelConfig. "
-                        "This usually means freeze() is being called before submodules are fully initialized. "
-                        "Skipping freeze for this submodule - it will be properly initialized and frozen later."
-                    )
-                continue
+            if not isinstance(submodule_config, RBLNModelConfig):
+                raise ValueError(f"`{submodule_name}` must be an instance of `RBLNModelConfig` before freezing.")
 
             if not submodule_config.is_frozen():
                 raise ValueError(f"`{submodule_name}` config must be frozen before freezing super config.")
