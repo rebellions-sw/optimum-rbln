@@ -367,7 +367,7 @@ class DecoderOnlyModel(nn.Module):
     def get_local_cache_positions(self, position_ids, query_position):
         max_cache_len = self._original_mod.config.sliding_window
         valid_input_len = 1 if query_position is None else query_position + 1
-        cache_seq_len = torch.clamp(position_ids, max=max_cache_len)[:, :1]  # past seen tokens
+        cache_seq_len = torch.clamp(position_ids.to(torch.int32), max=max_cache_len)[:, :1]  # past seen tokens
         cache_offset = (
             torch.clamp(position_ids, max=max_cache_len)[:, :1] + valid_input_len
         )  # cache offset for next steps
