@@ -20,7 +20,6 @@ from transformers import (
     CLIPTextModel,
     CLIPVisionConfig,
     CLIPVisionModel,
-    CLIPVisionModelWithProjection,
 )
 from transformers.modeling_outputs import BaseModelOutputWithPooling
 from transformers.models.clip.modeling_clip import CLIPTextModelOutput, CLIPVisionModelOutput
@@ -149,16 +148,6 @@ class _VisionEncoder(torch.nn.Module):
             output_attentions=self.output_attentions,
             return_dict=False,
         )
-        return enc_out
-
-
-class _VisionEncoderWithProjection(torch.nn.Module):
-    def __init__(self, enc: CLIPVisionModelWithProjection):
-        super().__init__()
-        self.enc = enc
-
-    def forward(self, inp):
-        enc_out = self.enc(inp, return_dict=False)
         return enc_out
 
 
