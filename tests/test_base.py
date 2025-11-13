@@ -259,10 +259,16 @@ class BaseTest:
                 self._inner_test_save_load(tmpdir)
 
         def test_model_save_dir_load(self):
+            REUSE_ARTIFACTS_PATH = os.environ.get("REUSE_ARTIFACTS_PATH", None)
+            if REUSE_ARTIFACTS_PATH is None:
+                rbln_local_dir = self.get_rbln_local_dir()
+            else:
+                rbln_local_dir = os.path.join(REUSE_ARTIFACTS_PATH, self.get_rbln_local_dir())
+
             with ContextRblnConfig(create_runtimes=False):
                 # Test model_save_dir
                 _ = self.RBLN_CLASS.from_pretrained(
-                    self.get_rbln_local_dir(),
+                    rbln_local_dir,
                     rbln_create_runtimes=False,
                     **self.HF_CONFIG_KWARGS,
                 )
