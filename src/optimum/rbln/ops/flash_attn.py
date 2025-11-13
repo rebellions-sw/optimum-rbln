@@ -24,8 +24,6 @@ from torch import Tensor
 )
 def paged_flash_attn_decode(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     mask: Tensor,
     kcache: Tensor,
     vcache: Tensor,
@@ -45,8 +43,6 @@ def paged_flash_attn_decode(
 @paged_flash_attn_decode.register_fake
 def paged_flash_attn_decode_fake(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     mask: Tensor,
     kcache: Tensor,
     vcache: Tensor,
@@ -65,8 +61,6 @@ def paged_flash_attn_decode_fake(
 )
 def paged_flash_attn_decode_kv_fp8(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     mask: Tensor,
     kcache: Tensor,
     vcache: Tensor,
@@ -84,8 +78,6 @@ def paged_flash_attn_decode_kv_fp8(
 @paged_flash_attn_decode_kv_fp8.register_fake
 def paged_flash_attn_decode_kv_fp8_fake(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     mask: Tensor,
     kcache: Tensor,
     vcache: Tensor,
@@ -106,8 +98,6 @@ def paged_flash_attn_decode_kv_fp8_fake(
 )
 def paged_flash_attn_prefill(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     mask: Tensor,
     kcache: Tensor,
     vcache: Tensor,
@@ -127,8 +117,6 @@ def paged_flash_attn_prefill(
 @paged_flash_attn_prefill.register_fake
 def paged_flash_attn_prefill_fake(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     mask: Tensor,
     kcache: Tensor,
     vcache: Tensor,
@@ -147,8 +135,6 @@ def paged_flash_attn_prefill_fake(
 )
 def paged_flash_attn_prefill_kv_fp8(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     mask: Tensor,
     kcache: Tensor,
     vcache: Tensor,
@@ -188,8 +174,6 @@ def paged_flash_attn_prefill_kv_fp8_fake(
 )
 def paged_flash_causal_attn_decode(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     kcache: Tensor,
     vcache: Tensor,
     seq: Tensor,
@@ -209,8 +193,6 @@ def paged_flash_causal_attn_decode(
 @paged_flash_causal_attn_decode.register_fake
 def paged_flash_causal_attn_decode_fake(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     kcache: Tensor,
     vcache: Tensor,
     seq: Tensor,
@@ -229,8 +211,6 @@ def paged_flash_causal_attn_decode_fake(
 )
 def paged_flash_causal_attn_decode_kv_fp8(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     kcache: Tensor,
     vcache: Tensor,
     seq: Tensor,
@@ -248,8 +228,6 @@ def paged_flash_causal_attn_decode_kv_fp8(
 @paged_flash_causal_attn_decode_kv_fp8.register_fake
 def paged_flash_causal_attn_decode_kv_fp8_fake(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     kcache: Tensor,
     vcache: Tensor,
     seq: Tensor,
@@ -270,8 +248,6 @@ def paged_flash_causal_attn_decode_kv_fp8_fake(
 )
 def paged_flash_causal_attn_prefill(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     kcache: Tensor,
     vcache: Tensor,
     seq: Tensor,
@@ -292,8 +268,6 @@ def paged_flash_causal_attn_prefill(
 @paged_flash_causal_attn_prefill.register_fake
 def paged_flash_causal_attn_prefill_fake(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     kcache: Tensor,
     vcache: Tensor,
     seq: Tensor,
@@ -313,8 +287,6 @@ def paged_flash_causal_attn_prefill_fake(
 )
 def paged_flash_causal_attn_prefill_kv_fp8(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     kcache: Tensor,
     vcache: Tensor,
     seq: Tensor,
@@ -333,8 +305,6 @@ def paged_flash_causal_attn_prefill_kv_fp8(
 @paged_flash_causal_attn_prefill_kv_fp8.register_fake
 def paged_flash_causal_attn_prefill_kv_fp8_fake(
     q: Tensor,
-    k: Tensor,
-    v: Tensor,
     kcache: Tensor,
     vcache: Tensor,
     seq: Tensor,
