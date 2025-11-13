@@ -13,9 +13,10 @@
 # limitations under the License.
 
 
+from typing import Optional
+
 import torch
 from torch import Tensor
-from typing import Optional
 
 
 @torch.library.custom_op(
@@ -95,6 +96,7 @@ def paged_sliding_window_attn_decode(
     scale: Tensor,
     block_table: Tensor,
     block_size: int,
+    attn_mask: Tensor,
     s_aux: Optional[Tensor] = None,
 ) -> Tensor:
     return torch.empty_like(q)
@@ -112,6 +114,7 @@ def paged_sliding_window_attn_decode_fake(
     scale: Tensor,
     block_table: Tensor,
     block_size: int,
+    attn_mask: Tensor,
     s_aux: Optional[Tensor] = None,
 ) -> Tensor:
     return torch.empty_like(q)

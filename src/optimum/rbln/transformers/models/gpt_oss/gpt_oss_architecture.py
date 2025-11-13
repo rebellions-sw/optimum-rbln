@@ -24,7 +24,6 @@ from ..decoderonly.decoderonly_architecture import (
     DecoderOnlyAttention,
     DecoderOnlyLayer,
     DecoderOnlyWrapper,
-    DecoderOnlyAttention,
 )
 
 
@@ -120,7 +119,9 @@ class RBLNGptOssExperts(nn.Module):
         hidden_states = hidden_states.repeat(num_experts, 1)
         hidden_states = hidden_states.view(num_experts, -1, self.hidden_size)
 
-        gate_up = torch.bmm(hidden_states, self.gate_up_proj.to(hidden_states.dtype)) + self.gate_up_proj_bias[..., None, :].to(hidden_states.dtype)
+        gate_up = torch.bmm(hidden_states, self.gate_up_proj.to(hidden_states.dtype)) + self.gate_up_proj_bias[
+            ..., None, :
+        ].to(hidden_states.dtype)
         gate, up = gate_up[..., ::2], gate_up[..., 1::2]
         gate = gate.clamp(min=None, max=self.limit)
         up = up.clamp(min=-self.limit, max=self.limit)

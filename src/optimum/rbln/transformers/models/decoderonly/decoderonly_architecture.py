@@ -372,7 +372,11 @@ class DecoderOnlyModel(nn.Module):
             torch.clamp(position_ids, max=max_cache_len)[:, :1] + valid_input_len
         )  # cache offset for next steps
 
-        return cache_seq_len, cache_offset
+        # Causal mask for sliding window attention
+        attn_mask = torch.arange(max_cache_len)[None, :] - cache_seq_len
+        attn_mask = torch.where(attn_mask > 0, 0.0, 1.0)[:, None, :, None]
+
+        return cache_seq_len, cache_offset, attn_mask
 
     def get_last_layernorm(self) -> nn.LayerNorm:
         return self._original_mod.norm
@@ -1127,6 +1131,9 @@ class SlidingWindowAttentionOp(AttentionOp):
 
         if self.phase == "prefill" or self.phase == "image_prefill":
             op_args["is_bidirectional"] = self.phase == "image_prefill"  # FIXME, Hard-coded for Gemma3.
+
+        if self.phase == "decode":
+            op_args["attn_mask"] = seq_position[2]
 
         if s_aux is not None:
             op_args["s_aux"] = s_aux
