@@ -25,7 +25,7 @@ class RBLNAutoencoderKLTemporalDecoderConfig(RBLNModelConfig):
         uses_encoder: Optional[bool] = None,
         num_frames: Optional[bool] = None,
         decode_chunk_size: Optional[bool] = None,
-        vae_scale_factor: Optional[float] = None,  # TODO: rename to scaling_factor
+        vae_scale_factor: Optional[float] = None,
         **kwargs,
     ):
         """
@@ -35,10 +35,11 @@ class RBLNAutoencoderKLTemporalDecoderConfig(RBLNModelConfig):
                 If an integer is provided, it's used for both height and width.
             uses_encoder (Optional[bool]): Whether to include the encoder part of the VAE in the model.
                 When False, only the decoder is used (for latent-to-image conversion).
+            num_frames (Optional[int]): The number of frames in the generated video.
+            decode_chunk_size (Optional[int]): The number of frames to decode at once during VAE decoding.
+                Useful for managing memory usage during video generation.
             vae_scale_factor (Optional[float]): The scaling factor between pixel space and latent space.
                 Determines how much smaller the latent representations are compared to the original images.
-            in_channels (Optional[int]): Number of input channels for the model.
-            latent_channels (Optional[int]): Number of channels in the latent space.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:

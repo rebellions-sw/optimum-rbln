@@ -33,12 +33,8 @@ class RBLNUNetSpatioTemporalConditionModelConfig(RBLNModelConfig):
             batch_size (Optional[int]): The batch size for inference. Defaults to 1.
             sample_size (Optional[Tuple[int, int]]): The spatial dimensions (height, width) of the generated samples.
                 If an integer is provided, it's used for both height and width.
-            in_channels (Optional[int]): Number of input channels for the UNet.
-            cross_attention_dim (Optional[int]): Dimension of the cross-attention features.
-            use_additional_residuals (Optional[bool]): Whether to use additional residual connections in the model.
             in_features (Optional[int]): Number of input features for the model.
-            text_model_hidden_size (Optional[int]): Hidden size of the text encoder model.
-            image_model_hidden_size (Optional[int]): Hidden size of the image encoder model.
+            num_frames (Optional[int]): The number of frames in the generated video.
             **kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
