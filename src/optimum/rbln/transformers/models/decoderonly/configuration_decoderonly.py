@@ -46,6 +46,7 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
         use_attention_mask: Optional[bool] = None,
         use_position_ids: Optional[bool] = None,
         attn_impl: Optional[str] = None,
+        attn_mask_type: Optional[Literal["2D", "4D"]] = None,
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
         quantization: Optional[Union[Dict[str, Any], RBLNQuantizationConfig]] = None,
@@ -76,6 +77,9 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
             use_position_ids (Optional[bool]): Whether to use position IDs. Defaults to False.
             attn_impl (Optional[str]): Specifies the attention implementation to use.
                 See the "Attention Implementation (`attn_impl`)" section below for details.
+            attn_mask_type (Optional[Literal["2D", "4D"]]): Specifies the type of attention mask to use. Defaults to None.
+                - "2D": Uses a 2D attention mask, where the mask is a square matrix of shape (seq_len, seq_len).
+                - "4D": Uses a 4D attention mask, where the mask is a 4D tensor of shape (batch_size, num_heads, seq_len, seq_len).
             kvcache_partition_len (Optional[int]): Defines the partition length for the KV cache
                 when using "flash_attn". See the "KV Cache Partition Length (`kvcache_partition_len`)"
                 section below for details.
@@ -214,6 +218,7 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
             )
 
         self.attn_impl = attn_impl
+        self.attn_mask_type = attn_mask_type
         self.kvcache_partition_len = kvcache_partition_len
         self.kvcache_block_size = kvcache_block_size
         self.prefill_chunk_size = prefill_chunk_size or 128
