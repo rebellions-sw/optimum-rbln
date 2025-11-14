@@ -27,7 +27,7 @@ from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ...modeling_outputs import RBLNDecoderOnlyOutput
 from ...utils.rbln_runtime_wrapper import LoopProcessor
-from ..decoderonly.decoderonly_runtime_utils import RBLNPageTableManager, RBLNRuntimeModel
+from ..decoderonly.decoderonly_runtime_utils import RBLNPageTableManager
 from ..decoderonly.generation_decoderonly import RBLNDecoderOnlyGenerationMixin
 from ..decoderonly.modeling_decoderonly import (
     RBLNDecoderOnlyModelForCausalLM,
@@ -383,7 +383,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
         self.decoders = {}
         for i, batch_size in enumerate(self.rbln_config.decoder_batch_sizes):
-            self.decoders[batch_size] = RBLNRuntimeModel(
+            self.decoders[batch_size] = RBLNGemma3RuntimeModel(
                 runtime=self.model[i + self.rbln_config.decoder_runtime_idx],
                 phase="decode",
                 batch_size=batch_size,
@@ -449,7 +449,6 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         rbln_config: Optional[RBLNGemma3ForCausalLMConfig] = None,
     ) -> RBLNGemma3ForCausalLMConfig:
         # Update rbln_config with super class
-        rbln_config.attn_mask_type = "2D"
         rbln_config = super()._update_rbln_config(preprocessors, model, model_config, rbln_config)
 
         if not (rbln_config.use_attention_mask and rbln_config.use_position_ids):
