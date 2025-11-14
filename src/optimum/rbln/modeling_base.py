@@ -223,8 +223,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             else:
                 rbln_submodules = []
 
-            allow_no_compile_cfgs = getattr(cls, "_allow_no_compile_cfgs", False)
-            rbln_config.freeze(allow_no_compile_cfgs=allow_no_compile_cfgs)
+            rbln_config.freeze()
 
             if config is None:
                 if cls.hf_library_name == "transformers":
@@ -466,8 +465,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         rbln_config = cls._update_rbln_config(
             preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
         )
-        allow_no_compile_cfgs = getattr(cls, "_allow_no_compile_cfgs", False)
-        rbln_config.freeze(allow_no_compile_cfgs=allow_no_compile_cfgs)
+        rbln_config.freeze()
         if rbln_config.rbln_model_cls_name != cls.__name__:
             raise NameError(
                 f"Cannot get the rbln config. {cls.__name__} is not the same as {rbln_config.rbln_model_cls_name}. "

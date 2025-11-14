@@ -799,9 +799,16 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         target_npu = self.npu or next((cfg.npu for cfg in self._compile_cfgs if cfg.npu is not None), None)
         warn_deprecated_npu(target_npu)
 
-    def freeze(self, allow_no_compile_cfgs: bool = False):
+    def freeze(self):
         if self._frozen:
             raise RuntimeError(f"`{self.__class__.__name__}` is already frozen.")
+
+        allow_no_compile_cfgs = False
+        try:
+            rbln_model_cls = self.rbln_model_cls
+            allow_no_compile_cfgs = getattr(rbln_model_cls, "_allow_no_compile_cfgs", False)
+        except (ValueError, AttributeError):
+            pass
 
         if (
             not isinstance(self._compile_cfgs, list)
