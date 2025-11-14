@@ -59,7 +59,7 @@ class RBLNTransformerEncoder(RBLNModel):
     rbln_dtype = "int64"
 
     @classmethod
-    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNTransformerEncoderConfig) -> nn.Module:
+    def _wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNTransformerEncoderConfig) -> nn.Module:
         class TransformerEncoderWrapper(nn.Module):
             # Parameters to disable for RBLN compilation
             DISABLED_PARAMS = {"return_dict", "use_cache"}
@@ -268,7 +268,7 @@ class RBLNModelForDepthEstimation(RBLNImageModel):
     auto_model_class = AutoModelForDepthEstimation
 
     @classmethod
-    def wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNImageModelConfig):
+    def _wrap_model_if_needed(cls, model: "PreTrainedModel", rbln_config: RBLNImageModelConfig):
         class ImageModelWrapper(nn.Module):
             def __init__(self, model: "PreTrainedModel", rbln_config: RBLNImageModelConfig):
                 super().__init__()

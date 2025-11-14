@@ -171,7 +171,7 @@ class RBLNUNet2DConditionModel(RBLNModel):
             self.add_embedding = ADDEMBEDDING(LINEAR1(self.in_features))
 
     @classmethod
-    def wrap_model_if_needed(
+    def _wrap_model_if_needed(
         cls, model: torch.nn.Module, rbln_config: RBLNUNet2DConditionModelConfig
     ) -> torch.nn.Module:
         if model.config.addition_embed_type == "text_time":

@@ -77,7 +77,7 @@ class RBLNPriorTransformer(RBLNModel):
         self.clip_std = artifacts["clip_std"]
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
+    def _wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNModelConfig) -> torch.nn.Module:
         return _PriorTransformer(model).eval()
 
     @classmethod
