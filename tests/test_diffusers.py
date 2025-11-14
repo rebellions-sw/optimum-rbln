@@ -16,6 +16,7 @@ from optimum.rbln import (
     RBLNStableDiffusionPipeline,
     RBLNStableDiffusionXLControlNetPipeline,
     RBLNStableDiffusionXLPipeline,
+    RBLNStableVideoDiffusionPipeline,
 )
 
 from .test_base import BaseHubTest, BaseTest, TestLevel
@@ -317,6 +318,35 @@ class TestKandinskyV22Img2ImgModel(BaseTest.TestModel):
         },
     }
     TEST_LEVEL = TestLevel.DISABLED  # Should be enabled after compiler issue is fixed
+
+
+class TestSVDImg2VidModel(BaseTest.TestModel):
+    RBLN_CLASS = RBLNStableVideoDiffusionPipeline
+    HF_MODEL_ID = "seinpark/tiny-stable-video-diffusion-img2vid"
+
+    GENERATION_KWARGS = {
+        "num_inference_steps": 2,
+        "generator": torch.manual_seed(42),
+        "image": torch.randn(1, 3, 32, 32, generator=torch.manual_seed(42)).uniform_(0, 1),
+        "num_frames": 2,
+        "decode_chunk_size": 2,
+        "output_type": "pt",
+        "height": 32,
+        "width": 32,
+    }
+    RBLN_CLASS_KWARGS = {
+        "rbln_width": 32,
+        "rbln_height": 32,
+        "rbln_num_frames": 2,
+        "rbln_decode_chunk_size": 2,
+    }
+
+    def test_generate(self):
+        inputs = self.get_inputs()
+        output = self.model(**inputs).frames[0]
+        output = self.postprocess(inputs, output)
+        if self.EXPECTED_OUTPUT:
+            self.assertEqual(output, self.EXPECTED_OUTPUT)
 
 
 if __name__ == "__main__":
