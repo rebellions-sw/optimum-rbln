@@ -26,7 +26,6 @@ from typing import TYPE_CHECKING, Optional, Union
 from torch import nn
 from transformers import (
     AutoModel,
-    AutoModelForAudioClassification,
     AutoModelForDepthEstimation,
     AutoModelForImageClassification,
     AutoModelForMaskedLM,
