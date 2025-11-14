@@ -374,7 +374,7 @@ class DecoderOnlyModel(nn.Module):
 
         # Causal mask for sliding window attention
         attn_mask = torch.arange(max_cache_len)[None, :] - cache_seq_len
-        attn_mask = torch.where(attn_mask > 0, 0.0, 1.0)[:, None, :, None]
+        attn_mask = torch.where(attn_mask > 0, 0.0, 1.0)[:, None, None, :]
 
         return cache_seq_len, cache_offset, attn_mask
 
