@@ -799,7 +799,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         target_npu = self.npu or next((cfg.npu for cfg in self._compile_cfgs if cfg.npu is not None), None)
         warn_deprecated_npu(target_npu)
 
-    def freeze(self, allow_no_compile_cfgs: bool = False):
+    def freeze(self):
         if self._frozen:
             raise RuntimeError(f"`{self.__class__.__name__}` is already frozen.")
 
@@ -808,43 +808,12 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
             or len(self._compile_cfgs) == 0
             or not all(isinstance(cfg, RBLNCompileConfig) for cfg in self._compile_cfgs)
         ):
-            if allow_no_compile_cfgs:
-                # Allow freezing without compile_cfgs for special use cases
-                logger.debug(
-                    f"Freezing {self.__class__.__name__} without compile_cfgs "
-                    "(allow_no_compile_cfgs=True). This is typically used for models "
-                    "that don't require compilation."
-                )
-            else:
-                raise RuntimeError("`compile_cfgs` must be set before freezing.")
+            raise RuntimeError("`compile_cfgs` must be set before freezing.")
 
         for submodule_name in self.submodules:
             submodule_config = getattr(self, submodule_name, None)
-
-            # If submodule_config is None, dict, or not RBLNModelConfig, it means submodules haven't been initialized yet
-            # This can happen when freeze() is called before _export_submodules_from_model
-            # processes the submodule (e.g., in update_rbln_config which is called before _load_submodules)
-            # In this case, we skip freezing the submodule and let it be handled later
-            if submodule_config is None or not isinstance(submodule_config, RBLNModelConfig):
-                if isinstance(submodule_config, dict):
-                    logger.debug(
-                        f"`{submodule_name}` submodule config is still a dict. "
-                        "This usually means freeze() is being called before submodules are fully initialized. "
-                        "Skipping freeze for this submodule - it will be properly initialized and frozen later."
-                    )
-                elif submodule_config is None:
-                    logger.debug(
-                        f"`{submodule_name}` submodule config is None. "
-                        "This usually means freeze() is being called before submodules are fully initialized. "
-                        "Skipping freeze for this submodule - it will be properly initialized and frozen later."
-                    )
-                else:
-                    logger.debug(
-                        f"`{submodule_name}` submodule config is {type(submodule_config)}, not RBLNModelConfig. "
-                        "This usually means freeze() is being called before submodules are fully initialized. "
-                        "Skipping freeze for this submodule - it will be properly initialized and frozen later."
-                    )
-                continue
+            if not isinstance(submodule_config, RBLNModelConfig):
+                raise ValueError(f"`{submodule_name}` must be an instance of `RBLNModelConfig` before freezing.")
 
             if not submodule_config.is_frozen():
                 raise ValueError(f"`{submodule_name}` config must be frozen before freezing super config.")
