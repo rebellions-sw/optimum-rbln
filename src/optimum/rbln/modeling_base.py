@@ -72,7 +72,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         if not rbln_config.is_frozen():
             raise RuntimeError("`rbln_config` must be frozen. Please call `rbln_config.freeze()` first.")
 
-        self.allow_no_compile_cfgs = getattr(self.__class__, "_allow_no_compile_cfgs", False)
+        self.allow_no_compile_cfgs = getattr(self, "_allow_no_compile_cfgs", False)
         self.compiled_models = rbln_compiled_models
 
         # Registers the RBLN classes into the transformers AutoModel classes to avoid warnings when creating

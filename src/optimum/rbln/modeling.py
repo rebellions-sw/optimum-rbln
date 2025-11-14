@@ -61,7 +61,7 @@ class RBLNModel(RBLNBaseModel):
     @classmethod
     def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
         # If compile_cfgs is empty, return None
-        if len(rbln_config.compile_cfgs) == 0:
+        if getattr(cls, "_allow_no_compile_cfgs", False):
             return None
 
         model = cls._wrap_model_if_needed(model, rbln_config)
