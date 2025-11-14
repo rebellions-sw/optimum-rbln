@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - dev
+      - dev_copy
 
 env:
   REBEL_PYPI_ENDPOINT: ${{ vars.REBEL_PYPI_INTERNAL_ENDPOINT }}
@@ -19,6 +20,7 @@ jobs:
     steps:
       - name: Check if [skip ci] is in commit message
         run: |
+          echo "github.event.pull_request.head.commit.message: ${{ github.event.pull_request.head.commit.message }}"
           if ${{ contains(github.event.pull_request.head.commit.message, '[skip ci]') }}; then
             echo "Found [skip ci] in commit message, skipping CI"
           else
