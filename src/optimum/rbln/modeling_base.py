@@ -28,7 +28,7 @@ from transformers.utils.hub import PushToHubMixin
 from .configuration_utils import RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig, get_rbln_config_class
 from .utils.hub import pull_compiled_model_from_hub, validate_files
 from .utils.logging import get_logger
-from .utils.runtime_utils import UnavailableRuntime, tp_and_devices_are_ok
+from .utils.runtime_utils import tp_and_devices_are_ok
 from .utils.save_utils import maybe_load_preprocessors
 from .utils.submodule import SubModulesMixin
 
@@ -72,6 +72,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         if not rbln_config.is_frozen():
             raise RuntimeError("`rbln_config` must be frozen. Please call `rbln_config.freeze()` first.")
 
+        self.allow_no_compile_cfgs = getattr(self.__class__, "_allow_no_compile_cfgs", False)
         self.compiled_models = rbln_compiled_models
 
         # Registers the RBLN classes into the transformers AutoModel classes to avoid warnings when creating
@@ -128,29 +129,6 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             model_path = model_path / subfolder
             rbln_files = list(model_path.glob("*.rbln"))
             rbln_config_filenames = list(model_path.glob("rbln_config.json"))
-
-            # Check if rbln_config.json exists and if compile_cfgs is empty
-            # If compile_cfgs is empty, we don't need .rbln files
-            if len(rbln_config_filenames) > 0:
-                import json
-
-                try:
-                    with open(rbln_config_filenames[0], "r") as f:
-                        config_data = json.load(f)
-                    compile_cfgs = config_data.get("_compile_cfgs", [])
-                    if len(compile_cfgs) == 0:
-                        if len(rbln_config_filenames) == 0:
-                            raise FileNotFoundError(
-                                f"Could not find `rbln_config.json` file in directory {model_path}"
-                            )
-                        if len(rbln_config_filenames) > 1:
-                            raise FileExistsError(
-                                f"Multiple rbln_config.json files found in directory {model_path}. This is not expected."
-                            )
-                        return str(model_path)
-                except (json.JSONDecodeError, KeyError):
-                    pass
-
             validate_files(rbln_files, rbln_config_filenames, f"directory {model_path}")
         else:
             model_path = pull_compiled_model_from_hub(
@@ -245,9 +223,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
             else:
                 rbln_submodules = []
 
-            # Allow freezing without compile_cfgs if compile_cfgs is empty
-            # This supports models that don't require compilation (e.g., wrapper models)
-            allow_no_compile_cfgs = len(rbln_config.compile_cfgs) == 0
+            allow_no_compile_cfgs = getattr(cls, "_allow_no_compile_cfgs", False)
             rbln_config.freeze(allow_no_compile_cfgs=allow_no_compile_cfgs)
 
             if config is None:
@@ -280,13 +256,8 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
                     )
                     config = PretrainedConfig(**config)
 
-            # If compile_cfgs is empty or no compiled models are provided, use UnavailableRuntime
-            if len(rbln_config.compile_cfgs) == 0:
-                compiled_model_names = []
-                rbln_compiled_models = {}
-            else:
-                compiled_model_names = [cfg.compiled_model_name for cfg in rbln_config.compile_cfgs]
-                rbln_compiled_models = cls._load_compiled_models(model_path_subfolder, compiled_model_names)
+            compiled_model_names = [cfg.compiled_model_name for cfg in rbln_config.compile_cfgs]
+            rbln_compiled_models = cls._load_compiled_models(model_path_subfolder, compiled_model_names)
 
             if subfolder != "":
                 model_save_dir = Path(model_path_subfolder).absolute().parent
@@ -317,9 +288,8 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         if isinstance(model_save_dir, str):
             model_save_dir = Path(model_save_dir)
 
-        # If compile_cfgs is empty or no compiled models are provided, use UnavailableRuntime
         if len(rbln_config.compile_cfgs) == 0 or len(rbln_compiled_models) == 0:
-            models = UnavailableRuntime()
+            models = []
             return cls(
                 models,
                 config,
@@ -337,11 +307,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
         # create runtimes only if `rbln_create_runtimes` is enabled
         try:
-            models = (
-                cls._create_runtimes(rbln_compiled_models, rbln_config)
-                if rbln_config.create_runtimes
-                else UnavailableRuntime()
-            )
+            models = cls._create_runtimes(rbln_compiled_models, rbln_config) if rbln_config.create_runtimes else []
 
         except rebel.core.exception.RBLNRuntimeError as e:
             error_msg = (
@@ -500,9 +466,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         rbln_config = cls._update_rbln_config(
             preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
         )
-        # Allow freezing without compile_cfgs if compile_cfgs is empty
-        # This supports models that don't require compilation (e.g., wrapper models)
-        allow_no_compile_cfgs = len(rbln_config.compile_cfgs) == 0
+        allow_no_compile_cfgs = getattr(cls, "_allow_no_compile_cfgs", False)
         rbln_config.freeze(allow_no_compile_cfgs=allow_no_compile_cfgs)
         if rbln_config.rbln_model_cls_name != cls.__name__:
             raise NameError(
