@@ -808,7 +808,14 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
             or len(self._compile_cfgs) == 0
             or not all(isinstance(cfg, RBLNCompileConfig) for cfg in self._compile_cfgs)
         ):
-            if not allow_no_compile_cfgs:
+            if allow_no_compile_cfgs:
+                # Allow freezing without compile_cfgs for special use cases
+                logger.debug(
+                    f"Freezing {self.__class__.__name__} without compile_cfgs "
+                    "(allow_no_compile_cfgs=True). This is typically used for models "
+                    "that don't require compilation."
+                )
+            else:
                 raise RuntimeError("`compile_cfgs` must be set before freezing.")
 
         for submodule_name in self.submodules:
