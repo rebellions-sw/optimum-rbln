@@ -127,7 +127,7 @@ jobs:
 
   # Full Schedule test if Dependency update
   optimum-rbln-dependency-pytest:
-    needs: [check-compiler, check-team-member, check-pytest-full]
+    needs: [check-compiler, check-team-member, check-pytest-full, check-slack-report]
     if: |
       needs.check-pytest-full.outputs.should_full_test == 'true' &&
       needs.check-team-member.outputs.is_team_member == 'true'
