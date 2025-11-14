@@ -32,6 +32,7 @@ jobs:
     steps:
       - name: Check if [pytest-full] is in commit message
         run: |
+          echo "github.event.pull_request.head.commit.message: ${{ github.event.pull_request.head.commit.message }}"
           if ${{ contains(github.event.pull_request.head.commit.message, '[pytest-full]') }}; then
             echo "Found [pytest-full] in commit message, running full pytest"
           else
