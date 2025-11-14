@@ -80,6 +80,7 @@ class RBLNColPaliForRetrieval(RBLNModel):
     """
 
     auto_model_class = None
+    _allow_no_compile_cfgs = True
     _rbln_submodule_postfix = "model"
     _rbln_submodules = [
         {"name": "vlm"},

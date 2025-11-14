@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 from pathlib import Path
 from typing import List, Optional, Union
 
@@ -65,16 +66,27 @@ def validate_files(
     files: List[Path],
     config_files: List[Path],
     location: str,
-):
-    """Validate the presence and count of required files."""
-    if len(files) == 0:
-        raise FileNotFoundError(f"Could not find any rbln model file in {location}")
-
+) -> bool:
     if len(config_files) == 0:
         raise FileNotFoundError(f"Could not find `rbln_config.json` file in {location}")
 
     if len(config_files) > 1:
         raise FileExistsError(f"Multiple rbln_config.json files found in {location}. This is not expected.")
+
+    try:
+        with open(config_files[0], "r") as f:
+            config_data = json.load(f)
+        compile_cfgs = config_data.get("_compile_cfgs", [])
+        if len(compile_cfgs) == 0:
+            # If compile_cfgs is empty, we don't need .rbln files
+            return True
+    except (json.JSONDecodeError, KeyError, OSError):
+        pass
+
+    if len(files) == 0:
+        raise FileNotFoundError(f"Could not find any rbln model file in {location}")
+
+    return False
 
 
 def _get_huggingface_token(token: Union[bool, str]) -> str:

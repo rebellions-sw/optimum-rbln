@@ -58,6 +58,7 @@ class LoopVisionTower(LoopProcessor):
 
 class RBLNPaliGemmaForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixin):
     auto_model_class = AutoModelForVision2Seq
+    _allow_no_compile_cfgs = True
     _rbln_submodules = [
         {"name": "vision_tower"},
         {"name": "language_model"},
@@ -295,6 +296,7 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
 
 
 class RBLNPaliGemmaModel(RBLNModel):
+    _allow_no_compile_cfgs = True
     _rbln_submodules = [
         {"name": "vision_tower"},
         {"name": "language_model"},
@@ -400,6 +402,7 @@ class RBLNPaliGemmaModel(RBLNModel):
         if inputs_embeds is None:
             inputs_embeds = self.get_input_embeddings()(llm_input_ids)
 
+        image_features = None
         if pixel_values is not None:
             image_features = self.get_image_features(pixel_values)
             image_features = image_features.to(inputs_embeds.device, inputs_embeds.dtype)
