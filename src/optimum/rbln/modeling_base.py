@@ -28,7 +28,7 @@ from transformers.utils.hub import PushToHubMixin
 from .configuration_utils import RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig, get_rbln_config_class
 from .utils.hub import pull_compiled_model_from_hub, validate_files
 from .utils.logging import get_logger
-from .utils.runtime_utils import UnavailableRuntime, tp_and_devices_are_ok
+from .utils.runtime_utils import tp_and_devices_are_ok
 from .utils.save_utils import maybe_load_preprocessors
 from .utils.submodule import SubModulesMixin
 
@@ -72,6 +72,7 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         if not rbln_config.is_frozen():
             raise RuntimeError("`rbln_config` must be frozen. Please call `rbln_config.freeze()` first.")
 
+        self.allow_no_compile_cfgs = getattr(self, "_allow_no_compile_cfgs", False)
         self.compiled_models = rbln_compiled_models
 
         # Registers the RBLN classes into the transformers AutoModel classes to avoid warnings when creating
@@ -286,17 +287,26 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         if isinstance(model_save_dir, str):
             model_save_dir = Path(model_save_dir)
 
+        if len(rbln_config.compile_cfgs) == 0 or len(rbln_compiled_models) == 0:
+            models = []
+            return cls(
+                models,
+                config,
+                rbln_config,
+                model_save_dir=model_save_dir,
+                subfolder=subfolder,
+                rbln_compiled_models=rbln_compiled_models,
+                rbln_submodules=rbln_submodules,
+                **kwargs,
+            )
+
         # FIXME:: Should we convert it?
         compiled_model_names = [cfg.compiled_model_name for cfg in rbln_config.compile_cfgs]
         rbln_compiled_models = [rbln_compiled_models[cm_name] for cm_name in compiled_model_names]
 
         # create runtimes only if `rbln_create_runtimes` is enabled
         try:
-            models = (
-                cls._create_runtimes(rbln_compiled_models, rbln_config)
-                if rbln_config.create_runtimes
-                else UnavailableRuntime()
-            )
+            models = cls._create_runtimes(rbln_compiled_models, rbln_config) if rbln_config.create_runtimes else []
 
         except rebel.core.exception.RBLNRuntimeError as e:
             error_msg = (
