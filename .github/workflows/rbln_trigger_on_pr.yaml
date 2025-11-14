@@ -38,6 +38,19 @@ jobs:
             echo "No [pytest-full] found, continuing with default pytest"
           fi
 
+  check-slack-report:
+    runs-on: rebel-k8s-runner
+    outputs:
+      should_slack_report: ${{ contains(github.event.pull_request.head.commit.message, '[slack-report]') }}
+    steps:
+      - name: Check if [slack-report] is in commit message
+        run: |
+          if ${{ contains(github.event.pull_request.head.commit.message, '[slack-report]') }}; then
+            echo "Found [slack-report] in commit message, reporting slack"
+          else
+            echo "No [slack-report] found, continuing without reporting slack"
+          fi
+
   check-code-quality:
     needs: check-skip-ci
     if: ${{ needs.check-skip-ci.outputs.should_skip != 'true' }}
@@ -122,5 +135,6 @@ jobs:
     with:
       rebel_compiler_version: ${{ needs.check-compiler.outputs.compiler_version }}
       ref: ${{ github.event.pull_request.head.sha }}
+      report_slack: ${{ needs.check-slack-report.outputs.should_slack_report == 'true' }}
     secrets: inherit
  
