@@ -62,7 +62,7 @@ class RBLNModel(RBLNBaseModel):
     def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
         # If compile_cfgs is empty, return None
         if getattr(cls, "_allow_no_compile_cfgs", False):
-            return None
+            return {}
 
         model = cls._wrap_model_if_needed(model, rbln_config)
         rbln_compile_config = rbln_config.compile_cfgs[0]
@@ -162,6 +162,10 @@ class RBLNModel(RBLNBaseModel):
         for preprocessor in preprocessors:
             preprocessor.save_pretrained(save_dir_path / subfolder)
 
+        # Create subfolder if it doesn't exist
+        if not (save_dir_path / subfolder).exists():
+            (save_dir_path / subfolder).mkdir(parents=True, exist_ok=True)
+
         # Load submodules
         if len(cls._rbln_submodules) > 0:
             rbln_submodules = cls._load_submodules(
@@ -183,20 +187,19 @@ class RBLNModel(RBLNBaseModel):
         torchscript_backup = config.torchscript
         config.torchscript = True
 
-        compiled_model: Union[rebel.RBLNCompiledModel, Dict[str, rebel.RBLNCompiledModel], None] = (
-            cls.get_compiled_model(model, rbln_config=rbln_config)
+        compiled_model: Union[rebel.RBLNCompiledModel, Dict[str, rebel.RBLNCompiledModel]] = cls.get_compiled_model(
+            model, rbln_config=rbln_config
         )
+        import pdb
 
-        # Save compiled models (.rbln) - only if compiled_model is not None
-        (save_dir_path / subfolder).mkdir(exist_ok=True)
-        compiled_models = {}
-        if compiled_model is not None:
-            if not isinstance(compiled_model, dict):
-                compiled_models = {DEFAULT_COMPILED_MODEL_NAME: compiled_model}
-            else:
-                compiled_models = compiled_model
-            for compiled_model_name, cm in compiled_models.items():
-                cm.save(save_dir_path / subfolder / f"{compiled_model_name}.rbln")
+        pdb.set_trace()
+        # Save compiled models (.rbln)
+        if not isinstance(compiled_model, dict):
+            compiled_models = {DEFAULT_COMPILED_MODEL_NAME: compiled_model}
+        else:
+            compiled_models = compiled_model
+        for compiled_model_name, cm in compiled_models.items():
+            cm.save(save_dir_path / subfolder / f"{compiled_model_name}.rbln")
         rbln_config.save(save_dir_path / subfolder)
 
         config.torchscript = torchscript_backup
@@ -254,6 +257,9 @@ class RBLNModel(RBLNBaseModel):
     ) -> List[rebel.Runtime]:
         if DEFAULT_COMPILED_MODEL_NAME not in rbln_config.device_map:
             cls._raise_missing_compiled_file_error([DEFAULT_COMPILED_MODEL_NAME])
+
+        if getattr(cls, "_allow_no_compile_cfgs", False):
+            return []
 
         return [
             rebel.Runtime(

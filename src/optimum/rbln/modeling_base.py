@@ -28,7 +28,7 @@ from transformers.utils.hub import PushToHubMixin
 from .configuration_utils import RBLNAutoConfig, RBLNCompileConfig, RBLNModelConfig, get_rbln_config_class
 from .utils.hub import pull_compiled_model_from_hub, validate_files
 from .utils.logging import get_logger
-from .utils.runtime_utils import tp_and_devices_are_ok
+from .utils.runtime_utils import UnavailableRuntime, tp_and_devices_are_ok
 from .utils.save_utils import maybe_load_preprocessors
 from .utils.submodule import SubModulesMixin
 
@@ -306,7 +306,11 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
         # create runtimes only if `rbln_create_runtimes` is enabled
         try:
-            models = cls._create_runtimes(rbln_compiled_models, rbln_config) if rbln_config.create_runtimes else []
+            models = (
+                cls._create_runtimes(rbln_compiled_models, rbln_config)
+                if rbln_config.create_runtimes
+                else UnavailableRuntime()
+            )
 
         except rebel.core.exception.RBLNRuntimeError as e:
             error_msg = (
