@@ -162,10 +162,6 @@ class RBLNModel(RBLNBaseModel):
         for preprocessor in preprocessors:
             preprocessor.save_pretrained(save_dir_path / subfolder)
 
-        # Create subfolder if it doesn't exist
-        if not (save_dir_path / subfolder).exists():
-            (save_dir_path / subfolder).mkdir(parents=True, exist_ok=True)
-
         # Load submodules
         if len(cls._rbln_submodules) > 0:
             rbln_submodules = cls._load_submodules(
@@ -192,6 +188,7 @@ class RBLNModel(RBLNBaseModel):
         )
 
         # Save compiled models (.rbln)
+        (save_dir_path / subfolder).mkdir(exist_ok=True)
         if not isinstance(compiled_model, dict):
             compiled_models = {DEFAULT_COMPILED_MODEL_NAME: compiled_model}
         else:
