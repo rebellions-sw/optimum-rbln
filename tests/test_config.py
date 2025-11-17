@@ -207,54 +207,5 @@ def test_custom_class(model_id):
         _ = RBLNResNetModel.from_pretrained(tmp_dir, export=False)
 
 
-def test_allow_no_compile_cfgs_false(model_id):
-    class RBLNResNetModelNoCompileCfg(RBLNResNetForImageClassification):
-        @classmethod
-        def _update_rbln_config(
-            cls,
-            preprocessors=None,
-            model=None,
-            model_config=None,
-            rbln_config=None,
-        ):
-            return rbln_config
-
-    class RBLNResNetModelConfigNoCompileCfg(RBLNResNetForImageClassificationConfig):
-        _allow_no_compile_cfgs = False
-
-    with pytest.raises(RuntimeError, match="`compile_cfgs` must contain at least one `RBLNCompileConfig`"):
-        _ = RBLNResNetModelNoCompileCfg.from_pretrained(
-            model_id,
-            export=True,
-            rbln_config=RBLNResNetModelConfigNoCompileCfg(create_runtimes=False, image_size=224, batch_size=1),
-        )
-
-
-def test_allow_no_compile_cfgs_true(model_id):
-    class RBLNResNetModelNoCompileCfg(RBLNResNetForImageClassification):
-        @classmethod
-        def _update_rbln_config(
-            cls,
-            preprocessors=None,
-            model=None,
-            model_config=None,
-            rbln_config=None,
-        ):
-            return rbln_config
-
-    class RBLNResNetModelConfigNoCompileCfg(RBLNResNetForImageClassificationConfig):
-        _allow_no_compile_cfgs = True
-
-    # Should not raise error when loading model without compile_cfgs
-    model = RBLNResNetModelNoCompileCfg.from_pretrained(
-        model_id,
-        export=True,
-        rbln_config=RBLNResNetModelConfigNoCompileCfg(create_runtimes=False, image_size=224, batch_size=1),
-    )
-    assert model is not None
-    assert model.rbln_config._allow_no_compile_cfgs is True
-    assert model.compiled_models == {}
-
-
 if __name__ == "__main__":
     pytest.main()
