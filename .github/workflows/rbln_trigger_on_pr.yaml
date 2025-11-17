@@ -36,11 +36,11 @@ jobs:
     needs: head-commit-message
     runs-on: rebel-k8s-runner
     outputs:
-      should_full_test: ${{ contains(needs.head-commit-message.outputs.message, '[pytest-full]') }}
+      should_full_test: ${{ contains(needs.head-commit-message.outputs.message, '[pytest-full]') && 'true' || 'false' }}
     steps:
       - name: Check if [pytest-full] is in commit message
         run: |
-          if ${{ contains(needs.head-commit-message.outputs.message, '[pytest-full]') }}; then
+          if [[ "${{ contains(needs.head-commit-message.outputs.message, '[pytest-full]') }}" == "true" ]]; then
             echo "Found [pytest-full] in commit message, running full pytest"
           else
             echo "No [pytest-full] found, continuing with default pytest"
@@ -50,11 +50,11 @@ jobs:
     needs: head-commit-message
     runs-on: rebel-k8s-runner
     outputs:
-      should_slack_report: ${{ contains(needs.head-commit-message.outputs.message, '[slack-report]') }}
+      should_slack_report: ${{ contains(needs.head-commit-message.outputs.message, '[slack-report]') && 'true' || 'false' }}
     steps:
       - name: Check if [slack-report] is in commit message
         run: |
-          if ${{ contains(needs.head-commit-message.outputs.message, '[slack-report]') }}; then
+          if [[ "${{ contains(needs.head-commit-message.outputs.message, '[slack-report]') }}" == "true" ]]; then
             echo "Found [slack-report] in commit message, reporting slack"
           else
             echo "No [slack-report] found, continuing without reporting slack"
