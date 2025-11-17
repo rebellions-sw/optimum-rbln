@@ -30,6 +30,7 @@ class RBLNPaliGemmaForConditionalGenerationConfig(RBLNModelConfig):
     """
 
     submodules = ["vision_tower", "language_model"]
+    _allow_no_compile_cfgs = True
 
     def __init__(
         self,
@@ -73,6 +74,7 @@ class RBLNPaliGemmaForConditionalGenerationConfig(RBLNModelConfig):
 
 class RBLNPaliGemmaModelConfig(RBLNModelConfig):
     submodules = ["vision_tower", "language_model"]
+    _allow_no_compile_cfgs = True
 
     def __init__(
         self,

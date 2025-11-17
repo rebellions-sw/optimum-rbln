@@ -47,6 +47,7 @@ class RBLNColPaliForRetrievalConfig(RBLNModelConfig):
         ```
     """
 
+    _allow_no_compile_cfgs = True
     submodules = ["vlm"]
 
     def __init__(
