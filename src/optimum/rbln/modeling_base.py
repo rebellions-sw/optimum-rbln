@@ -287,19 +287,6 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         if isinstance(model_save_dir, str):
             model_save_dir = Path(model_save_dir)
 
-        if len(rbln_config.compile_cfgs) == 0 or len(rbln_compiled_models) == 0:
-            models = []
-            return cls(
-                models,
-                config,
-                rbln_config,
-                model_save_dir=model_save_dir,
-                subfolder=subfolder,
-                rbln_compiled_models=rbln_compiled_models,
-                rbln_submodules=rbln_submodules,
-                **kwargs,
-            )
-
         # FIXME:: Should we convert it?
         compiled_model_names = [cfg.compiled_model_name for cfg in rbln_config.compile_cfgs]
         rbln_compiled_models = [rbln_compiled_models[cm_name] for cm_name in compiled_model_names]

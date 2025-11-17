@@ -190,9 +190,7 @@ class RBLNModel(RBLNBaseModel):
         compiled_model: Union[rebel.RBLNCompiledModel, Dict[str, rebel.RBLNCompiledModel]] = cls.get_compiled_model(
             model, rbln_config=rbln_config
         )
-        import pdb
 
-        pdb.set_trace()
         # Save compiled models (.rbln)
         if not isinstance(compiled_model, dict):
             compiled_models = {DEFAULT_COMPILED_MODEL_NAME: compiled_model}
