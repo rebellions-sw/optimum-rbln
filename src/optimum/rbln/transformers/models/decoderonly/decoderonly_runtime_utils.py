@@ -370,17 +370,15 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     1, self.rbln_config.max_seq_len, dtype=self.rbln_config.torch_dtype
                 )
             else:
-                chunked_attention_mask = (
-                    torch.zeros(
-                        1,
-                        1,
-                        self.rbln_config.prefill_chunk_size,
-                        self.rbln_config.max_seq_len,
-                        dtype=self.rbln_config.torch_dtype,
-                    )
-                    if self.rbln_config.use_attention_mask
-                    else None
+                chunked_attention_mask = torch.zeros(
+                    1,
+                    1,
+                    self.rbln_config.prefill_chunk_size,
+                    self.rbln_config.max_seq_len,
+                    dtype=self.rbln_config.torch_dtype,
                 )
+        else:
+            chunked_attention_mask = None
 
         cache_position = (
             torch.arange(query_length, dtype=torch.int32).unsqueeze(0) if cache_position is None else cache_position

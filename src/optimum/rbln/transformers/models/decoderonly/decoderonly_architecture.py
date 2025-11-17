@@ -632,6 +632,7 @@ class DecoderOnlyAttention(nn.Module):
             self.num_key_value_heads = self.num_heads
 
         self.is_sliding = is_sliding
+        self.use_attention_mask = rbln_config.use_attention_mask if not is_sliding else True
         self.attn_impl = rbln_config.attn_impl if not is_sliding else "eager"
         self.kvcache_partition_len = getattr(rbln_config, "kvcache_partition_len", None)
         self.kvcache_block_size = rbln_config.sliding_window if is_sliding else rbln_config.kvcache_block_size
@@ -677,6 +678,7 @@ class DecoderOnlyAttention(nn.Module):
             return SlidingWindowAttentionOp(
                 self.num_heads,
                 self.head_dim,
+                self.use_attention_mask,
                 self.num_key_value_heads,
                 rbln_config=self.rbln_config,
             )
@@ -684,6 +686,7 @@ class DecoderOnlyAttention(nn.Module):
             return FlashAttentionOp(
                 self.num_heads,
                 self.head_dim,
+                self.use_attention_mask,
                 self.num_key_value_heads,
                 self.kvcache_partition_len,
                 self.quantization,
@@ -693,6 +696,7 @@ class DecoderOnlyAttention(nn.Module):
             return AttentionOp(
                 self.num_heads,
                 self.head_dim,
+                self.use_attention_mask,
                 self.num_key_value_heads,
                 self.quantization,
                 rbln_config=self.rbln_config,
@@ -824,6 +828,7 @@ class AttentionOp(nn.Module):
         self,
         num_heads: int,
         head_dim: int,
+        use_attention_mask: bool,
         num_key_value_heads: int,
         quantization: Optional[RBLNQuantizationConfig] = None,
         rbln_config: Optional["RBLNDecoderOnlyModelConfig"] = None,
@@ -835,7 +840,7 @@ class AttentionOp(nn.Module):
         self.phase = "prefill"
         self.quantization = quantization
         self.rbln_config = rbln_config
-        self.use_attention_mask = rbln_config.use_attention_mask
+        self.use_attention_mask = use_attention_mask
         self.attn_mask_type = rbln_config.attn_mask_type
         self.use_position_ids = rbln_config.use_position_ids
 
@@ -929,6 +934,8 @@ class AttentionOp(nn.Module):
             else:
                 if self.use_attention_mask and self.attn_mask_type == "2D":
                     op_args["is_bidirectional"] = True
+                elif not self.use_attention_mask:  # use is_bidirectional only for causal
+                    op_args["is_bidirectional"] = False
 
         if self.quantization and self.quantization.kv_caches == "fp8":
             if past_key_state.dtype != torch.float8_e4m3fn:
@@ -954,6 +961,7 @@ class FlashAttentionOp(AttentionOp):
         self,
         num_heads: int,
         head_dim: int,
+        use_attention_mask: bool,
         num_key_value_heads: int,
         kvcache_partition_len: int,
         quantization: Optional[RBLNQuantizationConfig] = None,
@@ -962,6 +970,7 @@ class FlashAttentionOp(AttentionOp):
         super().__init__(
             num_heads=num_heads,
             head_dim=head_dim,
+            use_attention_mask=use_attention_mask,
             num_key_value_heads=num_key_value_heads,
             quantization=quantization,
             rbln_config=rbln_config,
@@ -1039,6 +1048,8 @@ class FlashAttentionOp(AttentionOp):
             else:
                 if self.use_attention_mask and self.attn_mask_type == "2D":
                     op_args["is_bidirectional"] = True
+                elif not self.use_attention_mask:  # use is_bidirectional only for causal
+                    op_args["is_bidirectional"] = False
 
         if self.quantization and self.quantization.kv_caches == "fp8":
             if past_key_state.dtype != torch.float8_e4m3fn:
@@ -1123,6 +1134,8 @@ class SlidingWindowAttentionOp(AttentionOp):
             else:
                 if self.use_attention_mask and self.attn_mask_type == "2D":
                     op_args["is_bidirectional"] = True
+                else:
+                    op_args["is_bidirectional"] = False
 
         attn_op_name = self.get_attn_op_name()
         attn_op = getattr(torch.ops.rbln_custom_ops, attn_op_name, None)
