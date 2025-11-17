@@ -322,6 +322,7 @@ class TestKandinskyV22Img2ImgModel(BaseTest.TestModel):
 
 class TestSVDImg2VidModel(BaseTest.TestModel):
     RBLN_CLASS = RBLNStableVideoDiffusionPipeline
+    # ref: https://github.com/huggingface/diffusers/blob/b88fef47851059ce32f161d17f00cd16d94af96a/tests/pipelines/stable_video_diffusion/test_stable_video_diffusion.py#L64
     HF_MODEL_ID = "seinpark/tiny-stable-video-diffusion-img2vid"
 
     GENERATION_KWARGS = {
