@@ -294,7 +294,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     raise ValueError(
                         "local_block_tables should be provided with external block tables for 2D attention mask type."
                     )
-            else:
+            if self.rbln_config.use_local_attention:
                 local_block_tables = (
                     local_block_tables
                     if local_block_tables is not None
