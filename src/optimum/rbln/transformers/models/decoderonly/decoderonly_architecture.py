@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import math
-from typing import TYPE_CHECKING, List, Literal, Optional, Tuple, Union
+from typing import TYPE_CHECKING, List, Optional, Tuple, Union
 
 import torch
 from torch import nn
@@ -631,9 +631,6 @@ class DecoderOnlyAttention(nn.Module):
         else:
             self.num_key_value_heads = self.num_heads
 
-        self.use_attention_mask = rbln_config.use_attention_mask if not is_sliding else True
-        self.use_position_ids = rbln_config.use_position_ids
-        self.attn_mask_type = rbln_config.attn_mask_type
         self.is_sliding = is_sliding
         self.attn_impl = rbln_config.attn_impl if not is_sliding else "eager"
         self.kvcache_partition_len = getattr(rbln_config, "kvcache_partition_len", None)
@@ -681,9 +678,6 @@ class DecoderOnlyAttention(nn.Module):
                 self.num_heads,
                 self.head_dim,
                 self.num_key_value_heads,
-                self.use_attention_mask,
-                self.use_position_ids,
-                self.attn_mask_type,
                 rbln_config=self.rbln_config,
             )
         elif self.attn_impl == "flash_attn":
@@ -692,9 +686,6 @@ class DecoderOnlyAttention(nn.Module):
                 self.head_dim,
                 self.num_key_value_heads,
                 self.kvcache_partition_len,
-                self.use_attention_mask,
-                self.use_position_ids,
-                self.attn_mask_type,
                 self.quantization,
                 rbln_config=self.rbln_config,
             )
@@ -703,9 +694,6 @@ class DecoderOnlyAttention(nn.Module):
                 self.num_heads,
                 self.head_dim,
                 self.num_key_value_heads,
-                self.use_attention_mask,
-                self.use_position_ids,
-                self.attn_mask_type,
                 self.quantization,
                 rbln_config=self.rbln_config,
             )
@@ -837,9 +825,6 @@ class AttentionOp(nn.Module):
         num_heads: int,
         head_dim: int,
         num_key_value_heads: int,
-        use_attention_mask: bool,
-        use_position_ids: bool,
-        attn_mask_type: Optional[Literal["2D", "4D"]] = None,
         quantization: Optional[RBLNQuantizationConfig] = None,
         rbln_config: Optional["RBLNDecoderOnlyModelConfig"] = None,
     ):
@@ -848,11 +833,11 @@ class AttentionOp(nn.Module):
         self.head_dim = head_dim
         self.num_key_value_heads = num_key_value_heads
         self.phase = "prefill"
-        self.use_attention_mask = use_attention_mask
-        self.attn_mask_type = attn_mask_type
-        self.use_position_ids = use_position_ids
         self.quantization = quantization
         self.rbln_config = rbln_config
+        self.use_attention_mask = rbln_config.use_attention_mask
+        self.attn_mask_type = rbln_config.attn_mask_type
+        self.use_position_ids = rbln_config.use_position_ids
 
     def get_attn_op_name(self):
         phase = "decode" if self.phase == "decode" else "prefill"
@@ -938,7 +923,7 @@ class AttentionOp(nn.Module):
             op_args["mask"] = attn_mask
 
         if self.phase == "prefill" or self.phase == "image_prefill":
-            use_image_prefill = getattr(self.rbln_config, "use_image_prefill", False) if self.rbln_config else False
+            use_image_prefill = getattr(self.rbln_config, "use_image_prefill", False)
             if use_image_prefill:
                 op_args["is_bidirectional"] = self.phase == "image_prefill"
             else:
@@ -971,9 +956,6 @@ class FlashAttentionOp(AttentionOp):
         head_dim: int,
         num_key_value_heads: int,
         kvcache_partition_len: int,
-        use_attention_mask: bool,
-        use_position_ids: bool,
-        attn_mask_type: Optional[Literal["2D", "4D"]] = None,
         quantization: Optional[RBLNQuantizationConfig] = None,
         rbln_config: Optional["RBLNDecoderOnlyModelConfig"] = None,
     ):
@@ -981,9 +963,6 @@ class FlashAttentionOp(AttentionOp):
             num_heads=num_heads,
             head_dim=head_dim,
             num_key_value_heads=num_key_value_heads,
-            use_attention_mask=use_attention_mask,
-            use_position_ids=use_position_ids,
-            attn_mask_type=attn_mask_type,
             quantization=quantization,
             rbln_config=rbln_config,
         )
@@ -1054,7 +1033,7 @@ class FlashAttentionOp(AttentionOp):
             op_args["mask"] = attn_mask
 
         if self.phase == "prefill" or self.phase == "image_prefill":
-            use_image_prefill = getattr(self.rbln_config, "use_image_prefill", False) if self.rbln_config else False
+            use_image_prefill = getattr(self.rbln_config, "use_image_prefill", False)
             if use_image_prefill:
                 op_args["is_bidirectional"] = self.phase == "image_prefill"
             else:
@@ -1081,27 +1060,6 @@ class FlashAttentionOp(AttentionOp):
 
 
 class SlidingWindowAttentionOp(AttentionOp):
-    def __init__(
-        self,
-        num_heads: int,
-        head_dim: int,
-        num_key_value_heads: int,
-        use_attention_mask: bool,
-        use_position_ids: bool,
-        attn_mask_type: Optional[Literal["2D", "4D"]],
-        rbln_config: Optional["RBLNDecoderOnlyModelConfig"] = None,
-    ):
-        super().__init__(
-            num_heads=num_heads,
-            head_dim=head_dim,
-            num_key_value_heads=num_key_value_heads,
-            use_attention_mask=use_attention_mask,
-            use_position_ids=use_position_ids,
-            attn_mask_type=attn_mask_type,
-            quantization=None,
-            rbln_config=rbln_config,
-        )
-
     def get_attn_op_name(self):
         phase = "decode" if self.phase == "decode" else "prefill"
         if not self.use_attention_mask:
@@ -1159,7 +1117,7 @@ class SlidingWindowAttentionOp(AttentionOp):
         }
 
         if self.phase == "prefill" or self.phase == "image_prefill":
-            use_image_prefill = getattr(self.rbln_config, "use_image_prefill", False) if self.rbln_config else False
+            use_image_prefill = getattr(self.rbln_config, "use_image_prefill", False)
             if use_image_prefill:
                 op_args["is_bidirectional"] = self.phase == "image_prefill"
             else:

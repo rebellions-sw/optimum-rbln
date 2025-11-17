@@ -78,7 +78,7 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
             attn_impl (Optional[str]): Specifies the attention implementation to use.
                 See the "Attention Implementation (`attn_impl`)" section below for details.
             attn_mask_type (Optional[Literal["2D", "4D"]]): Specifies the type of attention mask to use. Defaults to None.
-                - "2D": Uses a 2D attention mask, where the mask is a square matrix of shape (seq_len, seq_len).
+                - "2D": Uses a 2D attention mask, where the mask is a square matrix of shape (batch_size, seq_len).
                 - "4D": Uses a 4D attention mask, where the mask is a 4D tensor of shape (batch_size, num_heads, seq_len, seq_len).
             kvcache_partition_len (Optional[int]): Defines the partition length for the KV cache
                 when using "flash_attn". See the "KV Cache Partition Length (`kvcache_partition_len`)"
