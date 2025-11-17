@@ -253,7 +253,7 @@ class RBLNModel(RBLNBaseModel):
         if DEFAULT_COMPILED_MODEL_NAME not in rbln_config.device_map:
             cls._raise_missing_compiled_file_error([DEFAULT_COMPILED_MODEL_NAME])
 
-        if getattr(cls, "_allow_no_compile_cfgs", False):
+        if len(rbln_config.compile_cfgs) == 0:
             return []
 
         return [
