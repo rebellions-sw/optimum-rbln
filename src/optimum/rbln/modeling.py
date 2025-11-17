@@ -60,7 +60,6 @@ class RBLNModel(RBLNBaseModel):
 
     @classmethod
     def get_compiled_model(cls, model: "PreTrainedModel", rbln_config: RBLNModelConfig):
-        # If compile_cfgs is empty, return None
         if rbln_config._allow_no_compile_cfgs:
             return {}
 
@@ -250,11 +249,11 @@ class RBLNModel(RBLNBaseModel):
         compiled_models: List[rebel.RBLNCompiledModel],
         rbln_config: RBLNModelConfig,
     ) -> List[rebel.Runtime]:
-        if DEFAULT_COMPILED_MODEL_NAME not in rbln_config.device_map:
-            cls._raise_missing_compiled_file_error([DEFAULT_COMPILED_MODEL_NAME])
-
         if len(rbln_config.compile_cfgs) == 0:
             return []
+
+        if DEFAULT_COMPILED_MODEL_NAME not in rbln_config.device_map:
+            cls._raise_missing_compiled_file_error([DEFAULT_COMPILED_MODEL_NAME])
 
         return [
             rebel.Runtime(
