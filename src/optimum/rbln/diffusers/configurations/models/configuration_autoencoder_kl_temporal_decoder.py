@@ -23,8 +23,8 @@ class RBLNAutoencoderKLTemporalDecoderConfig(RBLNModelConfig):
         batch_size: Optional[int] = None,
         sample_size: Optional[Tuple[int, int]] = None,
         uses_encoder: Optional[bool] = None,
-        num_frames: Optional[bool] = None,
-        decode_chunk_size: Optional[bool] = None,
+        num_frames: Optional[int] = None,
+        decode_chunk_size: Optional[int] = None,
         vae_scale_factor: Optional[float] = None,
         **kwargs,
     ):

@@ -100,7 +100,6 @@ _import_structure = {
         "RBLNCosmosTransformer3DModel",
         "RBLNSD3Transformer2DModel",
         "RBLNAutoencoderKLTemporalDecoder",
-        "RBLNUNetSpatioTemporalConditionModel",
         "RBLNPriorTransformer",
         "RBLNVQModel",
     ],

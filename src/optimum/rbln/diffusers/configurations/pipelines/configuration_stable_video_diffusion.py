@@ -39,7 +39,7 @@ class RBLNStableVideoDiffusionPipelineConfig(RBLNModelConfig):
     ):
         """
         Args:
-            text_encoder (Optional[RBLNCLIPVisionModelWithProjectionConfig]): Configuration for the text encoder component.
+            image_encoder (Optional[RBLNCLIPVisionModelWithProjectionConfig]): Configuration for the image encoder component.
                 Initialized as RBLNCLIPVisionModelWithProjectionConfig if not provided.
             unet (Optional[RBLNUNetSpatioTemporalConditionModelConfig]): Configuration for the UNet model component.
                 Initialized as RBLNUNetSpatioTemporalConditionModelConfig if not provided.
@@ -96,7 +96,7 @@ class RBLNStableVideoDiffusionPipelineConfig(RBLNModelConfig):
                 "max_guidance_scale"
             ]
 
-        if not self.unet.batch_size_is_specified:  # FIXME(si) : is it needed?
+        if not self.unet.batch_size_is_specified:
             do_classifier_free_guidance = guidance_scale > 1.0
             if do_classifier_free_guidance:
                 self.unet.batch_size = self.image_encoder.batch_size * 2
