@@ -285,22 +285,20 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 f"Cache position size mismatch: got {cache_position.shape[0]}, expected {self.batch_size}."
             )
 
-        if self.rbln_config.use_attention_mask and attention_mask is None:
-            if self.rbln_config.attn_mask_type == "2D" and is_external_block_tables:
-                raise ValueError(
-                    "attention_mask should be provided with external block tables for 2D attention mask type."
-                )
-                if local_block_tables is None:
-                    raise ValueError(
-                        "local_block_tables should be provided with external block tables for 2D attention mask type."
-                    )
-            if self.rbln_config.use_local_attention:
-                local_block_tables = (
-                    local_block_tables
-                    if local_block_tables is not None
-                    else torch.arange(0, self.batch_size, dtype=torch.int16).view(self.batch_size, -1)
-                )
+        if is_external_block_tables:
+            if attention_mask is None:
+                raise ValueError("attention_mask should be provided with external block tables.")
+            if local_block_tables is None:
+                raise ValueError("local_block_tables should be provided with external block tables.")
 
+        if self.rbln_config.use_local_attention:
+            local_block_tables = (
+                local_block_tables
+                if local_block_tables is not None
+                else torch.arange(0, self.batch_size, dtype=torch.int16).view(self.batch_size, -1)
+            )
+
+        if self.rbln_config.use_attention_mask and attention_mask is None:
             for b_idx in range(self.batch_size):
                 decoding_step = cache_position[b_idx].item()
                 if not (0 <= decoding_step < self.dec_attn_mask.shape[-1]):
@@ -497,15 +495,14 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
                 else:
                     if step > 0:  # update previous chunk
-                        chunked_attention_mask[
-                            :,
-                            :,
-                            :,
-                            s - self.rbln_config.prefill_chunk_size + prefix_cached_len : e
-                            - self.rbln_config.prefill_chunk_size
-                            + prefix_cached_len,
-                        ] = 1
-                    chunked_attention_mask[:, :, :, s + prefix_cached_len : e + prefix_cached_len] = self.causal_mask
+                        # Update attention mask for the previous chunk (from s - prefill_chunk_size to s)
+                        prev_chunk_start = s - self.rbln_config.prefill_chunk_size + prefix_cached_len
+                        prev_chunk_end = s + prefix_cached_len
+                        chunked_attention_mask[:, :, :, prev_chunk_start:prev_chunk_end] = 1
+
+                    current_chunk_start = s + prefix_cached_len
+                    current_chunk_end = e + prefix_cached_len
+                    chunked_attention_mask[:, :, :, current_chunk_start:current_chunk_end] = self.causal_mask
 
             # Calculate query position if needed
             if self.rbln_config.use_local_attention or self.rbln_config.logits_to_keep > 0:
