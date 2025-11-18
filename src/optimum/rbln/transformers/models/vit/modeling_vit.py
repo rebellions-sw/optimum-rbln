@@ -13,6 +13,8 @@
 # limitations under the License.
 
 from ...modeling_generic import RBLNModelForImageClassification
+import torch
+from transformers.modeling_outputs import ImageClassifierOutput
 
 
 class RBLNViTForImageClassification(RBLNModelForImageClassification):
@@ -23,3 +25,6 @@ class RBLNViTForImageClassification(RBLNModelForImageClassification):
     on RBLN devices, supporting image classification with transformer-based architectures
     that process images as sequences of patches.
     """
+
+    def forward(self, pixel_values: torch.Tensor, **kwargs):
+        return ImageClassifierOutput(logits=super().forward(pixel_values, **kwargs))
