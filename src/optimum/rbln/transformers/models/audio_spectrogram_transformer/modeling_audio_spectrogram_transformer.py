@@ -15,6 +15,7 @@
 from typing import TYPE_CHECKING, Optional
 
 from transformers import AutoModelForAudioClassification
+from transformers.modeling_outputs import SequenceClassifierOutput
 
 from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
@@ -69,3 +70,7 @@ class RBLNASTForAudioClassification(RBLNModel):
 
         rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
         return rbln_config
+
+    def _prepare_output(self, output, return_dict):
+        # ignore return_dict as transformers doesn't use it for this model
+        return SequenceClassifierOutput(logits=output)
