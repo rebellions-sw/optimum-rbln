@@ -319,7 +319,7 @@ class RBLNDecoderOnlyFlashAttentionMixin:
         if layer_types:
             layer_types_dict = Counter(layer_types)
             num_full_attention = layer_types_dict.pop("full_attention", 0)
-            num_sliding_window_attention = layer_types_dict.pop("sliding_window_attention", 0)
+            num_sliding_window_attention = layer_types_dict.pop("sliding_attention", 0)
             if len(layer_types_dict) > 0:
                 raise ValueError(f"Unknown layer types found in the config: {layer_types_dict.keys()}")
 
@@ -334,7 +334,7 @@ class RBLNDecoderOnlyFlashAttentionMixin:
             sliding_window = getattr(model_config, "sliding_window", None)
             if sliding_window is None:
                 logger.warning(
-                    "`sliding_window` is not found in the config while `sliding_window_attention` layers are present. "
+                    "`sliding_window` is not found in the config while `sliding_attention` layers are present. "
                     "Assuming maximum sliding window size for estimation."
                 )
                 sliding_window = rbln_config.kvcache_block_size
