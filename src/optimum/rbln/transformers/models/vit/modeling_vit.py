@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ...modeling_generic import RBLNModelForImageClassification
 import torch
 from transformers.modeling_outputs import ImageClassifierOutput
+
+from ...modeling_generic import RBLNModelForImageClassification
 
 
 class RBLNViTForImageClassification(RBLNModelForImageClassification):
@@ -27,4 +28,11 @@ class RBLNViTForImageClassification(RBLNModelForImageClassification):
     """
 
     def forward(self, pixel_values: torch.Tensor, **kwargs):
+        """
+        Forward pass for the RBLN-optimized Vision Transformer model for image classification.
+
+        Args:
+            pixel_values (`torch.FloatTensor` of shape `(batch_size, channels, height, width)`):
+                The tensors corresponding to the input images.
+        """
         return ImageClassifierOutput(logits=super().forward(pixel_values, **kwargs))

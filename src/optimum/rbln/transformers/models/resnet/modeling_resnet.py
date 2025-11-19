@@ -74,6 +74,16 @@ class RBLNResNetForImageClassification(RBLNModelForImageClassification):
     def forward(
         self, pixel_values: torch.Tensor, output_hidden_states: bool = None, return_dict: bool = None, **kwargs
     ):
+        """
+        Foward pass for the RBLN-optimized ResNet model for image classification.
+
+        Args:
+            pixel_values (`torch.FloatTensor]` of shape `(batch_size, channels, height, width)`):
+               The tensors corresponding to the input images.
+            output_hidden_states (`bool`, *optional*, defaults to `False`):
+               Whether or not to return the hidden states of all layers. See `hidden_states` under returned tensors
+               for more details.
+        """
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.rbln_config.output_hidden_states
         )
@@ -83,9 +93,9 @@ class RBLNResNetForImageClassification(RBLNModelForImageClassification):
                 f"Variable output_hidden_states {output_hidden_states} is not equal to rbln_config.output_hidden_states {self.rbln_config.output_hidden_states} "
                 f"Please compile again with the correct argument."
             )
-        return super().forward(pixel_values, return_dict=return_dict, **kwargs)
 
-    def _prepare_output(self, output, return_dict):
+        output = super().forward(pixel_values=pixel_values, return_dict=return_dict, **kwargs)
+
         if not return_dict:
             return (output,) if not isinstance(output, (tuple, list)) else output
         else:
