@@ -146,7 +146,13 @@ class DecoderOnlyWrapper(nn.Module):
         query_position = (
             args.pop(0)
             # query_position usage: 1. causal_lm prefill or 2. sliding_window cache_position
-            if ("prefill" in self.phase and (self.is_causal_lm or self.rbln_config.use_local_attention))
+            if (
+                "prefill" in self.phase
+                and (
+                    (self.is_causal_lm and self.rbln_config.logits_to_keep == 1)
+                    or self.rbln_config.use_local_attention
+                )
+            )
             else None
         )
         attention_mask = args.pop(0) if self.rbln_config.use_attention_mask else None
@@ -288,7 +294,7 @@ class DecoderOnlyForCausalLM(nn.Module):
             lora_int_id=lora_int_id,
         )
 
-        if "prefill" in self.phase:
+        if "prefill" in self.phase and query_position is not None:
             hidden_states = hidden_states[:, query_position.to(torch.int).unsqueeze(0)]
 
         logits = self.lm_head(hidden_states)

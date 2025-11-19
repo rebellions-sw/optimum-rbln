@@ -478,7 +478,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 chunked_attention_mask if self.rbln_config.use_attention_mask else None,
                 position_ids_chunk,
                 lora_int_ids if self.rbln_config.use_lora else None,
-                out=self.out_buffers,
+                out=None,
             )
             output_logits.append(output_logit)
 

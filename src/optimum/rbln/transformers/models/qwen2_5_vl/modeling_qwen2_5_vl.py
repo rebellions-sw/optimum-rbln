@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 import torch
 from transformers import AutoModelForVision2Seq, PretrainedConfig, PreTrainedModel, Qwen2_5_VLForConditionalGeneration
 from transformers.modeling_utils import no_init_weights
+from transformers.models.auto import CONFIG_MAPPING
 from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     Qwen2_5_VisionPatchEmbed,
     Qwen2_5_VisionRotaryEmbedding,
@@ -31,7 +32,7 @@ from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...modeling_outputs import RBLNDecoderOnlyOutput
-from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM
+from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModel, RBLNDecoderOnlyModelForCausalLM
 from .configuration_qwen2_5_vl import (
     RBLNQwen2_5_VisionTransformerPretrainedModelConfig,
     RBLNQwen2_5_VLForConditionalGenerationConfig,
@@ -42,7 +43,7 @@ from .qwen2_5_vl_architecture import Qwen2_5_VisionTransformerWrapper, Qwen2_5_V
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
 
 
 class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
@@ -336,6 +337,203 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
         hidden_states = hidden_states[reverse_indices, :]
 
         return hidden_states
+
+
+class RBLNQwen2_5_VLModel(RBLNDecoderOnlyModel):
+    auto_model_class = AutoModelForVision2Seq
+    _decoder_wrapper_cls = Qwen2_5_VL_LanguageModelWrapper
+    _supports_non_fp32 = False
+    _use_rotary_emb = False
+    _rbln_submodules = [
+        {"name": "visual"},
+    ]
+
+    def __post_init__(self, **kwargs):
+        super().__post_init__(**kwargs)
+        self.visual = self.rbln_submodules[0]
+        self.mrope_section = self.config.rope_scaling["mrope_section"]
+        self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config)
+        self.rope_deltas = torch.zeros(self.rbln_config.batch_size)
+
+        if not isinstance(self.config.text_config, PretrainedConfig):
+            self.config.text_config = CONFIG_MAPPING[self.config.text_config["model_type"]](**self.config.text_config)
+            self.config.vision_config = CONFIG_MAPPING[self.config.vision_config["model_type"]](
+                **self.config.vision_config
+            )
+
+    # @classmethod
+    # def _reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
+    #     model.model.lm_head = model.lm_head
+    #     model.lm_head = None
+    #     del model.lm_head
+    #     return model
+
+    @classmethod
+    def get_input_info(
+        cls,
+        batch_size: int,
+        query_length: int,
+        rbln_config: RBLNQwen2_5_VLForConditionalGenerationConfig,
+        model_config: PretrainedConfig,
+    ):
+        input_info = super().get_input_info(batch_size, query_length, rbln_config, model_config)
+        pos_idx = 3
+        input_info.insert(
+            pos_idx,
+            (
+                "position_emb",
+                [2, batch_size, 1, query_length, model_config.hidden_size // model_config.num_attention_heads],
+                "float32",
+            ),
+        )
+
+        return input_info
+
+    def _get_position_embeddings(self, hidden_states, position_ids):
+        cos, sin = self.rotary_emb(hidden_states, position_ids)
+        mrope_section = self.mrope_section * 2
+        cos = torch.cat([m[i % 3] for i, m in enumerate(cos.split(mrope_section, dim=-1))], dim=-1).unsqueeze(1)
+        sin = torch.cat([m[i % 3] for i, m in enumerate(sin.split(mrope_section, dim=-1))], dim=-1).unsqueeze(1)
+        return torch.stack([cos, sin])
+
+    def _preprocess_prefill(
+        self,
+        input_ids: torch.LongTensor = None,
+        attention_mask: torch.Tensor = None,
+        pixel_values: torch.Tensor = None,
+        pixel_values_videos: torch.FloatTensor = None,
+        image_grid_thw: torch.LongTensor = None,
+        video_grid_thw: torch.LongTensor = None,
+        second_per_grid_ts: torch.Tensor = None,
+    ):
+        batch_size = input_ids.shape[0]
+        inputs_embeds = self.embed_tokens(input_ids)
+
+        if pixel_values is not None:
+            image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
+            n_image_tokens = (input_ids == self.config.image_token_id).sum().item()
+            n_image_features = image_embeds.shape[0]
+            if n_image_tokens != n_image_features:
+                raise ValueError(
+                    f"Image features and image tokens do not match: tokens: {n_image_tokens}, features {n_image_features}"
+                )
+
+            mask = input_ids == self.config.image_token_id
+            mask_unsqueezed = mask.unsqueeze(-1)
+            mask_expanded = mask_unsqueezed.expand_as(inputs_embeds)
+
+            image_embeds = image_embeds.to(inputs_embeds.device, inputs_embeds.dtype)
+            inputs_embeds = inputs_embeds.masked_scatter(mask_expanded, image_embeds)
+
+        if pixel_values_videos is not None:
+            video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
+            n_video_tokens = (input_ids == self.config.video_token_id).sum().item()
+            n_video_features = video_embeds.shape[0]
+            if n_video_tokens != n_video_features:
+                raise ValueError(
+                    f"Video features and video tokens do not match: tokens: {n_video_tokens}, features {n_video_features}"
+                )
+
+            mask = input_ids == self.config.video_token_id
+            mask_unsqueezed = mask.unsqueeze(-1)
+            mask_expanded = mask_unsqueezed.expand_as(inputs_embeds)
+            inputs_embeds = inputs_embeds.masked_scatter(mask_expanded, video_embeds)
+
+        max_inputs_len = input_ids.shape[1]
+
+        head_dim = getattr(self.config, "head_dim", None) or self.config.hidden_size // self.config.num_attention_heads
+        all_position_embeds = torch.zeros(2, batch_size, 1, max_inputs_len, head_dim)
+        all_rope_deltas = []
+
+        image_token_id = self.config.image_token_id
+        video_token_id = self.config.video_token_id
+        vision_start_token_id = self.config.vision_start_token_id
+        image_idx, video_idx = 0, 0
+
+        for b_idx in range(batch_size):
+            input_id = input_ids[b_idx : b_idx + 1][:, attention_mask[b_idx].bool()]
+            vision_start_indices = torch.argwhere(input_id == vision_start_token_id).squeeze(1)
+            vision_tokens = input_id[0][vision_start_indices + 1]
+            image_nums = (vision_tokens == image_token_id).sum()
+            video_nums = (vision_tokens == video_token_id).sum()
+            position_ids, rope_deltas = Qwen2_5_VLModel.get_rope_index(
+                self,
+                input_id,
+                image_grid_thw[image_idx : image_idx + image_nums] if image_grid_thw is not None else None,
+                video_grid_thw[video_idx : video_idx + video_nums] if video_grid_thw is not None else None,
+                second_per_grid_ts[video_idx : video_idx + video_nums] if second_per_grid_ts is not None else None,
+            )
+            image_idx += image_nums
+            video_idx += video_nums
+
+            position_embed = self._get_position_embeddings(inputs_embeds, position_ids)
+            mask_indices = torch.nonzero(attention_mask[b_idx], as_tuple=True)[0]
+            all_position_embeds[:, b_idx : b_idx + 1].index_copy_(dim=-2, index=mask_indices, source=position_embed)
+            all_rope_deltas.append(rope_deltas)
+
+        rope_deltas = torch.stack(all_rope_deltas)
+
+        return inputs_embeds, all_position_embeds, rope_deltas
+
+    def forward(
+        self,
+        input_ids: Optional[torch.LongTensor] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        pixel_values: Optional[torch.Tensor] = None,
+        pixel_values_videos: Optional[torch.FloatTensor] = None,
+        image_grid_thw: Optional[torch.LongTensor] = None,
+        video_grid_thw: Optional[torch.LongTensor] = None,
+        cache_position: Optional[torch.LongTensor] = None,
+        second_per_grid_ts: Optional[torch.Tensor] = None,
+        return_dict: Optional[bool] = None,
+        **kwargs,
+    ) -> RBLNDecoderOnlyOutput:
+        inputs_embeds, position_embed, rope_deltas = self._preprocess_prefill(
+            input_ids,
+            attention_mask,
+            pixel_values,
+            pixel_values_videos,
+            image_grid_thw,
+            video_grid_thw,
+            second_per_grid_ts,
+        )
+
+        self.rope_deltas = rope_deltas
+        batch_size = inputs_embeds.shape[0]
+
+        logits = []
+        for b_idx in range(batch_size):
+            query_length = attention_mask[b_idx].sum(dim=-1).int().item()
+            cache_position = torch.arange(query_length, dtype=torch.int32).unsqueeze(0)
+
+            output = self.prefill_decoder(
+                inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
+                attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
+                cache_position=cache_position,
+                batch_idx=b_idx,
+                position_embed=position_embed[:, b_idx : b_idx + 1],
+            )
+            projs = output.logits[:, :query_length]
+
+            if attention_mask is not None:
+                embedding = torch.full(
+                    (1, attention_mask.shape[-1], projs.shape[-1]),
+                    fill_value=1e-10,
+                    dtype=projs.dtype,
+                )
+                mask_indices = torch.nonzero(attention_mask, as_tuple=True)[0]
+                embedding.index_copy_(dim=-2, index=mask_indices, source=projs)
+            else:
+                embedding = projs
+
+            logits.append(embedding)
+        logits = torch.cat(logits, dim=0)
+
+        if not return_dict:
+            return logits
+        else:
+            return RBLNDecoderOnlyOutput(logits=logits)
 
 
 class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):

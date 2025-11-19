@@ -123,7 +123,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         return (
             1,
             self.rbln_config.prefill_chunk_size if self.rbln_config.logits_to_keep == 0 else 1,
-            self.config.hidden_size,
+            128,
         )
 
     @classmethod

@@ -396,12 +396,14 @@ class TestColPaliModel(BaseTest.TestModel):
 class TestColQwen2Model(BaseTest.TestModel):
     RBLN_AUTO_CLASS = None
     RBLN_CLASS = RBLNColQwen2ForRetrieval
-    HF_MODEL_ID = "vidore/colqwen2-v1.0-hf"
+    HF_MODEL_ID = "Sahil-Kabir/colqwen2.5-v0.2-hf"
     RBLN_CLASS_KWARGS = {
         "rbln_config": {
-            "visual": {"max_seq_lens": 512},
-            "tensor_parallel_size": 1,
-            "max_seq_len": 32_768,
+            "vlm": {
+                "visual": {"max_seq_lens": 512},
+                "tensor_parallel_size": 1,
+                "max_seq_len": 32_768,
+            }
         }
     }
     HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
