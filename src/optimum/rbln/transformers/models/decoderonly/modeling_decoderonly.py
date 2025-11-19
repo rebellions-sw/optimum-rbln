@@ -445,10 +445,22 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         # Returns:
         #     RBLNDecoderOnlyModelConfig: The updated RBLN model configuration.
 
-        raise NotImplementedError(
-            "Subclasses must implement _update_sliding_window_config to configure sliding window attention settings. "
-            "See method docstring for required configuration details."
+        rbln_config.sliding_window = model_config.sliding_window
+        sliding_window_layers = []
+
+        for i in range(model_config.num_hidden_layers):
+            if hasattr(model_config, "layer_types"):
+                if model_config.layer_types[i] == "sliding_attention":
+                    sliding_window_layers.append(i)
+            else:
+                sliding_window_layers.append(i)
+
+        rbln_config.sliding_window_layers = sliding_window_layers
+
+        rbln_config.cache_impl = (
+            "sliding_window" if len(sliding_window_layers) == model_config.num_hidden_layers else "hybrid"
         )
+        return rbln_config
 
     @classmethod
     def _update_attention_config(

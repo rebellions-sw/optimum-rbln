@@ -21,7 +21,6 @@ from transformers import PretrainedConfig, PreTrainedModel
 
 from ....utils import logging
 from ...modeling_rope_utils import ROPE_INIT_FUNCTIONS
-from ...utils.rbln_quantization import RBLNQuantizationConfig
 from .configuration_lora import RBLNLoRAConfig
 from .lora_architecture import LoRALinear
 
@@ -622,7 +621,6 @@ class DecoderOnlyAttention(nn.Module):
         self.head_dim = self._original_mod.head_dim
         self._phase = "prefill"
         self.scale = torch.nn.Parameter(torch.tensor(self.get_attn_scale()))
-        self.quantization = rbln_config.quantization
 
         if hasattr(self._original_mod, "num_key_value_heads"):
             self.num_key_value_heads = self._original_mod.num_key_value_heads
@@ -689,7 +687,6 @@ class DecoderOnlyAttention(nn.Module):
                 self.use_attention_mask,
                 self.num_key_value_heads,
                 self.kvcache_partition_len,
-                self.quantization,
                 rbln_config=self.rbln_config,
             )
         elif self.attn_impl == "eager":
@@ -698,7 +695,6 @@ class DecoderOnlyAttention(nn.Module):
                 self.head_dim,
                 self.use_attention_mask,
                 self.num_key_value_heads,
-                self.quantization,
                 rbln_config=self.rbln_config,
             )
         else:
@@ -830,7 +826,6 @@ class AttentionOp(nn.Module):
         head_dim: int,
         use_attention_mask: bool,
         num_key_value_heads: int,
-        quantization: Optional[RBLNQuantizationConfig] = None,
         rbln_config: Optional["RBLNDecoderOnlyModelConfig"] = None,
     ):
         super().__init__()
@@ -838,16 +833,20 @@ class AttentionOp(nn.Module):
         self.head_dim = head_dim
         self.num_key_value_heads = num_key_value_heads
         self.phase = "prefill"
-        self.quantization = quantization
         self.rbln_config = rbln_config
         self.use_attention_mask = use_attention_mask
         self.attn_mask_type = rbln_config.attn_mask_type
         self.use_position_ids = rbln_config.use_position_ids
+        self.quantization = rbln_config.quantization
 
     def get_attn_op_name(self):
         phase = "decode" if self.phase == "decode" else "prefill"
-        if self.use_attention_mask and not self.attn_mask_type == "2D":
-            attn_op_name = "paged_attn_"
+
+        if self.use_attention_mask:
+            if self.attn_mask_type == "2D":
+                attn_op_name = "paged_causal_attn_"
+            else:
+                attn_op_name = "paged_attn_"
         else:
             attn_op_name = "paged_causal_attn_"
 
@@ -964,7 +963,6 @@ class FlashAttentionOp(AttentionOp):
         use_attention_mask: bool,
         num_key_value_heads: int,
         kvcache_partition_len: int,
-        quantization: Optional[RBLNQuantizationConfig] = None,
         rbln_config: Optional["RBLNDecoderOnlyModelConfig"] = None,
     ):
         super().__init__(
@@ -972,15 +970,18 @@ class FlashAttentionOp(AttentionOp):
             head_dim=head_dim,
             use_attention_mask=use_attention_mask,
             num_key_value_heads=num_key_value_heads,
-            quantization=quantization,
             rbln_config=rbln_config,
         )
         self.kvcache_partition_size = kvcache_partition_len
 
     def get_attn_op_name(self):
         phase = "decode" if self.phase == "decode" else "prefill"
-        if self.use_attention_mask and not self.attn_mask_type == "2D":
-            attn_op_name = "paged_flash_attn_"
+
+        if self.use_attention_mask:
+            if self.attn_mask_type == "2D":
+                attn_op_name = "paged_flash_causal_attn_"
+            else:
+                attn_op_name = "paged_flash_attn_"
         else:
             attn_op_name = "paged_flash_causal_attn_"
 
@@ -1071,6 +1072,23 @@ class FlashAttentionOp(AttentionOp):
 
 
 class SlidingWindowAttentionOp(AttentionOp):
+    def __init__(
+        self,
+        num_heads: int,
+        head_dim: int,
+        use_attention_mask: bool,
+        num_key_value_heads: int,
+        rbln_config: Optional["RBLNDecoderOnlyModelConfig"] = None,
+    ):
+        super().__init__(
+            num_heads=num_heads,
+            head_dim=head_dim,
+            use_attention_mask=use_attention_mask,
+            num_key_value_heads=num_key_value_heads,
+            rbln_config=rbln_config,
+        )
+        self.quantization = None  # Sliding window attention does not support quantization
+
     def get_attn_op_name(self):
         phase = "decode" if self.phase == "decode" else "prefill"
         if not self.use_attention_mask:
