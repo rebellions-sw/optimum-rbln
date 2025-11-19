@@ -48,5 +48,5 @@ class RBLNWav2Vec2ForCTC(RBLNModelForMaskedLM):
     rbln_dtype = "float32"
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNWav2Vec2ForCTCConfig) -> torch.nn.Module:
+    def _wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNWav2Vec2ForCTCConfig) -> torch.nn.Module:
         return _Wav2Vec2(model).eval()

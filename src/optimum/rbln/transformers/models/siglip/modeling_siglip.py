@@ -66,7 +66,9 @@ class RBLNSiglipVisionModel(RBLNModel):
     _tp_support = False
 
     @classmethod
-    def wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNSiglipVisionModelConfig) -> torch.nn.Module:
+    def _wrap_model_if_needed(
+        cls, model: torch.nn.Module, rbln_config: RBLNSiglipVisionModelConfig
+    ) -> torch.nn.Module:
         wrapper_cfg = {
             "interpolate_pos_encoding": rbln_config.interpolate_pos_encoding,
             "output_hidden_states": rbln_config.output_hidden_states,

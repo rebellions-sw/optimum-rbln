@@ -140,7 +140,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, GenerationMixin, ABC):
     @classmethod
     @torch.inference_mode()
     def get_compiled_model(cls, model: PreTrainedModel, rbln_config: RBLNModelForSeq2SeqLMConfig):
-        wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
+        wrapped_model = cls._wrap_model_if_needed(model, rbln_config)
 
         enc_compile_config = rbln_config.compile_cfgs[0]
         dec_compile_config = rbln_config.compile_cfgs[1]
@@ -220,12 +220,6 @@ class RBLNModelForSeq2SeqLM(RBLNModel, GenerationMixin, ABC):
         max_position_embeddings = getattr(model_config, "n_positions", None) or getattr(
             model_config, "max_position_embeddings", None
         )
-
-        pad_token_id = getattr(model_config, "pad_token_id", None)
-        pad_token_id = pad_token_id or getattr(model_config, "bos_token_id", None)
-        pad_token_id = pad_token_id or getattr(model_config, "eos_token_id", None)
-        pad_token_id = pad_token_id or -1
-        rbln_config.pad_token_id = pad_token_id
 
         if rbln_config.enc_max_seq_len is None:
             enc_max_seq_len = max_position_embeddings
@@ -432,7 +426,7 @@ class RBLNModelForSeq2SeqLM(RBLNModel, GenerationMixin, ABC):
         inputs_tensor = torch.nn.functional.pad(
             inputs_tensor,
             (0, self.rbln_config.enc_max_seq_len - input_len),
-            value=self.rbln_config.pad_token_id,
+            value=self.config.pad_token_id,
         )
         model_kwargs["attention_mask"] = torch.nn.functional.pad(
             model_kwargs["attention_mask"], (0, self.rbln_config.enc_max_seq_len - input_len)
