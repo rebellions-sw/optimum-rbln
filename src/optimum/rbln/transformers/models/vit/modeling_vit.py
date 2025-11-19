@@ -34,5 +34,9 @@ class RBLNViTForImageClassification(RBLNModelForImageClassification):
         Args:
             pixel_values (`torch.FloatTensor` of shape `(batch_size, channels, height, width)`):
                 The tensors corresponding to the input images.
+
+        Returns:
+            ImageClassifierOutput or tuple(torch.FloatTensor)
+
         """
         return ImageClassifierOutput(logits=super().forward(pixel_values, **kwargs))

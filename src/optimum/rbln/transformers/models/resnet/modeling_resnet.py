@@ -83,6 +83,7 @@ class RBLNResNetForImageClassification(RBLNModelForImageClassification):
             output_hidden_states (`bool`, *optional*, defaults to `False`):
                Whether or not to return the hidden states of all layers. See `hidden_states` under returned tensors
                for more details.
+            return_dict (`bool`, *optional*, defaults to `True`): Whether to return a dictionary of outputs.
         """
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.rbln_config.output_hidden_states
