@@ -17,9 +17,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 
 import torch
-from transformers import AutoModelForVision2Seq, PretrainedConfig, PreTrainedModel, Qwen2_5_VLForConditionalGeneration
+from transformers import (
+    AutoModelForVision2Seq,
+    PretrainedConfig,
+    PreTrainedModel,
+    Qwen2_5_VLConfig,
+    Qwen2_5_VLForConditionalGeneration,
+)
 from transformers.modeling_utils import no_init_weights
-from transformers.models.auto import CONFIG_MAPPING
 from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     Qwen2_5_VisionPatchEmbed,
     Qwen2_5_VisionRotaryEmbedding,
@@ -349,24 +354,26 @@ class RBLNQwen2_5_VLModel(RBLNDecoderOnlyModel):
     ]
 
     def __post_init__(self, **kwargs):
+        if not isinstance(self.config.text_config, PretrainedConfig):
+            self.config = Qwen2_5_VLConfig(
+                text_config=self.config.text_config, vision_config=self.config.vision_config
+            )
+
         super().__post_init__(**kwargs)
         self.visual = self.rbln_submodules[0]
         self.mrope_section = self.config.rope_scaling["mrope_section"]
         self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config)
         self.rope_deltas = torch.zeros(self.rbln_config.batch_size)
+        self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
 
-        if not isinstance(self.config.text_config, PretrainedConfig):
-            self.config.text_config = CONFIG_MAPPING[self.config.text_config["model_type"]](**self.config.text_config)
-            self.config.vision_config = CONFIG_MAPPING[self.config.vision_config["model_type"]](
-                **self.config.vision_config
+    def _create_embedding_layer(self):
+        with no_init_weights():
+            embed_tokens = torch.nn.Embedding(
+                self.config.text_config.vocab_size,
+                self.config.text_config.hidden_size,
+                self.config.text_config.pad_token_id,
             )
-
-    # @classmethod
-    # def _reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
-    #     model.model.lm_head = model.lm_head
-    #     model.lm_head = None
-    #     del model.lm_head
-    #     return model
+        return embed_tokens
 
     @classmethod
     def get_input_info(
@@ -513,6 +520,7 @@ class RBLNQwen2_5_VLModel(RBLNDecoderOnlyModel):
                 cache_position=cache_position,
                 batch_idx=b_idx,
                 position_embed=position_embed[:, b_idx : b_idx + 1],
+                block_tables=self.block_tables,
             )
             projs = output.logits[:, :query_length]
 
@@ -522,7 +530,7 @@ class RBLNQwen2_5_VLModel(RBLNDecoderOnlyModel):
                     fill_value=1e-10,
                     dtype=projs.dtype,
                 )
-                mask_indices = torch.nonzero(attention_mask, as_tuple=True)[0]
+                mask_indices = torch.nonzero(attention_mask[b_idx], as_tuple=True)[0]
                 embedding.index_copy_(dim=-2, index=mask_indices, source=projs)
             else:
                 embedding = projs

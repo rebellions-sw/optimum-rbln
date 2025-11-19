@@ -75,6 +75,14 @@ class RBLNColQwen2ForRetrieval(RBLNModel):
 
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
+        # Handle the custom "pixel_values" input obtained with `ColQwen2Processor` through unpadding
+        if pixel_values is not None and image_grid_thw is not None:
+            offsets = image_grid_thw[:, 1] * image_grid_thw[:, 2]  # (batch_size,)
+            pixel_values = torch.cat(
+                [pixel_sequence[:offset] for pixel_sequence, offset in zip(pixel_values, offsets)],
+                dim=0,
+            )
+
         vlm_output = self.vlm_model(
             input_ids=input_ids,
             attention_mask=attention_mask,
