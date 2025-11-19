@@ -361,10 +361,9 @@ class RBLNQwen2_5_VLModel(RBLNDecoderOnlyModel):
 
         super().__post_init__(**kwargs)
         self.visual = self.rbln_submodules[0]
-        self.mrope_section = self.config.rope_scaling["mrope_section"]
         self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config)
-        self.rope_deltas = torch.zeros(self.rbln_config.batch_size)
-        self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
+        if not self.can_generate():
+            self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
 
     def _create_embedding_layer(self):
         with no_init_weights():
@@ -398,7 +397,7 @@ class RBLNQwen2_5_VLModel(RBLNDecoderOnlyModel):
 
     def _get_position_embeddings(self, hidden_states, position_ids):
         cos, sin = self.rotary_emb(hidden_states, position_ids)
-        mrope_section = self.mrope_section * 2
+        mrope_section = self.config.rope_scaling["mrope_section"] * 2
         cos = torch.cat([m[i % 3] for i, m in enumerate(cos.split(mrope_section, dim=-1))], dim=-1).unsqueeze(1)
         sin = torch.cat([m[i % 3] for i, m in enumerate(sin.split(mrope_section, dim=-1))], dim=-1).unsqueeze(1)
         return torch.stack([cos, sin])
@@ -544,7 +543,8 @@ class RBLNQwen2_5_VLModel(RBLNDecoderOnlyModel):
             return RBLNDecoderOnlyOutput(logits=logits)
 
 
-class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
+# MRO: RBLNQwen2_5_VLForConditionalGeneration -> RBLNQwen2_5_VLModel -> RBLNDecoderOnlyModelForCausalLM -> RBLNDecoderOnlyModel -> RBLNModel
+class RBLNQwen2_5_VLForConditionalGeneration(RBLNQwen2_5_VLModel, RBLNDecoderOnlyModelForCausalLM):
     """
     RBLNQwen2_5_VLForConditionalGeneration is a multi-modal model that integrates vision and language processing capabilities,
     optimized for RBLN NPUs. It is designed for conditional generation tasks that involve both image and text inputs.
@@ -579,20 +579,16 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         ```
     """
 
-    _supports_non_fp32 = False
-
     auto_model_class = AutoModelForVision2Seq
+    _decoder_wrapper_cls = Qwen2_5_VL_LanguageModelWrapper
+    _supports_non_fp32 = False
+    _use_rotary_emb = False
     _rbln_submodules = [
         {"name": "visual"},
     ]
-    _decoder_wrapper_cls = Qwen2_5_VL_LanguageModelWrapper
-    _use_rotary_emb = False
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
-        self.visual = self.rbln_submodules[0]
-        self.mrope_section = self.config.rope_scaling["mrope_section"]
-        self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config)
         self.rope_deltas = torch.zeros(self.rbln_config.batch_size)
 
     def can_generate(self):
@@ -601,30 +597,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
     @classmethod
     def _reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
         model.model.lm_head = model.lm_head
-        model.lm_head = None
-        del model.lm_head
         return model
-
-    @classmethod
-    def get_input_info(
-        cls,
-        batch_size: int,
-        query_length: int,
-        rbln_config: RBLNQwen2_5_VLForConditionalGenerationConfig,
-        model_config: PretrainedConfig,
-    ):
-        input_info = super().get_input_info(batch_size, query_length, rbln_config, model_config)
-        pos_idx = 3
-        input_info.insert(
-            pos_idx,
-            (
-                "position_emb",
-                [2, batch_size, 1, query_length, model_config.hidden_size // model_config.num_attention_heads],
-                "float32",
-            ),
-        )
-
-        return input_info
 
     def prepare_inputs_for_generation(
         self,
@@ -669,92 +642,6 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         )
 
         return model_inputs
-
-    def _get_position_embeddings(self, hidden_states, position_ids):
-        cos, sin = self.rotary_emb(hidden_states, position_ids)
-        mrope_section = self.mrope_section * 2
-        cos = torch.cat([m[i % 3] for i, m in enumerate(cos.split(mrope_section, dim=-1))], dim=-1).unsqueeze(1)
-        sin = torch.cat([m[i % 3] for i, m in enumerate(sin.split(mrope_section, dim=-1))], dim=-1).unsqueeze(1)
-        return torch.stack([cos, sin])
-
-    def _preprocess_prefill(
-        self,
-        input_ids: torch.LongTensor = None,
-        attention_mask: torch.Tensor = None,
-        pixel_values: torch.Tensor = None,
-        pixel_values_videos: torch.FloatTensor = None,
-        image_grid_thw: torch.LongTensor = None,
-        video_grid_thw: torch.LongTensor = None,
-        second_per_grid_ts: torch.Tensor = None,
-    ):
-        batch_size = input_ids.shape[0]
-        inputs_embeds = self.embed_tokens(input_ids)
-
-        if pixel_values is not None:
-            image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
-            n_image_tokens = (input_ids == self.config.image_token_id).sum().item()
-            n_image_features = image_embeds.shape[0]
-            if n_image_tokens != n_image_features:
-                raise ValueError(
-                    f"Image features and image tokens do not match: tokens: {n_image_tokens}, features {n_image_features}"
-                )
-
-            mask = input_ids == self.config.image_token_id
-            mask_unsqueezed = mask.unsqueeze(-1)
-            mask_expanded = mask_unsqueezed.expand_as(inputs_embeds)
-
-            image_embeds = image_embeds.to(inputs_embeds.device, inputs_embeds.dtype)
-            inputs_embeds = inputs_embeds.masked_scatter(mask_expanded, image_embeds)
-
-        if pixel_values_videos is not None:
-            video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
-            n_video_tokens = (input_ids == self.config.video_token_id).sum().item()
-            n_video_features = video_embeds.shape[0]
-            if n_video_tokens != n_video_features:
-                raise ValueError(
-                    f"Video features and video tokens do not match: tokens: {n_video_tokens}, features {n_video_features}"
-                )
-
-            mask = input_ids == self.config.video_token_id
-            mask_unsqueezed = mask.unsqueeze(-1)
-            mask_expanded = mask_unsqueezed.expand_as(inputs_embeds)
-            inputs_embeds = inputs_embeds.masked_scatter(mask_expanded, video_embeds)
-
-        max_inputs_len = input_ids.shape[1]
-
-        head_dim = getattr(self.config, "head_dim", None) or self.config.hidden_size // self.config.num_attention_heads
-        all_position_embeds = torch.zeros(2, batch_size, 1, max_inputs_len, head_dim)
-        all_rope_deltas = []
-
-        image_token_id = self.config.image_token_id
-        video_token_id = self.config.video_token_id
-        vision_start_token_id = self.config.vision_start_token_id
-        image_idx, video_idx = 0, 0
-
-        for b_idx in range(batch_size):
-            input_id = input_ids[b_idx : b_idx + 1][:, attention_mask[b_idx].bool()]
-            vision_start_indices = torch.argwhere(input_id == vision_start_token_id).squeeze(1)
-            vision_tokens = input_id[0][vision_start_indices + 1]
-            image_nums = (vision_tokens == image_token_id).sum()
-            video_nums = (vision_tokens == video_token_id).sum()
-            position_ids, rope_deltas = Qwen2_5_VLModel.get_rope_index(
-                self,
-                input_id,
-                image_grid_thw[image_idx : image_idx + image_nums] if image_grid_thw is not None else None,
-                video_grid_thw[video_idx : video_idx + video_nums] if video_grid_thw is not None else None,
-                second_per_grid_ts[video_idx : video_idx + video_nums] if second_per_grid_ts is not None else None,
-            )
-            image_idx += image_nums
-            video_idx += video_nums
-
-            position_embed = self._get_position_embeddings(inputs_embeds, position_ids)
-            mask_indices = torch.nonzero(attention_mask[b_idx], as_tuple=True)[0]
-            all_position_embeds[:, b_idx : b_idx + 1].index_copy_(dim=-2, index=mask_indices, source=position_embed)
-            all_rope_deltas.append(rope_deltas)
-
-        rope_deltas = torch.stack(all_rope_deltas)
-
-        return inputs_embeds, all_position_embeds, rope_deltas
 
     def _preprocess_decoder(
         self,

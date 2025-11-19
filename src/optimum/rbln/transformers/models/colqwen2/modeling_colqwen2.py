@@ -51,7 +51,7 @@ class RBLNColQwen2ForRetrieval(RBLNModel):
             new_model.vlm.model.language_model.load_state_dict(model.language_model.state_dict())
             model = new_model
 
-        # del model.vlm.model.lm_head
+        # replace the lm_head with the custom text projection layer for optimization
         model.vlm.model.lm_head = model.embedding_proj_layer
 
         return model.to(torch.float32)
