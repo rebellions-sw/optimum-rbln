@@ -303,11 +303,13 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMix
         **lm_kwargs: Dict[str, Any],
     ) -> Union[Tuple, RBLNDecoderOnlyOutput]:
         output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.rbln_config.output_hidden_states
+            output_hidden_states
+            if output_hidden_states is not None
+            else self.rbln_config.language_model.output_hidden_states
         )
-        if output_hidden_states != self.rbln_config.output_hidden_states:
+        if output_hidden_states != self.rbln_config.language_model.output_hidden_states:
             raise ValueError(
-                f"Variable output_hidden_states {output_hidden_states} is not equal to rbln_config.output_hidden_states {self.rbln_config.output_hidden_states} "
+                f"Variable output_hidden_states {output_hidden_states} is not equal to rbln_config.language_model.output_hidden_states {self.rbln_config.language_model.output_hidden_states} "
                 f"Please compile again with the correct argument."
             )
 
@@ -320,11 +322,14 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMix
             all_hidden_states = (
                 tuple(
                     torch.zeros(
-                        batch_size, inputs_embeds.shape[1], self.config.hidden_size, dtype=self.rbln_config.torch_dtype
+                        batch_size,
+                        inputs_embeds.shape[1],
+                        self.config.text_config.hidden_size,
+                        dtype=self.rbln_config.torch_dtype,
                     )
-                    for _ in range(self.config.num_hidden_layers + 1)
+                    for _ in range(self.config.text_config.num_hidden_layers + 1)
                 )
-                if self.rbln_config.output_hidden_states
+                if self.rbln_config.language_model.output_hidden_states
                 else None
             )
 
@@ -342,8 +347,8 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMix
                 )
                 padded_cache_lengths[b_idx] += outputs.padded_cache_lengths
                 logits.append(outputs.logits)
-                if self.rbln_config.output_hidden_states:
-                    for l_idx in range(self.config.num_hidden_layers + 1):
+                if self.rbln_config.language_model.output_hidden_states:
+                    for l_idx in range(self.config.text_config.num_hidden_layers + 1):
                         mask_indices = torch.nonzero(attention_mask[b_idx], as_tuple=True)[0]
                         all_hidden_states[l_idx][b_idx].index_copy_(
                             dim=0, index=mask_indices, source=outputs.hidden_states[l_idx][0]
