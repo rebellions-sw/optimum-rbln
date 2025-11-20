@@ -491,9 +491,9 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 output_logits.append(outputs)
 
         if self.rbln_config.output_hidden_states:
-            num_hidden_layers = len(all_hidden_states[0])
+            num_hidden_layers = len(all_hidden_states[0]) - 1
             concatenated_hidden_states = ()
-            for l_idx in range(num_hidden_layers):
+            for l_idx in range(num_hidden_layers + 1):
                 l_hidden_states = torch.cat([hidden_states[l_idx] for hidden_states in all_hidden_states], dim=1)
                 l_hidden_states = l_hidden_states[:, :query_length, :]
                 concatenated_hidden_states += (l_hidden_states,)
