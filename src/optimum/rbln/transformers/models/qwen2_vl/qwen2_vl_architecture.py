@@ -114,7 +114,7 @@ class Qwen2VL_LanguageModelWrapper(DecoderOnlyWrapper):
         global_block_tables = args.pop(0)
         local_block_tables = None
         position_embeds = args.pop(0)
-        query_position = args.pop(0) if self.phase == "prefill" else None
+        query_position = args.pop(0) if self.phase == "prefill" and self.rbln_config.logits_to_keep > 0 else None
         position_ids = None
         attention_mask = args.pop(0) if self.rbln_config.use_attention_mask else None
         lora_int_id = args.pop(0) if self.rbln_config.lora_config else None
