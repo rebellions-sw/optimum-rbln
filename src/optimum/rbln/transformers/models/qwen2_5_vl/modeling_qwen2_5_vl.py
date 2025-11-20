@@ -354,6 +354,9 @@ class RBLNQwen2_5_VLModel(RBLNDecoderOnlyModel):
     ]
 
     def __post_init__(self, **kwargs):
+        if hasattr(self.config, "embedding_dim"):
+            self.embedding_dim = self.config.embedding_dim
+
         if not isinstance(self.config.text_config, PretrainedConfig):
             self.config = Qwen2_5_VLConfig(
                 text_config=self.config.text_config, vision_config=self.config.vision_config
@@ -375,27 +378,15 @@ class RBLNQwen2_5_VLModel(RBLNDecoderOnlyModel):
         return embed_tokens
 
     # FIXME: Workaround for the optimization purpose.
-    # rbln_config is not appropriate place fot the embedding_dim.
     @property
     def prefill_output_size(self):
+        hidden_size = self.embedding_dim if hasattr(self, "embedding_dim") else self.config.text_config.hidden_size
         return (
             1,
             self.rbln_config.prefill_chunk_size if self.rbln_config.logits_to_keep == 0 else 1,
-            self.rbln_config.embedding_dim,
+            hidden_size,
         )
 
-    @classmethod
-    def _update_submodule_config(
-        cls,
-        model: "PreTrainedModel",
-        rbln_config: RBLNModelConfig,
-        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
-    ):
-        # Being called as a submodule of ColQwen2, the linear attached for optimization purposes
-        # determines the prefill_output_size.
-        rbln_config.embedding_dim = model.config.embedding_dim
-
-        return rbln_config
 
     @classmethod
     def get_input_info(

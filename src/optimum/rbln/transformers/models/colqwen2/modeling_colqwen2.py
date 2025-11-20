@@ -53,6 +53,7 @@ class RBLNColQwen2ForRetrieval(RBLNModel):
 
         # replace the lm_head with the custom text projection layer for optimization
         model.vlm.model.lm_head = model.embedding_proj_layer
+        model.vlm.model.config.embedding_dim = model.config.embedding_dim
 
         return model.to(torch.float32)
 
