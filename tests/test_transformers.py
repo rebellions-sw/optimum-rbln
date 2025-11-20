@@ -416,7 +416,8 @@ class TestColQwen2Model(BaseTest.TestModel):
         # Reduce model size for faster testing
         vision_config = json.loads(config.vlm_config.vision_config.to_json_string())
         text_config = json.loads(config.vlm_config.text_config.to_json_string())
-        vision_config["depth"] = 1
+        vision_config["depth"] = 2
+        vision_config["fullatt_block_indexes"] = [1]
         text_config["num_hidden_layers"] = 1
         text_config["layer_types"] = text_config["layer_types"][:1]
 
