@@ -96,6 +96,7 @@ def paged_sliding_window_attn_decode(
     scale: Tensor,
     block_table: Tensor,
     block_size: int,
+    attn_mask: Tensor,
     s_aux: Optional[Tensor] = None,
 ) -> Tensor:
     return torch.empty_like(q)
@@ -113,6 +114,7 @@ def paged_sliding_window_attn_decode_fake(
     scale: Tensor,
     block_table: Tensor,
     block_size: int,
+    attn_mask: Tensor,
     s_aux: Optional[Tensor] = None,
 ) -> Tensor:
     return torch.empty_like(q)
