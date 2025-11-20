@@ -289,18 +289,12 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         if batch_size != cache_position.shape[0]:
             raise RuntimeError(f"Cache position size mismatch: got {cache_position.shape[0]}, expected {batch_size}.")
 
-        if is_external_block_tables:
-            if attention_mask is None:
-                raise ValueError("attention_mask should be provided with external block tables.")
-            if local_block_tables is None:
-                raise ValueError("local_block_tables should be provided with external block tables.")
-        else:
-            if self.rbln_config.use_local_attention:
-                local_block_tables = (
-                    local_block_tables
-                    if local_block_tables is not None
-                    else torch.arange(0, batch_size, dtype=torch.int16).view(batch_size, -1)
-                )
+        if self.rbln_config.use_local_attention:
+            local_block_tables = (
+                local_block_tables
+                if local_block_tables is not None
+                else torch.arange(0, batch_size, dtype=torch.int16).view(batch_size, -1)
+            )
 
         if self.rbln_config.use_attention_mask and attention_mask is None:
             for b_idx in range(batch_size):
