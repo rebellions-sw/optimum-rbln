@@ -276,7 +276,7 @@ class DecoderOnlyForCausalLM(nn.Module):
         global_block_tables: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
         lora_int_id: Optional[torch.Tensor] = None,
-        output_hidden_states: Optional[bool] = False,
+        output_hidden_states: Optional[bool] = None,
     ):
         # outputs
         hidden_states, all_hidden_states = self.model(
@@ -404,7 +404,7 @@ class DecoderOnlyModel(nn.Module):
         global_block_tables: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
         lora_int_id: Optional[torch.Tensor] = None,
-        output_hidden_states: Optional[bool] = False,
+        output_hidden_states: Optional[bool] = None,
     ):
         # retrieve input_ids and inputs_embeds
         if (input_ids is None) ^ (inputs_embeds is not None):
