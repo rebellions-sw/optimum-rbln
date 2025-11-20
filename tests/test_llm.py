@@ -120,6 +120,26 @@ class TestQwen2Model(LLMTest.TestLLMWithoutLMHead):
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "layer_types": ["full_attention"], "max_position_embeddings": 1024}
 
 
+class TestQwen2ForCausalLM_OutputHiddenStates(TestQwen2ForCausalLM):
+    RBLN_CLASS_KWARGS = {"rbln_config": {"output_hidden_states": True}}
+
+    def get_inputs(self):
+        inputs = super().get_inputs()
+        inputs["return_dict_in_generate"] = True
+        inputs["output_hidden_states"] = True
+        return inputs
+
+
+class TestQwen2Model_OutputHiddenStates(TestQwen2Model):
+    RBLN_CLASS_KWARGS = {"rbln_config": {"output_hidden_states": True}}
+
+    def get_inputs(self):
+        inputs = super().get_inputs()
+        inputs["return_dict_in_generate"] = True
+        inputs["output_hidden_states"] = True
+        return inputs
+
+
 class TestQwen3ForCausalLM(LLMTest.TestLLM):
     RBLN_CLASS = RBLNQwen3ForCausalLM
     HF_MODEL_ID = "trl-internal-testing/tiny-Qwen3ForCausalLM"
@@ -640,6 +660,20 @@ class TestGemma3ForConditionalGeneration(LLMTest.TestLLM):
         inputs = tokenizer(images=[image], text=[self.PROMPT], return_tensors="pt", padding=True)
         inputs["max_new_tokens"] = 20
         inputs["do_sample"] = False
+        return inputs
+
+
+class TestGemma3ForConditionalGeneration_OutputHiddenStates(TestGemma3ForConditionalGeneration):
+    RBLN_CLASS_KWARGS = {
+        "rbln_config": {
+            "language_model": {"use_inputs_embeds": True, "kvcache_partition_len": 4096, "output_hidden_states": True}
+        }
+    }
+
+    def get_inputs(self):
+        inputs = super().get_inputs()
+        inputs["return_dict_in_generate"] = True
+        inputs["output_hidden_states"] = True
         return inputs
 
 
