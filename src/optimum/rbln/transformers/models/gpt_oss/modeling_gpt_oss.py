@@ -109,6 +109,18 @@ class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
         return rbln_config
 
+    @classmethod
+    def get_pytorch_model(
+        cls,
+        *args,
+        rbln_config: Optional[RBLNDecoderOnlyModelConfig] = None,
+        **kwargs,
+    ) -> PreTrainedModel:
+        if rbln_config._support_mxfp4:
+            return cls._get_mxfp4_pytorch_model(*args, rbln_config=rbln_config, **kwargs)
+        else:
+            return super().get_pytorch_model(*args, rbln_config=rbln_config, **kwargs)
+
     # FIXME(thkim): workaround patch for dtype
     @staticmethod
     def _get_dtype(dtype: Union[str, torch.dtype] = None, torch_dtype: Union[str, torch.dtype] = None):
@@ -125,7 +137,7 @@ class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         return dtype
 
     @classmethod
-    def get_pytorch_model(
+    def _get_mxfp4_pytorch_model(
         cls,
         model_id: str,
         *args,
@@ -135,6 +147,7 @@ class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         config: Optional[PretrainedConfig] = None,
         **kwargs,
     ) -> PreTrainedModel:
+        
         safetensor_files = load_weight_files(model_id, exception_keywords=["original"])
         safetensors = [load_file(safetensor_file) for safetensor_file in safetensor_files]
         state_dict = {}
