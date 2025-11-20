@@ -16,7 +16,11 @@ def main(
     kvcache_partition_len: typing.Optional[int] = None,
     diff: bool = False,
     n_layers: int = 1,
+    compiled_model_path: typing.Optional[str] = None,
 ):
+    if compiled_model_path is None:
+        compiled_model_path = os.path.basename(model_id)
+
     if from_transformers:
         model = RBLNQwen3MoeForCausalLM.from_pretrained(
             model_id,
@@ -29,7 +33,7 @@ def main(
         )
         model.save_pretrained(os.path.basename(model_id))
     else:
-        model = RBLNQwen3MoeForCausalLM.from_pretrained(os.path.basename(model_id), export=False)
+        model = RBLNQwen3MoeForCausalLM.from_pretrained(compiled_model_path, export=False)
 
     # model = Qwen2MoeForCausalLM.from_pretrained(model_id, num_hidden_layers=1)
     # replace_qwen2moe_block(model)
@@ -102,6 +106,12 @@ def main(
             print(
                 f"step {i} : {stats.pearsonr(r.detach().numpy().reshape(-1), g.detach().numpy().reshape(-1)).statistic}"
             )
+
+            #per batch
+            for j in range(r.shape[0]):
+                print(
+                    f"step {i}, batch {j} : {stats.pearsonr(r[j].detach().numpy().reshape(-1), g[j].detach().numpy().reshape(-1)).statistic}"
+                )
 
 
 if __name__ == "__main__":
