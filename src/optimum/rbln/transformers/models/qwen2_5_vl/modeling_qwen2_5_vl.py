@@ -33,7 +33,7 @@ from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     Qwen2_5_VLRotaryEmbedding,
 )
 
-from ....configuration_utils import RBLNCompileConfig
+from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...modeling_outputs import RBLNDecoderOnlyOutput
@@ -373,6 +373,29 @@ class RBLNQwen2_5_VLModel(RBLNDecoderOnlyModel):
                 self.config.text_config.pad_token_id,
             )
         return embed_tokens
+
+    # FIXME: Workaround for the optimization purpose.
+    # rbln_config is not appropriate place fot the embedding_dim.
+    @property
+    def prefill_output_size(self):
+        return (
+            1,
+            self.rbln_config.prefill_chunk_size if self.rbln_config.logits_to_keep == 0 else 1,
+            self.rbln_config.embedding_dim,
+        )
+
+    @classmethod
+    def _update_submodule_config(
+        cls,
+        model: "PreTrainedModel",
+        rbln_config: RBLNModelConfig,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+    ):
+        # Being called as a submodule of ColQwen2, the linear attached for optimization purposes
+        # determines the prefill_output_size.
+        rbln_config.embedding_dim = model.config.embedding_dim
+
+        return rbln_config
 
     @classmethod
     def get_input_info(

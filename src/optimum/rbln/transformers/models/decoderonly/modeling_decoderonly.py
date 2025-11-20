@@ -123,7 +123,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         return (
             1,
             self.rbln_config.prefill_chunk_size if self.rbln_config.logits_to_keep == 0 else 1,
-            128,
+            self.config.hidden_size,
         )
 
     @classmethod
@@ -329,8 +329,8 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         return model
 
     @classmethod
-    def use_query_position(cls, use_local_attention: bool, is_prefill: bool = True):
-        return use_local_attention
+    def use_query_position(cls, use_local_attention: bool, is_prefill: bool = True, logits_to_keep: int = None):
+        return use_local_attention or (is_prefill and logits_to_keep == 1)
 
     @classmethod
     def get_input_info(
@@ -363,7 +363,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         if rbln_config.use_local_attention:
             input_info.append(("local_block_tables", [1] if is_prefill else [batch_size, 1], "int16"))
 
-        if cls.use_query_position(rbln_config.use_local_attention, is_prefill):
+        if cls.use_query_position(rbln_config.use_local_attention, is_prefill, rbln_config.logits_to_keep):
             input_info.append(("query_position", [], "int16"))
 
         if rbln_config.use_attention_mask:
@@ -666,10 +666,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
             self.rbln_config.prefill_chunk_size if self.rbln_config.logits_to_keep == 0 else 1,
             self.config.vocab_size,
         )
-
-    @classmethod
-    def use_query_position(cls, use_local_attention: bool, is_prefill: bool = True):
-        return is_prefill
 
     def set_lora_int_ids(self, lora_int_ids: Optional[torch.Tensor]):
         if isinstance(lora_int_ids, int):
