@@ -60,8 +60,6 @@ class Qwen3MoeSparseMoeBlock(nn.Module):
         self.top_k = model.top_k
         self.norm_topk_prob = model.norm_topk_prob
         self.gate = model.gate
-        # self.shared_expert = model.shared_expert
-        # self.shared_expert_gate = model.shared_expert_gate
         self.experts = Qwen3MoeMLP(model.experts)
 
     def get_masked_routing_weights(self, router_logits):
@@ -69,9 +67,7 @@ class Qwen3MoeSparseMoeBlock(nn.Module):
             selected_weights, selected_experts = torch.topk(router_logits, k=self.top_k, dim=-1)
             selected_weights = torch.nn.functional.softmax(selected_weights, dim=1, dtype=torch.float)
         else:
-            # routing_weights: (batch * sequence_length, n_experts)
             routing_weights = torch.nn.functional.softmax(router_logits, dim=1, dtype=torch.float)
-            # selected_experts: (batch * sequence_length, top_k)
             selected_weights, selected_experts = torch.topk(routing_weights, k=self.top_k, dim=-1)
 
         masked_routing_weights = torch.zeros_like(router_logits, dtype=torch.float32)
@@ -108,7 +104,6 @@ class Qwen3MoeMLP(nn.Module):
         self.act_fn = ACT2FN[self.config.hidden_act]
         self.act_fn_name = self.config.hidden_act
 
-        # RBLN-optimized MLP
         self.num_experts = len(expert_list)
         self.gate_proj = nn.Linear(self.hidden_size, self.num_experts * self.intermediate_size, bias=False)
         self.up_proj = nn.Linear(self.hidden_size, self.num_experts * self.intermediate_size, bias=False)
@@ -118,22 +113,11 @@ class Qwen3MoeMLP(nn.Module):
         self.down_proj.weight.data = torch.stack([expert.down_proj.weight.data for expert in expert_list], dim=0)
 
     def forward(self, x, masked_routing_weights, expert_select_count):
-        # # masked_routing_weights: (batch * sequence_length, num_experts)
-        # # x: (batch * sequence_length, hidden_size)
-        # # y: (batch * sequence_length, num_experts * intermediate_size)
-        # y = self.act_fn(self.gate_proj(x)) * self.up_proj(x)
-
-        # # elementwise multiplication of y and routing_weights
-        # y = y.reshape(-1, self.num_experts, self.intermediate_size) * masked_routing_weights[:, :, None]
-        # y = y.reshape(-1, self.num_experts * self.intermediate_size)
-
-        # return self.down_proj(y)
         return torch.ops.rbln_custom_ops.custom_moe_glu(
             x,
             self.gate_proj.weight,
             self.up_proj.weight,
             self.down_proj.weight,
             masked_routing_weights,
-            expert_select_count,  # count for each expert
-            # self.act_fn_name,
+            expert_select_count,
         )
