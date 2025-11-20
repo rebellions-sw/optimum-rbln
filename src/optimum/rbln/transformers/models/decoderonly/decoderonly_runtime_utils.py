@@ -501,7 +501,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             all_hidden_states = concatenated_hidden_states
 
         # Aggregate output_logits
-        output_logits = torch.concat(output_logits, dim=-2) if output_logits else None
+        output_logits = torch.concat(output_logits, dim=-2)
         if self.rbln_config.logits_to_keep > 0:
             output_logits = output_logits[:, -self.rbln_config.logits_to_keep :, :]
         else:
