@@ -96,6 +96,8 @@ _import_structure = {
         "RBLNQwen2VisionTransformerPretrainedModelConfig",
         "RBLNQwen2VLForConditionalGeneration",
         "RBLNQwen2VLForConditionalGenerationConfig",
+        "RBLNQwen2VLModel",
+        "RBLNQwen2VLModelConfig",
     ],
     "decoderonly": [
         "RBLNDecoderOnlyModelConfig",
@@ -305,6 +307,8 @@ if TYPE_CHECKING:
         RBLNQwen2VisionTransformerPretrainedModelConfig,
         RBLNQwen2VLForConditionalGeneration,
         RBLNQwen2VLForConditionalGenerationConfig,
+        RBLNQwen2VLModel,
+        RBLNQwen2VLModelConfig,
     )
     from .qwen3 import RBLNQwen3ForCausalLM, RBLNQwen3ForCausalLMConfig, RBLNQwen3Model, RBLNQwen3ModelConfig
     from .resnet import RBLNResNetForImageClassification, RBLNResNetForImageClassificationConfig
