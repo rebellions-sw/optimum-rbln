@@ -35,7 +35,7 @@ class RBLNUNetSpatioTemporalConditionModelConfig(RBLNModelConfig):
                 If an integer is provided, it's used for both height and width.
             in_features (Optional[int]): Number of input features for the model.
             num_frames (Optional[int]): The number of frames in the generated video.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If batch_size is not a positive integer.

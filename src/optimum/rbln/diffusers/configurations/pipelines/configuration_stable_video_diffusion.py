@@ -54,7 +54,7 @@ class RBLNStableVideoDiffusionPipelineConfig(RBLNModelConfig):
             image_size (Optional[Tuple[int, int]]): Alternative way to specify image dimensions.
                 Cannot be used together with height/width.
             guidance_scale (Optional[float]): Scale for classifier-free guidance.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If both image_size and height/width are provided.
