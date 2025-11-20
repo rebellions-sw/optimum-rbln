@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Any, Optional
 
 from ....configuration_utils import RBLNModelConfig
 from ....transformers import RBLNCLIPVisionModelWithProjectionConfig
@@ -35,7 +35,7 @@ class RBLNStableVideoDiffusionPipelineConfig(RBLNModelConfig):
         num_frames: Optional[int] = None,
         decode_chunk_size: Optional[int] = None,
         guidance_scale: Optional[float] = None,
-        **kwargs,
+        **kwargs: Any,
     ):
         """
         Args:
