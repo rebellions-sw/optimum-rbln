@@ -15,22 +15,22 @@
 from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausalLMConfig
 
 
-class RBLNQwen2MoeForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
+class RBLNQwen3MoeForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
     """
-    Configuration class for RBLN Qwen2 Moe models.
+    Configuration class for RBLN Qwen3 Moe models.
     This class is an alias of RBLNDecoderOnlyModelForCausalLMConfig.
     Example usage:
     ```python
-    from optimum.rbln import RBLNQwen2MoeForCausalLM, RBLNQwen2MoeForCausalLMConfig
+    from optimum.rbln import RBLNQwen3MoeForCausalLM, RBLNQwen3MoeForCausalLMConfig
     # Create a configuration object
-    config = RBLNQwen2MoeForCausalLMConfig(
+    config = RBLNQwen3MoeForCausalLMConfig(
         batch_size=1,
-        max_seq_len=8192,
+        max_seq_len=262144,
         tensor_parallel_size=4
     )
     # Use the configuration with from_pretrained
-    model = RBLNQwen2MoeForCausalLM.from_pretrained(
-        "Qwen/Qwen1.5-MoE-A2.7B",
+    model = RBLNQwen3MoeForCausalLM.from_pretrained(
+        "Qwen/Qwen3-30B-A3B-Thinking-2507",
         export=True,
         rbln_config=config
     )
