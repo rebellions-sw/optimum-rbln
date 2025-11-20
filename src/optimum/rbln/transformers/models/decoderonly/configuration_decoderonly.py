@@ -233,7 +233,7 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
         self.logits_to_keep = logits_to_keep or self._default_logits_to_keep
         if self.logits_to_keep is not None and self.logits_to_keep > 1:
             raise NotImplementedError("`logits_to_keep` > 1 is currently not supported for RBLN models.")
-    
+
         self.output_hidden_states = output_hidden_states or False
 
         self.decoder_batch_sizes = None

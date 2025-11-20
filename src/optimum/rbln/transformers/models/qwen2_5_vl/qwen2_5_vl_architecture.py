@@ -171,8 +171,8 @@ class Qwen2_5_VL_LanguageModelWrapper(DecoderOnlyWrapper):
         position_embeds = args.pop(0)
         query_position = args.pop(0) if self.phase == "prefill" and self.rbln_config.logits_to_keep > 0 else None
         position_ids = None
-        lora_int_id = None
         attention_mask = args.pop(0) if self.rbln_config.use_attention_mask else None
+        lora_int_id = args.pop(0) if self.rbln_config.lora_config else None
         past_key_values = args
 
         if len(past_key_values) != 2 * self.num_hidden_layers:

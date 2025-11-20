@@ -352,19 +352,22 @@ class RBLNQwen2_5_VLModel(RBLNDecoderOnlyModel):
     _rbln_submodules = [
         {"name": "visual"},
     ]
+    _config_class = Qwen2_5_VLConfig
+    _rotary_emb_class = Qwen2_5_VLRotaryEmbedding
+    _get_rope_index_func = Qwen2_5_VLModel.get_rope_index
 
     def __post_init__(self, **kwargs):
         if hasattr(self.config, "embedding_dim"):
             self.embedding_dim = self.config.embedding_dim
 
         if not isinstance(self.config.text_config, PretrainedConfig):
-            self.config = Qwen2_5_VLConfig(
+            self.config = self._config_class(
                 text_config=self.config.text_config, vision_config=self.config.vision_config
             )
 
         super().__post_init__(**kwargs)
         self.visual = self.rbln_submodules[0]
-        self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config)
+        self.rotary_emb = self._rotary_emb_class(self.config)
         if not self.can_generate():
             self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
 
@@ -475,8 +478,7 @@ class RBLNQwen2_5_VLModel(RBLNDecoderOnlyModel):
             vision_tokens = input_id[0][vision_start_indices + 1]
             image_nums = (vision_tokens == image_token_id).sum()
             video_nums = (vision_tokens == video_token_id).sum()
-            position_ids, rope_deltas = Qwen2_5_VLModel.get_rope_index(
-                self,
+            position_ids, rope_deltas = self._get_rope_index_func(
                 input_id,
                 image_grid_thw[image_idx : image_idx + image_nums] if image_grid_thw is not None else None,
                 video_grid_thw[video_idx : video_idx + video_nums] if video_grid_thw is not None else None,
@@ -723,7 +725,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNQwen2_5_VLModel, RBLNDecoderOnl
                 )
                 logits.append(output.logits)
             logits = torch.cat(logits, dim=0)
-            # Decoder
+        # Decoder
         else:
             inputs_embeds, position_embed = self._preprocess_decoder(input_ids, cache_position)
             output = self.decoder(
