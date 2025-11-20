@@ -22,7 +22,7 @@ from ..decoderonly.configuration_decoderonly import RBLNLoRAConfig
 from ..decoderonly.decoderonly_architecture import DecoderOnlyAttention, DecoderOnlyLayer, DecoderOnlyWrapper
 
 
-class QWEN2MoeWrapper(DecoderOnlyWrapper):
+class Qwen2MoeWrapper(DecoderOnlyWrapper):
     def get_rbln_layer_class(self):
         return Qwen2MoeLayer
 
@@ -114,6 +114,5 @@ class Qwen2MoeMLP(nn.Module):
             self.up_proj.weight,
             self.down_proj.weight,
             masked_routing_weights,
-            expert_select_count,  # count for each expert
-            # self.act_fn_name,
+            expert_select_count,
         )
