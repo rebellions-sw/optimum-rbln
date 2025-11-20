@@ -86,26 +86,35 @@ class RBLNGptOssExperts(nn.Module):
         self.intermediate_size = model.intermediate_size
         self.num_experts = model.num_experts
         self.hidden_size = model.hidden_size
-        
+
         if hasattr(model, "gate_up_proj_blocks"):
             self._support_mxfp4 = True
         else:
             self._support_mxfp4 = False
 
         if self._support_mxfp4:
-            self.register_buffer("gate_proj_blocks", model.gate_up_proj_blocks.data[:, ::2, :, :].reshape(
-                self.num_experts, self.intermediate_size, -1
-            ))
+            self.register_buffer(
+                "gate_proj_blocks",
+                model.gate_up_proj_blocks.data[:, ::2, :, :].reshape(self.num_experts, self.intermediate_size, -1),
+            )
             self.register_buffer("gate_proj_scales", model.gate_up_proj_scales.data[:, ::2, :])
-            self.register_buffer("gate_proj_bias", model.gate_up_proj_bias.data[:, ::2].reshape(self.num_experts, self.intermediate_size))
+            self.register_buffer(
+                "gate_proj_bias",
+                model.gate_up_proj_bias.data[:, ::2].reshape(self.num_experts, self.intermediate_size),
+            )
 
-            self.register_buffer("up_proj_blocks", model.gate_up_proj_blocks.data[:, 1::2, :, :].reshape(
-                self.num_experts, self.intermediate_size, -1
-            ))
+            self.register_buffer(
+                "up_proj_blocks",
+                model.gate_up_proj_blocks.data[:, 1::2, :, :].reshape(self.num_experts, self.intermediate_size, -1),
+            )
             self.register_buffer("up_proj_scales", model.gate_up_proj_scales.data[:, 1::2, :])
-            self.register_buffer("up_proj_bias", model.gate_up_proj_bias.data[:, 1::2].reshape(self.num_experts, self.intermediate_size))
+            self.register_buffer(
+                "up_proj_bias", model.gate_up_proj_bias.data[:, 1::2].reshape(self.num_experts, self.intermediate_size)
+            )
 
-            self.register_buffer("down_proj_blocks", model.down_proj_blocks.data.reshape(self.num_experts, self.hidden_size, -1))
+            self.register_buffer(
+                "down_proj_blocks", model.down_proj_blocks.data.reshape(self.num_experts, self.hidden_size, -1)
+            )
             self.register_buffer("down_proj_scales", model.down_proj_scales.data)
             self.register_buffer("down_proj_bias", model.down_proj_bias.data)
         else:
@@ -113,7 +122,6 @@ class RBLNGptOssExperts(nn.Module):
             self.gate_up_proj_bias = model.gate_up_proj_bias
             self.down_proj = model.down_proj
             self.down_proj_bias = model.down_proj_bias
-            
 
         self.alpha = model.alpha  # 1.702
         self.limit = model.limit  # 7.0

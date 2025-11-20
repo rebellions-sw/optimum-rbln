@@ -77,7 +77,6 @@ class Qwen3MoeSparseMoeBlock(nn.Module):
         masked_routing_weights = torch.zeros_like(router_logits, dtype=torch.float32)
         masked_routing_weights.scatter_(1, selected_experts, selected_weights)
 
-
         ## get size per expert
         expert = router_logits.shape[1]
         zeros = torch.zeros(expert, dtype=torch.int32)

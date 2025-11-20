@@ -148,8 +148,6 @@ _import_structure = {
         "RBLNQwen2_5_VisionTransformerPretrainedModelConfig",
         "RBLNQwen2_5_VLForConditionalGeneration",
         "RBLNQwen2_5_VLForConditionalGenerationConfig",
-        "RBLNQwen2MoeForCausalLM",
-        "RBLNQwen2MoeForCausalLMConfig",
         "RBLNQwen3MoeForCausalLM",
         "RBLNQwen3MoeForCausalLMConfig",
         "RBLNQwen2Model",

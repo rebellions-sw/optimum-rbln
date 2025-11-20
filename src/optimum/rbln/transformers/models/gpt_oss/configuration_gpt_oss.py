@@ -41,7 +41,7 @@ class RBLNGptOssForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
     )
     ```
     """
-    
+
     @property
     def _support_mxfp4(self):
         npu = self.npu or rebel.get_npu_name() or ""
