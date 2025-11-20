@@ -17,7 +17,7 @@ from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelForCausa
 
 class RBLNQwen2MoeForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
     """
-    Configuration class for RBLN Qwen2 models.
+    Configuration class for RBLN Qwen2 Moe models.
     This class is an alias of RBLNDecoderOnlyModelForCausalLMConfig.
     Example usage:
     ```python
