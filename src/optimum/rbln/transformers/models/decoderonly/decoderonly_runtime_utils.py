@@ -280,26 +280,30 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         if lora_int_ids is not None and lora_int_ids.shape[0] != self.batch_size:
             raise ValueError(f"lora_int_ids size mismatch: got {lora_int_ids.shape[0]}, expected {self.batch_size}.")
 
-        if self.batch_size != cache_position.shape[0]:
+        batch_size = inputs.shape[0]
+        if batch_size != self.batch_size:
             raise RuntimeError(
-                f"Cache position size mismatch: got {cache_position.shape[0]}, expected {self.batch_size}."
+                f"Batch size mismatch: got {batch_size}, expected {self.batch_size} (compiled batch size)."
             )
+
+        if batch_size != cache_position.shape[0]:
+            raise RuntimeError(f"Cache position size mismatch: got {cache_position.shape[0]}, expected {batch_size}.")
 
         if is_external_block_tables:
             if attention_mask is None:
                 raise ValueError("attention_mask should be provided with external block tables.")
             if local_block_tables is None:
                 raise ValueError("local_block_tables should be provided with external block tables.")
-
-        if self.rbln_config.use_local_attention:
-            local_block_tables = (
-                local_block_tables
-                if local_block_tables is not None
-                else torch.arange(0, self.batch_size, dtype=torch.int16).view(self.batch_size, -1)
-            )
+        else:
+            if self.rbln_config.use_local_attention:
+                local_block_tables = (
+                    local_block_tables
+                    if local_block_tables is not None
+                    else torch.arange(0, batch_size, dtype=torch.int16).view(batch_size, -1)
+                )
 
         if self.rbln_config.use_attention_mask and attention_mask is None:
-            for b_idx in range(self.batch_size):
+            for b_idx in range(batch_size):
                 decoding_step = cache_position[b_idx].item()
                 if not (0 <= decoding_step < self.dec_attn_mask.shape[-1]):
                     raise ValueError(
