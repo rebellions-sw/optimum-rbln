@@ -18,30 +18,6 @@ import torch
 from torch import Tensor
 
 
-ACT_TYPES = Literal[
-    "gelu",
-    "gelu_10",
-    "gelu_fast",
-    "gelu_new",
-    "gelu_python",
-    "gelu_pytorch_tanh",
-    "gelu_accurate",
-    "laplace",
-    "leaky_relu",
-    "linear",
-    "mish",
-    "quick_gelu",
-    "relu",
-    "relu2",
-    "relu6",
-    "sigmoid",
-    "silu",
-    "swish",
-    "tanh",
-    "prelu",
-]
-
-
 @torch.library.custom_op(
     "rbln_custom_ops::custom_moe_glu",
     mutates_args=(),
@@ -65,12 +41,11 @@ def custom_moe_glu(
     - gate_proj_weight: [num_experts, hidden_size, intermediate_size]
     - up_proj_weight: [num_experts, hidden_size, intermediate_size]
     - down_proj_weight: [num_experts, intermediate_size, hidden_size]
-
+    - masked_routing_weight: [batch*seq_len, num_experts]
+    - expert_select_count: [num_experts]
     - gate_proj_bias: [num_experts, intermediate_size]
     - up_proj_bias: [num_experts, intermediate_size]
     - down_proj_bias: [num_experts, hidden_size]
-
-    - masked_routing_weight: [batch * seq_len, num_experts]
 
     Returns:
         Tensor: [batch * seq_len, hidden_size]
@@ -123,6 +98,8 @@ def custom_moe_ff(
     - gate_proj_weight: [hidden_size, num_experts * intermediate_size]
     - down_proj_weight: [num_experts * intermediate_size, hidden_size]
     - masked_routing_weight: [batch * seq_len, num_experts]
+    - gate_proj_bias: [num_experts * intermediate_size]
+    - down_proj_bias: [hidden_size]
 
     Returns:
         Tensor: [batch * seq_len, hidden_size]
