@@ -333,20 +333,20 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMix
                 token_type_id = token_type_ids[b_idx : b_idx + 1, attention_mask[b_idx].bool()]
                 cache_position = self.get_padded_cache_position(cache_position, token_type_id)
 
-                output = self.language_model.prefill_decoder(
+                outputs = self.language_model.prefill_decoder(
                     inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
                     attention_mask=attention_mask[b_idx],
                     cache_position=cache_position,
                     batch_idx=b_idx,
                     token_type_ids=token_type_ids[b_idx : b_idx + 1],  # do not pass token_type_id
                 )
-                padded_cache_lengths[b_idx] += output.padded_cache_lengths
-                logits.append(output.logits)
+                padded_cache_lengths[b_idx] += outputs.padded_cache_lengths
+                logits.append(outputs.logits)
                 if self.rbln_config.output_hidden_states:
                     for l_idx in range(self.config.num_hidden_layers + 1):
                         mask_indices = torch.nonzero(attention_mask[b_idx], as_tuple=True)[0]
                         all_hidden_states[l_idx][b_idx].index_copy_(
-                            dim=0, index=mask_indices, source=output.hidden_states[l_idx][0]
+                            dim=0, index=mask_indices, source=outputs.hidden_states[l_idx][0]
                         )
 
             logits = torch.cat(logits, dim=0)
@@ -361,14 +361,14 @@ class RBLNGemma3ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMix
                     f"Please run your model with one of these batch sizes or add support for batch size {batch_size}."
                 )
 
-            output = self.language_model.decoders[batch_size](
+            outputs = self.language_model.decoders[batch_size](
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
                 position_ids=position_ids if self.rbln_config.language_model.use_position_ids else None,
             )
-            logits = output.logits
-            all_hidden_states = output.hidden_states
+            logits = outputs.logits
+            all_hidden_states = outputs.hidden_states
 
         return RBLNDecoderOnlyOutput(
             logits=logits,
