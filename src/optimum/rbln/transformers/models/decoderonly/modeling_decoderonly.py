@@ -763,6 +763,14 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
                     f"Input's length({input_len}) exceeds compiled max_seq_len({self.rbln_config.max_seq_len})."
                 )
 
+            all_hidden_states = (
+                tuple(
+                    torch.zeros(batch_size, input_len, self.config.hidden_size, dtype=self.config.torch_dtype)
+                    for _ in range(self.config.num_hidden_layers)
+                )
+                if self.rbln_config.output_hidden_states
+                else None
+            )
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
                 output = self.prefill_decoder(
@@ -776,6 +784,14 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
                 )
                 padded_cache_lengths[b_idx] += output.padded_cache_lengths
                 logits.append(output.logits)
+
+                if self.rbln_config.output_hidden_states:
+                    for l_idx in range(self.config.num_hidden_layers):
+                        mask_indices = torch.nonzero(attention_mask[b_idx], as_tuple=True)[0]
+                        all_hidden_states[l_idx][b_idx].index_copy_(
+                            dim=0, index=mask_indices, source=output.hidden_states[l_idx][0]
+                        )
+
             logits = torch.cat(logits, dim=0)
         # Decoder
         else:
@@ -796,17 +812,22 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
                     f"or `max_length` in the generation config."
                 )
 
-            logits = self.decoders[batch_size](
+            output = self.decoders[batch_size](
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
                 position_ids=position_ids if self.rbln_config.use_position_ids else None,
                 lora_int_ids=lora_int_ids,
-            ).logits
+            )
+            logits = output.logits
+            all_hidden_states = output.hidden_states
 
         if not return_dict:
-            return logits, generate_idx, padded_cache_lengths
+            return logits, generate_idx, padded_cache_lengths, all_hidden_states
         else:
             return RBLNDecoderOnlyOutput(
-                logits=logits, generate_idx=generate_idx, padded_cache_lengths=padded_cache_lengths
+                logits=logits,
+                generate_idx=generate_idx,
+                padded_cache_lengths=padded_cache_lengths,
+                hidden_states=all_hidden_states,
             )

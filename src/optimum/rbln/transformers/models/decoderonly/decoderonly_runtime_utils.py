@@ -301,7 +301,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
             attention_mask = self.dec_attn_mask
 
-        logits = super().forward(
+        outputs = super().forward(
             inputs,
             cache_position,
             block_tables,
@@ -312,7 +312,10 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             lora_int_ids if self.rbln_config.use_lora else None,
         )
 
-        return RBLNDecoderOnlyOutput(logits=logits)
+        if self.rbln_config.output_hidden_states:
+            return RBLNDecoderOnlyOutput(logits=outputs[0], hidden_states=tuple(outputs[1:]))
+        else:
+            return RBLNDecoderOnlyOutput(logits=outputs, hidden_states=None)
 
     def _prepare_prefill_inputs(
         self,
@@ -436,6 +439,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
         # Process input in chunks of size `prefill_chunk_size`
         output_logits = []
+        all_hidden_states = [] if self.rbln_config.output_hidden_states else None
         for step in range(0, query_length, self.rbln_config.prefill_chunk_size):
             s, e = step, step + self.rbln_config.prefill_chunk_size
             # Extract the current chunk of inputs, cache positions, position ids, and position embeddings
@@ -468,7 +472,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 query_position = None
 
             # Forward pass for the current chunk
-            output_logit = super().forward(
+            outputs = super().forward(
                 input_chunk,
                 cache_pos_chunk,
                 block_tables,
@@ -478,12 +482,26 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 chunked_attention_mask if self.rbln_config.use_attention_mask else None,
                 position_ids_chunk,
                 lora_int_ids if self.rbln_config.use_lora else None,
-                out=self.out_buffers,
+                out=None if self.rbln_config.output_hidden_states else self.out_buffers,
             )
-            output_logits.append(output_logit)
+            if self.rbln_config.output_hidden_states:
+                output_logits.append(outputs[0])
+                all_hidden_states.append(tuple(outputs[1:]))
+            else:
+                output_logits.append(outputs)
+
+        if self.rbln_config.output_hidden_states:
+            num_hidden_layers = len(all_hidden_states[0])
+            concatenated_hidden_states = ()
+            for l_idx in range(num_hidden_layers):
+                l_hidden_states = torch.cat([hidden_states[l_idx] for hidden_states in all_hidden_states], dim=1)
+                l_hidden_states = l_hidden_states[:, :query_length, :]
+                concatenated_hidden_states += (l_hidden_states,)
+
+            all_hidden_states = concatenated_hidden_states
 
         # Aggregate output_logits
-        output_logits = torch.concat(output_logits, dim=-2)
+        output_logits = torch.concat(output_logits, dim=-2) if output_logits else None
         if self.rbln_config.logits_to_keep > 0:
             output_logits = output_logits[:, -self.rbln_config.logits_to_keep :, :]
         else:
@@ -505,4 +523,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             self.dec_attn_mask[batch_idx].fill_(0)
             self.dec_attn_mask[batch_idx, :, :, :query_length] = 1
 
-        return RBLNDecoderOnlyOutput(logits=output_logits, padded_cache_lengths=padded_cache_lengths)
+        return RBLNDecoderOnlyOutput(
+            logits=output_logits, padded_cache_lengths=padded_cache_lengths, hidden_states=all_hidden_states
+        )
