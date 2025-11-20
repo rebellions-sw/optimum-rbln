@@ -14,6 +14,7 @@
 
 from typing import TYPE_CHECKING, Optional
 
+import torch
 from transformers import AutoModelForAudioClassification
 from transformers.modeling_outputs import SequenceClassifierOutput
 
@@ -71,6 +72,15 @@ class RBLNASTForAudioClassification(RBLNModel):
         rbln_config.set_compile_cfgs([RBLNCompileConfig(input_info=input_info)])
         return rbln_config
 
-    def _prepare_output(self, output, return_dict):
-        # ignore return_dict as transformers doesn't use it for this model
-        return SequenceClassifierOutput(logits=output)
+    def forward(self, input_values: torch.Tensor, **kwargs) -> SequenceClassifierOutput:
+        r"""
+        Forward pass for the RBLN-optimized Audio Spectrogram Transformer model for audio classification.
+        Args:
+            input_values (`torch.FloatTensor` of shape `(batch_size, max_length, num_mel_bins)`):
+                Float values mel features extracted from the raw audio waveform. Raw audio waveform can be obtained by
+                loading a `.flac` or `.wav` audio file into an array of type `list[float]`, a `numpy.ndarray` or a `torch.Tensor`, *e.g.* via
+                the torchcodec library (`pip install torchcodec`) or the soundfile library (`pip install soundfile`).
+                To prepare the array into `input_features`, the [`AutoFeatureExtractor`] should be used for extracting the
+                mel features, padding and conversion into a tensor of type `torch.FloatTensor`.
+        """
+        return SequenceClassifierOutput(logits=super().forward(input_values, **kwargs))

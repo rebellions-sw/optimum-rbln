@@ -13,6 +13,8 @@
 # limitations under the License.
 
 
+from typing import Optional
+
 from ...configuration_generic import RBLNModelForImageClassificationConfig
 
 
@@ -23,3 +25,7 @@ class RBLNResNetForImageClassificationConfig(RBLNModelForImageClassificationConf
     This configuration class stores the configuration parameters specific to
     RBLN-optimized ResNet models for image classification tasks.
     """
+
+    def __init__(self, output_hidden_states: Optional[bool] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.output_hidden_states = output_hidden_states
