@@ -33,7 +33,7 @@ from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     Qwen2_5_VLRotaryEmbedding,
 )
 
-from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
+from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...modeling_outputs import RBLNDecoderOnlyOutput
@@ -386,7 +386,6 @@ class RBLNQwen2_5_VLModel(RBLNDecoderOnlyModel):
             self.rbln_config.prefill_chunk_size if self.rbln_config.logits_to_keep == 0 else 1,
             hidden_size,
         )
-
 
     @classmethod
     def get_input_info(
