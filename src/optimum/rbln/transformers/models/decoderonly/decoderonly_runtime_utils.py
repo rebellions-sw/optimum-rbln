@@ -482,7 +482,9 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 chunked_attention_mask if self.rbln_config.use_attention_mask else None,
                 position_ids_chunk,
                 lora_int_ids if self.rbln_config.use_lora else None,
-                out=None if self.rbln_config.output_hidden_states else self.out_buffers, # TODO(taehoon): add hidden states output
+                out=None
+                if self.rbln_config.output_hidden_states
+                else self.out_buffers,  # TODO(taehoon): add hidden states output
             )
             if self.rbln_config.output_hidden_states:
                 output_logits.append(outputs[0])
