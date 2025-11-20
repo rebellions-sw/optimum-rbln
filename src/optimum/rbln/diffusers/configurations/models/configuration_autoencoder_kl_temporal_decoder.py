@@ -40,7 +40,7 @@ class RBLNAutoencoderKLTemporalDecoderConfig(RBLNModelConfig):
                 Useful for managing memory usage during video generation.
             vae_scale_factor (Optional[float]): The scaling factor between pixel space and latent space.
                 Determines how much smaller the latent representations are compared to the original images.
-            **kwargs: Additional arguments passed to the parent RBLNModelConfig.
+            kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If batch_size is not a positive integer.

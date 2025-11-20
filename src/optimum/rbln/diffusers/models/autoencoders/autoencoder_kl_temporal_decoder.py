@@ -243,7 +243,6 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
             x: The input image to encode.
             return_dict:
                 Whether to return output as a dictionary. Defaults to True.
-            kwargs: Additional arguments to pass to the encoder.
 
         Returns:
             The latent representation or AutoencoderKLOutput if return_dict=True
