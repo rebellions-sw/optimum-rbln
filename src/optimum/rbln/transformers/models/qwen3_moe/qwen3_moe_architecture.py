@@ -22,7 +22,7 @@ from ..decoderonly.configuration_decoderonly import RBLNLoRAConfig
 from ..decoderonly.decoderonly_architecture import DecoderOnlyAttention, DecoderOnlyLayer, DecoderOnlyWrapper
 
 
-class QWEN3MoeWrapper(DecoderOnlyWrapper):
+class Qwen3MoeWrapper(DecoderOnlyWrapper):
     def get_rbln_layer_class(self):
         return Qwen3MoeLayer
 
