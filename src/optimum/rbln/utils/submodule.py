@@ -65,6 +65,7 @@ class SubModulesMixin:
     ) -> List["RBLNModel"]:
         rbln_submodules = []
         submodule_prefix = getattr(cls, "_rbln_submodule_prefix", None)
+        submodule_postfix = getattr(cls, "_rbln_submodule_postfix", None)
         preprocessors = kwargs.pop("preprocessors", [])
 
         for submodule in cls._rbln_submodules:
@@ -72,6 +73,9 @@ class SubModulesMixin:
             if submodule_prefix is not None:
                 torch_submodule: PreTrainedModel = getattr(model, submodule_prefix)
                 torch_submodule = getattr(torch_submodule, submodule_name)
+            elif submodule_postfix is not None:
+                torch_submodule: PreTrainedModel = getattr(model, submodule_name)
+                torch_submodule = getattr(torch_submodule, submodule_postfix)
             else:
                 torch_submodule: PreTrainedModel = getattr(model, submodule_name)
 

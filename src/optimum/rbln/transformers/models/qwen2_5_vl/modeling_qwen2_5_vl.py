@@ -17,7 +17,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 
 import torch
-from transformers import AutoModelForVision2Seq, PretrainedConfig, PreTrainedModel, Qwen2_5_VLForConditionalGeneration
+from transformers import (
+    AutoModelForVision2Seq,
+    PretrainedConfig,
+    PreTrainedModel,
+    Qwen2_5_VLConfig,
+    Qwen2_5_VLForConditionalGeneration,
+)
 from transformers.modeling_utils import no_init_weights
 from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     Qwen2_5_VisionPatchEmbed,
@@ -31,7 +37,7 @@ from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
 from ...modeling_outputs import RBLNDecoderOnlyOutput
-from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM
+from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModel, RBLNDecoderOnlyModelForCausalLM
 from .configuration_qwen2_5_vl import (
     RBLNQwen2_5_VisionTransformerPretrainedModelConfig,
     RBLNQwen2_5_VLForConditionalGenerationConfig,
@@ -42,7 +48,7 @@ from .qwen2_5_vl_architecture import Qwen2_5_VisionTransformerWrapper, Qwen2_5_V
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
 
 
 class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
@@ -338,66 +344,51 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
         return hidden_states
 
 
-class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
-    """
-    RBLNQwen2_5_VLForConditionalGeneration is a multi-modal model that integrates vision and language processing capabilities,
-    optimized for RBLN NPUs. It is designed for conditional generation tasks that involve both image and text inputs.
-
-    This model inherits from [`RBLNDecoderOnlyModelForCausalLM`]. Check the superclass documentation for the generic methods the library implements for all its models.
-
-    Important Note:
-        This model includes a Large Language Model (LLM). For optimal performance, it is highly recommended to use
-        tensor parallelism for the language model. This can be achieved by using the `rbln_config` parameter in the
-        `from_pretrained` method. Refer to the `from_pretrained` documentation and the RBLNQwen2_5_VLForConditionalGenerationConfig class for details.
-
-    Examples:
-        ```python
-        from optimum.rbln import RBLNQwen2_5_VLForConditionalGeneration
-
-        model = RBLNQwen2_5_VLForConditionalGeneration.from_pretrained(
-            "Qwen/Qwen2.5-VL-7B-Instruct",
-            export=True,
-            rbln_config={
-                "visual": {
-                    "max_seq_lens": 6400,
-                    "device": 0,
-                },
-                "tensor_parallel_size": 8,
-                "kvcache_partition_len": 16_384,
-                "max_seq_len": 114_688,
-                "device": [0, 1, 2, 3, 4, 5, 6, 7],
-            },
-        )
-
-        model.save_pretrained("compiled-qwen2.5-vl-7b-instruct")
-        ```
-    """
-
-    _supports_non_fp32 = False
-
+class RBLNQwen2_5_VLModel(RBLNDecoderOnlyModel):
     auto_model_class = AutoModelForVision2Seq
+    _decoder_wrapper_cls = Qwen2_5_VL_LanguageModelWrapper
+    _supports_non_fp32 = False
+    _use_rotary_emb = False
     _rbln_submodules = [
         {"name": "visual"},
     ]
-    _decoder_wrapper_cls = Qwen2_5_VL_LanguageModelWrapper
-    _use_rotary_emb = False
+    _config_class = Qwen2_5_VLConfig
+    _rotary_emb_class = Qwen2_5_VLRotaryEmbedding
+    _get_rope_index_func = Qwen2_5_VLModel.get_rope_index
 
     def __post_init__(self, **kwargs):
+        if hasattr(self.config, "embedding_dim"):
+            self.embedding_dim = self.config.embedding_dim
+
+        if not isinstance(self.config.text_config, PretrainedConfig):
+            self.config = self._config_class(
+                text_config=self.config.text_config, vision_config=self.config.vision_config
+            )
+
         super().__post_init__(**kwargs)
         self.visual = self.rbln_submodules[0]
-        self.mrope_section = self.config.rope_scaling["mrope_section"]
-        self.rotary_emb = Qwen2_5_VLRotaryEmbedding(self.config)
-        self.rope_deltas = torch.zeros(self.rbln_config.batch_size)
+        self.rotary_emb = self._rotary_emb_class(self.config)
+        if not self.can_generate():
+            self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
 
-    def can_generate(self):
-        return True
+    def _create_embedding_layer(self):
+        with no_init_weights():
+            embed_tokens = torch.nn.Embedding(
+                self.config.text_config.vocab_size,
+                self.config.text_config.hidden_size,
+                self.config.text_config.pad_token_id,
+            )
+        return embed_tokens
 
-    @classmethod
-    def _reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
-        model.model.lm_head = model.lm_head
-        model.lm_head = None
-        del model.lm_head
-        return model
+    # FIXME: Workaround for the optimization purpose.
+    @property
+    def prefill_output_size(self):
+        hidden_size = self.embedding_dim if hasattr(self, "embedding_dim") else self.config.text_config.hidden_size
+        return (
+            1,
+            self.rbln_config.prefill_chunk_size if self.rbln_config.logits_to_keep == 0 else 1,
+            hidden_size,
+        )
 
     @classmethod
     def get_input_info(
@@ -420,53 +411,9 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
 
         return input_info
 
-    def prepare_inputs_for_generation(
-        self,
-        input_ids: torch.LongTensor,
-        generate_idx: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.LongTensor] = None,
-        inputs_embeds: Optional[torch.Tensor] = None,
-        pixel_values=None,
-        pixel_values_videos=None,
-        image_grid_thw=None,
-        video_grid_thw=None,
-        second_per_grid_ts=None,
-        **kwargs,
-    ):
-        model_inputs = {}
-        is_prefill_phase = generate_idx is None
-
-        if is_prefill_phase:
-            generate_idx = attention_mask.sum(dim=-1, keepdim=True).int()
-            cache_position = None
-            model_inputs.update({"input_ids": input_ids})
-        else:
-            if inputs_embeds is not None:
-                raise NotImplementedError("Specifying inputs_embeds in decoder phase is not supported.")
-
-            input_ids = input_ids[:, -1:]
-            cache_position = generate_idx
-            generate_idx = generate_idx + 1
-            model_inputs.update({"input_ids": input_ids})
-
-        model_inputs.update(
-            {
-                "attention_mask": attention_mask,
-                "cache_position": cache_position,
-                "generate_idx": generate_idx,
-                "pixel_values": pixel_values,
-                "pixel_values_videos": pixel_values_videos,
-                "image_grid_thw": image_grid_thw,
-                "video_grid_thw": video_grid_thw,
-                "second_per_grid_ts": second_per_grid_ts,
-            }
-        )
-
-        return model_inputs
-
     def _get_position_embeddings(self, hidden_states, position_ids):
         cos, sin = self.rotary_emb(hidden_states, position_ids)
-        mrope_section = self.mrope_section * 2
+        mrope_section = self.config.rope_scaling["mrope_section"] * 2
         cos = torch.cat([m[i % 3] for i, m in enumerate(cos.split(mrope_section, dim=-1))], dim=-1).unsqueeze(1)
         sin = torch.cat([m[i % 3] for i, m in enumerate(sin.split(mrope_section, dim=-1))], dim=-1).unsqueeze(1)
         return torch.stack([cos, sin])
@@ -531,8 +478,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
             vision_tokens = input_id[0][vision_start_indices + 1]
             image_nums = (vision_tokens == image_token_id).sum()
             video_nums = (vision_tokens == video_token_id).sum()
-            position_ids, rope_deltas = Qwen2_5_VLModel.get_rope_index(
-                self,
+            position_ids, rope_deltas = self._get_rope_index_func(
                 input_id,
                 image_grid_thw[image_idx : image_idx + image_nums] if image_grid_thw is not None else None,
                 video_grid_thw[video_idx : video_idx + video_nums] if video_grid_thw is not None else None,
@@ -549,6 +495,155 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
         rope_deltas = torch.stack(all_rope_deltas)
 
         return inputs_embeds, all_position_embeds, rope_deltas
+
+    def forward(
+        self,
+        input_ids: Optional[torch.LongTensor] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        pixel_values: Optional[torch.Tensor] = None,
+        pixel_values_videos: Optional[torch.FloatTensor] = None,
+        image_grid_thw: Optional[torch.LongTensor] = None,
+        video_grid_thw: Optional[torch.LongTensor] = None,
+        cache_position: Optional[torch.LongTensor] = None,
+        second_per_grid_ts: Optional[torch.Tensor] = None,
+        return_dict: Optional[bool] = None,
+        **kwargs,
+    ) -> RBLNDecoderOnlyOutput:
+        inputs_embeds, position_embed, rope_deltas = self._preprocess_prefill(
+            input_ids,
+            attention_mask,
+            pixel_values,
+            pixel_values_videos,
+            image_grid_thw,
+            video_grid_thw,
+            second_per_grid_ts,
+        )
+
+        self.rope_deltas = rope_deltas
+        batch_size = inputs_embeds.shape[0]
+
+        logits = []
+        for b_idx in range(batch_size):
+            query_length = attention_mask[b_idx].sum(dim=-1).int().item()
+            cache_position = torch.arange(query_length, dtype=torch.int32).unsqueeze(0)
+
+            output = self.prefill_decoder(
+                inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
+                attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
+                cache_position=cache_position,
+                batch_idx=b_idx,
+                position_embed=position_embed[:, b_idx : b_idx + 1],
+                block_tables=self.block_tables,
+            )
+            logits.append(output.logits)
+        logits = torch.cat(logits, dim=0)
+
+        if not return_dict:
+            return logits
+        else:
+            return RBLNDecoderOnlyOutput(logits=logits)
+
+
+# MRO: RBLNQwen2_5_VLForConditionalGeneration -> RBLNQwen2_5_VLModel -> RBLNDecoderOnlyModelForCausalLM -> RBLNDecoderOnlyModel -> RBLNModel
+class RBLNQwen2_5_VLForConditionalGeneration(RBLNQwen2_5_VLModel, RBLNDecoderOnlyModelForCausalLM):
+    """
+    RBLNQwen2_5_VLForConditionalGeneration is a multi-modal model that integrates vision and language processing capabilities,
+    optimized for RBLN NPUs. It is designed for conditional generation tasks that involve both image and text inputs.
+
+    This model inherits from [`RBLNDecoderOnlyModelForCausalLM`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    Important Note:
+        This model includes a Large Language Model (LLM). For optimal performance, it is highly recommended to use
+        tensor parallelism for the language model. This can be achieved by using the `rbln_config` parameter in the
+        `from_pretrained` method. Refer to the `from_pretrained` documentation and the RBLNQwen2_5_VLForConditionalGenerationConfig class for details.
+
+    Examples:
+        ```python
+        from optimum.rbln import RBLNQwen2_5_VLForConditionalGeneration
+
+        model = RBLNQwen2_5_VLForConditionalGeneration.from_pretrained(
+            "Qwen/Qwen2.5-VL-7B-Instruct",
+            export=True,
+            rbln_config={
+                "visual": {
+                    "max_seq_lens": 6400,
+                    "device": 0,
+                },
+                "tensor_parallel_size": 8,
+                "kvcache_partition_len": 16_384,
+                "max_seq_len": 114_688,
+                "device": [0, 1, 2, 3, 4, 5, 6, 7],
+            },
+        )
+
+        model.save_pretrained("compiled-qwen2.5-vl-7b-instruct")
+        ```
+    """
+
+    auto_model_class = AutoModelForVision2Seq
+    _decoder_wrapper_cls = Qwen2_5_VL_LanguageModelWrapper
+    _supports_non_fp32 = False
+    _use_rotary_emb = False
+    _rbln_submodules = [
+        {"name": "visual"},
+    ]
+
+    def __post_init__(self, **kwargs):
+        super().__post_init__(**kwargs)
+        self.rope_deltas = torch.zeros(self.rbln_config.batch_size)
+
+    def can_generate(self):
+        return True
+
+    @classmethod
+    def _reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
+        model.model.lm_head = model.lm_head
+        return model
+
+    def prepare_inputs_for_generation(
+        self,
+        input_ids: torch.LongTensor,
+        generate_idx: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.LongTensor] = None,
+        inputs_embeds: Optional[torch.Tensor] = None,
+        pixel_values=None,
+        pixel_values_videos=None,
+        image_grid_thw=None,
+        video_grid_thw=None,
+        second_per_grid_ts=None,
+        **kwargs,
+    ):
+        model_inputs = {}
+        is_prefill_phase = generate_idx is None
+
+        if is_prefill_phase:
+            generate_idx = attention_mask.sum(dim=-1, keepdim=True).int()
+            cache_position = None
+            model_inputs.update({"input_ids": input_ids})
+        else:
+            if inputs_embeds is not None:
+                raise NotImplementedError("Specifying inputs_embeds in decoder phase is not supported.")
+
+            input_ids = input_ids[:, -1:]
+            cache_position = generate_idx
+            generate_idx = generate_idx + 1
+            model_inputs.update({"input_ids": input_ids})
+
+        model_inputs.update(
+            {
+                "attention_mask": attention_mask,
+                "cache_position": cache_position,
+                "generate_idx": generate_idx,
+                "pixel_values": pixel_values,
+                "pixel_values_videos": pixel_values_videos,
+                "image_grid_thw": image_grid_thw,
+                "video_grid_thw": video_grid_thw,
+                "second_per_grid_ts": second_per_grid_ts,
+            }
+        )
+
+        return model_inputs
 
     def _preprocess_decoder(
         self,
@@ -617,7 +712,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNDecoderOnlyModelForCausalLM):
                 )
                 logits.append(output.logits)
             logits = torch.cat(logits, dim=0)
-            # Decoder
+        # Decoder
         else:
             inputs_embeds, position_embed = self._preprocess_decoder(input_ids, cache_position)
             output = self.decoder(

@@ -396,12 +396,14 @@ class TestColPaliModel(BaseTest.TestModel):
 class TestColQwen2Model(BaseTest.TestModel):
     RBLN_AUTO_CLASS = None
     RBLN_CLASS = RBLNColQwen2ForRetrieval
-    HF_MODEL_ID = "vidore/colqwen2-v1.0-hf"
+    HF_MODEL_ID = "Sahil-Kabir/colqwen2.5-v0.2-hf"
     RBLN_CLASS_KWARGS = {
         "rbln_config": {
-            "visual": {"max_seq_lens": 512},
-            "tensor_parallel_size": 1,
-            "max_seq_len": 32_768,
+            "vlm": {
+                "visual": {"max_seq_lens": 512},
+                "tensor_parallel_size": 1,
+                "max_seq_len": 32_768,
+            }
         }
     }
     HF_CONFIG_KWARGS = {}  # Initialize empty to avoid sharing with other classes
@@ -414,7 +416,8 @@ class TestColQwen2Model(BaseTest.TestModel):
         # Reduce model size for faster testing
         vision_config = json.loads(config.vlm_config.vision_config.to_json_string())
         text_config = json.loads(config.vlm_config.text_config.to_json_string())
-        vision_config["depth"] = 1
+        vision_config["depth"] = 2
+        vision_config["fullatt_block_indexes"] = [1]
         text_config["num_hidden_layers"] = 1
         text_config["layer_types"] = text_config["layer_types"][:1]
 
