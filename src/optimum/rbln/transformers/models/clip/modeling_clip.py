@@ -15,12 +15,7 @@
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import torch
-from transformers import (
-    CLIPTextConfig,
-    CLIPTextModel,
-    CLIPVisionConfig,
-    CLIPVisionModel,
-)
+from transformers import CLIPTextConfig, CLIPTextModel, CLIPVisionConfig, CLIPVisionModel
 from transformers.modeling_outputs import BaseModelOutputWithPooling
 from transformers.models.clip.modeling_clip import CLIPTextModelOutput, CLIPVisionModelOutput
 
