@@ -423,20 +423,8 @@ class RBLNQwen2VLModel(RBLNDecoderOnlyModel):
                 position_embed=position_embed[:, b_idx : b_idx + 1],
                 block_tables=self.block_tables,
             )
-            projs = output.logits[:, :query_length]
 
-            if attention_mask is not None:
-                embedding = torch.full(
-                    (1, attention_mask.shape[-1], projs.shape[-1]),
-                    fill_value=1e-10,
-                    dtype=projs.dtype,
-                )
-                mask_indices = torch.nonzero(attention_mask[b_idx], as_tuple=True)[0]
-                embedding.index_copy_(dim=-2, index=mask_indices, source=projs)
-            else:
-                embedding = projs
-
-            logits.append(embedding)
+            logits.append(output.logits)
         logits = torch.cat(logits, dim=0)
 
         if not return_dict:
