@@ -176,7 +176,7 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
             encoder_hidden_states (torch.Tensor): The encoder hidden states.
             added_time_ids (torch.Tensor): A tensor containing additional sinusoidal embeddings and added to the time embeddings.
             return_dict (bool): Whether or not to return a [`~diffusers.models.unets.unet_spatio_temporal.UNetSpatioTemporalConditionOutput`] instead of a plain tuple.
-            
+
         Returns:
             (Union[`~diffusers.models.unets.unet_spatio_temporal.UNetSpatioTemporalConditionOutput`], Tuple)
         """
