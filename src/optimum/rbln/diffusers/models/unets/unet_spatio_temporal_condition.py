@@ -166,7 +166,7 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
         encoder_hidden_states: torch.Tensor,
         added_time_ids: torch.Tensor,
         return_dict: bool = True,
-        **kwargs: Any,
+        **kwargs,
     ) -> Union[UNetSpatioTemporalConditionOutput, Tuple]:
         """
         Forward pass for the RBLN-optimized UNet2DConditionModel.
@@ -176,7 +176,6 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
             encoder_hidden_states (torch.Tensor): The encoder hidden states.
             added_time_ids (torch.Tensor): A tensor containing additional sinusoidal embeddings and added to the time embeddings.
             return_dict (bool): Whether or not to return a [`~diffusers.models.unets.unet_spatio_temporal.UNetSpatioTemporalConditionOutput`] instead of a plain tuple.
-            kwargs: Additional arguments for the forward method.
             
         Returns:
             (Union[`~diffusers.models.unets.unet_spatio_temporal.UNetSpatioTemporalConditionOutput`], Tuple)
