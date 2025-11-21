@@ -102,8 +102,8 @@ class LoopProjector(LoopProcessor):
 
     def _process_outputs(self, outputs: list, **kwargs):
         if hasattr(self.rbln_config.vision_tower, "max_image_size"):
-            concatenated_output = torch.cat(outputs, dim=1)
-            return concatenated_output
+            concat_output = torch.cat(outputs, dim=1)
+            return concat_output
         else:
             output = kwargs["out"]
             return output[0]
@@ -369,7 +369,6 @@ class RBLNLlavaForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixi
                     padding_tensor = torch.zeros(
                         (selected_image_feature.shape[0], max_patches - chunk_size, selected_image_feature.shape[2]),
                         dtype=selected_image_feature.dtype,
-                        device=selected_image_feature.device,
                     )
                     chunk = torch.cat([chunk, padding_tensor], dim=1)
                 chunks.append(chunk)
