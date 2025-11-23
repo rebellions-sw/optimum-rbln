@@ -226,10 +226,8 @@ class RBLNLlavaForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixi
     ) -> RBLNModelConfig:
         # support for pixtral that needs padding
         if hasattr(rbln_config.vision_tower, "max_image_size"):
-            num_positions = (
-                # rbln_config.batch_size
-                (rbln_config.vision_tower.max_image_size[0] // model_config.vision_config.patch_size)
-                * (rbln_config.vision_tower.max_image_size[1] // model_config.vision_config.patch_size)
+            num_positions = (rbln_config.vision_tower.max_image_size[0] // model_config.vision_config.patch_size) * (
+                rbln_config.vision_tower.max_image_size[1] // model_config.vision_config.patch_size
             )
             selected_image_feature_dim = num_positions
 
