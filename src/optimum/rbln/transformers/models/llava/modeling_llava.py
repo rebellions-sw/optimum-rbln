@@ -97,16 +97,18 @@ class LoopProjector(LoopProcessor):
 
     def _prepare_inputs_for_iteration(self, index, common_inputs, image_feature, **kwargs):
         image_feature_item = image_feature[index : index + 1]
-        out_buffer = [tensor[index : index + 1] for tensor in kwargs["out"]]
+        if hasattr(self.rbln_config.vision_tower, "max_image_size"):
+            out_buffer = [
+                tensor[:, index * image_feature.shape[1] : (index + 1) * image_feature.shape[1], :]
+                for tensor in kwargs["out"]
+            ]
+        else:
+            out_buffer = [tensor[index : index + 1] for tensor in kwargs["out"]]
         return ([image_feature_item], {"out": out_buffer})
 
     def _process_outputs(self, outputs: list, **kwargs):
-        if hasattr(self.rbln_config.vision_tower, "max_image_size"):
-            concat_output = torch.cat(outputs, dim=1)
-            return concat_output
-        else:
-            output = kwargs["out"]
-            return output[0]
+        output = kwargs["out"]
+        return output[0]
 
 
 class RBLNLlavaForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixin):
@@ -375,11 +377,8 @@ class RBLNLlavaForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixi
 
             split_features = torch.cat(chunks, dim=0)
             num_chunks = len(chunks)
-            projector_out_size = [1, max_patches, self.config.text_config.hidden_size]
-            projector_out_buffer = [
-                torch.empty(size=projector_out_size, dtype=torch.float32, device="cpu")
-                for _ in range(num_chunks * selected_image_feature.shape[0])
-            ]
+            projector_out_size = [1, max_patches * num_chunks, self.config.text_config.hidden_size]
+            projector_out_buffer = [torch.empty(size=projector_out_size, dtype=torch.float32, device="cpu")]
             projected_features = self.multi_modal_projector(split_features, out=projector_out_buffer)
             projected_features = projected_features.view(
                 selected_image_feature.shape[0], num_chunks * max_patches, self.config.text_config.hidden_size
