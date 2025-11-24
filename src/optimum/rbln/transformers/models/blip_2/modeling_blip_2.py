@@ -111,11 +111,18 @@ class RBLNBlip2VisionModel(RBLNModel):
     def forward(
         self,
         pixel_values: torch.FloatTensor,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-        interpolate_pos_encoding: bool = False,
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
+        """
+        Forward pass for the RBLN-optimized Blip2VisionModel model.
+
+        Args:
+            pixel_values (`torch.FloatTensor` of shape `(batch_size, num_channels, height, width)`): The tensors corresponding to the input images.
+            return_dict (bool, optional): Whether to return a ModelOutput instead of a plain tuple.
+
+        Returns:
+            BaseModelOutputWithPooling or tuple(torch.FloatTensor): The model outputs. If `return_dict=False` is passed, returns a tuple of tensors. Otherwise, returns a `BaseModelOutputWithPooling` object.
+        """
         batch_size = pixel_values.shape[0]
         outputs = []
         for i in range(batch_size):
@@ -231,17 +238,22 @@ class RBLNBlip2QFormerModel(RBLNModel):
     def forward(
         self,
         query_embeds: torch.FloatTensor,
-        query_length: Optional[int] = None,
-        attention_mask: Optional[torch.FloatTensor] = None,
-        head_mask: Optional[torch.FloatTensor] = None,
         encoder_hidden_states: Optional[torch.FloatTensor] = None,
         encoder_attention_mask: Optional[torch.FloatTensor] = None,
-        past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None,
-        use_cache: Optional[bool] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple[torch.Tensor], BaseModelOutputWithPoolingAndCrossAttentions]:
+        """
+        The forward pass for the RBLN-optimized Blip2QFormerModel model.
+
+        Args:
+            query_embeds (torch.FloatTensor): Hidden states to be used in the attention computation.
+            encoder_hidden_states (torch.FloatTensor, optional): Sequence of hidden-states at the output of the last layer of the encoder. Used in the cross-attention if the model is configured as a decoder.
+            encoder_attention_mask (torch.FloatTensor, optional): Mask to avoid performing attention on the padding token indices of the encoder input. This mask is used in the cross-attention if the model is configured as a decoder.
+            return_dict (bool, optional): Whether to return a ModelOutput instead of a plain tuple.
+
+        Returns:
+            BaseModelOutputWithPoolingAndCrossAttentions or tuple(torch.FloatTensor): The model outputs. If `return_dict=False` is passed, returns a tuple of tensors. Otherwise, returns a `BaseModelOutputWithPoolingAndCrossAttentions` object.
+        """
         batch_size = query_embeds.shape[0]
         outputs = []
         for i in range(batch_size):
