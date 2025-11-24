@@ -31,29 +31,50 @@ Generation utilities for Whisper.
 Modified from `transformers.models.whisper.generation_whisper.py`
 """
 
+from typing import Optional
+
 import torch
 import transformers
 from packaging import version
 from transformers import GenerationMixin
+from transformers.generation.configuration_utils import GenerationConfig
 from transformers.models.whisper.generation_whisper import WhisperGenerationMixin
 
 
 class RBLNWhisperGenerationMixin(WhisperGenerationMixin, GenerationMixin):
-    def generate(self, *args, generation_config=None, **kwargs):
-        num_beams = kwargs.get(
-            "num_beams",
-            generation_config.num_beams
-            if hasattr(generation_config, "num_beams") and generation_config.num_beams is not None
-            else 1,
-        )
-        if num_beams > 1:
+    def generate(
+        self,
+        input_features: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        generation_config: Optional[GenerationConfig] = None,
+        return_segments: Optional[bool] = None,
+        return_timestamps: Optional[bool] = None,
+        return_token_timestamps: Optional[bool] = None,
+        **kwargs,
+    ):
+        """
+        The generate function is utilized in its standard form as in the HuggingFace transformers library. User can use this function to generate text from the model.
+
+        Args:
+            input_features(torch.Tensor, optional): The input features to the model.
+            attention_mask(torch.Tensor, optional): Attention mask needs to be passed when doing long-form transcription using a batch size > 1.
+            generation_config(GenerationConfig, optional): The generation configuration to be used as base parametrization for the generation call. **kwargs passed to generate matching the attributes of generation_config will override them. If generation_config is not provided, the default will be used, which had the following loading priority: 1) from the generation_config.json model file, if it exists; 2) from the model configuration.
+            return_segments(bool, optional): Whether to return segments.
+            return_timestamps(bool, optional): Whether to return the timestamps with the text. For audios longer than 30 seconds, it is necessary to set return_timestamps=True.
+            return_token_timestamps(bool, optional): Whether to return token timestamps.
+            kwargs(dict, optional): Additional arguments passed to the generate function. See the HuggingFace transformers documentation for more details.
+        """
+        if kwargs.get("num_beams", None) is not None:
             raise ValueError(
-                f"Beam search is not supported in RBLNWhisperGenerationMixin. "
-                f"Received num_beams={num_beams}, but only num_beams=1 is allowed. "
-                f"Please set num_beams=1 for greedy search or adjust your configuration."
+                "Beam search is not supported in RBLNWhisperGenerationMixin. "
+                "Received num_beams={num_beams}, but only num_beams=1 is allowed. "
+                "Please set num_beams=1 for greedy search or adjust your configuration."
             )
 
-        return super().generate(*args, **kwargs)
+        if return_token_timestamps is not None:
+            kwargs["return_token_timestamps"] = return_token_timestamps
+
+        return super().generate(input_features, generation_config, **kwargs)
 
     def _postprocess_outputs(
         self,
