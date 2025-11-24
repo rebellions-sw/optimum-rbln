@@ -36,7 +36,7 @@ class RBLNViTForImageClassification(RBLNModelForImageClassification):
                 The tensors corresponding to the input images.
 
         Returns:
-            ImageClassifierOutput or tuple(torch.FloatTensor)
+            `ImageClassifierOutput` or `tuple(torch.FloatTensor)`
 
         """
         return ImageClassifierOutput(logits=super().forward(pixel_values, **kwargs))

@@ -35,12 +35,12 @@ class RBLNXLMRobertaModel(RBLNTransformerEncoderForFeatureExtraction):
         Forward pass for the RBLN-optimized XLM-RoBERTa base model.
 
         Args:
-            input_ids (`torch.Tensor` of shape `(batch_size, sequence_length)`, optional) — Indices of input sequence tokens in the vocabulary.
-            attention_mask (`torch.Tensor` of shape `(batch_size, sequence_length)`, optional) — Mask to avoid performing attention on padding token indices.
-            token_type_ids (`torch.Tensor` of shape `(batch_size, sequence_length)`, optional) — Segment token indices to indicate first and second portions of the inputs.
+            input_ids (`torch.Tensor` of shape `(batch_size, sequence_length)`, optional): Indices of input sequence tokens in the vocabulary.
+            attention_mask (`torch.Tensor` of shape `(batch_size, sequence_length)`, optional): Mask to avoid performing attention on padding token indices.
+            token_type_ids (`torch.Tensor` of shape `(batch_size, sequence_length)`, optional): Segment token indices to indicate first and second portions of the inputs.
 
         Returns:
-            BaseModelOutputWithPoolingAndCrossAttentions or tuple(torch.FloatTensor)
+            `BaseModelOutputWithPoolingAndCrossAttentions` or `tuple(torch.FloatTensor)`
         """
 
         return super().forward(input_ids, attention_mask, token_type_ids, **kwargs)
@@ -63,11 +63,11 @@ class RBLNXLMRobertaForSequenceClassification(RBLNModelForSequenceClassification
         Forward pass for the RBLN-optimized XLM-RoBERTa model for sequence classification.
 
         Args:
-            input_ids (`torch.LongTensor` of shape `(batch_size, sequence_length)`, optional) — Indices of input sequence tokens in the vocabulary.
-            attention_mask (`torch.FloatTensor` of shape `(batch_size, sequence_length)`, optional) — Mask to avoid performing attention on padding token indices.
+            input_ids (`torch.LongTensor` of shape `(batch_size, sequence_length)`, optional): Indices of input sequence tokens in the vocabulary.
+            attention_mask (`torch.FloatTensor` of shape `(batch_size, sequence_length)`, optional): Mask to avoid performing attention on padding token indices.
 
         Returns:
-            SequenceClassifierOutput or tuple(torch.FloatTensor)
+            `SequenceClassifierOutput` or `tuple(torch.FloatTensor)`
         """
 
         return super().forward(input_ids, attention_mask, **kwargs)
