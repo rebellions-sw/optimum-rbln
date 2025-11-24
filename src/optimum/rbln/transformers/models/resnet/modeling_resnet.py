@@ -78,7 +78,7 @@ class RBLNResNetForImageClassification(RBLNModelForImageClassification):
         Foward pass for the RBLN-optimized ResNet model for image classification.
 
         Args:
-            pixel_values (`torch.FloatTensor]` of shape `(batch_size, channels, height, width)`):
+            pixel_values (`torch.FloatTensor` of shape `(batch_size, channels, height, width)`):
                The tensors corresponding to the input images.
             output_hidden_states (`bool`, *optional*, defaults to `False`):
                Whether or not to return the hidden states of all layers. See `hidden_states` under returned tensors

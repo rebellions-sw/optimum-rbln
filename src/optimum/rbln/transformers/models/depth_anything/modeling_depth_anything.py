@@ -31,7 +31,7 @@ class RBLNDepthAnythingForDepthEstimation(RBLNModelForDepthEstimation):
         Forward pass for the RBLN-optimized DepthAnythingForDepthEstimation model.
 
         Args:
-            pixel_values (torch.FloatTensor of shape (batch_size, num_channels, image_size, image_size)) — The tensors corresponding to the input images.
+            pixel_values (torch.FloatTensor of shape (batch_size, num_channels, height, width)) — The tensors corresponding to the input images.
 
         Returns:
             DepthEstimatorOutput or tuple(torch.FloatTensor)
