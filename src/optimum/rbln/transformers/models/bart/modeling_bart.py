@@ -13,8 +13,9 @@
 # limitations under the License.
 
 import inspect
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
+import torch
 from transformers import BartForConditionalGeneration, PreTrainedModel
 
 from ....utils.logging import get_logger
@@ -34,6 +35,25 @@ class RBLNBartModel(RBLNTransformerEncoderForFeatureExtraction):
     This class provides hardware-accelerated inference for BART encoder models
     on RBLN devices, optimized for feature extraction use cases.
     """
+
+    def forward(
+        self,
+        input_ids: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        **kwargs,
+    ):
+        """
+        Forward pass for the RBLN-optimized BART model for feature extraction tasks.
+
+        Args:
+            input_ids (torch.LongTensor of shape (batch_size, sequence_length), optional) — Indices of input sequence tokens in the vocabulary.
+            attention_mask (torch.Tensor of shape (batch_size, sequence_length), optional) — Mask to avoid performing attention on padding token indices.
+
+        Returns:
+            Seq2SeqModelOutput or tuple(torch.FloatTensor)
+        """
+
+        return super().forward(input_ids, attention_mask, **kwargs)
 
 
 class RBLNBartForConditionalGeneration(RBLNModelForSeq2SeqLM):

@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Optional
+
 import torch
 
 from ...modeling_generic import (
@@ -37,6 +39,25 @@ class RBLNBertModel(RBLNTransformerEncoderForFeatureExtraction):
     @classmethod
     def _wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNBertModelConfig) -> torch.nn.Module:
         return BertModelWrapper(model, rbln_config)
+
+    def forward(
+        self,
+        input_ids: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        **kwargs,
+    ):
+        """
+        Forward pass for the RBLN-optimized BERT model for feature extraction tasks.
+
+        Args:
+            input_ids (torch.Tensor of shape (batch_size, sequence_length), optional) — Indices of input sequence tokens in the vocabulary.
+            attention_mask (torch.Tensor of shape (batch_size, sequence_length), optional) — Mask to avoid performing attention on padding token indices.
+
+        Returns:
+            BaseModelOutputWithPoolingAndCrossAttentions or tuple(torch.FloatTensor)
+        """
+
+        return super().forward(input_ids, attention_mask, **kwargs)
 
 
 class RBLNBertForMaskedLM(RBLNModelForMaskedLM):
