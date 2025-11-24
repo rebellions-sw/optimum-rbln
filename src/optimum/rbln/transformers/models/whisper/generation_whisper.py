@@ -72,11 +72,12 @@ class RBLNWhisperGenerationMixin(WhisperGenerationMixin, GenerationMixin):
             Transcribes or translates log-mel input features to a sequence of auto-regressively generated token ids.
         """
         if kwargs.get("num_beams", None) is not None:
-            raise ValueError(
-                "Beam search is not supported in RBLNWhisperGenerationMixin. "
-                "Received num_beams={num_beams}, but only num_beams=1 is allowed. "
-                "Please set num_beams=1 for greedy search or adjust your configuration."
-            )
+            if kwargs.get("num_beams") != 1:
+                raise ValueError(
+                    "Beam search is not supported in RBLNWhisperGenerationMixin. "
+                    "Received num_beams={num_beams}, but only num_beams=1 is allowed. "
+                    "Please set num_beams=1 for greedy search or adjust your configuration."
+                )
 
         return super().generate(
             input_features,
