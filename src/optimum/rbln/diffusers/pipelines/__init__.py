@@ -48,7 +48,6 @@ _import_structure = {
         "RBLNStableDiffusionImg2ImgPipeline",
         "RBLNStableDiffusionPipeline",
         "RBLNStableDiffusionInpaintPipeline",
-        "RBLNStableVideoDiffusionPipeline",
     ],
     "stable_diffusion_xl": [
         "RBLNStableDiffusionXLImg2ImgPipeline",
@@ -91,7 +90,6 @@ if TYPE_CHECKING:
         RBLNStableDiffusionImg2ImgPipeline,
         RBLNStableDiffusionInpaintPipeline,
         RBLNStableDiffusionPipeline,
-        RBLNStableVideoDiffusionPipeline,
     )
     from .stable_diffusion_3 import (
         RBLNStableDiffusion3Img2ImgPipeline,
