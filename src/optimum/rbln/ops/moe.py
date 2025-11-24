@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Literal, Optional
+from typing import Optional
 
 import torch
 from torch import Tensor
@@ -164,7 +164,7 @@ def custom_moe_glu_mxfp4(
     return torch.empty_like(hidden_states)
 
 
-@custom_moe_glu.register_fake
+@custom_moe_glu_mxfp4.register_fake
 def custom_moe_glu_mxfp4_fake(
     hidden_states: Tensor,
     gate_proj_blocks: Tensor,
