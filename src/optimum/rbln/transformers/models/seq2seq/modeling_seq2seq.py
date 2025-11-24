@@ -20,6 +20,7 @@ import rebel
 import torch
 from rebel.compile_context import CompileContext
 from transformers import AutoModelForSeq2SeqLM, PretrainedConfig, PreTrainedModel
+from transformers.generation.configuration_utils import GenerationConfig
 from transformers.generation.utils import GenerationMixin
 from transformers.modeling_outputs import BaseModelOutput, ModelOutput, Seq2SeqLMOutput
 
@@ -33,7 +34,7 @@ from .configuration_seq2seq import RBLNModelForSeq2SeqLMConfig
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, GenerationConfig, PretrainedConfig
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
 
 
 class RBLNRuntimeEncoder(RBLNPytorchRuntime):
