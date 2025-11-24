@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 import torch
 from transformers import GenerationConfig
 from transformers.generation.utils import GenerationMixin
+from transformers.modeling_outputs import ModelOutput
 
 
 if TYPE_CHECKING:
@@ -94,19 +95,21 @@ class RBLNDecoderOnlyGenerationMixin(GenerationMixin):
         attention_mask: Optional[torch.LongTensor] = None,
         generation_config: Optional[GenerationConfig] = None,
         **kwargs,
-    ):
+    ) -> Union[ModelOutput, torch.LongTensor]:
         """
         The generate function is utilized in its standard form as in the HuggingFace transformers library. User can use this function to generate text from the model.
-        Check the HuggingFace transformers documentation for more details: https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/text_generation#transformers.GenerationMixin.generate
+        Check the [HuggingFace transformers documentation](https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/text_generation#transformers.GenerationMixin.generate) for more details.
 
         Args:
             input_ids (torch.LongTensor): The input ids to the model.
             attention_mask (torch.LongTensor, optional): The attention mask to the model.
-            generation_config (GenerationConfig, optional): The generation configuration to be used as base parametrization for the generation call. **kwargs passed to generate matching the attributes of generation_config will override them. If generation_config is not provided, the default will be used, which had the following loading priority: 1) from the generation_config.json model file, if it exists; 2) from the model configuration. Please note that unspecified parameters will inherit [GenerationConfig](https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/text_generation#transformers.GenerationConfig)’s default values, whose documentation should be checked to parameterize generation.
-            kwargs (dict, optional): Additional arguments passed to the generate function. See the HuggingFace transformers documentation for more details.
+            generation_config (GenerationConfig, optional): The generation configuration to be used as base parametrization for the generation call. **kwargs passed to generate matching the attributes of generation_config will override them.
+                If generation_config is not provided, the default will be used, which had the following loading priority: 1) from the generation_config.json model file, if it exists; 2) from the model configuration.
+                Please note that unspecified parameters will inherit [GenerationConfig](https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/text_generation#transformers.GenerationConfig)’s default values.
+            kwargs (dict[str, Any], optional): Additional arguments passed to the generate function. See the HuggingFace transformers documentation for more details.
 
         Returns:
-            ModelOutput or torch.LongTensor
+            A ModelOutput (if return_dict_in_generate=True or when config.return_dict_in_generate=True) or a torch.LongTensor.
         """
         if generation_config is not None:
             kwargs["generation_config"] = generation_config

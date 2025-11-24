@@ -14,7 +14,7 @@
 
 import inspect
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 
 import torch
 from transformers import (
@@ -444,7 +444,20 @@ class RBLNBlip2ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixi
         inputs_embeds: Optional[torch.FloatTensor] = None,
         interpolate_pos_encoding: bool = False,
         **generate_kwargs,
-    ) -> torch.LongTensor:
+    ) -> List[torch.LongTensor]:
+        """
+        The generate function is utilized in its standard form as in the HuggingFace transformers library. User can use this function to generate text from the model.
+        Check the [HuggingFace transformers documentation](https://huggingface.co/docs/transformers/v4.57.1/en/model_doc/blip-2#transformers.Blip2ForConditionalGeneration.generate) for more details.
+
+        Args:
+            pixel_values (torch.FloatTensor): Input images to be processed.
+            input_ids (torch.LongTensor, optional): The sequence used as a prompt for the generation.
+            attention_mask (torch.LongTensor, optional): Mask to avoid performing attention on padding token indices
+            inputs_embeds (torch.FloatTensor, optional): Embedded representation of the inputs. Should be float, not int tokens.
+            interpolate_pos_encoding (bool, optional, defaults to False) — Whether to interpolate the positional encoding of the image embeddings.
+        Returns:
+            A list of strings of length batch_size * num_captions.
+        """
         batch_size = pixel_values.shape[0]
         image_embeds = self.vision_model(
             pixel_values,
