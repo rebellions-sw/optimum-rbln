@@ -96,7 +96,6 @@ class RBLNWav2Vec2ForCTC(RBLNModel):
             return_dict (`bool`, optional): Whether or not to return a ModelOutput instead of a plain tuple.
 
         Returns:
-            `CausalLMOutput`: When `return_dict=True` is passed or when `config.return_dict=True`.
-            `tuple(torch.FloatTensor)`: When `return_dict=False` is passed.
+            `CausalLMOutput` or `tuple(torch.FloatTensor)`: The model outputs. If `return_dict=False` is passed, returns a tuple of tensors. Otherwise, returns a `CausalLMOutput` object.
         """
         return super().forward(input_values=input_values, return_dict=return_dict, **kwargs)

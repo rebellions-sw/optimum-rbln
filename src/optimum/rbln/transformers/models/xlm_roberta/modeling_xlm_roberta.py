@@ -40,8 +40,7 @@ class RBLNXLMRobertaModel(RBLNTransformerEncoderForFeatureExtraction):
             token_type_ids (`torch.Tensor` of shape `(batch_size, sequence_length)`, optional): Segment token indices to indicate first and second portions of the inputs.
 
         Returns:
-            `BaseModelOutputWithPoolingAndCrossAttentions`: When `return_dict=True` is passed or when `config.return_dict=True`.
-            `tuple(torch.FloatTensor)`: When `return_dict=False` is passed.
+            `BaseModelOutputWithPoolingAndCrossAttentions` or `tuple(torch.FloatTensor)`: The model outputs. If `return_dict=False` is passed, returns a tuple of tensors. Otherwise, returns a `BaseModelOutputWithPoolingAndCrossAttentions` object.
         """
 
         return super().forward(input_ids, attention_mask, token_type_ids, **kwargs)
@@ -68,8 +67,7 @@ class RBLNXLMRobertaForSequenceClassification(RBLNModelForSequenceClassification
             attention_mask (`torch.FloatTensor` of shape `(batch_size, sequence_length)`, optional): Mask to avoid performing attention on padding token indices.
 
         Returns:
-            `SequenceClassifierOutput`: When `return_dict=True` is passed or when `config.return_dict=True`.
-            `tuple(torch.FloatTensor)`: When `return_dict=False` is passed.
+            `SequenceClassifierOutput` or `tuple(torch.FloatTensor)`: The model outputs. If `return_dict=False` is passed, returns a tuple of tensors. Otherwise, returns a `SequenceClassifierOutput` object.
         """
 
         return super().forward(input_ids, attention_mask, **kwargs)
