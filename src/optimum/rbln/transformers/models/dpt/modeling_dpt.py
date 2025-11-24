@@ -13,6 +13,8 @@
 # limitations under the License.
 
 
+import torch
+
 from ...modeling_generic import RBLNModelForDepthEstimation
 
 
@@ -23,3 +25,15 @@ class RBLNDPTForDepthEstimation(RBLNModelForDepthEstimation):
     This class provides hardware-accelerated inference for DPT (Dense Prediction Transformer)
     models on RBLN devices, supporting monocular depth estimation from single images.
     """
+
+    def forward(self, pixel_values: torch.Tensor, **kwargs):
+        """
+        Forward pass for the RBLN-optimized DPT model.
+
+        Args:
+            pixel_values (torch.FloatTensor of shape (batch_size, num_channels, image_size, image_size)) — The tensors corresponding to the input images.
+
+        Returns:
+            DepthEstimatorOutput or tuple(torch.FloatTensor)
+        """
+        return super().forward(pixel_values, **kwargs)

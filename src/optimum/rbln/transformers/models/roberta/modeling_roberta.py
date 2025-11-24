@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import torch
+
 from ...modeling_generic import RBLNModelForMaskedLM, RBLNModelForSequenceClassification
 
 
@@ -26,6 +28,19 @@ class RBLNRobertaForMaskedLM(RBLNModelForMaskedLM):
 
     rbln_model_input_names = ["input_ids", "attention_mask"]
 
+    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor, **kwargs):
+        """
+        Forward pass for the RBLN-optimized RoBERTa model for masked language modeling tasks.
+
+        Args:
+            input_ids (torch.LongTensor of shape (batch_size, sequence_length), optional) — Indices of input sequence tokens in the vocabulary.
+            attention_mask (torch.FloatTensor of shape (batch_size, sequence_length), optional) — Mask to avoid performing attention on padding token indices.
+
+        Returns:
+            MaskedLMOutput or tuple(torch.FloatTensor)
+        """
+        return super().forward(input_ids, attention_mask, **kwargs)
+
 
 class RBLNRobertaForSequenceClassification(RBLNModelForSequenceClassification):
     """
@@ -37,3 +52,16 @@ class RBLNRobertaForSequenceClassification(RBLNModelForSequenceClassification):
     """
 
     rbln_model_input_names = ["input_ids", "attention_mask"]
+
+    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor, **kwargs):
+        """
+        Forward pass for the RBLN-optimized RoBERTa model for sequence classification tasks.
+
+        Args:
+            input_ids (torch.LongTensor of shape (batch_size, sequence_length), optional) — Indices of input sequence tokens in the vocabulary.
+            attention_mask (torch.FloatTensor of shape (batch_size, sequence_length), optional) — Mask to avoid performing attention on padding token indices.
+
+        Returns:
+            SequenceClassifierOutput or tuple(torch.FloatTensor)
+        """
+        return super().forward(input_ids, attention_mask, **kwargs)
