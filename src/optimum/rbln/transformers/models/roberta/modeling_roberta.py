@@ -33,8 +33,8 @@ class RBLNRobertaForMaskedLM(RBLNModelForMaskedLM):
         Forward pass for the RBLN-optimized RoBERTa model for masked language modeling tasks.
 
         Args:
-            input_ids (torch.Tensor of shape (batch_size, sequence_length), optional) — Indices of input sequence tokens in the vocabulary. Padding will be ignored by default.
-            attention_mask (torch.Tensor of shape (batch_size, sequence_length), optional) — Mask to avoid performing attention on padding token indices.
+            input_ids (torch.LongTensor of shape (batch_size, sequence_length), optional) — Indices of input sequence tokens in the vocabulary.
+            attention_mask (torch.FloatTensor of shape (batch_size, sequence_length), optional) — Mask to avoid performing attention on padding token indices.
 
         Returns:
             MaskedLMOutput or tuple(torch.FloatTensor)
