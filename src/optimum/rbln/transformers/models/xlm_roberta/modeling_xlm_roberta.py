@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Optional, Union
 
 import torch
+from transformers.modeling_outputs import BaseModelOutputWithPoolingAndCrossAttentions, SequenceClassifierOutput
 
 from ...modeling_generic import RBLNModelForSequenceClassification, RBLNTransformerEncoderForFeatureExtraction
 
@@ -30,7 +31,7 @@ class RBLNXLMRobertaModel(RBLNTransformerEncoderForFeatureExtraction):
         attention_mask: Optional[torch.Tensor] = None,
         token_type_ids: Optional[torch.Tensor] = None,
         **kwargs,
-    ):
+    ) -> Union[BaseModelOutputWithPoolingAndCrossAttentions, tuple]:
         """
         Forward pass for the RBLN-optimized XLM-RoBERTa base model.
 
@@ -58,7 +59,7 @@ class RBLNXLMRobertaForSequenceClassification(RBLNModelForSequenceClassification
         input_ids: Optional[torch.LongTensor] = None,
         attention_mask: Optional[torch.FloatTensor] = None,
         **kwargs,
-    ):
+    ) -> Union[SequenceClassifierOutput, tuple]:
         """
         Forward pass for the RBLN-optimized XLM-RoBERTa model for sequence classification.
 

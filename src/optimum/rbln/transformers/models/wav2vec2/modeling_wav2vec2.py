@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Optional, Union
 
 import torch
 from transformers import AutoModelForCTC, Wav2Vec2Config, Wav2Vec2ForCTC
+from transformers.modeling_outputs import CausalLMOutput
 
 from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
@@ -87,7 +88,9 @@ class RBLNWav2Vec2ForCTC(RBLNModel):
         rbln_config.set_compile_cfgs([rbln_compile_config])
         return rbln_config
 
-    def forward(self, input_values: torch.Tensor, return_dict: Optional[bool] = None, **kwargs):
+    def forward(
+        self, input_values: torch.Tensor, return_dict: Optional[bool] = None, **kwargs
+    ) -> Union[CausalLMOutput, tuple]:
         """
         Forward pass for the RBLN-optimized Wav2Vec2 model for Connectionist Temporal Classification (CTC).
 
