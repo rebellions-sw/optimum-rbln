@@ -170,7 +170,7 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
     ) -> Union[UNetSpatioTemporalConditionOutput, Tuple]:
         """
         Forward pass for the RBLN-optimized UNetSpatioTemporalConditionModel.
-        
+
         Args:
             sample (torch.Tensor): The noisy input tensor with the following shape `(batch, channel, height, width)`.
             timestep (Union[torch.Tensor, float, int]): The number of timesteps to denoise an input.
