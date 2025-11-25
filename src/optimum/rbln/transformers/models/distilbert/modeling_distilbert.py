@@ -41,8 +41,8 @@ class RBLNDistilBertForQuestionAnswering(RBLNModelForQuestionAnswering):
         Forward pass for the RBLN-optimized DistilBERT model for question answering tasks.
 
         Args:
-            input_ids (torch.LongTensor of shape (batch_size, num_choices)) — Indices of input sequence tokens in the vocabulary.
-            attention_mask (torch.Tensor of shape (batch_size, sequence_length), optional) — Mask to avoid performing attention on padding token indices.
+            input_ids (torch.Tensor of shape (batch_size, sequence_length), optional): Indices of input sequence tokens in the vocabulary.
+            attention_mask (torch.Tensor of shape (batch_size, sequence_length), optional): Mask to avoid performing attention on padding token indices.
 
         Returns:
             The model outputs. If return_dict=False is passed, returns a tuple of tensors. Otherwise, returns a QuestionAnsweringModelOutput object.
