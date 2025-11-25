@@ -336,19 +336,14 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
         "width": 32,
     }
     RBLN_CLASS_KWARGS = {
-        "rbln_width": 32,
-        "rbln_height": 32,
-        "rbln_num_frames": 2,
-        "rbln_decode_chunk_size": 2,
-        "rbln_create_runtimes": True,
+        "rbln_config": {
+            "width": 32,
+            "height": 32,
+            "num_frames": 2,
+            "decode_chunk_size": 2,
+            "create_runtimes": True,
+        },
     }
-
-    def test_generate(self):
-        inputs = self.get_inputs()
-        output = self.model(**inputs).frames[0]
-        output = self.postprocess(inputs, output)
-        if self.EXPECTED_OUTPUT:
-            self.assertEqual(output, self.EXPECTED_OUTPUT)
 
 
 if __name__ == "__main__":
