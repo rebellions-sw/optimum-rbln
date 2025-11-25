@@ -34,7 +34,7 @@ class RBLNDPTForDepthEstimation(RBLNModelForDepthEstimation):
         Forward pass for the RBLN-optimized DPT model.
 
         Args:
-            pixel_values (torch.FloatTensor of shape (batch_size, num_channels, image_size, image_size)) — The tensors corresponding to the input images.
+            pixel_values (torch.FloatTensor of shape (batch_size, num_channels, image_size, image_size)): The tensors corresponding to the input images.
 
         Returns:
             The model outputs. If return_dict=False is passed, returns a tuple of tensors. Otherwise, returns a DepthEstimatorOutput object.
