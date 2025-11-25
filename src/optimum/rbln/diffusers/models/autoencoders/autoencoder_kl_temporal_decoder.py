@@ -53,7 +53,7 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
 
         if self.rbln_config.uses_encoder:
             self.encoder = RBLNRuntimeVAEEncoder(runtime=self.model[0], main_input_name="x")
-        self.decoder = RBLNRuntimeVAEDecoder(runtime=self.model[1], main_input_name="z")
+        self.decoder = RBLNRuntimeVAEDecoder(runtime=self.model[-1], main_input_name="z")
         self.image_size = self.rbln_config.image_size
 
     @classmethod
