@@ -365,7 +365,7 @@ class RBLNTimeSeriesTransformerForPrediction(RBLNModel):
             static_real_features (torch.FloatTensor of shape (batch_size, number of static real features), optional): Optional static real features which the model will add to the values of the time series.
 
         Returns:
-            The model outputs. If `return_dict=False` is passed, returns a tuple of tensors. Otherwise, returns a `SampleTSPredictionOutput` object.
+            The model outputs. If return_dict=False is passed, returns a tuple of tensors. Otherwise, returns a SampleTSPredictionOutput object.
         """
         self.validate_batch_size(**{k: v for k, v in locals().items() if isinstance(v, torch.Tensor)})
 

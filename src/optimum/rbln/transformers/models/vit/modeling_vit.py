@@ -34,11 +34,11 @@ class RBLNViTForImageClassification(RBLNModelForImageClassification):
         Forward pass for the RBLN-optimized Vision Transformer model for image classification.
 
         Args:
-            pixel_values (`torch.FloatTensor` of shape `(batch_size, channels, height, width)`):
+            pixel_values (torch.FloatTensor of shape (batch_size, channels, height, width)):
                 The tensors corresponding to the input images.
 
         Returns:
-            The model outputs. If `return_dict=False` is passed, returns a tuple of tensors. Otherwise, returns an `ImageClassifierOutput` object.
+            The model outputs. If return_dict=False is passed, returns a tuple of tensors. Otherwise, returns an ImageClassifierOutput object.
 
         """
         return ImageClassifierOutput(logits=super().forward(pixel_values, **kwargs))
