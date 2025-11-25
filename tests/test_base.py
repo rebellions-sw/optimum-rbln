@@ -152,9 +152,6 @@ class BaseTest:
                 **cls.RBLN_CLASS_KWARGS,
                 **cls.HF_CONFIG_KWARGS,
             )
-            import pdb
-
-            pdb.set_trace()
 
         @classmethod
         def get_rbln_local_dir(cls):
