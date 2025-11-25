@@ -22,7 +22,7 @@ from ..decoderonly.configuration_decoderonly import RBLNLoRAConfig
 from ..decoderonly.decoderonly_architecture import DecoderOnlyAttention, DecoderOnlyLayer, DecoderOnlyWrapper
 
 
-class QWEN2MoeWrapper(DecoderOnlyWrapper):
+class Qwen2MoeWrapper(DecoderOnlyWrapper):
     def get_rbln_layer_class(self):
         return Qwen2MoeLayer
 
@@ -56,12 +56,9 @@ class Qwen2MoeSparseMoeBlock(nn.Module):
         routing_weights = torch.nn.functional.softmax(router_logits, dim=1, dtype=torch.float)
 
         # selected_experts: (batch * sequence_length, top_k)
-        _, selected_experts = torch.topk(routing_weights, k=self.top_k, dim=-1)
-        mask = torch.zeros_like(routing_weights, dtype=torch.float32)
-        un_mask = torch.ones_like(selected_experts, dtype=torch.float32)
-        mask.scatter_(1, selected_experts, un_mask)
-
-        masked_routing_weights = routing_weights * mask
+        selected_weights, selected_experts = torch.topk(routing_weights, k=self.top_k, dim=-1)
+        masked_routing_weights = torch.zeros_like(router_logits, dtype=torch.float32)
+        masked_routing_weights.scatter_(1, selected_experts, selected_weights)
 
         ## get size per expert
         expert = router_logits.shape[1]
@@ -117,6 +114,5 @@ class Qwen2MoeMLP(nn.Module):
             self.up_proj.weight,
             self.down_proj.weight,
             masked_routing_weights,
-            expert_select_count,  # count for each expert
-            # self.act_fn_name,
+            expert_select_count,
         )
