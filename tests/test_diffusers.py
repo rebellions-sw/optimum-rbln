@@ -341,7 +341,6 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
             "height": 32,
             "num_frames": 2,
             "decode_chunk_size": 2,
-            "create_runtimes": True,
         },
     }
 
