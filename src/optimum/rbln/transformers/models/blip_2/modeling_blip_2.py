@@ -117,11 +117,11 @@ class RBLNBlip2VisionModel(RBLNModel):
         Forward pass for the RBLN-optimized Blip2VisionModel model.
 
         Args:
-            pixel_values (`torch.FloatTensor` of shape `(batch_size, num_channels, height, width)`): The tensors corresponding to the input images.
+            pixel_values (torch.FloatTensor of shape (batch_size, num_channels, height, width)): The tensors corresponding to the input images.
             return_dict (bool, optional): Whether to return a ModelOutput instead of a plain tuple.
 
         Returns:
-            BaseModelOutputWithPooling or tuple(torch.FloatTensor): The model outputs. If `return_dict=False` is passed, returns a tuple of tensors. Otherwise, returns a `BaseModelOutputWithPooling` object.
+            BaseModelOutputWithPooling or tuple(torch.FloatTensor): The model outputs. If return_dict=False is passed, returns a tuple of tensors. Otherwise, returns a BaseModelOutputWithPooling object.
         """
         batch_size = pixel_values.shape[0]
         outputs = []
