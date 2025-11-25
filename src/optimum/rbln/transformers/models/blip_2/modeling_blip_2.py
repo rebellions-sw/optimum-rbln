@@ -111,6 +111,7 @@ class RBLNBlip2VisionModel(RBLNModel):
     def forward(
         self,
         pixel_values: torch.FloatTensor,
+        interpolate_pos_encoding: bool = False,
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
         """
@@ -118,6 +119,7 @@ class RBLNBlip2VisionModel(RBLNModel):
 
         Args:
             pixel_values (torch.FloatTensor of shape (batch_size, num_channels, height, width)): The tensors corresponding to the input images.
+            interpolate_pos_encoding (bool, optional): Whether to interpolate the positional encoding of the image embeddings. Defaults to False.
             return_dict (bool, optional): Whether to return a ModelOutput instead of a plain tuple.
 
         Returns:
