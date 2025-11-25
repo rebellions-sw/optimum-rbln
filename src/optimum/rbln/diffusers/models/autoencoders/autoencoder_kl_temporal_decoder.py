@@ -111,7 +111,7 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
             if hasattr(pipe.vae.config, "block_out_channels"):
                 vae_scale_factor = 2 ** (len(pipe.vae.config.block_out_channels) - 1)
             else:
-                vae_scale_factor = 8 # vae image processor default value 8 (int)
+                vae_scale_factor = 8  # vae image processor default value 8 (int)
 
         if sample_size is None:
             sample_size = pipe.unet.config.sample_size
