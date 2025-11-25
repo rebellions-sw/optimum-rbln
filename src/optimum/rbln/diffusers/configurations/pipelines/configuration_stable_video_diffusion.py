@@ -48,8 +48,9 @@ class RBLNStableVideoDiffusionPipelineConfig(RBLNModelConfig):
             batch_size (Optional[int]): Batch size for inference, applied to all submodules.
             height (Optional[int]): Height of the generated images.
             width (Optional[int]): Width of the generated images.
-            num_frames (Optional[int]):
-            decode_chunk_size (Optional[int]):
+            num_frames (Optional[int]): The number of frames in the generated video.
+            decode_chunk_size (Optional[int]): The number of frames to decode at once during VAE decoding.
+                Useful for managing memory usage during video generation.
             sample_size (Optional[Tuple[int, int]]): Spatial dimensions for the UNet model.
             image_size (Optional[Tuple[int, int]]): Alternative way to specify image dimensions.
                 Cannot be used together with height/width.
