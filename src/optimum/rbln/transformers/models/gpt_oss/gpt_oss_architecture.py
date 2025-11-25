@@ -118,10 +118,16 @@ class RBLNGptOssExperts(nn.Module):
             self.register_buffer("down_proj_scales", model.down_proj_scales.data)
             self.register_buffer("down_proj_bias", model.down_proj_bias.data)
         else:
-            self.gate_up_proj = model.gate_up_proj
-            self.gate_up_proj_bias = model.gate_up_proj_bias
-            self.down_proj = model.down_proj
-            self.down_proj_bias = model.down_proj_bias
+            self.register_buffer("gate_proj_weight", model.gate_up_proj.data[:, :, ::2])
+            self.register_buffer("gate_proj_bias", model.gate_up_proj_bias.data[:, ::2])
+            self.register_buffer("up_proj_weight", model.gate_up_proj.data[:, :, 1::2])
+            self.register_buffer("up_proj_bias", model.gate_up_proj_bias.data[:, 1::2])
+            self.register_buffer("down_proj_weight", model.down_proj.data)
+            self.register_buffer("down_proj_bias", model.down_proj_bias.data)
+            # self.gate_up_proj = model.gate_up_proj
+            # self.gate_up_proj_bias = model.gate_up_proj_bias
+            # self.down_proj = model.down_proj
+            # self.down_proj_bias = model.down_proj_bias
 
         self.alpha = model.alpha  # 1.702
         self.limit = model.limit  # 7.0
@@ -147,25 +153,37 @@ class RBLNGptOssExperts(nn.Module):
                 torch.tensor(self.limit, dtype=hidden_states.dtype),
             )
         else:
-            batch_size = hidden_states.shape[0]
-            hidden_states = hidden_states.reshape(-1, self.hidden_size)  # (num_tokens, hidden_size)
-            num_experts = routing_weights.shape[1]
+            next_states = torch.ops.rbln_custom_ops.custom_moe_glu(
+                hidden_states,
+                self.gate_proj_weight,
+                self.up_proj_weight,
+                self.down_proj_weight,
+                routing_weights,
+                expert_select_count,
+                self.gate_proj_bias,
+                self.up_proj_bias,
+                self.down_proj_bias,
+            )
 
-            hidden_states = hidden_states.repeat(num_experts, 1)
-            hidden_states = hidden_states.view(num_experts, -1, self.hidden_size)
+            # batch_size = hidden_states.shape[0]
+            # hidden_states = hidden_states.reshape(-1, self.hidden_size)  # (num_tokens, hidden_size)
+            # num_experts = routing_weights.shape[1]
 
-            gate_up = torch.bmm(hidden_states, self.gate_up_proj.to(hidden_states.dtype)) + self.gate_up_proj_bias[
-                ..., None, :
-            ].to(hidden_states.dtype)
-            gate, up = gate_up[..., ::2], gate_up[..., 1::2]
-            gate = gate.clamp(min=None, max=self.limit)
-            up = up.clamp(min=-self.limit, max=self.limit)
-            glu = gate * torch.sigmoid(gate * self.alpha)
-            next_states = torch.bmm(((up + 1.0) * glu), self.down_proj.to(hidden_states.dtype))
-            next_states = next_states + self.down_proj_bias[..., None, :].to(hidden_states.dtype)
-            next_states = next_states.view(num_experts, batch_size, -1, self.hidden_size)
-            next_states = next_states * routing_weights.transpose(0, 1).view(num_experts, batch_size, -1)[..., None]
-            next_states = next_states.sum(dim=0)
+            # hidden_states = hidden_states.repeat(num_experts, 1)
+            # hidden_states = hidden_states.view(num_experts, -1, self.hidden_size)
+
+            # gate_up = torch.bmm(hidden_states, self.gate_up_proj.to(hidden_states.dtype)) + self.gate_up_proj_bias[
+            #     ..., None, :
+            # ].to(hidden_states.dtype)
+            # gate, up = gate_up[..., ::2], gate_up[..., 1::2]
+            # gate = gate.clamp(min=None, max=self.limit)
+            # up = up.clamp(min=-self.limit, max=self.limit)
+            # glu = gate * torch.sigmoid(gate * self.alpha)
+            # next_states = torch.bmm(((up + 1.0) * glu), self.down_proj.to(hidden_states.dtype))
+            # next_states = next_states + self.down_proj_bias[..., None, :].to(hidden_states.dtype)
+            # next_states = next_states.view(num_experts, batch_size, -1, self.hidden_size)
+            # next_states = next_states * routing_weights.transpose(0, 1).view(num_experts, batch_size, -1)[..., None]
+            # next_states = next_states.sum(dim=0)
 
         return next_states
 
