@@ -105,11 +105,13 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
         return_vae_scale_factor: bool = False,
     ) -> Tuple[int, int]:
         sample_size = rbln_config.sample_size
-        vae_scale_factor = (
-            pipe.vae_scale_factor
-            if hasattr(pipe, "vae_scale_factor")
-            else 2 ** (len(pipe.vae.config.block_out_channels) - 1)
-        )
+        if hasattr(pipe, "vae_scale_factor"):
+            vae_scale_factor = pipe.vae_scale_factor
+        else:
+            if hasattr(pipe.vae.config, "block_out_channels"):
+                vae_scale_factor = 2 ** (len(pipe.vae.config.block_out_channels) - 1)
+            else:
+                vae_scale_factor = 8 # vae image processor default value 8 (int)
 
         if sample_size is None:
             sample_size = pipe.unet.config.sample_size
@@ -161,14 +163,8 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
         model_config: "PretrainedConfig",
         rbln_config: RBLNAutoencoderKLTemporalDecoderConfig,
     ) -> RBLNAutoencoderKLTemporalDecoderConfig:
-        if rbln_config.batch_size is None:
-            rbln_config.batch_size = 1
-
         if rbln_config.sample_size is None:
             rbln_config.sample_size = model_config.sample_size
-
-        if isinstance(rbln_config.sample_size, int):
-            rbln_config.sample_size = (rbln_config.sample_size, rbln_config.sample_size)
 
         if rbln_config.vae_scale_factor is None:
             if hasattr(model_config, "block_out_channels"):
