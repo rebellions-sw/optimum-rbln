@@ -288,7 +288,7 @@ class RBLNSwinBackbone(RBLNModel):
             output_hidden_states (bool, optional) — Whether or not to return the hidden states of all layers. See hidden_states under returned tensors for more detail.
 
         Returns:
-            BackboneOutput or tuple(torch.FloatTensor)
+            The model outputs. If return_dict=False is passed, returns a tuple of tensors. Otherwise, returns a BackboneOutput object.
         """
 
         if len(kwargs) > 0 and any(value is not None for value in kwargs.values()):

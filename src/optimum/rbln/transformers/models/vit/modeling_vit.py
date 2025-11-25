@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Union
+from typing import Tuple, Union
 
 import torch
 from transformers.modeling_outputs import ImageClassifierOutput
@@ -29,7 +29,7 @@ class RBLNViTForImageClassification(RBLNModelForImageClassification):
     that process images as sequences of patches.
     """
 
-    def forward(self, pixel_values: torch.Tensor, **kwargs) -> Union[ImageClassifierOutput, tuple]:
+    def forward(self, pixel_values: torch.Tensor, **kwargs) -> Union[ImageClassifierOutput, Tuple]:
         """
         Forward pass for the RBLN-optimized Vision Transformer model for image classification.
 
@@ -38,7 +38,7 @@ class RBLNViTForImageClassification(RBLNModelForImageClassification):
                 The tensors corresponding to the input images.
 
         Returns:
-            `ImageClassifierOutput` or `tuple(torch.FloatTensor)`: The model outputs. If `return_dict=False` is passed, returns a tuple of tensors. Otherwise, returns an `ImageClassifierOutput` object.
+            The model outputs. If `return_dict=False` is passed, returns a tuple of tensors. Otherwise, returns an `ImageClassifierOutput` object.
 
         """
         return ImageClassifierOutput(logits=super().forward(pixel_values, **kwargs))

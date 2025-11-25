@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import torch
 from transformers.modeling_outputs import ImageClassifierOutputWithNoAttention
@@ -73,7 +73,7 @@ class RBLNResNetForImageClassification(RBLNModelForImageClassification):
 
     def forward(
         self, pixel_values: torch.Tensor, output_hidden_states: bool = None, return_dict: bool = None, **kwargs
-    ):
+    ) -> Union[Tuple, ImageClassifierOutputWithNoAttention]:
         """
         Foward pass for the RBLN-optimized ResNet model for image classification.
 
@@ -84,6 +84,9 @@ class RBLNResNetForImageClassification(RBLNModelForImageClassification):
                Whether or not to return the hidden states of all layers. See `hidden_states` under returned tensors
                for more details.
             return_dict (`bool`, *optional*, defaults to `True`): Whether to return a dictionary of outputs.
+
+        Returns:
+            The model outputs. If return_dict=False is passed, returns a tuple of tensors. Otherwise, returns a ImageClassifierOutputWithNoAttention object.
         """
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.rbln_config.output_hidden_states

@@ -30,10 +30,10 @@ if TYPE_CHECKING:
 class RBLNASTForAudioClassification(RBLNModel):
     """
     Audio Spectrogram Transformer model with an audio classification head on top (a linear layer on top of the pooled output) e.g. for datasets like AudioSet, Speech Commands v2.
-    This model inherits from [`RBLNModelForAudioClassification`]. Check the superclass documentation for the generic methods the library implements for all its models.
+    This model inherits from [RBLNModelForAudioClassification]. Check the superclass documentation for the generic methods the library implements for all its models.
 
-    A class to convert and run pre-trained transformer-based `ASTForAudioClassification` models on RBLN devices.
-    It implements the methods to convert a pre-trained transformers `ASTForAudioClassification` model into a RBLN transformer model by:
+    A class to convert and run pre-trained transformer-based ASTForAudioClassification models on RBLN devices.
+    It implements the methods to convert a pre-trained transformers ASTForAudioClassification model into a RBLN transformer model by:
 
     - transferring the checkpoint weights of the original into an optimized RBLN graph,
     - compiling the resulting graph using the RBLN Compiler.
@@ -59,7 +59,7 @@ class RBLNASTForAudioClassification(RBLNModel):
                     break
 
         if rbln_config.max_length is None:
-            raise ValueError("`max_length` should be specified!")
+            raise ValueError("max_length should be specified!")
 
         input_info = [
             (
@@ -73,14 +73,19 @@ class RBLNASTForAudioClassification(RBLNModel):
         return rbln_config
 
     def forward(self, input_values: torch.Tensor, **kwargs) -> SequenceClassifierOutput:
-        r"""
-        Forward pass for the RBLN-optimized Audio Spectrogram Transformer model for audio classification.
-        Args:
-            input_values (`torch.FloatTensor` of shape `(batch_size, max_length, num_mel_bins)`):
-                Float values mel features extracted from the raw audio waveform. Raw audio waveform can be obtained by
-                loading a `.flac` or `.wav` audio file into an array of type `list[float]`, a `numpy.ndarray` or a `torch.Tensor`, *e.g.* via
-                the torchcodec library (`pip install torchcodec`) or the soundfile library (`pip install soundfile`).
-                To prepare the array into `input_features`, the [`AutoFeatureExtractor`] should be used for extracting the
-                mel features, padding and conversion into a tensor of type `torch.FloatTensor`.
         """
+        Forward pass for the RBLN-optimized Audio Spectrogram Transformer model for audio classification.
+
+        Args:
+            input_values (torch.FloatTensor of shape (batch_size, max_length, num_mel_bins)):
+                Float values mel features extracted from the raw audio waveform. Raw audio waveform can be obtained by
+                loading a .flac or .wav audio file into an array of type list[float], a numpy.ndarray or a torch.Tensor, *e.g.* via
+                the torchcodec library (pip install torchcodec) or the soundfile library (pip install soundfile).
+                To prepare the array into input_features, the [AutoFeatureExtractor] should be used for extracting the
+                mel features, padding and conversion into a tensor of type torch.FloatTensor.
+
+        Returns:
+            Returns a SequenceClassifierOutput object.
+        """
+
         return SequenceClassifierOutput(logits=super().forward(input_values, **kwargs))

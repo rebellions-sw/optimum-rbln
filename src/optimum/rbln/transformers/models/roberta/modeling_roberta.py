@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Tuple, Union
+
 import torch
+from transformers.modeling_outputs import MaskedLMOutput, SequenceClassifierOutput
 
 from ...modeling_generic import RBLNModelForMaskedLM, RBLNModelForSequenceClassification
 
@@ -28,7 +31,7 @@ class RBLNRobertaForMaskedLM(RBLNModelForMaskedLM):
 
     rbln_model_input_names = ["input_ids", "attention_mask"]
 
-    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor, **kwargs):
+    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor, **kwargs) -> Union[Tuple, MaskedLMOutput]:
         """
         Forward pass for the RBLN-optimized RoBERTa model for masked language modeling tasks.
 
@@ -37,7 +40,7 @@ class RBLNRobertaForMaskedLM(RBLNModelForMaskedLM):
             attention_mask (torch.FloatTensor of shape (batch_size, sequence_length), optional) — Mask to avoid performing attention on padding token indices.
 
         Returns:
-            MaskedLMOutput or tuple(torch.FloatTensor)
+            The model outputs. If return_dict=False is passed, returns a tuple of tensors. Otherwise, returns a MaskedLMOutput object.
         """
         return super().forward(input_ids, attention_mask, **kwargs)
 
@@ -53,7 +56,9 @@ class RBLNRobertaForSequenceClassification(RBLNModelForSequenceClassification):
 
     rbln_model_input_names = ["input_ids", "attention_mask"]
 
-    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor, **kwargs):
+    def forward(
+        self, input_ids: torch.Tensor, attention_mask: torch.Tensor, **kwargs
+    ) -> Union[Tuple, SequenceClassifierOutput]:
         """
         Forward pass for the RBLN-optimized RoBERTa model for sequence classification tasks.
 
@@ -62,6 +67,6 @@ class RBLNRobertaForSequenceClassification(RBLNModelForSequenceClassification):
             attention_mask (torch.FloatTensor of shape (batch_size, sequence_length), optional) — Mask to avoid performing attention on padding token indices.
 
         Returns:
-            SequenceClassifierOutput or tuple(torch.FloatTensor)
+            The model outputs. If return_dict=False is passed, returns a tuple of tensors. Otherwise, returns a SequenceClassifierOutput object.
         """
         return super().forward(input_ids, attention_mask, **kwargs)

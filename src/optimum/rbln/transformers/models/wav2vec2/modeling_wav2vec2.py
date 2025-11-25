@@ -95,10 +95,10 @@ class RBLNWav2Vec2ForCTC(RBLNModel):
         Forward pass for the RBLN-optimized Wav2Vec2 model for Connectionist Temporal Classification (CTC).
 
         Args:
-            input_values (`torch.FloatTensor` of shape `(batch_size, sequence_length)`): Float values of input raw speech waveform. Values can be obtained by loading a .flac or .wav audio file into an array of type List[float] or a numpy.ndarray, e.g. via the soundfile library (pip install soundfile). To prepare the array into input_values, the AutoProcessor should be used for padding and conversion into a tensor of type torch.FloatTensor.
-            return_dict (`bool`, optional): Whether or not to return a ModelOutput instead of a plain tuple.
+            input_values (torch.FloatTensor of shape (batch_size, sequence_length)): Float values of input raw speech waveform. Values can be obtained by loading a .flac or .wav audio file into an array of type List[float] or a numpy.ndarray, e.g. via the soundfile library (pip install soundfile). To prepare the array into input_values, the AutoProcessor should be used for padding and conversion into a tensor of type torch.FloatTensor.
+            return_dict (bool, optional): Whether or not to return a ModelOutput instead of a plain tuple.
 
         Returns:
-            `CausalLMOutput` or `tuple(torch.FloatTensor)`: The model outputs. If `return_dict=False` is passed, returns a tuple of tensors. Otherwise, returns a `CausalLMOutput` object.
+            The model outputs. If return_dict=False is passed, returns a tuple of tensors. Otherwise, returns a CausalLMOutput object.
         """
         return super().forward(input_values=input_values, return_dict=return_dict, **kwargs)

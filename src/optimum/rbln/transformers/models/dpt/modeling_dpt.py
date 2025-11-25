@@ -13,7 +13,10 @@
 # limitations under the License.
 
 
+from typing import Tuple, Union
+
 import torch
+from transformers.modeling_outputs import DepthEstimatorOutput
 
 from ...modeling_generic import RBLNModelForDepthEstimation
 
@@ -26,7 +29,7 @@ class RBLNDPTForDepthEstimation(RBLNModelForDepthEstimation):
     models on RBLN devices, supporting monocular depth estimation from single images.
     """
 
-    def forward(self, pixel_values: torch.Tensor, **kwargs):
+    def forward(self, pixel_values: torch.Tensor, **kwargs) -> Union[Tuple, DepthEstimatorOutput]:
         """
         Forward pass for the RBLN-optimized DPT model.
 
@@ -34,6 +37,6 @@ class RBLNDPTForDepthEstimation(RBLNModelForDepthEstimation):
             pixel_values (torch.FloatTensor of shape (batch_size, num_channels, image_size, image_size)) — The tensors corresponding to the input images.
 
         Returns:
-            DepthEstimatorOutput or tuple(torch.FloatTensor)
+            The model outputs. If return_dict=False is passed, returns a tuple of tensors. Otherwise, returns a DepthEstimatorOutput object.
         """
         return super().forward(pixel_values, **kwargs)

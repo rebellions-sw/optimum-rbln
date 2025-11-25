@@ -135,7 +135,7 @@ class RBLNSiglipVisionModel(RBLNModel):
             interpolate_pos_encoding (bool, defaults to False) — Whether to interpolate the pre-trained position encodings.
 
         Returns:
-            BaseModelOutputWithPooling or tuple(torch.FloatTensor)
+            The model outputs. If return_dict=False is passed, returns a tuple of tensors. Otherwise, returns a BaseModelOutputWithPooling object.
         """
 
         output_attentions = output_attentions if output_attentions is not None else self.rbln_config.output_attentions

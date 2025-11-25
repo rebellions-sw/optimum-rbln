@@ -13,10 +13,11 @@
 # limitations under the License.
 
 import inspect
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Tuple, Union
 
 import torch
 from transformers import BartForConditionalGeneration, PreTrainedModel
+from transformers.modeling_outputs import Seq2SeqModelOutput
 
 from ....utils.logging import get_logger
 from ...modeling_generic import RBLNTransformerEncoderForFeatureExtraction
@@ -41,16 +42,16 @@ class RBLNBartModel(RBLNTransformerEncoderForFeatureExtraction):
         input_ids: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         **kwargs,
-    ):
+    ) -> Union[Tuple, Seq2SeqModelOutput]:
         """
         Forward pass for the RBLN-optimized BART model for feature extraction tasks.
 
         Args:
-            input_ids (torch.LongTensor of shape (batch_size, sequence_length), optional) — Indices of input sequence tokens in the vocabulary.
-            attention_mask (torch.Tensor of shape (batch_size, sequence_length), optional) — Mask to avoid performing attention on padding token indices.
+            input_ids (torch.Tensor of shape (batch_size, sequence_length), optional): Indices of input sequence tokens in the vocabulary.
+            attention_mask (torch.Tensor of shape (batch_size, sequence_length), optional): Mask to avoid performing attention on padding token indices.
 
         Returns:
-            Seq2SeqModelOutput or tuple(torch.FloatTensor)
+            The model outputs. If return_dict=False is passed, returns a tuple of tensors. Otherwise, returns a BaseModelOutputWithPoolingAndCrossAttentions object.
         """
 
         return super().forward(input_ids, attention_mask, **kwargs)
