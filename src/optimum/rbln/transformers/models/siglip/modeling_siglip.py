@@ -128,11 +128,11 @@ class RBLNSiglipVisionModel(RBLNModel):
         Forward pass for the RBLN-optimized SigLIP vision model.
 
         Args:
-            pixel_values (torch.FloatTensor of shape (batch_size, num_channels, image_size, image_size), optional) — The tensors corresponding to the input images. Pixel values can be obtained using ViTImageProcessor. See ViTImageProcessor.call() for details (processor_class uses ViTImageProcessor for processing images).
-            return_dict (bool, optional) — Whether or not to return a ModelOutput instead of a plain tuple.
-            output_attentions (bool, optional) — Whether or not to return the attentions tensors of all attention layers. See attentions under returned tensors for more detail.
-            output_hidden_states (bool, optional) — Whether or not to return the hidden states of all layers. See hidden_states under returned tensors for more detail.
-            interpolate_pos_encoding (bool, defaults to False) — Whether to interpolate the pre-trained position encodings.
+            pixel_values (torch.FloatTensor of shape (batch_size, num_channels, image_size, image_size), optional): The tensors corresponding to the input images. Pixel values can be obtained using ViTImageProcessor. See ViTImageProcessor.call() for details (processor_class uses ViTImageProcessor for processing images).
+            return_dict (bool, optional): Whether or not to return a ModelOutput instead of a plain tuple.
+            output_attentions (bool, optional): Whether or not to return the attentions tensors of all attention layers. See attentions under returned tensors for more detail.
+            output_hidden_states (bool, optional): Whether or not to return the hidden states of all layers. See hidden_states under returned tensors for more detail.
+            interpolate_pos_encoding (bool, defaults to False): Whether to interpolate the pre-trained position encodings.
 
         Returns:
             The model outputs. If return_dict=False is passed, returns a tuple of tensors. Otherwise, returns a BaseModelOutputWithPooling object.
