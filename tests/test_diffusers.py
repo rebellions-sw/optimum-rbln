@@ -340,7 +340,6 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
         "rbln_height": 32,
         "rbln_num_frames": 2,
         "rbln_decode_chunk_size": 2,
-        "rbln_create_runtimes": True,
     }
 
     def test_generate(self):
