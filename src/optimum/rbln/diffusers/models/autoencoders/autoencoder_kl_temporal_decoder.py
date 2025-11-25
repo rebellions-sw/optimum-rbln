@@ -57,7 +57,7 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
         self.image_size = self.rbln_config.image_size
 
     @classmethod
-    def wrap_model_if_needed(
+    def _wrap_model_if_needed(
         cls, model: torch.nn.Module, rbln_config: RBLNAutoencoderKLTemporalDecoderConfig
     ) -> torch.nn.Module:
         decoder_model = _VAETemporalDecoder(model)
@@ -77,7 +77,7 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
     ) -> Dict[str, rebel.RBLNCompiledModel]:
         compiled_models = {}
         if rbln_config.uses_encoder:
-            encoder_model, decoder_model = cls.wrap_model_if_needed(model, rbln_config)
+            encoder_model, decoder_model = cls._wrap_model_if_needed(model, rbln_config)
             enc_compiled_model = cls.compile(
                 encoder_model,
                 rbln_compile_config=rbln_config.compile_cfgs[0],
@@ -86,7 +86,7 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
             )
             compiled_models["encoder"] = enc_compiled_model
         else:
-            decoder_model = cls.wrap_model_if_needed(model, rbln_config)
+            decoder_model = cls._wrap_model_if_needed(model, rbln_config)
         dec_compiled_model = cls.compile(
             decoder_model,
             rbln_compile_config=rbln_config.compile_cfgs[-1],
@@ -217,7 +217,11 @@ class RBLNAutoencoderKLTemporalDecoder(RBLNModel):
         compiled_models: List[rebel.RBLNCompiledModel],
         rbln_config: RBLNAutoencoderKLTemporalDecoderConfig,
     ) -> List[rebel.Runtime]:
-        expected_models = ["encoder", "decoder"]
+        if len(compiled_models) == 1:
+            # decoder
+            expected_models = ["decoder"]
+        else:
+            expected_models = ["encoder", "decoder"]
 
         if any(model_name not in rbln_config.device_map for model_name in expected_models):
             cls._raise_missing_compiled_file_error(expected_models)

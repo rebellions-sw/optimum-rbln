@@ -80,7 +80,7 @@ class RBLNUNetSpatioTemporalConditionModel(RBLNModel):
             self.add_embedding = ADDEMBEDDING(LINEAR1(self.in_features))
 
     @classmethod
-    def wrap_model_if_needed(
+    def _wrap_model_if_needed(
         cls, model: torch.nn.Module, rbln_config: RBLNUNetSpatioTemporalConditionModelConfig
     ) -> torch.nn.Module:
         return _UNet_STCM(model).eval()
