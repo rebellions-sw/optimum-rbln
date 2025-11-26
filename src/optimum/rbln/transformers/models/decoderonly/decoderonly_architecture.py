@@ -616,7 +616,9 @@ class DecoderOnlyAttention(nn.Module):
         self._original_mod = self_attn
         self.rbln_config = rbln_config
         self.layer_idx = self_attn.layer_idx
-        self.num_heads = getattr(self._original_mod, "num_heads", None) or self._original_mod.config.num_attention_heads
+        self.num_heads = (
+            getattr(self._original_mod, "num_heads", None) or self._original_mod.config.num_attention_heads
+        )
         self.head_dim = self._original_mod.head_dim
         self._phase = "prefill"
         self.scale = torch.nn.Parameter(torch.tensor(self.get_attn_scale()))
