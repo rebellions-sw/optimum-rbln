@@ -98,18 +98,4 @@ class RBLNResNetForImageClassification(RBLNModelForImageClassification):
                 f"Please compile again with the correct argument."
             )
 
-        output = super().forward(pixel_values=pixel_values, return_dict=return_dict, **kwargs)
-
-        if not return_dict:
-            return (output,) if not isinstance(output, (tuple, list)) else output
-        else:
-            logits = output.pop(0) if isinstance(output, (tuple, list)) else output
-
-            if self.rbln_config.output_hidden_states:
-                hidden_states = ()
-                for _ in range(len(output)):
-                    hidden_states += (output.pop(0),)
-            else:
-                hidden_states = None
-
-            return ImageClassifierOutputWithNoAttention(logits=logits, hidden_states=hidden_states)
+        return super().forward(pixel_values=pixel_values, return_dict=return_dict, **kwargs)
