@@ -118,8 +118,6 @@ class RBLNCosmosVideoToWorldPipeline(RBLNDiffusionMixin, CosmosVideoToWorldPipel
                 RBLN compilation process. These may include parameters specific to individual submodules
                 or the particular diffusion pipeline being used.
         """
-        rbln_config = rbln_config if rbln_config is not None else {}
-
         rbln_config, kwargs = cls.get_rbln_config_class().initialize_from_kwargs(rbln_config, **kwargs)
         if safety_checker is None and export:
             safety_checker = RBLNCosmosSafetyChecker(rbln_config=rbln_config.safety_checker)

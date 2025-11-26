@@ -183,7 +183,6 @@ class RBLNDiffusionMixin:
             A compiled or loaded diffusion pipeline that can be used for inference on RBLN NPU.
                 The returned object is an instance of the class that called this method, inheriting from RBLNDiffusionMixin.
         """
-        rbln_config = rbln_config if rbln_config is not None else {}
         rbln_config, kwargs = cls.get_rbln_config_class().initialize_from_kwargs(rbln_config, **kwargs)
 
         if export is None:
