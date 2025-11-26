@@ -530,7 +530,7 @@ class RBLNGroundingDinoForObjectDetection(RBLNModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         **kwargs,
-    ):
+    ) -> Union[Tuple, GroundingDinoObjectDetectionOutput]:
         """
         Forward pass for the RBLN-optimized GroundingDinoForObjectDetection model.
 
