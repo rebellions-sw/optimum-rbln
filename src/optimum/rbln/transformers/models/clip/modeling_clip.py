@@ -342,7 +342,7 @@ class RBLNCLIPVisionModelWithProjection(RBLNCLIPVisionModel):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             interpolate_pos_encoding=interpolate_pos_encoding,
-            *kwargs
+            **kwargs,
         )
 
     def _prepare_output(self, output, return_dict):
