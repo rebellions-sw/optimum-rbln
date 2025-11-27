@@ -4,10 +4,7 @@ on:
   schedule:
     # Run every day at 1 (16:00 UTC, 1:00am KST)
     - cron: '0 16 * * *'
-<<<<<<< HEAD
   workflow_dispatch:
-=======
->>>>>>> ca085abb (dependency: full test for dependency update pr (#340))
 
 env:
   REBEL_PYPI_ENDPOINT: ${{ vars.REBEL_PYPI_INTERNAL_ENDPOINT }}
