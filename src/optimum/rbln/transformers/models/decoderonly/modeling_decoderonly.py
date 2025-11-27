@@ -484,13 +484,8 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
         # Update kvcache_num_blocks based on the attention implementation.
         if rbln_config.attn_impl == "flash_attn":
-            estimated_max_num_blocks = cls.get_maximum_num_blocks(
-                config=model_config,
-                tensor_parallel_size=rbln_config.tensor_parallel_size or 1,
-                kvcache_block_size=rbln_config.kvcache_block_size,
-                nbits_per_param=16 if not rbln_config.quantization else 4,  # TODO(jongho): FIX Ad-hoc
-                n_model_params=sum(p.numel() for p in model.parameters()),
-                num_runtimes=1 if not rbln_config.can_generate else 1 + len(rbln_config.decoder_batch_sizes),
+            estimated_max_num_blocks = cls.get_maximum_num_blocks_by_model(
+                model=model, model_config=model_config, rbln_config=rbln_config
             )
 
             if rbln_config.kvcache_num_blocks is None:
@@ -628,9 +623,20 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         position_ids: Optional[torch.Tensor] = None,
         position_embed: Optional[torch.Tensor] = None,
         **kwargs,
-    ) -> Tuple[torch.FloatTensor]:
+    ) -> BaseModelOutputWithPast:
+        """
+        Args:
+            input_ids (torch.LongTensor, optional): The input IDs to the model.
+            inputs_embeds (torch.Tensor, optional): The input embeddings to the model.
+            attention_mask (torch.LongTensor, optional): The attention mask to the model.
+            kwargs (dict[str, Any], optional): Additional keyword arguments.
+
+        Returns:
+            Dataclass containing the last hidden states of the model.
+        """
         inputs = inputs_embeds if inputs_embeds is not None else input_ids
         batch_size = inputs.shape[0]
+        position_embed = kwargs.get("position_embed", None)
 
         if batch_size != self.rbln_config.batch_size:
             raise ValueError(
@@ -655,6 +661,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             all_last_hidden_states.append(last_hidden_states)
 
         last_hidden_states = torch.concat(all_last_hidden_states, dim=0)
+
         return BaseModelOutputWithPast(last_hidden_state=last_hidden_states)
 
 

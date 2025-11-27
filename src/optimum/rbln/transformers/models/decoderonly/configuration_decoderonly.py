@@ -279,12 +279,17 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
 
     @property
     def use_lora(self):
-        """Check if LoRA is enabled for this configuration."""
         return self.lora_config is not None
 
     @property
     def can_generate(self) -> bool:
         return "decode" in self.phases
+
+    @property
+    def nbits_per_param(self) -> int:
+        if self.quantization:
+            return self.quantization.nbits_per_param
+        return 16
 
 
 class RBLNDecoderOnlyModelForCausalLMConfig(RBLNDecoderOnlyModelConfig):
