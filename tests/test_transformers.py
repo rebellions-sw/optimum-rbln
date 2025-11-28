@@ -396,7 +396,7 @@ class TestColPaliModel(BaseTest.TestModel):
 class TestColQwen2Model(BaseTest.TestModel):
     RBLN_AUTO_CLASS = None
     RBLN_CLASS = RBLNColQwen2ForRetrieval
-    HF_MODEL_ID = "Sahil-Kabir/colqwen2.5-v0.2-hf"
+    HF_MODEL_ID = "vidore/colqwen2-v1.0-hf"
     RBLN_CLASS_KWARGS = {
         "rbln_config": {
             "vlm": {
@@ -437,6 +437,32 @@ class TestColQwen2Model(BaseTest.TestModel):
         ]
         inputs_image = processor(images=images)
         return inputs_image
+
+
+class TestColQwen2Model_BFloat16(TestColQwen2Model):
+    TEST_LEVEL = TestLevel.FULL
+    HF_CONFIG_KWARGS = {
+        "dtype": torch.bfloat16,
+    }
+
+
+class TestColQwen2Model_Auto(TestColQwen2Model):
+    TEST_LEVEL = TestLevel.FULL
+    HF_CONFIG_KWARGS = {
+        "dtype": "auto",
+    }
+
+
+class TestColQwen2Model_Float32(TestColQwen2Model):
+    TEST_LEVEL = TestLevel.FULL
+    HF_CONFIG_KWARGS = {
+        "dtype": torch.float32,
+    }
+
+
+class TestColQwen2_5Model(TestColQwen2Model):
+    TEST_LEVEL = TestLevel.FULL
+    HF_MODEL_ID = "Sahil-Kabir/colqwen2.5-v0.2-hf"
 
 
 class TestWav2VecModel(BaseTest.TestModel):

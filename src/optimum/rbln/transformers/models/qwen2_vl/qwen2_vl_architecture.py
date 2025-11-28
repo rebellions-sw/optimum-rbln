@@ -9,19 +9,25 @@ from ..decoderonly.decoderonly_architecture import (
     DecoderOnlyWrapper,
     apply_rotary_pos_emb,
 )
+from .configuration_qwen2_vl import RBLNQwen2VisionTransformerPretrainedModelConfig
 
 
 class Qwen2VisionTransformerWrapper(nn.Module):
-    def __init__(self, model: torch.nn.Module):
+    def __init__(self, model: torch.nn.Module, rbln_config: RBLNQwen2VisionTransformerPretrainedModelConfig):
         super().__init__()
         self._original_mod = model
         self.merger = model.merger
-        self.blocks = self.wrap_vision_blocks(model.blocks)
+        self.rbln_config = rbln_config
+        self.blocks = self.wrap_vision_blocks(model.blocks, rbln_config)
 
-    def wrap_vision_blocks(self, blocks: torch.nn.ModuleList):
+    def wrap_vision_blocks(
+        self,
+        blocks: torch.nn.ModuleList,
+        rbln_config: RBLNQwen2VisionTransformerPretrainedModelConfig,
+    ):
         wrapped_blocks = []
         for i, block in enumerate(blocks):
-            wrapped_blocks.append(Qwen2VLVisionBlock(block))
+            wrapped_blocks.append(Qwen2VLVisionBlock(block, rbln_config))
         return nn.ModuleList(wrapped_blocks)
 
     def forward(
@@ -31,7 +37,7 @@ class Qwen2VisionTransformerWrapper(nn.Module):
         cos: torch.Tensor,
         sin: torch.Tensor,
     ):
-        full_attn_masks = (1 - full_attn_masks) * torch.finfo(torch.float32).min
+        full_attn_masks = (1.0 - full_attn_masks) * torch.finfo(hidden_states.dtype).min
 
         for block in self.blocks:
             hidden_states = block(hidden_states, full_attn_masks, [cos, sin])
@@ -40,13 +46,13 @@ class Qwen2VisionTransformerWrapper(nn.Module):
 
 
 class Qwen2VLVisionBlock(torch.nn.Module):
-    def __init__(self, model: torch.nn.Module):
+    def __init__(self, model: torch.nn.Module, rbln_config: RBLNQwen2VisionTransformerPretrainedModelConfig):
         super().__init__()
         self._origin_model = model
+        self.rbln_config = rbln_config
         self.norm1 = model.norm1
         self.norm2 = model.norm2
-
-        self.attn = VisionAttention(model.attn)
+        self.attn = VisionAttention(model.attn, rbln_config)
         self.mlp = model.mlp
 
     def forward(
@@ -65,13 +71,15 @@ class Qwen2VLVisionBlock(torch.nn.Module):
 
 
 class VisionAttention(nn.Module):
-    def __init__(self, model: nn.Module) -> None:
+    def __init__(self, model: nn.Module, rbln_config: RBLNQwen2VisionTransformerPretrainedModelConfig) -> None:
         super().__init__()
         self._origin_model = model
+        self.rbln_config = rbln_config
         self.num_heads = model.num_heads
         self.head_dim = getattr(model, "head_dim", model.proj.in_features // model.num_heads)
         self.qkv = model.qkv
         self.proj = model.proj
+        self.scale = torch.tensor(1 / math.sqrt(self.head_dim), dtype=rbln_config.torch_dtype)
 
     def forward(
         self,
@@ -88,9 +96,9 @@ class VisionAttention(nn.Module):
         cos, sin = position_embeddings
         q, k = apply_rotary_pos_emb(q, k, cos, sin)
 
-        attn_weights = torch.matmul(q, k.transpose(2, 3)) / math.sqrt(self.head_dim)
+        attn_weights = torch.matmul(q, k.transpose(2, 3)) * self.scale
         attn_weights = attn_weights + attn_masks
-        attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32)
+        attn_weights = nn.functional.softmax(attn_weights, dim=-1)
         attn_output = torch.matmul(attn_weights, v)
         attn_output = attn_output.transpose(1, 2)
         attn_output = attn_output.reshape(1, seq_length, -1)

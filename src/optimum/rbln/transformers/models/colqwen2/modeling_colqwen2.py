@@ -32,6 +32,7 @@ class RBLNColQwen2ForRetrieval(RBLNModel):
     _rbln_submodules = [
         {"name": "vlm"},
     ]
+    _supports_non_fp32 = True
 
     def __post_init__(self, **kwargs):
         self.vlm_model = self.rbln_submodules[0]
@@ -55,7 +56,8 @@ class RBLNColQwen2ForRetrieval(RBLNModel):
         model.vlm.model.lm_head = model.embedding_proj_layer
         model.vlm.model.config.embedding_dim = model.config.embedding_dim
 
-        return model.to(torch.float32)
+        # Some of the model weights are different from the model.dtype(vidore/colqwen2-v1.0-hf)
+        return model.to(model.dtype)
 
     def forward(
         self,

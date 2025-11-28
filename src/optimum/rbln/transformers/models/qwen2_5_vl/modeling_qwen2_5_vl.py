@@ -61,6 +61,7 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
     """
 
     auto_model_class = None
+    _supports_non_fp32 = True
 
     def __post_init__(self, **kwargs):
         self.transformer = self.model[0]
@@ -97,7 +98,7 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
     def _wrap_model_if_needed(
         cls, model: "PreTrainedModel", rbln_config: RBLNQwen2_5_VisionTransformerPretrainedModelConfig
     ):
-        return Qwen2_5_VisionTransformerWrapper(model).eval()
+        return Qwen2_5_VisionTransformerWrapper(model, rbln_config).eval()
 
     def __getattr__(self, __name: str) -> Any:
         def redirect(func):
@@ -132,22 +133,22 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
                 )
 
             input_info = [
-                ("hidden_states", [max_seq_len, hidden_size], "float32"),
-                ("full_attn_masks", [1, 1, max_seq_len, max_seq_len], "float32"),
+                ("hidden_states", [max_seq_len, hidden_size], rbln_config.torch_dtype),
+                ("full_attn_masks", [1, 1, max_seq_len, max_seq_len], rbln_config.torch_dtype),
                 (
                     "window_attn_masks",
                     [max_seq_len // window_seq_len, 1, window_seq_len, window_seq_len],
-                    "float32",
+                    rbln_config.torch_dtype,
                 ),
                 (
                     "cos",
                     [1, 1, max_seq_len, head_dim],
-                    "float32",
+                    rbln_config.torch_dtype,
                 ),
                 (
                     "sin",
                     [1, 1, max_seq_len, head_dim],
-                    "float32",
+                    rbln_config.torch_dtype,
                 ),
             ]
             input_infos.append(input_info)
@@ -209,7 +210,7 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
             1,
             window_seq_len,
             window_seq_len,
-            dtype=torch.float32,
+            dtype=hidden_states.dtype,
         )
         for i, valid_len in enumerate(window_valid_lengths):
             if valid_len < window_seq_len:
@@ -248,7 +249,7 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
             1,
             max_seq_len,
             max_seq_len,
-            dtype=torch.float32,
+            dtype=hidden_state_padded.dtype,
         )
         for i, valid_len in enumerate(window_valid_lengths):
             start = i * window_seq_len
@@ -259,7 +260,7 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
         return hidden_state_full_padded, cos_full_padded, sin_full_padded, full_attn_masks
 
     def forward(self, hidden_states: torch.Tensor, grid_thw: torch.Tensor) -> torch.Tensor:
-        hidden_states = self.patch_embed(hidden_states)
+        hidden_states = self.patch_embed(hidden_states).to(self.rbln_config.torch_dtype)
         rotary_pos_emb = self.rot_pos_emb(grid_thw)
         window_index, cu_window_seqlens = self.get_window_index(grid_thw)
         cu_window_seqlens = torch.tensor(
@@ -276,7 +277,7 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
         rotary_pos_emb = rotary_pos_emb[window_index, :, :]
         rotary_pos_emb = rotary_pos_emb.reshape(seq_len, -1)
         emb = torch.cat((rotary_pos_emb, rotary_pos_emb), dim=-1)
-        position_embeddings = (emb.cos(), emb.sin())
+        position_embeddings = (emb.cos().to(self.rbln_config.torch_dtype), emb.sin().to(self.rbln_config.torch_dtype))
 
         cu_seqlens = torch.repeat_interleave(grid_thw[:, 1] * grid_thw[:, 2], grid_thw[:, 0]).cumsum(
             dim=0,
@@ -347,7 +348,6 @@ class RBLNQwen2_5_VisionTransformerPretrainedModel(RBLNModel):
 class RBLNQwen2_5_VLModel(RBLNDecoderOnlyModel):
     auto_model_class = AutoModelForVision2Seq
     _decoder_wrapper_cls = Qwen2_5_VL_LanguageModelWrapper
-    _supports_non_fp32 = False
     _use_rotary_emb = False
     _rbln_submodules = [
         {"name": "visual"},
@@ -405,7 +405,7 @@ class RBLNQwen2_5_VLModel(RBLNDecoderOnlyModel):
             (
                 "position_emb",
                 [2, batch_size, 1, query_length, model_config.hidden_size // model_config.num_attention_heads],
-                "float32",
+                rbln_config.torch_dtype,
             ),
         )
 
@@ -414,8 +414,16 @@ class RBLNQwen2_5_VLModel(RBLNDecoderOnlyModel):
     def _get_position_embeddings(self, hidden_states, position_ids):
         cos, sin = self.rotary_emb(hidden_states, position_ids)
         mrope_section = self.config.rope_scaling["mrope_section"] * 2
-        cos = torch.cat([m[i % 3] for i, m in enumerate(cos.split(mrope_section, dim=-1))], dim=-1).unsqueeze(1)
-        sin = torch.cat([m[i % 3] for i, m in enumerate(sin.split(mrope_section, dim=-1))], dim=-1).unsqueeze(1)
+        cos = (
+            torch.cat([m[i % 3] for i, m in enumerate(cos.split(mrope_section, dim=-1))], dim=-1)
+            .unsqueeze(1)
+            .to(self.rbln_config.torch_dtype)
+        )
+        sin = (
+            torch.cat([m[i % 3] for i, m in enumerate(sin.split(mrope_section, dim=-1))], dim=-1)
+            .unsqueeze(1)
+            .to(self.rbln_config.torch_dtype)
+        )
         return torch.stack([cos, sin])
 
     def _preprocess_prefill(
@@ -429,7 +437,7 @@ class RBLNQwen2_5_VLModel(RBLNDecoderOnlyModel):
         second_per_grid_ts: torch.Tensor = None,
     ):
         batch_size = input_ids.shape[0]
-        inputs_embeds = self.embed_tokens(input_ids)
+        inputs_embeds = self.embed_tokens(input_ids).to(self.rbln_config.torch_dtype)
 
         if pixel_values is not None:
             image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
@@ -464,7 +472,9 @@ class RBLNQwen2_5_VLModel(RBLNDecoderOnlyModel):
         max_inputs_len = input_ids.shape[1]
 
         head_dim = getattr(self.config, "head_dim", None) or self.config.hidden_size // self.config.num_attention_heads
-        all_position_embeds = torch.zeros(2, batch_size, 1, max_inputs_len, head_dim)
+        all_position_embeds = torch.zeros(
+            2, batch_size, 1, max_inputs_len, head_dim, dtype=self.rbln_config.torch_dtype
+        )
         all_rope_deltas = []
 
         image_token_id = self.config.image_token_id
@@ -583,7 +593,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNQwen2_5_VLModel, RBLNDecoderOnl
 
     auto_model_class = AutoModelForVision2Seq
     _decoder_wrapper_cls = Qwen2_5_VL_LanguageModelWrapper
-    _supports_non_fp32 = False
+    _supports_non_fp32 = True
     _use_rotary_emb = False
     _rbln_submodules = [
         {"name": "visual"},
@@ -655,14 +665,16 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNQwen2_5_VLModel, RBLNDecoderOnl
                 f"Cache position size mismatch: got {cache_position.shape[0]}, expected {self.rbln_config.batch_size}."
             )
 
-        inputs_embeds = self.embed_tokens(input_ids)
+        inputs_embeds = self.embed_tokens(input_ids).to(self.rbln_config.torch_dtype)
         position_embeds = []
         for b_idx in range(self.rbln_config.batch_size):
             delta = cache_position[b_idx] + self.rope_deltas[b_idx]
             position_ids = torch.arange(1).view(1, -1)
             position_ids = position_ids.add(delta)
             position_ids = position_ids.unsqueeze(0).expand(3, -1, -1)
-            position_embed = self._get_position_embeddings(torch.zeros(1, dtype=torch.float32), position_ids)
+            position_embed = self._get_position_embeddings(
+                torch.zeros(1, dtype=self.rbln_config.torch_dtype), position_ids
+            )
             position_embeds.append(position_embed)
 
         position_embeds = torch.cat(position_embeds, dim=1)
