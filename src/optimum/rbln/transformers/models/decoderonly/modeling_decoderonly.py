@@ -602,6 +602,8 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         input_ids: Optional[torch.LongTensor] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.LongTensor] = None,
+        position_embed: Optional[torch.Tensor] = None,
+        output_hidden_states: Optional[bool] = None,
         **kwargs,
     ) -> BaseModelOutputWithPast:
         """
@@ -623,24 +625,52 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
                 f"Batch size ({batch_size}) must be equal to the batch size of the model ({self.rbln_config.batch_size})."
             )
 
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.rbln_config.output_hidden_states
+        )
+        if output_hidden_states != self.rbln_config.output_hidden_states:
+            raise ValueError(
+                f"Variable output_hidden_states {output_hidden_states} is not equal to rbln_config.output_hidden_states {self.rbln_config.output_hidden_states} "
+                f"Please compile again with the correct argument."
+            )
+
         all_last_hidden_states = []
+        all_hidden_states = (
+            tuple(
+                torch.zeros(
+                    self.rbln_config.batch_size,
+                    inputs.shape[1],
+                    self.config.hidden_size,
+                    dtype=self.rbln_config.torch_dtype,
+                )
+                for _ in range(self.config.num_hidden_layers + 1)
+            )
+            if output_hidden_states
+            else None
+        )
         for b_idx in range(self.rbln_config.batch_size):
             query_length = (
                 attention_mask[b_idx].sum(dim=-1).int().item() if attention_mask is not None else inputs.shape[1]
             )
             cache_position = torch.arange(query_length, dtype=torch.int32).unsqueeze(0)
-            last_hidden_states = self.prefill_decoder(
+            outputs = self.prefill_decoder(
                 inputs[b_idx : b_idx + 1],
                 attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
                 position_embed=position_embed[b_idx : b_idx + 1] if position_embed is not None else None,
                 cache_position=cache_position,
                 batch_idx=b_idx,
-            ).logits
-            all_last_hidden_states.append(last_hidden_states)
+            )
+            all_last_hidden_states.append(outputs.logits)
+
+            if output_hidden_states:
+                for l_idx in range(self.config.num_hidden_layers + 1):
+                    mask_indices = torch.nonzero(attention_mask[b_idx], as_tuple=True)[0]
+                    all_hidden_states[l_idx][b_idx].index_copy_(
+                        dim=0, index=mask_indices, source=outputs.hidden_states[l_idx][0]
+                    )
 
         last_hidden_states = torch.concat(all_last_hidden_states, dim=0)
-
-        return BaseModelOutputWithPast(last_hidden_state=last_hidden_states)
+        return BaseModelOutputWithPast(last_hidden_state=last_hidden_states, hidden_states=all_hidden_states)
 
 
 class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGenerationMixin):
@@ -736,6 +766,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
         token_type_ids: Optional[torch.Tensor] = None,
         lora_int_ids: Optional[torch.Tensor] = None,
         return_dict: Optional[torch.Tensor] = None,
+        output_hidden_states: Optional[bool] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor]:
         # Forward method for the RBLN-optimized model, designed for integration with the HuggingFace generate API.
@@ -759,6 +790,15 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
             )
             padded_cache_lengths = torch.zeros_like(generate_idx)
 
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.rbln_config.output_hidden_states
+        )
+        if output_hidden_states != self.rbln_config.output_hidden_states:
+            raise ValueError(
+                f"Variable output_hidden_states {output_hidden_states} is not equal to rbln_config.output_hidden_states {self.rbln_config.output_hidden_states} "
+                f"Please compile again with the correct argument."
+            )
+
         # Prefill
         if cache_position is None:
             logits = []
@@ -774,9 +814,17 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
                     f"Input's length({input_len}) exceeds compiled max_seq_len({self.rbln_config.max_seq_len})."
                 )
 
+            all_hidden_states = (
+                tuple(
+                    torch.zeros(batch_size, input_len, self.config.hidden_size, dtype=self.rbln_config.torch_dtype)
+                    for _ in range(self.config.num_hidden_layers + 1)
+                )
+                if self.rbln_config.output_hidden_states
+                else None
+            )
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
-                output = self.prefill_decoder(
+                outputs = self.prefill_decoder(
                     input_ids=inputs[b_idx : b_idx + 1] if inputs_embeds is None else None,
                     inputs_embeds=inputs[b_idx : b_idx + 1] if inputs_embeds is not None else None,
                     attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
@@ -785,8 +833,16 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
                     token_type_ids=token_type_ids[b_idx : b_idx + 1] if token_type_ids is not None else None,
                     lora_int_ids=lora_int_ids[b_idx : b_idx + 1] if lora_int_ids is not None else None,
                 )
-                padded_cache_lengths[b_idx] += output.padded_cache_lengths
-                logits.append(output.logits)
+                padded_cache_lengths[b_idx] += outputs.padded_cache_lengths
+                logits.append(outputs.logits)
+
+                if self.rbln_config.output_hidden_states:
+                    for l_idx in range(self.config.num_hidden_layers + 1):
+                        mask_indices = torch.nonzero(attention_mask[b_idx], as_tuple=True)[0]
+                        all_hidden_states[l_idx][b_idx].index_copy_(
+                            dim=0, index=mask_indices, source=outputs.hidden_states[l_idx][0]
+                        )
+
             logits = torch.cat(logits, dim=0)
         # Decoder
         else:
@@ -807,17 +863,22 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
                     f"or `max_length` in the generation config."
                 )
 
-            logits = self.decoders[batch_size](
+            outputs = self.decoders[batch_size](
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
                 cache_position=cache_position,
                 position_ids=position_ids if self.rbln_config.use_position_ids else None,
                 lora_int_ids=lora_int_ids,
-            ).logits
+            )
+            logits = outputs.logits
+            all_hidden_states = outputs.hidden_states
 
         if not return_dict:
-            return logits, generate_idx, padded_cache_lengths
+            return logits, generate_idx, padded_cache_lengths, all_hidden_states
         else:
             return RBLNDecoderOnlyOutput(
-                logits=logits, generate_idx=generate_idx, padded_cache_lengths=padded_cache_lengths
+                logits=logits,
+                generate_idx=generate_idx,
+                padded_cache_lengths=padded_cache_lengths,
+                hidden_states=all_hidden_states,
             )
