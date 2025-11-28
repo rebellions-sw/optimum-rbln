@@ -216,7 +216,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         return self.rbln_config.kvcache_num_blocks
 
     @classmethod
-    def wrap_model_if_needed(cls, model: PreTrainedModel, rbln_config: "RBLNDecoderOnlyModelConfig"):
+    def _wrap_model_if_needed(cls, model: PreTrainedModel, rbln_config: "RBLNDecoderOnlyModelConfig"):
         return cls._decoder_wrapper_cls(model, rbln_config, cls._use_rotary_emb).eval()
 
     @classmethod
@@ -272,7 +272,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     @classmethod
     @torch.inference_mode()
     def get_compiled_model(cls, model: PreTrainedModel, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig):
-        wrapped_model = cls.wrap_model_if_needed(model, rbln_config)
+        wrapped_model = cls._wrap_model_if_needed(model, rbln_config)
         prefill_compile_config = rbln_config.compile_cfgs[0]
 
         # Here we use meta tensor, for the memory efficiency.
@@ -466,13 +466,8 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
         # Update kvcache_num_blocks based on the attention implementation.
         if rbln_config.attn_impl == "flash_attn":
-            estimated_max_num_blocks = cls.get_maximum_num_blocks(
-                config=model_config,
-                tensor_parallel_size=rbln_config.tensor_parallel_size or 1,
-                kvcache_block_size=rbln_config.kvcache_block_size,
-                nbits_per_param=16 if not rbln_config.quantization else 4,  # TODO(jongho): FIX Ad-hoc
-                n_model_params=sum(p.numel() for p in model.parameters()),
-                num_runtimes=1 if not rbln_config.can_generate else 1 + len(rbln_config.decoder_batch_sizes),
+            estimated_max_num_blocks = cls.get_maximum_num_blocks_by_model(
+                model=model, model_config=model_config, rbln_config=rbln_config
             )
 
             if rbln_config.kvcache_num_blocks is None:
@@ -511,7 +506,6 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
                     f" than the required number of blocks ({num_full_blocks})."
                     "This can cause a failure during model compilation."
                 )
-
         logger.info(f"[KVCache] Compiling with num_blocks: {rbln_config.kvcache_num_blocks}")
 
         return rbln_config
@@ -608,11 +602,21 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         input_ids: Optional[torch.LongTensor] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.LongTensor] = None,
-        position_embed: Optional[torch.Tensor] = None,
         **kwargs,
-    ) -> Tuple[torch.FloatTensor]:
+    ) -> BaseModelOutputWithPast:
+        """
+        Args:
+            input_ids (torch.LongTensor, optional): The input IDs to the model.
+            inputs_embeds (torch.Tensor, optional): The input embeddings to the model.
+            attention_mask (torch.LongTensor, optional): The attention mask to the model.
+            kwargs (dict[str, Any], optional): Additional keyword arguments.
+
+        Returns:
+            Dataclass containing the last hidden states of the model.
+        """
         inputs = inputs_embeds if inputs_embeds is not None else input_ids
         batch_size = inputs.shape[0]
+        position_embed = kwargs.get("position_embed", None)
 
         if batch_size != self.rbln_config.batch_size:
             raise ValueError(
@@ -635,6 +639,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             all_last_hidden_states.append(last_hidden_states)
 
         last_hidden_states = torch.concat(all_last_hidden_states, dim=0)
+
         return BaseModelOutputWithPast(last_hidden_state=last_hidden_states)
 
 
@@ -759,6 +764,16 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
             logits = []
             inputs = inputs_embeds if inputs_embeds is not None else input_ids
             batch_size = inputs.shape[0]
+            input_len = inputs.shape[1]
+            if batch_size > self.rbln_config.batch_size:
+                raise ValueError(
+                    f"Input's batch({batch_size}) exceeds compiled batch_size({self.rbln_config.batch_size})"
+                )
+            if input_len > self.rbln_config.max_seq_len:
+                raise ValueError(
+                    f"Input's length({input_len}) exceeds compiled max_seq_len({self.rbln_config.max_seq_len})."
+                )
+
             for b_idx in range(batch_size):
                 cache_position = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
                 output = self.prefill_decoder(
@@ -783,6 +798,15 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
                     f"Available batch sizes are: {list(self.decoders.keys())}. "
                     f"Please run your model with one of these batch sizes or add support for batch size {batch_size}."
                 )
+            if max(cache_position.reshape(-1)) >= self.rbln_config.max_seq_len:
+                raise ValueError(
+                    f"Cache position exceeds the maximum sequence length.\n"
+                    f"  - Current max cache position: {int(torch.max(cache_position).item())}\n"
+                    f"  - Allowed max_seq_len: {self.rbln_config.max_seq_len}\n"
+                    f"Solution: Reduce the generation length by adjusting `max_new_tokens` "
+                    f"or `max_length` in the generation config."
+                )
+
             logits = self.decoders[batch_size](
                 input_ids=input_ids,
                 inputs_embeds=inputs_embeds,
