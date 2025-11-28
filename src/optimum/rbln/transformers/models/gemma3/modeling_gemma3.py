@@ -404,26 +404,6 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         return embed_tokens
 
     @classmethod
-    def _update_sliding_window_config(cls, model_config: PretrainedConfig, rbln_config: RBLNGemma3ForCausalLMConfig):
-        sliding_window = getattr(model_config, "sliding_window", None)
-        sliding_window_pattern = getattr(model_config, "sliding_window_pattern", None)
-        if sliding_window_pattern is None:
-            if hasattr(model_config, "layer_types"):
-                first_full_attention_index = model_config.layer_types.index("full_attention")
-                sliding_window_pattern = first_full_attention_index + 1
-            else:
-                raise ValueError("Cannot determine sliding_window_pattern from model_config")
-
-        if sliding_window_pattern <= model_config.num_hidden_layers:
-            rbln_config.cache_impl = "hybrid"
-            rbln_config.sliding_window = sliding_window
-            rbln_config.sliding_window_layers = [
-                i for i in range(model_config.num_hidden_layers) if (i + 1) % sliding_window_pattern > 0
-            ]
-
-        return rbln_config
-
-    @classmethod
     def _update_submodule_config(
         cls,
         model: "PreTrainedModel",
@@ -449,6 +429,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         rbln_config: Optional[RBLNGemma3ForCausalLMConfig] = None,
     ) -> RBLNGemma3ForCausalLMConfig:
         # Update rbln_config with super class
+        rbln_config.attn_mask_type = "2D"
         rbln_config = super()._update_rbln_config(preprocessors, model, model_config, rbln_config)
 
         if not (rbln_config.use_attention_mask and rbln_config.use_position_ids):
