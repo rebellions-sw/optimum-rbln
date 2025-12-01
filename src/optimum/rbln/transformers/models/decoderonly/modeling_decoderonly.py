@@ -330,7 +330,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
     @classmethod
     def use_query_position(cls, use_local_attention: bool, is_prefill: bool = True, logits_to_keep: int = None):
-        return use_local_attention or (is_prefill and logits_to_keep == 1)
+        return is_prefill and (use_local_attention or logits_to_keep == 1)
 
     @classmethod
     def get_input_info(

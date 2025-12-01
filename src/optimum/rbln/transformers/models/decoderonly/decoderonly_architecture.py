@@ -145,10 +145,10 @@ class DecoderOnlyWrapper(nn.Module):
         local_block_tables = args.pop(0) if self.rbln_config.use_local_attention else None
         query_position = (
             args.pop(0)
-            # query_position usage: 1. prefill & logits_to_keep == 1 or 2. sliding_window cache_position
+            # query_position usage: prefill & (logits_to_keep == 1 or use_local_attention)
             if (
-                ("prefill" in self.phase and self.rbln_config.logits_to_keep == 1)
-                or self.rbln_config.use_local_attention
+                "prefill" in self.phase
+                and (self.rbln_config.logits_to_keep == 1 or self.rbln_config.use_local_attention)
             )
             else None
         )
