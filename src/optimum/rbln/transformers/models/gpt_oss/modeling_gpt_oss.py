@@ -99,13 +99,20 @@ class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     def _update_sliding_window_config(
         cls, model_config: PretrainedConfig, rbln_config: RBLNDecoderOnlyModelForCausalLMConfig
     ):
-        rbln_config.cache_impl = "hybrid"
         rbln_config.sliding_window = model_config.sliding_window
         sliding_window_layers = []
         for i in range(model_config.num_hidden_layers):
             if model_config.layer_types[i] == "sliding_attention":
                 sliding_window_layers.append(i)
         rbln_config.sliding_window_layers = sliding_window_layers
+
+        if len(sliding_window_layers) == 0:
+            rbln_config.cache_impl = "static"
+            rbln_config.sliding_window = None
+        elif len(sliding_window_layers) == model_config.num_hidden_layers:
+            rbln_config.cache_impl = "sliding_window"
+        else:
+            rbln_config.cache_impl = "hybrid"
 
         return rbln_config
 
