@@ -57,7 +57,6 @@ class RBLNGptOssLayer(DecoderOnlyLayer):
     def get_mlp(self) -> nn.Module:
         return self.mlp
 
-
 class RBLNGptOssTopKRouter(nn.Module):
     def __init__(self, model):
         super().__init__()
@@ -69,15 +68,7 @@ class RBLNGptOssTopKRouter(nn.Module):
 
     def forward(self, hidden_states):
         router_logits = F.linear(hidden_states, self.weight, self.bias)  # (seq_len, num_experts)
-        router_top_value, router_indices = torch.topk(router_logits, self.top_k, dim=-1)  # (seq_len, top_k)
-        router_top_value = torch.nn.functional.softmax(router_top_value, dim=1, dtype=router_top_value.dtype)
-        router_scores = torch.zeros_like(router_logits).scatter_(1, router_indices, router_top_value)
-
-        zeros = torch.zeros(self.num_experts, dtype=torch.int32)
-        ones = torch.ones_like(router_indices.view(-1), dtype=torch.int32)
-        expert_select_count = torch.scatter_add(zeros, dim=0, index=router_indices.view(-1), src=ones)
-
-        return router_scores, router_indices, expert_select_count
+        return router_logits
 
 
 class RBLNGptOssExperts(nn.Module):
@@ -118,11 +109,11 @@ class RBLNGptOssExperts(nn.Module):
             self.register_buffer("down_proj_scales", model.down_proj_scales.data)
             self.register_buffer("down_proj_bias", model.down_proj_bias.data)
         else:
-            self.register_buffer("gate_proj_weight", model.gate_up_proj.data[:, :, ::2])
+            self.register_buffer("gate_proj_weight", model.gate_up_proj.data[:, :, ::2].to(torch.float32))
             self.register_buffer("gate_proj_bias", model.gate_up_proj_bias.data[:, ::2])
-            self.register_buffer("up_proj_weight", model.gate_up_proj.data[:, :, 1::2])
+            self.register_buffer("up_proj_weight", model.gate_up_proj.data[:, :, 1::2].to(torch.float32))
             self.register_buffer("up_proj_bias", model.gate_up_proj_bias.data[:, 1::2])
-            self.register_buffer("down_proj_weight", model.down_proj.data)
+            self.register_buffer("down_proj_weight", model.down_proj.data.to(torch.float32))
             self.register_buffer("down_proj_bias", model.down_proj_bias.data)
             # self.gate_up_proj = model.gate_up_proj
             # self.gate_up_proj_bias = model.gate_up_proj_bias
@@ -133,7 +124,7 @@ class RBLNGptOssExperts(nn.Module):
         self.limit = model.limit  # 7.0
 
     def forward(
-        self, hidden_states: torch.Tensor, router_indices=None, routing_weights=None, expert_select_count=None
+        self, hidden_states: torch.Tensor, router_logits=None,
     ) -> torch.Tensor:
         if self._support_mxfp4:
             next_states = torch.ops.rbln_custom_ops.custom_moe_glu_mxfp4(
@@ -147,22 +138,25 @@ class RBLNGptOssExperts(nn.Module):
                 self.down_proj_blocks,
                 self.down_proj_scales,
                 self.down_proj_bias,
-                routing_weights,
-                expert_select_count,
+                router_logits,
                 torch.tensor(self.alpha, dtype=hidden_states.dtype),
                 torch.tensor(self.limit, dtype=hidden_states.dtype),
             )
         else:
-            next_states = torch.ops.rbln_custom_ops.custom_moe_glu(
+            next_states = torch.ops.rbln_custom_ops.custom_moe_glu_mxfp4(
                 hidden_states,
                 self.gate_proj_weight,
-                self.up_proj_weight,
-                self.down_proj_weight,
-                routing_weights,
-                expert_select_count,
                 self.gate_proj_bias,
+                self.gate_proj_bias,
+                self.up_proj_weight,
                 self.up_proj_bias,
+                self.up_proj_bias,
+                self.down_proj_weight,
                 self.down_proj_bias,
+                self.down_proj_bias,
+                router_logits,
+                torch.tensor(self.alpha, dtype=hidden_states.dtype),
+                torch.tensor(self.limit, dtype=hidden_states.dtype),
             )
 
             # batch_size = hidden_states.shape[0]
@@ -199,12 +193,10 @@ class RBLNGptOssMLP(nn.Module):
         batch_size, sequence_length, hidden_dim = hidden_states.shape
         hidden_states = hidden_states.view(-1, hidden_dim)
 
-        router_scores, router_indices, expert_select_count = self.router(hidden_states)
+        router_logits = self.router(hidden_states)
         routed_out = self.experts(
             hidden_states,
-            router_indices=router_indices,
-            routing_weights=router_scores,
-            expert_select_count=expert_select_count,
+            router_logits=router_logits,
         )
         routed_out = routed_out.reshape(batch_size, sequence_length, hidden_dim)
         return routed_out

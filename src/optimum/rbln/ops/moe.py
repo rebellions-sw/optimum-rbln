@@ -12,10 +12,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Literal, Optional
 
 import torch
 from torch import Tensor
+
+
+ACT_TYPES = Literal[
+    "gelu",
+    "gelu_10",
+    "gelu_fast",
+    "gelu_new",
+    "gelu_python",
+    "gelu_pytorch_tanh",
+    "gelu_accurate",
+    "laplace",
+    "leaky_relu",
+    "linear",
+    "mish",
+    "quick_gelu",
+    "relu",
+    "relu2",
+    "relu6",
+    "sigmoid",
+    "silu",
+    "swish",
+    "tanh",
+    "prelu",
+]
 
 
 @torch.library.custom_op(
@@ -28,6 +52,7 @@ def custom_moe_glu(
     up_proj_weight: Tensor,
     down_proj_weight: Tensor,
     masked_routing_weight: Tensor,
+    # act_fn: str,
     expert_select_count: Tensor,
     gate_proj_bias: Optional[Tensor] = None,
     up_proj_bias: Optional[Tensor] = None,
@@ -41,11 +66,12 @@ def custom_moe_glu(
     - gate_proj_weight: [num_experts, hidden_size, intermediate_size]
     - up_proj_weight: [num_experts, hidden_size, intermediate_size]
     - down_proj_weight: [num_experts, intermediate_size, hidden_size]
-    - masked_routing_weight: [batch*seq_len, num_experts]
-    - expert_select_count: [num_experts]
+
     - gate_proj_bias: [num_experts, intermediate_size]
     - up_proj_bias: [num_experts, intermediate_size]
     - down_proj_bias: [num_experts, hidden_size]
+
+    - masked_routing_weight: [batch * seq_len, num_experts]
 
     Returns:
         Tensor: [batch * seq_len, hidden_size]
@@ -71,9 +97,13 @@ def custom_moe_glu_fake(
     down_proj_weight: Tensor,
     masked_routing_weight: Tensor,
     expert_select_count: Tensor,
+    # act_fn: ACT_TYPES,
     gate_proj_bias: Optional[Tensor] = None,
     up_proj_bias: Optional[Tensor] = None,
     down_proj_bias: Optional[Tensor] = None,
+    # gate_proj_scale: Optional[Tensor] = None,
+    # up_proj_scale: Optional[Tensor] = None,
+    # down_proj_scale: Optional[Tensor] = None,
 ) -> Tensor:
     return torch.empty_like(hidden_states)
 
@@ -87,6 +117,7 @@ def custom_moe_ff(
     gate_proj_weight: Tensor,
     down_proj_weight: Tensor,
     masked_routing_weight: Tensor,
+    # act_fn: str,
     gate_proj_bias: Optional[Tensor] = None,
     down_proj_bias: Optional[Tensor] = None,
 ) -> Tensor:
@@ -98,8 +129,6 @@ def custom_moe_ff(
     - gate_proj_weight: [hidden_size, num_experts * intermediate_size]
     - down_proj_weight: [num_experts * intermediate_size, hidden_size]
     - masked_routing_weight: [batch * seq_len, num_experts]
-    - gate_proj_bias: [num_experts * intermediate_size]
-    - down_proj_bias: [hidden_size]
 
     Returns:
         Tensor: [batch * seq_len, hidden_size]
@@ -113,6 +142,7 @@ def custom_moe_ff_fake(
     gate_proj_weight: Tensor,
     down_proj_weight: Tensor,
     masked_routing_weight: Tensor,
+    # act_fn: str,
     gate_proj_bias: Optional[Tensor] = None,
     down_proj_bias: Optional[Tensor] = None,
 ) -> Tensor:
@@ -134,10 +164,11 @@ def custom_moe_glu_mxfp4(
     down_proj_blocks: Tensor,
     down_proj_scales: Tensor,
     down_proj_bias: Tensor,
-    masked_routing_weight: Tensor,
-    expert_select_count: Tensor,
+    router_logits: Tensor,
     alpha: Tensor,
     limit: Tensor,
+    k: int = 2,
+    post_norm : bool = True,
 ) -> Tensor:
     """
     Customized MoE GLU operation.
@@ -164,7 +195,7 @@ def custom_moe_glu_mxfp4(
     return torch.empty_like(hidden_states)
 
 
-@custom_moe_glu_mxfp4.register_fake
+@custom_moe_glu.register_fake
 def custom_moe_glu_mxfp4_fake(
     hidden_states: Tensor,
     gate_proj_blocks: Tensor,
@@ -176,9 +207,10 @@ def custom_moe_glu_mxfp4_fake(
     down_proj_blocks: Tensor,
     down_proj_scales: Tensor,
     down_proj_bias: Tensor,
-    masked_routing_weight: Tensor,
-    expert_select_count: Tensor,
+    router_logits: Tensor,
     alpha: Tensor,
     limit: Tensor,
+    k: int = 2,
+    post_norm : bool = True,
 ) -> Tensor:
     return torch.empty_like(hidden_states)
