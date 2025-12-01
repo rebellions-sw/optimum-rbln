@@ -1,7 +1,6 @@
 import os
 import typing
 
-import torch
 import fire
 import torch
 from transformers import AutoConfig, AutoTokenizer, GptOssForCausalLM
@@ -54,6 +53,8 @@ def main(
     target_config = AutoConfig.from_pretrained(model_id)
     target_config.num_hidden_layers = n_layers
     target_config.layer_types = target_config.layer_types[:n_layers]
+    # target_config.layer_types = ["full_attention" for _ in range(n_layers)]
+    # target_config.layer_types = ["sliding_attention" for _ in range(n_layers)]
     # target_config.dtype = torch.float32
 
     if from_transformers:
@@ -134,7 +135,7 @@ def main(
             print(
                 f"step {i} : {stats.pearsonr(r.detach().numpy().reshape(-1), g.detach().numpy().reshape(-1)).statistic}"
             )
-            #per batch
+            # per batch
             for j in range(r.shape[0]):
                 print(
                     f"step {i}, batch {j} : {stats.pearsonr(r[j].detach().numpy().reshape(-1), g[j].detach().numpy().reshape(-1)).statistic}"
