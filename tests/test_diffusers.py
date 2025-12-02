@@ -19,7 +19,7 @@ from optimum.rbln import (
     RBLNStableVideoDiffusionPipeline,
 )
 
-from .test_base import BaseHubTest, BaseTest, TestLevel
+from .test_base import BaseHubTest, BaseTest
 
 
 class TestSDModel(BaseTest.TestModel, BaseHubTest.TestHub):
