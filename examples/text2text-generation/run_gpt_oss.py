@@ -134,13 +134,17 @@ def main(
             print(
                 f"step {i} : {stats.pearsonr(r.detach().numpy().reshape(-1), g.detach().numpy().reshape(-1)).statistic}"
             )
+            print (f"rbln logits : {r}")
+            print (f"golden logits : {g}")
+
+
             #per batch
             for j in range(r.shape[0]):
                 print(
                     f"step {i}, batch {j} : {stats.pearsonr(r[j].detach().numpy().reshape(-1), g[j].detach().numpy().reshape(-1)).statistic}"
                 )
 
-    breakpoint()
+    # breakpoint()
 
 
 if __name__ == "__main__":
