@@ -68,7 +68,20 @@ class RBLNGptOssTopKRouter(nn.Module):
 
     def forward(self, hidden_states):
         router_logits = F.linear(hidden_states, self.weight, self.bias)  # (seq_len, num_experts)
-        return router_logits
+
+        router_top_value, router_indices = torch.topk(router_logits, self.top_k, dim=-1)  # (seq_len, top_k)
+        router_top_value = torch.nn.functional.softmax(router_top_value, dim=1, dtype=router_top_value.dtype)
+        router_scores = torch.zeros_like(router_logits).scatter_(1, router_indices, router_top_value)
+
+        # expert sizes
+        # zeros = torch.zeros(self.num_experts, dtype=torch.int32)
+        # ones = torch.ones_like(router_indices.view(-1), dtype=torch.int32)
+        # expert_select_count = torch.scatter_add(zeros, dim=0, index=router_indices.view(-1), src=ones)
+
+        # return router_scores, router_indices, expert_select_count
+        # return router_logits
+
+        return router_scores
 
 
 class RBLNGptOssExperts(nn.Module):
