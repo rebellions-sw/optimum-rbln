@@ -336,10 +336,24 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         """
         # Handle continuous batching in a compiled graph by extracting valid inputs
         # If an attention mask is provided, select only the valid (non-masked) inputs
+        first_one_idx = None
         if attention_mask is not None:
-            inputs = inputs[:, attention_mask.bool()]
-            position_embed = None if position_embed is None else position_embed[:, :, :, attention_mask.bool(), :]
-            token_type_ids = None if token_type_ids is None else token_type_ids[:, attention_mask.bool()]
+            if attention_mask.dim() != 1:
+                raise ValueError("attention_mask must be a 1D tensor.")
+
+            mask_bool = attention_mask.to(dtype=torch.bool)
+            if (~mask_bool).any():
+                first_one = torch.nonzero(mask_bool, as_tuple=False)
+                if first_one.numel() == 0:
+                    raise ValueError("attention_mask with padding must include at least one real token.")
+
+                first_one_idx = int(first_one[0].item())
+                if not mask_bool[first_one_idx:].all():
+                    raise ValueError("attention_mask must be left padded.")
+
+            inputs = inputs[:, mask_bool]
+            position_embed = None if position_embed is None else position_embed[:, :, :, mask_bool, :]
+            token_type_ids = None if token_type_ids is None else token_type_ids[:, mask_bool]
 
         query_length = inputs.shape[1]
         if query_length > self.rbln_config.max_seq_len:
@@ -402,22 +416,27 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         # Prepare output hidden states
         output_hidden_states = None
         if self.rbln_config.output_hidden_states:
+            padded_attention_mask = torch.nn.functional.pad(attention_mask, (0, padding_size), value=1)
             hidden_states_size = (
                 1,
-                padded_input_length if attention_mask is None else attention_mask.shape[-1] + padding_size,
+                padded_input_length if attention_mask is None else padded_attention_mask.shape[-1],
                 self.config.hidden_size,
             )
             output_hidden_states = [
                 torch.full(hidden_states_size, fill_value=1e-10, dtype=self.rbln_config.torch_dtype)
                 for _ in range(self.config.num_hidden_layers + 1)
             ]
+            valid_start_index = first_one_idx if attention_mask is not None else 0
+            hidden_states_buffers = [
+                output_hidden_state[:, valid_start_index:, :] for output_hidden_state in output_hidden_states
+            ]
 
             for i in range(padded_input_length // self.rbln_config.prefill_chunk_size):
                 s_idx = i * self.rbln_config.prefill_chunk_size
                 out_buffers[i].extend(
                     [
-                        output_hidden_state[:, s_idx : s_idx + self.rbln_config.prefill_chunk_size]
-                        for output_hidden_state in output_hidden_states
+                        hidden_states_buffer[:, s_idx : s_idx + self.rbln_config.prefill_chunk_size]
+                        for hidden_states_buffer in hidden_states_buffers
                     ]
                 )
 
