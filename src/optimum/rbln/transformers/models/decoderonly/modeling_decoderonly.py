@@ -88,10 +88,9 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     def setup_runtime(self):
         # Initialize resources to be used across Runtime instances (prefill and decode phases)
         page_table_manager = RBLNPageTableManager(self.rbln_config)
-        if self.rbln_config.attn_mask_type == "2D":
+        if self.rbln_config.is_2d_attn_mask:
             dec_attn_mask = torch.zeros(self.rbln_config.batch_size, self.rbln_config.max_seq_len, dtype=self.dtype)
         else:
-            # 4D attention mask - default setup
             dec_attn_mask = torch.zeros(
                 self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=self.dtype
             )
@@ -373,7 +372,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             input_info.append(("query_position", [], "int16"))
 
         if rbln_config.use_attention_mask:
-            if rbln_config.attn_mask_type == "2D":
+            if rbln_config.is_2d_attn_mask:
                 input_info.append(("attention_mask", [batch_size, rbln_config.max_seq_len], rbln_config.torch_dtype))
             else:
                 input_info.append(

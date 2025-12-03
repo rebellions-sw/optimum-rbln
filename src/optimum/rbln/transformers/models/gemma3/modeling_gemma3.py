@@ -429,7 +429,7 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         rbln_config: Optional[RBLNGemma3ForCausalLMConfig] = None,
     ) -> RBLNGemma3ForCausalLMConfig:
         # Update rbln_config with super class
-        rbln_config.attn_mask_type = "2D"
+        rbln_config.attn_mask_type = "2D_non_causal"
         rbln_config = super()._update_rbln_config(preprocessors, model, model_config, rbln_config)
 
         if not (rbln_config.use_attention_mask and rbln_config.use_position_ids):

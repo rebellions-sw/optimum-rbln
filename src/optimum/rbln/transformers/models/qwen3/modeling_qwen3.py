@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING
 
 from ....utils import logging
 from ...models.decoderonly import (
@@ -23,9 +22,6 @@ from .qwen3_architecture import Qwen3Wrapper
 
 
 logger = logging.get_logger(__name__)
-
-if TYPE_CHECKING:
-    pass
 
 
 class RBLNQwen3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):

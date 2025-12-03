@@ -24,6 +24,7 @@ logger = get_logger()
 
 CacheImplType = Literal["static", "sliding_window", "hybrid"]
 PhaseType = Literal["prefill", "image_prefill", "decode"]
+AttentionMaskType = Literal["2D_causal", "2D_non_causal", "4D_causal", "4D_non_causal"]
 
 
 class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
@@ -36,6 +37,7 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
     """
 
     _default_phases = ["prefill"]
+    _default_attn_mask_type = "4D_causal"
     _default_logits_to_keep = 0
 
     def __init__(
@@ -46,7 +48,7 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
         use_attention_mask: Optional[bool] = None,
         use_position_ids: Optional[bool] = None,
         attn_impl: Optional[str] = None,
-        attn_mask_type: Optional[Literal["2D", "4D"]] = None,
+        attn_mask_type: Optional[AttentionMaskType] = None,
         kvcache_partition_len: Optional[int] = None,
         kvcache_block_size: Optional[int] = None,
         quantization: Optional[Union[Dict[str, Any], RBLNQuantizationConfig]] = None,
@@ -77,9 +79,11 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
             use_position_ids (Optional[bool]): Whether to use position IDs. Defaults to False.
             attn_impl (Optional[str]): Specifies the attention implementation to use.
                 See the "Attention Implementation (`attn_impl`)" section below for details.
-            attn_mask_type (Optional[Literal["2D", "4D"]]): Specifies the type of attention mask to use. Defaults to None.
-                - "2D": Uses a 2D attention mask, where the mask is a square matrix of shape (batch_size, seq_len).
-                - "4D": Uses a 4D attention mask, where the mask is a 4D tensor of shape (batch_size, 1, query_length, seq_len).
+            attn_mask_type (Optional[AttentionMaskType]): Specifies the type of attention mask to use. Defaults to None.
+                - "2D_causal": Uses a 2D causal attention mask, where the mask is a square matrix of shape (batch_size, seq_len).
+                - "2D_non_causal": Uses a 2D non-causal attention mask, where the mask is a square matrix of shape (batch_size, seq_len).
+                - "4D_causal": Uses a 4D causal attention mask, where the mask is a 4D tensor of shape (batch_size, 1, query_length, seq_len).
+                - "4D_non_causal": Uses a 4D non-causal attention mask, where the mask is a 4D tensor of shape (batch_size, 1, query_length, seq_len).
             kvcache_partition_len (Optional[int]): Defines the partition length for the KV cache
                 when using "flash_attn". See the "KV Cache Partition Length (`kvcache_partition_len`)"
                 section below for details.
@@ -218,7 +222,6 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
             )
 
         self.attn_impl = attn_impl
-        self.attn_mask_type = attn_mask_type
         self.kvcache_partition_len = kvcache_partition_len
         self.kvcache_block_size = kvcache_block_size
         self.prefill_chunk_size = prefill_chunk_size or 128
@@ -229,6 +232,10 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
         self.cache_impl = cache_impl or "static"
         self.sliding_window = sliding_window
         self.sliding_window_layers = sliding_window_layers or []
+
+        if attn_mask_type is not None:
+            self.validate_attn_mask_type(attn_mask_type)
+        self.attn_mask_type = attn_mask_type or self._default_attn_mask_type
 
         if phases is not None:
             self.validate_phases_type(phases)
@@ -264,6 +271,21 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
             raise ValueError("`phases` must be a list.")
         if not all(phase in get_args(PhaseType) for phase in phases):
             raise ValueError(f"All elements in `phases` must be of type `PhaseType`({get_args(PhaseType)}).")
+
+    @staticmethod
+    def validate_attn_mask_type(attn_mask_type: AttentionMaskType):
+        if not isinstance(attn_mask_type, str):
+            raise ValueError("`attn_mask_type` must be a string.")
+        if attn_mask_type not in get_args(AttentionMaskType):
+            raise ValueError(f"`attn_mask_type` must be one of {get_args(AttentionMaskType)}.")
+
+    @property
+    def is_2d_attn_mask(self) -> bool:
+        return self.attn_mask_type in ["2D_causal", "2D_non_causal"]
+
+    @property
+    def is_causal_attn_mask(self) -> bool:
+        return self.attn_mask_type in ["2D_causal", "4D_causal"]
 
     @property
     def use_global_attention(self) -> bool:

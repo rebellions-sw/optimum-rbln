@@ -630,7 +630,6 @@ class DecoderOnlyAttention(nn.Module):
             self.num_key_value_heads = self.num_heads
 
         self.is_sliding = is_sliding
-        self.use_attention_mask = rbln_config.use_attention_mask if not is_sliding else True
         self.attn_impl = rbln_config.attn_impl if not is_sliding else "eager"
         self.kvcache_partition_len = getattr(rbln_config, "kvcache_partition_len", None)
         self.kvcache_block_size = rbln_config.sliding_window if is_sliding else rbln_config.kvcache_block_size
@@ -676,7 +675,6 @@ class DecoderOnlyAttention(nn.Module):
             return SlidingWindowAttentionOp(
                 self.num_heads,
                 self.head_dim,
-                self.use_attention_mask,
                 self.num_key_value_heads,
                 rbln_config=self.rbln_config,
             )
@@ -684,18 +682,18 @@ class DecoderOnlyAttention(nn.Module):
             return FlashAttentionOp(
                 self.num_heads,
                 self.head_dim,
-                self.use_attention_mask,
                 self.num_key_value_heads,
                 self.kvcache_partition_len,
                 rbln_config=self.rbln_config,
+                is_sliding=False,
             )
         elif self.attn_impl == "eager":
             return AttentionOp(
                 self.num_heads,
                 self.head_dim,
-                self.use_attention_mask,
                 self.num_key_value_heads,
                 rbln_config=self.rbln_config,
+                is_sliding=False,
             )
         else:
             raise NotImplementedError(f"Unknown attention implementation: {self.attn_impl}")
@@ -824,9 +822,9 @@ class AttentionOp(nn.Module):
         self,
         num_heads: int,
         head_dim: int,
-        use_attention_mask: bool,
         num_key_value_heads: int,
         rbln_config: Optional["RBLNDecoderOnlyModelConfig"] = None,
+        is_sliding: bool = False,
     ):
         super().__init__()
         self.num_heads = num_heads
@@ -834,7 +832,7 @@ class AttentionOp(nn.Module):
         self.num_key_value_heads = num_key_value_heads
         self.phase = "prefill"
         self.rbln_config = rbln_config
-        self.use_attention_mask = use_attention_mask
+        self.use_attention_mask = True if is_sliding else rbln_config.use_attention_mask
         self.attn_mask_type = rbln_config.attn_mask_type
         self.use_position_ids = rbln_config.use_position_ids
         self.quantization = rbln_config.quantization
@@ -843,7 +841,7 @@ class AttentionOp(nn.Module):
         phase = "decode" if self.phase == "decode" else "prefill"
 
         if self.use_attention_mask:
-            if self.attn_mask_type == "2D":
+            if self.rbln_config.is_2d_attn_mask:
                 attn_op_name = "paged_causal_attn_"
             else:
                 attn_op_name = "paged_attn_"
@@ -895,7 +893,7 @@ class AttentionOp(nn.Module):
         key_state = key_state.unsqueeze(2)  # 1, 32, 1, 128, 128
         value_state = value_state.unsqueeze(2)
 
-        if self.use_attention_mask and not self.attn_mask_type == "2D":
+        if self.use_attention_mask and not self.rbln_config.is_2d_attn_mask:
             attn_mask = attn_mask.unsqueeze(2)
 
         if self.phase == "decode":
@@ -931,10 +929,13 @@ class AttentionOp(nn.Module):
             if use_image_prefill:
                 op_args["is_bidirectional"] = self.phase == "image_prefill"
             else:
-                if self.use_attention_mask and self.attn_mask_type == "2D":
-                    op_args["is_bidirectional"] = True
-                elif not self.use_attention_mask:  # use is_bidirectional only for causal
+                if not self.use_attention_mask:
                     op_args["is_bidirectional"] = False
+                else:
+                    if self.rbln_config.is_2d_attn_mask and self.rbln_config.is_causal_attn_mask:
+                        op_args["is_bidirectional"] = False
+                    elif self.rbln_config.is_2d_attn_mask and not self.rbln_config.is_causal_attn_mask:
+                        op_args["is_bidirectional"] = True
 
         if self.quantization and self.quantization.kv_caches == "fp8":
             if past_key_state.dtype != torch.float8_e4m3fn:
@@ -960,17 +961,17 @@ class FlashAttentionOp(AttentionOp):
         self,
         num_heads: int,
         head_dim: int,
-        use_attention_mask: bool,
         num_key_value_heads: int,
         kvcache_partition_len: int,
         rbln_config: Optional["RBLNDecoderOnlyModelConfig"] = None,
+        is_sliding: bool = False,
     ):
         super().__init__(
             num_heads=num_heads,
             head_dim=head_dim,
-            use_attention_mask=use_attention_mask,
             num_key_value_heads=num_key_value_heads,
             rbln_config=rbln_config,
+            is_sliding=is_sliding,
         )
         self.kvcache_partition_size = kvcache_partition_len
 
@@ -978,7 +979,7 @@ class FlashAttentionOp(AttentionOp):
         phase = "decode" if self.phase == "decode" else "prefill"
 
         if self.use_attention_mask:
-            if self.attn_mask_type == "2D":
+            if self.rbln_config.is_2d_attn_mask:
                 attn_op_name = "paged_flash_causal_attn_"
             else:
                 attn_op_name = "paged_flash_attn_"
@@ -1010,7 +1011,8 @@ class FlashAttentionOp(AttentionOp):
         # reshape for removing repeat_kv (batch=1 , num_head, 1, q_len=1, head_dim)
         key_state = key_state.unsqueeze(2)
         value_state = value_state.unsqueeze(2)
-        if self.use_attention_mask and not self.attn_mask_type == "2D":
+
+        if self.use_attention_mask and not self.rbln_config.is_2d_attn_mask:
             attn_mask = attn_mask.unsqueeze(2)
 
         if self.phase == "decode":
@@ -1047,10 +1049,13 @@ class FlashAttentionOp(AttentionOp):
             if use_image_prefill:
                 op_args["is_bidirectional"] = self.phase == "image_prefill"
             else:
-                if self.use_attention_mask and self.attn_mask_type == "2D":
-                    op_args["is_bidirectional"] = True
-                elif not self.use_attention_mask:  # use is_bidirectional only for causal
+                if not self.use_attention_mask:
                     op_args["is_bidirectional"] = False
+                else:
+                    if self.rbln_config.is_2d_attn_mask and self.rbln_config.is_causal_attn_mask:
+                        op_args["is_bidirectional"] = False
+                    elif self.rbln_config.is_2d_attn_mask and not self.rbln_config.is_causal_attn_mask:
+                        op_args["is_bidirectional"] = True
 
         if self.quantization and self.quantization.kv_caches == "fp8":
             if past_key_state.dtype != torch.float8_e4m3fn:
@@ -1076,16 +1081,15 @@ class SlidingWindowAttentionOp(AttentionOp):
         self,
         num_heads: int,
         head_dim: int,
-        use_attention_mask: bool,
         num_key_value_heads: int,
         rbln_config: Optional["RBLNDecoderOnlyModelConfig"] = None,
     ):
         super().__init__(
             num_heads=num_heads,
             head_dim=head_dim,
-            use_attention_mask=use_attention_mask,
             num_key_value_heads=num_key_value_heads,
             rbln_config=rbln_config,
+            is_sliding=True,
         )
         self.quantization = None  # Sliding window attention does not support quantization
 
@@ -1150,7 +1154,7 @@ class SlidingWindowAttentionOp(AttentionOp):
             if use_image_prefill:
                 op_args["is_bidirectional"] = self.phase == "image_prefill"
             else:
-                if self.use_attention_mask and self.attn_mask_type == "2D":
+                if self.use_attention_mask and self.rbln_config.is_2d_attn_mask:
                     op_args["is_bidirectional"] = True
                 else:
                     op_args["is_bidirectional"] = False
