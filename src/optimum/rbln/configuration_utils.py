@@ -524,7 +524,8 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
     non_save_attributes = [
         "_frozen",
         "_runtime_options",
-        "torch_dtype",
+        "_dtype",
+        "dtype",
         "npu",
         "tensor_parallel_size",
         "create_runtimes",
@@ -661,7 +662,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         tensor_parallel_size: Optional[int] = None,
         timeout: Optional[int] = None,
         optimum_rbln_version: Optional[str] = None,
-        _torch_dtype: Optional[str] = None,
+        dtype: Optional[Union[str, torch.dtype]] = None,
         _compile_cfgs: Optional[List[RBLNCompileConfig]] = None,
         *,
         optimize_host_memory: Optional[bool] = None,
@@ -680,7 +681,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
             tensor_parallel_size (Optional[int]): Size for tensor parallelism to distribute the model across devices.
             timeout (Optional[int]): The timeout for the runtime in seconds. If it isn't provided, it will be set to 60 by default.
             optimum_rbln_version (Optional[str]): The optimum-rbln version used for this configuration.
-            _torch_dtype (Optional[str]): The data type to use for the model.
+            dtype (Optional[Union[str, torch.dtype]]): The data type to use for the model.
             _compile_cfgs (List[RBLNCompileConfig]): List of compilation configurations for the model.
             kwargs: Additional keyword arguments.
 
@@ -710,7 +711,9 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         self.npu = npu
         self.tensor_parallel_size = tensor_parallel_size
 
-        self._torch_dtype = _torch_dtype or "float32"
+        self._dtype = None
+        dtype_value = dtype if dtype is not None else "float32"
+        self.dtype = dtype_value
         self.optimum_rbln_version = optimum_rbln_version
         if self.optimum_rbln_version is None:
             self.optimum_rbln_version = __version__
@@ -742,15 +745,23 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
             raise ValueError(f"Unexpected arguments: {kwargs.keys()}")
 
     @property
-    def torch_dtype(self):
-        return getattr(torch, self._torch_dtype)
+    def dtype(self):
+        if self._dtype is None:
+            return None
 
-    @torch_dtype.setter
-    def torch_dtype(self, torch_dtype: Union[str, torch.dtype]):
-        if isinstance(torch_dtype, torch.dtype):
-            torch_dtype = RBLNCompileConfig.normalize_dtype(torch_dtype)
+        if isinstance(self._dtype, torch.dtype):
+            return self._dtype
 
-        self._torch_dtype = torch_dtype
+        return getattr(torch, self._dtype)
+
+    @dtype.setter
+    def dtype(self, value: Optional[Union[str, torch.dtype]]):
+        if value is None:
+            self._dtype = None
+            return
+
+        value = RBLNCompileConfig.normalize_dtype(value)
+        self._dtype = value
 
     @property
     def rbln_model_cls_name(self) -> str:

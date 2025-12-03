@@ -166,15 +166,9 @@ def get_quantized_model(
     """
     Get a quantized model from a model class and model id.
     """
-    # torch_dtype should not be passed to AutoConfig.from_pretrained
-    # since it doesn't support 'auto'
-    torch_dtype = kwargs.pop("torch_dtype", None)
-    if torch_dtype is not None:
-        logger.warning(
-            "torch_dtype is not supported for quantized models. "
-            "It will be ignored and the dtype of the model will be determined by the weights."
-        )
-        torch_dtype = None
+    dtype = kwargs.pop("dtype", None)
+    if dtype is not None:
+        logger.warning("`dtype` is not supported for quantized models. It will be ignored.")
 
     # get paths of safetensors files in the model repo
     safetensor_files = load_weight_files(
@@ -190,7 +184,7 @@ def get_quantized_model(
     safetensors = [load_file(safetensor_file) for safetensor_file in safetensor_files]
 
     # get the dtype of the model from the first safetensor file
-    torch_dtype = get_state_dict_dtype(safetensors[0])
+    model_dtype = get_state_dict_dtype(safetensors[0])
 
     config = AutoConfig.from_pretrained(
         model_id,
@@ -203,7 +197,7 @@ def get_quantized_model(
     )
 
     with no_init_weights():
-        model = hf_auto_model_class.from_config(config, torch_dtype=torch_dtype)
+        model = hf_auto_model_class.from_config(config, dtype=model_dtype)
 
     # Quantize the model
     update_layers_to_quantize(model, rbln_quantization)
