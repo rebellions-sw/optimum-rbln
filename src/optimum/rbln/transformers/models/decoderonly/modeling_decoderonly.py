@@ -89,7 +89,6 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         # Initialize resources to be used across Runtime instances (prefill and decode phases)
         page_table_manager = RBLNPageTableManager(self.rbln_config)
         dec_attn_mask = torch.zeros(self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=self.dtype)
-        out_buffers = [torch.empty(self.prefill_output_size, dtype=self.dtype)]
 
         common_kwargs = {
             "main_input_name": "inputs_embeds" if self.rbln_config.use_inputs_embeds else "input_ids",
@@ -97,12 +96,12 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             "dec_attn_mask": dec_attn_mask,
             "page_table_manager": page_table_manager,
             "rbln_config": self.rbln_config,
+            "config": self.config,
         }
         self.prefill_decoder = RBLNRuntimeModel(
             runtime=self.model[0],
             phase="prefill",
             batch_size=self.rbln_config.batch_size,
-            out_buffers=out_buffers,
             **common_kwargs,
         )
         if self.can_generate():
@@ -117,14 +116,6 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
             # NOTE(eunji): Use a decoder whose batch size matches the model's main batch size for compatibility.
             self.decoder = self.decoders[self.rbln_config.batch_size]
-
-    @property
-    def prefill_output_size(self):
-        return (
-            1,
-            self.rbln_config.prefill_chunk_size if self.rbln_config.logits_to_keep == 0 else 1,
-            self.config.hidden_size,
-        )
 
     @classmethod
     def get_quantized_model(
@@ -694,14 +685,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
     """
 
     auto_model_class = AutoModelForCausalLM
-
-    @property
-    def prefill_output_size(self):
-        return (
-            1,
-            self.rbln_config.prefill_chunk_size if self.rbln_config.logits_to_keep == 0 else 1,
-            self.config.vocab_size,
-        )
 
     @classmethod
     def use_query_position(cls, use_local_attention: bool, is_prefill: bool = True):
