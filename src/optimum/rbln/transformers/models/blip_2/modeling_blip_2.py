@@ -315,6 +315,7 @@ class RBLNBlip2ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixi
 
     auto_model_class = AutoModelForVisualQuestionAnswering
     _rbln_submodules = [{"name": "vision_model"}, {"name": "qformer"}, {"name": "language_model"}]
+    _supports_non_fp32 = True
 
     def __getattr__(self, __name: str) -> Any:
         def redirect(func):
@@ -473,14 +474,17 @@ class RBLNBlip2ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixi
             A list of strings of length batch_size * num_captions.
         """
         batch_size = pixel_values.shape[0]
+
+        pixel_values = pixel_values.to(self.rbln_config.vision_model.torch_dtype)
         image_embeds = self.vision_model(
             pixel_values,
             return_dict=True,
             interpolate_pos_encoding=interpolate_pos_encoding,
         ).last_hidden_state
         image_attention_mask = torch.ones(image_embeds.size()[:-1], dtype=torch.long, device=image_embeds.device)
-
-        query_tokens = self.query_tokens.expand(image_embeds.shape[0], -1, -1)
+       
+        query_tokens = self.query_tokens.expand(image_embeds.shape[0], -1, -1).to(self.rbln_config.qformer.torch_dtype)
+        image_embeds = image_embeds.to(self.rbln_config.qformer.torch_dtype)
         query_outputs = self.qformer(
             query_embeds=query_tokens,
             encoder_hidden_states=image_embeds,
@@ -488,9 +492,7 @@ class RBLNBlip2ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixi
             return_dict=True,
         )
         query_output = query_outputs.last_hidden_state
-
-        if query_output.dtype != image_embeds.dtype:
-            query_output = query_output.to(image_embeds.dtype)
+        query_output = query_output.to(self.rbln_config.torch_dtype)
 
         language_model_inputs = self.language_projection(query_output)
 
@@ -516,7 +518,8 @@ class RBLNBlip2ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixi
         special_image_mask = special_image_mask.unsqueeze(-1).expand_as(inputs_embeds).to(inputs_embeds.device)
         language_model_inputs = language_model_inputs.to(inputs_embeds.device, inputs_embeds.dtype)
         inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, language_model_inputs)
-
+        inputs_embeds = inputs_embeds.to(self.rbln_config.language_model.torch_dtype)
+        
         inputs = {"inputs_embeds": inputs_embeds, "attention_mask": attention_mask}
         if not self.language_model.config.is_encoder_decoder:
             inputs["input_ids"] = input_ids
