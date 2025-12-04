@@ -757,6 +757,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
 
             raise ValueError(f"Unexpected arguments: {kwargs.keys()}")
 
+    @property
     def torch_dtype(self):
         return self.dtype
 
