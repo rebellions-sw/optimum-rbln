@@ -416,10 +416,9 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         )
         out_buffers = [[] for _ in range(padded_input_length // self.rbln_config.prefill_chunk_size)]
 
-        if attention_mask is not None:
-            valid_start_index = int(torch.nonzero(attention_mask, as_tuple=False)[0][0].item())
-        else:
-            valid_start_index = 0
+        valid_start_index = (
+            int(torch.nonzero(attention_mask, as_tuple=False)[0][0].item()) if attention_mask is not None else 0
+        )
 
         # Prepare logits buffer
         logits_size = (
@@ -451,16 +450,12 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 for _ in range(self.config.num_hidden_layers + 1)
             ]
 
-            hidden_states_buffers = [
-                output_hidden_state[:, valid_start_index:, :] for output_hidden_state in output_hidden_states
-            ]
-
             for i in range(padded_input_length // self.rbln_config.prefill_chunk_size):
-                s_idx = i * self.rbln_config.prefill_chunk_size
+                s_idx = i * self.rbln_config.prefill_chunk_size + valid_start_index
                 out_buffers[i].extend(
                     [
                         hidden_states_buffer[:, s_idx : s_idx + self.rbln_config.prefill_chunk_size]
-                        for hidden_states_buffer in hidden_states_buffers
+                        for hidden_states_buffer in output_hidden_states
                     ]
                 )
 
