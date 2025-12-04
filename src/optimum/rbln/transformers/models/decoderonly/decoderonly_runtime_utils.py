@@ -345,7 +345,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 1,
                 self.rbln_config.prefill_chunk_size,
                 self.rbln_config.max_seq_len,
-                dtype=self.rbln_config.dtype,
+                dtype=self.rbln_config.torch_dtype,
             )
             if self.rbln_config.use_attention_mask
             else None

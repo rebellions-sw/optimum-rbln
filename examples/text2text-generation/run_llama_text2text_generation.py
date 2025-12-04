@@ -29,7 +29,7 @@ def main(
             rbln_batch_size=batch_size,
             rbln_max_seq_len=max_seq_len,
             rbln_tensor_parallel_size=tensor_parallel_size,
-            dtype="auto",
+            torch_dtype="auto",
         )
         model.save_pretrained(os.path.basename(model_id))
     else:

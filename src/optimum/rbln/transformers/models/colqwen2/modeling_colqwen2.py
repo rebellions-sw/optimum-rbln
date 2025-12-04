@@ -182,7 +182,7 @@ class RBLNColQwen2ForRetrieval(RBLNDecoderOnlyModel):
                     query_length,
                     text_config.hidden_size // text_config.num_attention_heads,
                 ],
-                rbln_config.dtype,
+                rbln_config.torch_dtype,
             ),
         )
 
