@@ -296,6 +296,8 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 else torch.arange(0, batch_size, dtype=torch.int16).view(batch_size, -1)
             )
 
+        decode_uses_2d_mask = self.rbln_config.is_2d_attn_mask_for_phase("decode")
+
         if self.rbln_config.use_attention_mask and attention_mask is None:
             for b_idx in range(batch_size):
                 decoding_step = cache_position[b_idx].item()
@@ -304,7 +306,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                         f"Decoding step {decoding_step} out of bounds for attention mask with shape {self.dec_attn_mask.shape}."
                     )
 
-                if self.rbln_config.is_2d_attn_mask:
+                if decode_uses_2d_mask:
                     self.dec_attn_mask[b_idx, decoding_step] = 1
 
                     if self.batch_size < block_tables.shape[0]:
@@ -359,9 +361,11 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 f"Input length ({query_length}) exceeds the maximum allowed sequence length ({self.rbln_config.max_seq_len})."
             )
 
+        phase_key = "image_prefill" if self.phase == "image_prefill" else "prefill"
+
         # Initialize attention mask for chunked processing
         if self.rbln_config.use_attention_mask:
-            if self.rbln_config.attn_mask_type == "2D":
+            if self.rbln_config.is_2d_attn_mask_for_phase(phase_key):
                 chunked_attention_mask = torch.zeros(
                     1, self.rbln_config.max_seq_len, dtype=self.rbln_config.torch_dtype
                 )
@@ -441,6 +445,10 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             else:
                 lora_int_ids = self.lora_int_ids.clone()
 
+        prefill_phase = "image_prefill" if self.phase == "image_prefill" else "prefill"
+        prefill_uses_2d_mask = self.rbln_config.is_2d_attn_mask_for_phase(prefill_phase)
+        decode_uses_2d_mask = self.rbln_config.is_2d_attn_mask_for_phase("decode")
+
         (
             inputs,
             cache_position,
@@ -462,7 +470,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                     "Prefix Caching is not supported yet for non-multiple of prefill_chunk_size."
                 )
             if self.rbln_config.use_attention_mask:
-                if self.rbln_config.is_2d_attn_mask:
+                if prefill_uses_2d_mask:
                     chunked_attention_mask[:, :prefix_cached_len] = 1
                 else:
                     chunked_attention_mask[:, :, :, :prefix_cached_len] = 1
@@ -479,7 +487,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
             # Update attention mask to ensure proper causal behavior
             if self.rbln_config.use_attention_mask:
-                if self.rbln_config.is_2d_attn_mask:
+                if prefill_uses_2d_mask:
                     if step > 0:  # update previous chunk
                         # Update attention mask for the previous chunk (from s - prefill_chunk_size to s)
                         prev_chunk_start = s - self.rbln_config.prefill_chunk_size + prefix_cached_len
@@ -547,7 +555,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
         # Update decoder attention mask with processed KV-cache length from prefill phase
         if self.rbln_config.can_generate and not is_external_block_tables and self.rbln_config.use_attention_mask:
-            if self.rbln_config.is_2d_attn_mask:
+            if decode_uses_2d_mask:
                 self.dec_attn_mask[batch_idx : batch_idx + 1] = chunked_attention_mask
             else:
                 self.dec_attn_mask[batch_idx].fill_(0)
