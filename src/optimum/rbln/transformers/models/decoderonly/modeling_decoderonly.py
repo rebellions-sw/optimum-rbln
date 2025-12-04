@@ -652,13 +652,9 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
                 batch_idx=b_idx,
             )
             all_last_hidden_states.append(outputs.logits)
-
-            if output_hidden_states:
+            if self.rbln_config.output_hidden_states:
                 for l_idx in range(self.config.num_hidden_layers + 1):
-                    mask_indices = torch.nonzero(attention_mask[b_idx], as_tuple=True)[0]
-                    all_hidden_states[l_idx][b_idx].index_copy_(
-                        dim=0, index=mask_indices, source=outputs.hidden_states[l_idx][0]
-                    )
+                    all_hidden_states[l_idx][b_idx].copy_(outputs.hidden_states[l_idx][0])
 
         last_hidden_states = torch.concat(all_last_hidden_states, dim=0)
         return BaseModelOutputWithPast(last_hidden_state=last_hidden_states, hidden_states=all_hidden_states)
@@ -818,14 +814,9 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
                 )
                 padded_cache_lengths[b_idx] += outputs.padded_cache_lengths
                 logits.append(outputs.logits)
-
                 if self.rbln_config.output_hidden_states:
                     for l_idx in range(self.config.num_hidden_layers + 1):
-                        mask_indices = torch.nonzero(attention_mask[b_idx], as_tuple=True)[0]
-                        all_hidden_states[l_idx][b_idx].index_copy_(
-                            dim=0, index=mask_indices, source=outputs.hidden_states[l_idx][0]
-                        )
-
+                        all_hidden_states[l_idx][b_idx].copy_(outputs.hidden_states[l_idx][0])
             logits = torch.cat(logits, dim=0)
         # Decoder
         else:

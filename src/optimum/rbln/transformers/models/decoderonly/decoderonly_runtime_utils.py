@@ -588,7 +588,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         if self.rbln_config.output_hidden_states:
             padding_size = (self.rbln_config.prefill_chunk_size - query_length) % self.rbln_config.prefill_chunk_size
             all_hidden_states = [
-                output_hidden_state[:, : -padding_size + 1, :] for output_hidden_state in output_hidden_states
+                output_hidden_state[:, :-padding_size, :] for output_hidden_state in output_hidden_states
             ]
             all_hidden_states = tuple(all_hidden_states)
 
