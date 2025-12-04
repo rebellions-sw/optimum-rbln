@@ -411,12 +411,20 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         # Prepare out buffers
         padding_size = (self.rbln_config.prefill_chunk_size - query_length) % self.rbln_config.prefill_chunk_size
         padded_input_length = query_length + padding_size
+        padded__mask_length = (
+            attention_mask.shape[-1] + padding_size if attention_mask is not None else padded_input_length
+        )
         out_buffers = [[] for _ in range(padded_input_length // self.rbln_config.prefill_chunk_size)]
+
+        if attention_mask is not None:
+            valid_start_index = int(torch.nonzero(attention_mask, as_tuple=False)[0][0].item())
+        else:
+            valid_start_index = 0
 
         # Prepare logits buffer
         logits_size = (
             1,
-            1 if self.rbln_config.logits_to_keep == 1 else padded_input_length,
+            1 if self.rbln_config.logits_to_keep == 1 else padded__mask_length,
             self.config.vocab_size if self.rbln_config.can_generate else self.config.hidden_size,
         )
         output_logits = torch.full(logits_size, fill_value=1e-10, dtype=self.rbln_config.torch_dtype)
@@ -426,7 +434,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 out_buffers[i].append(output_logits)
         else:
             for i in range(padded_input_length // self.rbln_config.prefill_chunk_size):
-                s_idx = i * self.rbln_config.prefill_chunk_size
+                s_idx = i * self.rbln_config.prefill_chunk_size + valid_start_index
                 out_buffers[i].append(output_logits[:, s_idx : s_idx + self.rbln_config.prefill_chunk_size])
 
         # Prepare output hidden states
@@ -442,12 +450,6 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 torch.full(hidden_states_size, fill_value=1e-10, dtype=self.rbln_config.torch_dtype)
                 for _ in range(self.config.num_hidden_layers + 1)
             ]
-
-            if attention_mask is not None:
-                first_one = torch.nonzero(attention_mask, as_tuple=False)
-                valid_start_index = int(first_one[0].item())
-            else:
-                valid_start_index = 0
 
             hidden_states_buffers = [
                 output_hidden_state[:, valid_start_index:, :] for output_hidden_state in output_hidden_states
@@ -566,27 +568,16 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
             )
 
         # Aggregate output_logits
+        padding_size = (self.rbln_config.prefill_chunk_size - query_length) % self.rbln_config.prefill_chunk_size
         if self.rbln_config.logits_to_keep == 1:
             output_logits = output_logits
         elif self.rbln_config.logits_to_keep > 1:
-            output_logits = output_logits[:, query_length - self.rbln_config.logits_to_keep : query_length, :]
+            output_logits = output_logits[:, -padding_size - self.rbln_config.logits_to_keep : -padding_size, :]
         else:
-            output_logits = output_logits[:, :query_length, :]
-            # index copy for masked output_logits
-            if attention_mask is not None:
-                new_output_logits = torch.full(
-                    (1, attention_mask.shape[-1], output_logits.shape[-1]),
-                    fill_value=1e-10,
-                    dtype=output_logits.dtype,
-                )
-                mask_indices = torch.nonzero(attention_mask, as_tuple=True)[0]
-                new_output_logits.index_copy_(dim=-2, index=mask_indices, source=output_logits)
-
-            output_logits = new_output_logits
+            output_logits = output_logits[:, :-padding_size, :]
 
         all_hidden_states = None
         if self.rbln_config.output_hidden_states:
-            padding_size = (self.rbln_config.prefill_chunk_size - query_length) % self.rbln_config.prefill_chunk_size
             all_hidden_states = [
                 output_hidden_state[:, :-padding_size, :] for output_hidden_state in output_hidden_states
             ]
