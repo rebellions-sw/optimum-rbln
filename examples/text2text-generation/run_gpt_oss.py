@@ -49,6 +49,7 @@ def main(
     kvcache_partition_len: typing.Optional[int] = None,
     diff: bool = False,
     n_layers: int = 2,
+    compiled_model_path: typing.Optional[str] = None,
 ):
     target_config = AutoConfig.from_pretrained(model_id)
     target_config.num_hidden_layers = n_layers
@@ -56,6 +57,10 @@ def main(
     # target_config.layer_types = ["full_attention" for _ in range(n_layers)]
     # target_config.layer_types = ["sliding_attention" for _ in range(n_layers)]
     # target_config.dtype = torch.float32
+    
+    if compiled_model_path is None:
+        compiled_model_path = os.path.basename(model_id)
+    
 
     if from_transformers:
         model = RBLNGptOssForCausalLM.from_pretrained(
@@ -68,9 +73,9 @@ def main(
             config=target_config,
             dtype=torch.float32,
         )
-        model.save_pretrained(os.path.basename(model_id))
+        model.save_pretrained(compiled_model_path)
     else:
-        model = RBLNGptOssForCausalLM.from_pretrained(os.path.basename(model_id), export=False)
+        model = RBLNGptOssForCausalLM.from_pretrained(compiled_model_path, export=False)
 
     # model = Qwen2MoeForCausalLM.from_pretrained(model_id, num_hidden_layers=1)
     # replace_qwen2moe_block(model)
