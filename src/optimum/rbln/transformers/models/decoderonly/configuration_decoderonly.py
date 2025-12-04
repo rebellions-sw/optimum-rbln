@@ -228,19 +228,18 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
         if self.prefill_chunk_size % 64 != 0 or self.prefill_chunk_size <= 0:
             raise ValueError("`prefill_chunk_size` must be a positive integer divisible by 64.")
 
-        if phases is not None:
-            self.validate_phases_type(phases)
-        self.phases = phases or self._default_phases
-
         self.kvcache_num_blocks = kvcache_num_blocks
         self.cache_impl = cache_impl or "static"
         self.sliding_window = sliding_window
         self.sliding_window_layers = sliding_window_layers or []
 
-        if attn_mask_type is None:
-            attn_mask_type = self._default_attn_mask_type
-        self.validate_attn_mask_type(attn_mask_type)
-        self._base_attn_mask_type = attn_mask_type
+        if attn_mask_type is not None:
+            self.validate_attn_mask_type(attn_mask_type)
+        self.attn_mask_type = attn_mask_type or self._default_attn_mask_type
+
+        if phases is not None:
+            self.validate_phases_type(phases)
+        self.phases = phases or self._default_phases
         self.logits_to_keep = logits_to_keep or self._default_logits_to_keep
         if self.logits_to_keep is not None and self.logits_to_keep > 1:
             raise NotImplementedError("`logits_to_keep` > 1 is currently not supported for RBLN models.")
@@ -281,32 +280,12 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
             raise ValueError(f"`attn_mask_type` must be one of {get_args(AttentionMaskType)}.")
 
     @property
-    def attn_mask_type(self) -> AttentionMaskType:
-        return self._base_attn_mask_type
-
-    @attn_mask_type.setter
-    def attn_mask_type(self, attn_mask_type_value: AttentionMaskType):
-        self.validate_attn_mask_type(attn_mask_type_value)
-        self._base_attn_mask_type = attn_mask_type_value
-
-    def get_attn_mask_type(self, phase: PhaseType) -> AttentionMaskType:
-        if phase == "image_prefill":
-            return "2D_non_causal"
-        return self._base_attn_mask_type
-
-    def is_2d_attn_mask_for_phase(self, phase: PhaseType) -> bool:
-        return self.get_attn_mask_type(phase) in ["2D_causal", "2D_non_causal"]
-
-    def is_causal_attn_mask_for_phase(self, phase: PhaseType) -> bool:
-        return self.get_attn_mask_type(phase) in ["2D_causal", "4D_causal"]
-
-    @property
     def is_2d_attn_mask(self) -> bool:
-        return self.is_2d_attn_mask_for_phase("prefill")
+        return self.attn_mask_type in ["2D_causal", "2D_non_causal"]
 
     @property
     def is_causal_attn_mask(self) -> bool:
-        return self.is_causal_attn_mask_for_phase("prefill")
+        return self.attn_mask_type in ["2D_causal", "4D_causal"]
 
     @property
     def use_global_attention(self) -> bool:

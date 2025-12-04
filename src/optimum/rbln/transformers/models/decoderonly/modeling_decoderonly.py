@@ -34,11 +34,7 @@ from ...modeling_attention_utils import (
 )
 from ...modeling_outputs import RBLNDecoderOnlyOutput
 from ...utils.rbln_quantization import get_quantized_model
-from .configuration_decoderonly import (
-    PhaseType,
-    RBLNDecoderOnlyModelConfig,
-    RBLNDecoderOnlyModelForCausalLMConfig,
-)
+from .configuration_decoderonly import RBLNDecoderOnlyModelConfig, RBLNDecoderOnlyModelForCausalLMConfig
 from .decoderonly_architecture import DecoderOnlyWrapper
 from .decoderonly_runtime_utils import RBLNPageTableManager, RBLNRuntimeModel
 from .generation_decoderonly import RBLNDecoderOnlyGenerationMixin
@@ -92,7 +88,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     def setup_runtime(self):
         # Initialize resources to be used across Runtime instances (prefill and decode phases)
         page_table_manager = RBLNPageTableManager(self.rbln_config)
-        if self.rbln_config.is_2d_attn_mask_for_phase("decode"):
+        if self.rbln_config.is_2d_attn_mask:
             dec_attn_mask = torch.zeros(self.rbln_config.batch_size, self.rbln_config.max_seq_len, dtype=self.dtype)
         else:
             dec_attn_mask = torch.zeros(
@@ -348,7 +344,6 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         query_length: int,
         rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
         model_config: PretrainedConfig,
-        phase: Optional[PhaseType] = None,
     ):
         num_attention_heads = getattr(model_config, "n_head", None) or model_config.num_attention_heads
         num_key_value_heads = getattr(model_config, "num_key_value_heads", None) or num_attention_heads
@@ -356,8 +351,6 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         hidden_size = getattr(model_config, "n_embd", None) or model_config.hidden_size
         head_dim = getattr(model_config, "head_dim", None) or hidden_size // num_attention_heads
         is_prefill = query_length > 1
-        if phase is None:
-            phase = "prefill" if is_prefill else "decode"
 
         input_info = []
         if rbln_config.use_inputs_embeds:
@@ -379,7 +372,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             input_info.append(("query_position", [], "int16"))
 
         if rbln_config.use_attention_mask:
-            if rbln_config.is_2d_attn_mask_for_phase(phase):
+            if rbln_config.is_2d_attn_mask:
                 input_info.append(("attention_mask", [batch_size, rbln_config.max_seq_len], rbln_config.torch_dtype))
             else:
                 input_info.append(
@@ -563,7 +556,6 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             query_length=rbln_config.prefill_chunk_size,
             rbln_config=rbln_config,
             model_config=model_config,
-            phase="prefill",
         )
 
         prefill_compile_config = RBLNCompileConfig(compiled_model_name="prefill", input_info=prefill_input_info)
@@ -576,7 +568,6 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
                     query_length=1,
                     rbln_config=rbln_config,
                     model_config=model_config,
-                    phase="decode",
                 )
                 compile_cfgs.append(
                     RBLNCompileConfig(compiled_model_name=f"decoder_batch_{batch_size}", input_info=dec_input_info)

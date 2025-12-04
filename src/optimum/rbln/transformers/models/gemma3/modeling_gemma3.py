@@ -447,7 +447,6 @@ class RBLNGemma3ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
                 query_length=rbln_config.image_prefill_chunk_size,
                 rbln_config=rbln_config,
                 model_config=model_config,
-                phase="image_prefill",
             )
             image_prefill_compile_config = RBLNCompileConfig(
                 compiled_model_name="image_prefill", input_info=img_prefill_input_info
