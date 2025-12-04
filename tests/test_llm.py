@@ -59,7 +59,7 @@ class LLMTest:
         DEVICE = None  # Use device to run
         PROMPT = "Who are you?"
         IS_MULTIMODAL = False
-        HF_CONFIG_KWARGS_PREPROCESSOR = {}
+        HF_CONFIG_KWARGS_PREPROCESSOR = {"padding_side": "left"}
 
         def get_tokenizer(self):
             PreProcessor = AutoProcessor if self.IS_MULTIMODAL else AutoTokenizer
@@ -121,23 +121,78 @@ class TestQwen2Model(LLMTest.TestLLMWithoutLMHead):
 
 
 class TestQwen2ForCausalLM_OutputHiddenStates(TestQwen2ForCausalLM):
-    RBLN_CLASS_KWARGS = {"rbln_config": {"output_hidden_states": True}}
+    PROMPT = ["Who are you?", "What is the capital of France?"]
+    RBLN_CLASS_KWARGS = {"rbln_config": {"output_hidden_states": True, "batch_size": 2}}
 
     def get_inputs(self):
         inputs = super().get_inputs()
         inputs["return_dict_in_generate"] = True
         inputs["output_hidden_states"] = True
+        inputs["max_new_tokens"] = 4
         return inputs
+
+    def test_generate(self):
+        inputs = self.get_inputs()
+        output = self.model.generate(**inputs)
+
+        # Check hidden states Shape and Type
+        self.assertTrue(len(output.hidden_states) == inputs["max_new_tokens"])
+        self.assertTrue(isinstance(output.hidden_states, tuple))
+        self.assertTrue(len(output.hidden_states[0]) == (self.HF_CONFIG_KWARGS["num_hidden_layers"] + 1))
+        self.assertTrue(isinstance(output.hidden_states[0], tuple))
+
+        test_hidden_states = output.hidden_states[0][1]
+        batch_size, seq_len = test_hidden_states.shape[:2]
+        self.assertTrue(batch_size == len(self.PROMPT))
+        self.assertTrue(seq_len == inputs.input_ids.shape[-1])
+
+        # Check well-masked hidden states corresponds to attention mask
+        for b_idx, bmask in enumerate(inputs.attention_mask):
+            masked_indices = torch.where(bmask == 0)[0]
+            unmasked_indices = torch.where(bmask == 1)[0]
+            masked = torch.allclose(test_hidden_states[b_idx][masked_indices], torch.zeros([1]))
+            # 1. all masked hidden states are zero
+            self.assertTrue(masked)
+            unmasked_tensor = test_hidden_states[b_idx][unmasked_indices]
+            avg_unmasked_tensor = torch.mean(unmasked_tensor, dim=-1)
+            zero_like = torch.zeros_like(avg_unmasked_tensor)
+            approx_zero = torch.isclose(avg_unmasked_tensor, zero_like, atol=1e-5)
+            # 2. check if unmasked hidden states are not masked
+            self.assertTrue(torch.any(approx_zero).item())
 
 
 class TestQwen2Model_OutputHiddenStates(TestQwen2Model):
-    RBLN_CLASS_KWARGS = {"rbln_config": {"output_hidden_states": True}}
+    PROMPT = ["Who are you?", "What is the capital of France?"]
+    RBLN_CLASS_KWARGS = {"rbln_config": {"output_hidden_states": True, "batch_size": 2}}
 
-    def get_inputs(self):
-        inputs = super().get_inputs()
-        inputs["return_dict_in_generate"] = True
-        inputs["output_hidden_states"] = True
-        return inputs
+    def test_generate(self):
+        inputs = self.get_inputs()
+        output = self.model(**inputs)
+
+        # Check hidden states Shape and Type
+        self.assertTrue(len(output.hidden_states) == (self.HF_CONFIG_KWARGS["num_hidden_layers"] + 1))
+        self.assertTrue(isinstance(output.hidden_states, tuple))
+        test_hidden_states = output.hidden_states[1]
+        batch_size, seq_len = test_hidden_states.shape[:2]
+        self.assertTrue(batch_size == len(self.PROMPT))
+        self.assertTrue(seq_len == inputs.input_ids.shape[-1])
+
+        # Check well-masked hidden states corresponds to attention mask
+        for b_idx, bmask in enumerate(inputs.attention_mask):
+            masked_indices = torch.where(bmask == 0)[0]
+            unmasked_indices = torch.where(bmask == 1)[0]
+            masked = torch.allclose(test_hidden_states[b_idx][masked_indices], torch.zeros([1]))
+            # 1. all masked hidden states are zero
+            self.assertTrue(masked)
+            unmasked_tensor = test_hidden_states[b_idx][unmasked_indices]
+            avg_unmasked_tensor = torch.mean(unmasked_tensor, dim=-1)
+            zero_like = torch.zeros_like(avg_unmasked_tensor)
+            approx_zero = torch.isclose(avg_unmasked_tensor, zero_like, atol=1e-5)
+            # 2. check if unmasked hidden states are not masked
+            self.assertTrue(torch.any(approx_zero).item())
+
+        # Check last hidden state corresponds to the last hidden state of the prefill stage
+        self.assertTrue(torch.allclose(output.last_hidden_state, output.hidden_states[-1]))
 
 
 class TestQwen3ForCausalLM(LLMTest.TestLLM):
