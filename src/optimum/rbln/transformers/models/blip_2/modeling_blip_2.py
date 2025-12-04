@@ -474,7 +474,6 @@ class RBLNBlip2ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixi
             A list of strings of length batch_size * num_captions.
         """
         batch_size = pixel_values.shape[0]
-
         image_embeds = self.vision_model(
             pixel_values,
             return_dict=True,
@@ -519,6 +518,7 @@ class RBLNBlip2ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixi
         language_model_inputs = language_model_inputs.to(inputs_embeds.device, inputs_embeds.dtype)
         inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, language_model_inputs)
 
+        inputs_embeds = inputs_embeds.to(self.language_model.dtype)
         inputs = {"inputs_embeds": inputs_embeds, "attention_mask": attention_mask}
         if not self.language_model.config.is_encoder_decoder:
             inputs["input_ids"] = input_ids
