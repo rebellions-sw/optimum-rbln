@@ -77,7 +77,7 @@ class DecoderOnlyWrapper(nn.Module):
             )
 
         self.model = self.convert_to_rbln_class(model, rbln_config.max_seq_len)
-        self.num_hidden_layers = getattr(self.config, "num_hidden_layers", None) or getattr(self.config, "n_layer")
+        self.num_hidden_layers = getattr(self.config, "num_hidden_layers", None) or self.config.n_layer
         self._phase = "prefill"
 
     def get_rotary_emb(self, max_seq_len):
@@ -206,7 +206,7 @@ class DecoderOnlyWrapper(nn.Module):
             rotary_emb,
         ) = self.prepare_forward_args(*args)
 
-        logit = self.model(
+        logits, all_hidden_states = self.model(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
@@ -218,9 +218,13 @@ class DecoderOnlyWrapper(nn.Module):
             global_block_tables=global_block_tables,
             local_block_tables=local_block_tables,
             lora_int_id=lora_int_id,
+            output_hidden_states=self.rbln_config.output_hidden_states,
         )
 
-        return logit
+        if self.rbln_config.output_hidden_states:
+            return logits, all_hidden_states
+        else:
+            return logits
 
 
 class DecoderOnlyForCausalLM(nn.Module):
@@ -275,9 +279,10 @@ class DecoderOnlyForCausalLM(nn.Module):
         global_block_tables: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
         lora_int_id: Optional[torch.Tensor] = None,
+        output_hidden_states: Optional[bool] = None,
     ):
         # outputs
-        hidden_states = self.model(
+        hidden_states, all_hidden_states = self.model(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
@@ -289,6 +294,7 @@ class DecoderOnlyForCausalLM(nn.Module):
             global_block_tables=global_block_tables,
             local_block_tables=local_block_tables,
             lora_int_id=lora_int_id,
+            output_hidden_states=output_hidden_states,
         )
 
         if "prefill" in self.phase and query_position is not None:
@@ -302,7 +308,7 @@ class DecoderOnlyForCausalLM(nn.Module):
             logits = torch.tanh(logits)
             logits = logits * self.config.final_logit_softcapping
 
-        return logits
+        return logits, all_hidden_states
 
 
 class DecoderOnlyModel(nn.Module):
@@ -401,6 +407,7 @@ class DecoderOnlyModel(nn.Module):
         global_block_tables: Optional[torch.Tensor] = None,
         local_block_tables: Optional[torch.Tensor] = None,
         lora_int_id: Optional[torch.Tensor] = None,
+        output_hidden_states: Optional[bool] = None,
     ):
         # retrieve input_ids and inputs_embeds
         if (input_ids is None) ^ (inputs_embeds is not None):
@@ -463,7 +470,11 @@ class DecoderOnlyModel(nn.Module):
         if len(self.sliding_window_layers) > 0:
             sliding_cache_pos = self.get_local_cache_positions(position_ids, query_position)
 
+        all_hidden_states = () if output_hidden_states else None
         for layer_idx, layer in enumerate(self.layers):
+            if output_hidden_states:
+                all_hidden_states += (hidden_states,)
+
             is_sliding = True if layer_idx in self.sliding_window_layers else False
             hidden_states = layer(
                 hidden_states=hidden_states,
@@ -477,7 +488,10 @@ class DecoderOnlyModel(nn.Module):
             )
 
         hidden_states = self.get_last_layernorm()(hidden_states)
-        return hidden_states
+        if output_hidden_states:
+            all_hidden_states += (hidden_states,)
+
+        return hidden_states, all_hidden_states
 
 
 class DecoderOnlyLayer(nn.Module):
@@ -619,8 +633,8 @@ class DecoderOnlyAttention(nn.Module):
         self._original_mod = self_attn
         self.rbln_config = rbln_config
         self.layer_idx = self_attn.layer_idx
-        self.num_heads = getattr(self._original_mod, "num_heads", None) or getattr(
-            self._original_mod.config, "num_attention_heads"
+        self.num_heads = (
+            getattr(self._original_mod, "num_heads", None) or self._original_mod.config.num_attention_heads
         )
         self.head_dim = self._original_mod.head_dim
         self._phase = "prefill"
