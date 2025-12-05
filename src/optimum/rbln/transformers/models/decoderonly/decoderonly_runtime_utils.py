@@ -411,7 +411,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         # Prepare out buffers
         padding_size = (self.rbln_config.prefill_chunk_size - query_length) % self.rbln_config.prefill_chunk_size
         padded_input_length = query_length + padding_size
-        padded__mask_length = (
+        padded_mask_length = (
             attention_mask.shape[-1] + padding_size if attention_mask is not None else padded_input_length
         )
         out_buffers = [[] for _ in range(padded_input_length // self.rbln_config.prefill_chunk_size)]
@@ -423,7 +423,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         # Prepare logits buffer
         logits_size = (
             1,
-            1 if self.rbln_config.logits_to_keep == 1 else padded__mask_length,
+            1 if self.rbln_config.logits_to_keep == 1 else padded_mask_length,
             self.config.vocab_size if self.rbln_config.can_generate else self.config.hidden_size,
         )
         output_logits = torch.full(logits_size, fill_value=1e-10, dtype=self.rbln_config.torch_dtype)
@@ -439,10 +439,9 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         # Prepare output hidden states
         output_hidden_states = None
         if self.rbln_config.output_hidden_states:
-            padded_attention_mask = torch.nn.functional.pad(attention_mask, (0, padding_size), value=1)
             hidden_states_size = (
                 1,
-                padded_input_length if attention_mask is None else padded_attention_mask.shape[-1],
+                padded_mask_length,
                 self.config.hidden_size,
             )
             output_hidden_states = [
@@ -559,7 +558,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                 chunked_attention_mask if self.rbln_config.use_attention_mask else None,
                 position_ids_chunk,
                 lora_int_ids if self.rbln_config.use_lora else None,
-                out=out_buffers[i],  # TODO(taehoon): add hidden states output
+                out=out_buffers[i],
             )
 
         # Aggregate output_logits
