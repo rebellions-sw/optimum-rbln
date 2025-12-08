@@ -68,7 +68,9 @@ class RBLNPaliGemmaForConditionalGenerationConfig(RBLNModelConfig):
 
         self.language_model = self.initialize_submodule_config(
             submodule_config=language_model,
-            attn_mask_type="2D",
+            use_position_ids=True,
+            use_attention_mask=True,
+            use_inputs_embeds=True,
         )
 
 
@@ -111,5 +113,9 @@ class RBLNPaliGemmaModelConfig(RBLNModelConfig):
         )
 
         self.language_model = self.initialize_submodule_config(
-            submodule_config=language_model, batch_size=batch_size, attn_mask_type="2D"
+            submodule_config=language_model,
+            batch_size=batch_size,
+            use_position_ids=True,
+            use_attention_mask=True,
+            use_inputs_embeds=True,
         )

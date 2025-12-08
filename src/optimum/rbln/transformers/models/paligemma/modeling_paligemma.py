@@ -21,7 +21,7 @@ import torch
 from transformers import AutoModelForVision2Seq, PaliGemmaForConditionalGeneration, PretrainedConfig, PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPooling
 from transformers.modeling_utils import no_init_weights
-from transformers.models.auto import CONFIG_MAPPING
+from transformers.models.paligemma.configuration_paligemma import PaliGemmaConfig
 from transformers.models.paligemma.modeling_paligemma import PaligemmaModelOutputWithPast, PaliGemmaMultiModalProjector
 
 from ....configuration_utils import RBLNModelConfig
@@ -305,9 +305,13 @@ class RBLNPaliGemmaModel(RBLNModel):
         self.language_model = self.rbln_submodules[1]
 
         if not isinstance(self.config.text_config, PretrainedConfig):
-            self.config.text_config = CONFIG_MAPPING[self.config.text_config["model_type"]](**self.config.text_config)
-            self.config.vision_config = CONFIG_MAPPING[self.config.vision_config["model_type"]](
-                **self.config.vision_config
+            cfg = self.config if isinstance(self.config, dict) else self.config.to_dict()
+            text_config = cfg.pop("text_config", None)
+            vision_config = cfg.pop("vision_config", None)
+            self.config = PaliGemmaConfig(
+                text_config=text_config,
+                vision_config=vision_config,
+                **cfg,
             )
 
         artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
