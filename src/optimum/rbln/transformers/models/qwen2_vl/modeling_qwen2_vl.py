@@ -264,6 +264,10 @@ class RBLNQwen2VLModel(RBLNDecoderOnlyModel):
         if not self.can_generate():
             self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
 
+    @property
+    def logits_last_dim(self):
+        return self.embedding_dim if hasattr(self, "embedding_dim") else self.config.hidden_size
+
     def _create_embedding_layer(self):
         with no_init_weights():
             embed_tokens = torch.nn.Embedding(
@@ -272,16 +276,6 @@ class RBLNQwen2VLModel(RBLNDecoderOnlyModel):
                 self.config.text_config.pad_token_id,
             )
         return embed_tokens
-
-    # FIXME: Workaround for the optimization purpose.
-    @property
-    def prefill_output_size(self):
-        hidden_size = self.embedding_dim if hasattr(self, "embedding_dim") else self.config.text_config.hidden_size
-        return (
-            1,
-            self.rbln_config.prefill_chunk_size if self.rbln_config.logits_to_keep == 0 else 1,
-            hidden_size,
-        )
 
     @classmethod
     def get_input_info(
@@ -421,15 +415,15 @@ class RBLNQwen2VLModel(RBLNDecoderOnlyModel):
         )
 
         self.rope_deltas = rope_deltas
-        batch_size = inputs_embeds.shape[0]
+        batch_size, seq_len = inputs_embeds.shape[:2]
 
         output_hidden_states = _validate_output_hidden_states(output_hidden_states, self.rbln_config)
 
         all_hidden_states = (
             tuple(
                 torch.zeros(
-                    self.rbln_config.batch_size,
-                    inputs_embeds.shape[1],
+                    batch_size,
+                    seq_len,
                     self.config.hidden_size,
                     dtype=self.rbln_config.torch_dtype,
                 )
@@ -610,20 +604,6 @@ class RBLNQwen2VLForConditionalGeneration(RBLNQwen2VLModel, RBLNDecoderOnlyModel
         **kwargs,
     ) -> RBLNDecoderOnlyOutput:
         output_hidden_states = _validate_output_hidden_states(output_hidden_states, self.rbln_config)
-        all_hidden_states = (
-            tuple(
-                torch.zeros(
-                    self.rbln_config.batch_size,
-                    inputs_embeds.shape[1],
-                    self.config.hidden_size,
-                    dtype=self.rbln_config.torch_dtype,
-                )
-                for _ in range(self.config.num_hidden_layers + 1)
-            )
-            if output_hidden_states
-            else None
-        )
-
         # Prefill
         if cache_position is None:
             inputs_embeds, position_embed, rope_deltas = self._preprocess_prefill(
@@ -635,8 +615,21 @@ class RBLNQwen2VLForConditionalGeneration(RBLNQwen2VLModel, RBLNDecoderOnlyModel
                 video_grid_thw,
             )
 
+            batch_size, seq_len = inputs_embeds.shape[:2]
+            all_hidden_states = (
+                tuple(
+                    torch.zeros(
+                        batch_size,
+                        seq_len,
+                        self.config.hidden_size,
+                        dtype=self.rbln_config.torch_dtype,
+                    )
+                    for _ in range(self.config.num_hidden_layers + 1)
+                )
+                if output_hidden_states
+                else None
+            )
             self.rope_deltas = rope_deltas
-            batch_size = inputs_embeds.shape[0]
 
             logits = []
             for b_idx in range(batch_size):

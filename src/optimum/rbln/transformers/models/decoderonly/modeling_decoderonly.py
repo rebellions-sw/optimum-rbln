@@ -102,6 +102,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             runtime=self.model[0],
             phase="prefill",
             batch_size=self.rbln_config.batch_size,
+            logits_last_dim=self.logits_last_dim,
             **common_kwargs,
         )
         if self.can_generate():
@@ -116,6 +117,10 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
             # NOTE(eunji): Use a decoder whose batch size matches the model's main batch size for compatibility.
             self.decoder = self.decoders[self.rbln_config.batch_size]
+
+    @property
+    def logits_last_dim(self):
+        return self.config.vocab_size if self.can_generate() else self.config.hidden_size
 
     @classmethod
     def get_quantized_model(

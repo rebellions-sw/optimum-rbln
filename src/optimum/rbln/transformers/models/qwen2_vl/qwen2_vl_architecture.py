@@ -27,7 +27,7 @@ class Qwen2VisionTransformerWrapper(nn.Module):
     ):
         wrapped_blocks = []
         for _, block in enumerate(blocks):
-            wrapped_blocks.append(Qwen2VLVisionBlock(block))
+            wrapped_blocks.append(Qwen2VLVisionBlock(block, rbln_config))
         return nn.ModuleList(wrapped_blocks)
 
     def forward(

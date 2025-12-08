@@ -101,6 +101,7 @@ class RBLNColQwen2ForRetrieval(RBLNModel):
             return_dict=True,
             **kwargs,
         )
+        hidden_states = vlm_output.hidden_states if output_hidden_states else None
 
         embeddings = vlm_output[0]
         embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
@@ -110,4 +111,5 @@ class RBLNColQwen2ForRetrieval(RBLNModel):
 
         return ColQwen2ForRetrievalOutput(
             embeddings=embeddings,
+            hidden_states=hidden_states,
         )

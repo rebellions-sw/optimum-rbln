@@ -80,5 +80,10 @@ class RBLNColQwen2ForRetrievalConfig(RBLNDecoderOnlyModelConfig):
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
         self.vlm = self.initialize_submodule_config(
-            submodule_config=vlm, batch_size=batch_size, output_hidden_states=output_hidden_states, force_kwargs=True, logits_to_keep=0, use_inputs_embeds=True
+            submodule_config=vlm,
+            batch_size=batch_size,
+            output_hidden_states=output_hidden_states,
+            force_kwargs=True,
+            logits_to_keep=0,
+            use_inputs_embeds=True,
         )
