@@ -32,7 +32,7 @@ from ...modeling_attention_utils import (
     validate_attention_method,
     validate_sliding_window,
 )
-from ...modeling_outputs import RBLNDecoderOnlyOutput
+from ...modeling_outputs import RBLNDecoderOnlyOutput, _validate_output_hidden_states
 from ...utils.rbln_quantization import get_quantized_model
 from .configuration_decoderonly import RBLNDecoderOnlyModelConfig, RBLNDecoderOnlyModelForCausalLMConfig
 from .decoderonly_architecture import DecoderOnlyWrapper
@@ -45,8 +45,6 @@ logger = get_logger()
 if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
 
-
-from ...modeling_outputs import _validate_output_hidden_states
 
 class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     """
@@ -675,10 +673,6 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
     """
 
     auto_model_class = AutoModelForCausalLM
-
-    @classmethod
-    def use_query_position(cls, use_local_attention: bool, is_prefill: bool = True):
-        return is_prefill
 
     def set_lora_int_ids(self, lora_int_ids: Optional[torch.Tensor]):
         if isinstance(lora_int_ids, int):

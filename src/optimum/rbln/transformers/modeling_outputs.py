@@ -49,13 +49,12 @@ def _validate_output_hidden_states(output_hidden_states: Optional[bool], rbln_co
             f"Variable output_hidden_states {output_hidden_states} is not equal to rbln_config.output_hidden_states {rbln_config.output_hidden_states} "
             f"Please compile again with the correct argument."
         )
-        
+
     return output_hidden_states
 
+
 def _validate_output_attentions(output_attentions: Optional[bool], rbln_config: RBLNModelConfig):
-    output_attentions = (
-        output_attentions if output_attentions is not None else rbln_config.output_attentions
-    )
+    output_attentions = output_attentions if output_attentions is not None else rbln_config.output_attentions
     if output_attentions != rbln_config.output_attentions:
         raise ValueError(
             f"Variable output_attentions {output_attentions} is not equal to rbln_config.output_attentions {rbln_config.output_attentions} "
