@@ -266,7 +266,10 @@ class RBLNQwen2VLModel(RBLNDecoderOnlyModel):
 
     @property
     def logits_last_dim(self):
-        return self.embedding_dim if hasattr(self, "embedding_dim") else self.config.hidden_size
+        if self.can_generate():
+            return self.config.vocab_size
+        else:
+            return self.embedding_dim if hasattr(self, "embedding_dim") else self.config.hidden_size
 
     def _create_embedding_layer(self):
         with no_init_weights():
