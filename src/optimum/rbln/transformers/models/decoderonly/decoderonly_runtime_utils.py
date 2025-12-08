@@ -344,13 +344,18 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
             mask_bool = attention_mask.to(dtype=torch.bool)
             if (~mask_bool).any():
-                first_one = torch.nonzero(mask_bool, as_tuple=False)
-                if first_one.numel() == 0:
+                indice_one = torch.nonzero(mask_bool, as_tuple=False)
+                if indice_one.numel() == 0:
                     raise ValueError("attention_mask with padding must include at least one real token.")
+                first_one_idx, last_one_idx = int(indice_one[0].item()), int(indice_one[-1].item())
+                if last_one_idx - first_one_idx + 1 != mask_bool.sum():
+                    raise ValueError(
+                        "attention_mask must group all 1s together (e.g. 000111 or 1111000). "
+                        "Zeros between real tokens like 101010 are not supported."
+                    )
 
-                first_one_idx = int(first_one[0].item())
-                if not mask_bool[first_one_idx:].all():
-                    raise ValueError("attention_mask must be left padded.")
+                if self.rbln_config.can_generate and not mask_bool[s:].all():
+                    raise ValueError("attention_mask must be left padded for generation.")
 
             inputs = inputs[:, mask_bool]
             position_embed = None if position_embed is None else position_embed[:, :, :, mask_bool, :]
