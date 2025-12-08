@@ -833,7 +833,6 @@ class AttentionOp(nn.Module):
         self.phase = "prefill"
         self.rbln_config = rbln_config
         self.use_attention_mask = True if is_sliding else rbln_config.use_attention_mask
-        self.attn_mask_type = rbln_config.attn_mask_type
         self.use_position_ids = rbln_config.use_position_ids
         self.quantization = rbln_config.quantization
 
@@ -841,7 +840,7 @@ class AttentionOp(nn.Module):
         phase = "decode" if self.phase == "decode" else "prefill"
 
         if self.use_attention_mask:
-            if self.rbln_config.is_2d_attn_mask:
+            if self.rbln_config.use_position_ids:
                 attn_op_name = "paged_causal_attn_"
             else:
                 attn_op_name = "paged_attn_"
@@ -893,7 +892,7 @@ class AttentionOp(nn.Module):
         key_state = key_state.unsqueeze(2)  # 1, 32, 1, 128, 128
         value_state = value_state.unsqueeze(2)
 
-        if self.use_attention_mask and not self.rbln_config.is_2d_attn_mask:
+        if self.use_attention_mask and not self.rbln_config.use_position_ids:
             attn_mask = attn_mask.unsqueeze(2)
 
         if self.phase == "decode":
@@ -931,11 +930,8 @@ class AttentionOp(nn.Module):
             else:
                 if not self.use_attention_mask:
                     op_args["is_bidirectional"] = False
-                else:
-                    if self.rbln_config.is_2d_attn_mask and self.rbln_config.is_causal_attn_mask:
-                        op_args["is_bidirectional"] = False
-                    elif self.rbln_config.is_2d_attn_mask and not self.rbln_config.is_causal_attn_mask:
-                        op_args["is_bidirectional"] = True
+                elif self.use_attention_mask and self.rbln_config.use_position_ids:
+                    op_args["is_bidirectional"] = True
 
         if self.quantization and self.quantization.kv_caches == "fp8":
             if past_key_state.dtype != torch.float8_e4m3fn:
@@ -979,7 +975,7 @@ class FlashAttentionOp(AttentionOp):
         phase = "decode" if self.phase == "decode" else "prefill"
 
         if self.use_attention_mask:
-            if self.rbln_config.is_2d_attn_mask:
+            if self.rbln_config.use_position_ids:
                 attn_op_name = "paged_flash_causal_attn_"
             else:
                 attn_op_name = "paged_flash_attn_"
@@ -1012,7 +1008,7 @@ class FlashAttentionOp(AttentionOp):
         key_state = key_state.unsqueeze(2)
         value_state = value_state.unsqueeze(2)
 
-        if self.use_attention_mask and not self.rbln_config.is_2d_attn_mask:
+        if self.use_attention_mask and not self.rbln_config.use_position_ids:
             attn_mask = attn_mask.unsqueeze(2)
 
         if self.phase == "decode":
@@ -1051,11 +1047,8 @@ class FlashAttentionOp(AttentionOp):
             else:
                 if not self.use_attention_mask:
                     op_args["is_bidirectional"] = False
-                else:
-                    if self.rbln_config.is_2d_attn_mask and self.rbln_config.is_causal_attn_mask:
-                        op_args["is_bidirectional"] = False
-                    elif self.rbln_config.is_2d_attn_mask and not self.rbln_config.is_causal_attn_mask:
-                        op_args["is_bidirectional"] = True
+                elif self.use_attention_mask and self.rbln_config.use_position_ids:
+                    op_args["is_bidirectional"] = True
 
         if self.quantization and self.quantization.kv_caches == "fp8":
             if past_key_state.dtype != torch.float8_e4m3fn:
@@ -1154,7 +1147,7 @@ class SlidingWindowAttentionOp(AttentionOp):
             if use_image_prefill:
                 op_args["is_bidirectional"] = self.phase == "image_prefill"
             else:
-                if self.use_attention_mask and self.rbln_config.is_2d_attn_mask:
+                if self.use_attention_mask and self.rbln_config.use_position_ids:
                     op_args["is_bidirectional"] = True
                 else:
                     op_args["is_bidirectional"] = False
