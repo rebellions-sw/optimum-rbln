@@ -46,6 +46,8 @@ if TYPE_CHECKING:
     from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
 
 
+from ...modeling_outputs import _validate_output_hidden_states
+
 class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     """
     A base class for decoder-only transformer models outputting raw hidden-states without any specific head on top.
@@ -615,15 +617,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             raise ValueError(
                 f"Batch size ({batch_size}) must be equal to the batch size of the model ({self.rbln_config.batch_size})."
             )
-
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.rbln_config.output_hidden_states
-        )
-        if output_hidden_states != self.rbln_config.output_hidden_states:
-            raise ValueError(
-                f"Variable output_hidden_states {output_hidden_states} is not equal to rbln_config.output_hidden_states {self.rbln_config.output_hidden_states} "
-                f"Please compile again with the correct argument."
-            )
+        output_hidden_states = _validate_output_hidden_states(output_hidden_states, self.rbln_config)
 
         all_last_hidden_states = []
         all_hidden_states = (
@@ -769,14 +763,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
             )
             padded_cache_lengths = torch.zeros_like(generate_idx)
 
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.rbln_config.output_hidden_states
-        )
-        if output_hidden_states != self.rbln_config.output_hidden_states:
-            raise ValueError(
-                f"Variable output_hidden_states {output_hidden_states} is not equal to rbln_config.output_hidden_states {self.rbln_config.output_hidden_states} "
-                f"Please compile again with the correct argument."
-            )
+        output_hidden_states = _validate_output_hidden_states(output_hidden_states, self.rbln_config)
 
         # Prefill
         if cache_position is None:
