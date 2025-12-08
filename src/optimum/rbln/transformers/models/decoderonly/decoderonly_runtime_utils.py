@@ -373,7 +373,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
                         "Zeros between real tokens like 101010 are not supported."
                     )
 
-                if self.rbln_config.can_generate and not mask_bool[s:].all():
+                if self.rbln_config.can_generate and not mask_bool[first_one_idx:].all():
                     raise ValueError("attention_mask must be left padded for generation.")
 
             inputs = inputs[:, mask_bool]
