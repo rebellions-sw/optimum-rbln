@@ -21,8 +21,8 @@ from transformers.modeling_outputs import BaseModelOutputWithPooling
 from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
-from .configuration_siglip import RBLNSiglipVisionModelConfig
 from ...modeling_outputs import _validate_output_attentions, _validate_output_hidden_states
+from .configuration_siglip import RBLNSiglipVisionModelConfig
 
 
 logger = get_logger(__name__)

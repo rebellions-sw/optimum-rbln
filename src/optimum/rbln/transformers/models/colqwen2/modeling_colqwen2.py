@@ -21,6 +21,7 @@ from transformers.modeling_utils import no_init_weights
 from transformers.models.colqwen2.modeling_colqwen2 import ColQwen2ForRetrievalOutput
 
 from ....modeling import RBLNModel
+from ....transformers.modeling_outputs import _validate_output_hidden_states
 
 
 if TYPE_CHECKING:
@@ -73,6 +74,8 @@ class RBLNColQwen2ForRetrieval(RBLNModel):
         return_dict: Optional[bool] = None,
         **kwargs,
     ) -> Union[Tuple, ColQwen2ForRetrievalOutput]:
+        output_hidden_states = _validate_output_hidden_states(output_hidden_states, self.rbln_config)
+
         if pixel_values is not None:
             pixel_values = pixel_values.to(dtype=self.dtype)
 

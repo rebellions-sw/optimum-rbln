@@ -28,6 +28,10 @@ class RBLNDecoderOnlyOutput(ModelOutput):
     padded_cache_lengths: int = None
     hidden_states: Tuple[torch.FloatTensor] = None
 
+@dataclass
+class RBLNMultiModalOutput(RBLNDecoderOnlyOutput):
+    image_hidden_states: Tuple[torch.FloatTensor] = None
+
 
 @dataclass
 class RBLNGemma3ForCausalLMOutput(RBLNDecoderOnlyOutput):
