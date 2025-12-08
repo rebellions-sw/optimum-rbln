@@ -18,7 +18,7 @@ from typing import Optional, Tuple
 import torch
 from transformers.modeling_outputs import ModelOutput
 
-from ...configuration_generic import RBLNModelConfig
+from ..configuration_utils import RBLNModelConfig
 
 
 @dataclass
