@@ -29,6 +29,62 @@ if TYPE_CHECKING:
 
 
 class RBLNColQwen2ForRetrieval(RBLNModel):
+    """
+    RBLNColQwen2ForRetrieval is a model for document retrieval using vision-language models.
+    This model inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    A class to convert and run pre-trained transformers based `ColQwen2ForRetrieval` model on RBLN devices.
+    It implements the methods to convert a pre-trained transformers `ColQwen2ForRetrieval` model into a RBLN transformer model by:
+
+    - transferring the checkpoint weights of the original into an optimized RBLN graph,
+    - compiling the resulting graph using the RBLN compiler.
+
+    Examples:
+        ```python
+        import torch
+        from PIL import Image
+        from transformers import ColQwen2Processor
+
+        from optimum.rbln import RBLNColQwen2ForRetrieval, RBLNColQwen2ForRetrievalConfig
+
+        rbln_config = {
+            "vlm": {
+                "visual": {
+                    "max_seq_lens": 6400,
+                },
+                "tensor_parallel_size": 4,
+                "kvcache_partition_len": 16384,
+                "max_seq_len": 16384 * 7,
+            },
+        }
+        model = RBLNColQwen2ForRetrieval.from_pretrained("vidore/colqwen2-v1.0-hf", rbln_config=config)
+        model.save_pretrained("compiled-colqwen2-v1.0-hf")
+
+        # The document page screenshots from your corpus. Below are dummy images.
+        images = [
+            Image.new("RGB", (128, 128), color="white"),
+            Image.new("RGB", (64, 32), color="black"),
+        ]
+        processor = ColQwen2Processor.from_pretrained("vidore/colqwen2-v1.0-hf")
+
+        queries = [
+            "When was the United States Declaration of Independence proclaimed?",
+            "Who printed the edition of Romeo and Juliet?",
+        ]
+        inputs_images = processor(images=images)
+        inputs_text = processor(text=queries)
+
+        # Forward pass
+        with torch.no_grad():
+            image_embeddings = model(**inputs_images).embeddings
+            query_embeddings = model(**inputs_text).embeddings
+
+        scores = processor.score_retrieval(query_embeddings, image_embeddings)
+        print("Retrieval scores (query x image):")
+        print(scores)
+        ```
+    """
+
     _rbln_submodule_postfix = "model"
     _rbln_submodules = [
         {"name": "vlm"},
@@ -66,14 +122,28 @@ class RBLNColQwen2ForRetrieval(RBLNModel):
         inputs_embeds: Optional[torch.FloatTensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         pixel_values: Optional[torch.Tensor] = None,
-        pixel_values_videos: Optional[torch.FloatTensor] = None,
         image_grid_thw: Optional[torch.LongTensor] = None,
-        video_grid_thw: Optional[torch.LongTensor] = None,
-        second_per_grid_ts: Optional[torch.Tensor] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         **kwargs,
     ) -> Union[Tuple, ColQwen2ForRetrievalOutput]:
+        """
+        Runs a ColQwen2 retrieval forward pass on text tokens and optional visual inputs.
+
+        Args:
+            input_ids (torch.LongTensor, optional): Indices of the textual tokens. Mutually exclusive with `inputs_embeds`.
+            inputs_embeds (torch.FloatTensor, optional): Pre-computed embeddings fed directly into the language model.
+            attention_mask (torch.Tensor, optional): Mask that selects which token positions contribute to the loss/embeddings.
+            pixel_values (torch.Tensor, optional): Flattened image patches produced by `ColQwen2Processor` for document pages.
+            image_grid_thw (torch.LongTensor, optional): Per-image `(t, h, w)` grid metadata that allows unpadding of `pixel_values`.
+            output_hidden_states (bool, optional): If `True`, expose intermediate decoder hidden states.
+            return_dict (bool, optional): If `True`, return a `ColQwen2ForRetrievalOutput`; otherwise return a tuple.
+            **kwargs (dict[str, Any], optional): Extra multimodal args forwarded to the wrapped VLM (e.g. `pixel_values_videos`,
+                `video_grid_thw`, `second_per_grid_ts`).
+
+        Returns:
+            Dataclass containing the embeddings and hidden states of the VLM model.
+        """
         output_hidden_states = _validate_output_hidden_states(output_hidden_states, self.rbln_config)
 
         if pixel_values is not None:
@@ -93,10 +163,7 @@ class RBLNColQwen2ForRetrieval(RBLNModel):
             input_ids=input_ids,
             attention_mask=attention_mask,
             pixel_values=pixel_values,
-            pixel_values_videos=pixel_values_videos,
             image_grid_thw=image_grid_thw,
-            video_grid_thw=video_grid_thw,
-            second_per_grid_ts=second_per_grid_ts,
             output_hidden_states=output_hidden_states,
             return_dict=True,
             **kwargs,
