@@ -544,10 +544,6 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             rbln_config = cls._update_sliding_window_config(model_config, rbln_config)
             if rbln_config.sliding_window is not None:
                 validate_sliding_window(rbln_config)
-        elif all_full_attention:
-            rbln_config.cache_impl = "static"
-            rbln_config.sliding_window_layers = None
-            rbln_config.sliding_window = None
 
         rbln_config = cls._update_attention_config(model, model_config, rbln_config)
 
