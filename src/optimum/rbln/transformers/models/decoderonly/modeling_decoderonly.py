@@ -435,21 +435,29 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         # Returns:
         #     RBLNDecoderOnlyModelConfig: The updated RBLN model configuration.
 
-        rbln_config.sliding_window = model_config.sliding_window
-        sliding_window_layers = []
+        rbln_config.sliding_window = getattr(model_config, "sliding_window", None)
+        num_layers = model_config.num_hidden_layers
 
-        for i in range(model_config.num_hidden_layers):
-            if hasattr(model_config, "layer_types"):
-                if model_config.layer_types[i] == "sliding_attention":
-                    sliding_window_layers.append(i)
-            else:
-                sliding_window_layers.append(i)
+        layer_types = getattr(model_config, "layer_types", None)
+        # BC -> the pattern used to be a simple int, and it's still present in configs on the Hub
+        sliding_window_pattern = getattr(model_config, "sliding_window_pattern", None)
+
+        sliding_window_layers = []
+        if layer_types is not None:
+            sliding_window_layers = [
+                i for i, layer_type in enumerate(layer_types) if layer_type == "sliding_attention"
+            ]
+            if not sliding_window_layers and sliding_window_pattern is None and "full_attention" in layer_types:
+                sliding_window_pattern = layer_types.index("full_attention") + 1
+
+        if not sliding_window_layers and sliding_window_pattern is not None:
+            sliding_window_layers = [i for i in range(num_layers) if (i + 1) % sliding_window_pattern != 0]
+
+        if not sliding_window_layers and layer_types is None:
+            sliding_window_layers = list(range(num_layers))
 
         rbln_config.sliding_window_layers = sliding_window_layers
-
-        rbln_config.cache_impl = (
-            "sliding_window" if len(sliding_window_layers) == model_config.num_hidden_layers else "hybrid"
-        )
+        rbln_config.cache_impl = "sliding_window" if len(sliding_window_layers) == num_layers else "hybrid"
         return rbln_config
 
     @classmethod
