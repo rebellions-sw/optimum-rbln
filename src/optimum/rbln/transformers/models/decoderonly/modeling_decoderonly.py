@@ -457,7 +457,15 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             sliding_window_layers = list(range(num_layers))
 
         rbln_config.sliding_window_layers = sliding_window_layers
-        rbln_config.cache_impl = "sliding_window" if len(sliding_window_layers) == num_layers else "hybrid"
+
+        if not sliding_window_layers:
+            rbln_config.cache_impl = "static"
+            rbln_config.sliding_window_layers = None
+        elif len(sliding_window_layers) == num_layers:
+            rbln_config.cache_impl = "sliding_window"
+        else:
+            rbln_config.cache_impl = "hybrid"
+
         return rbln_config
 
     @classmethod
