@@ -49,6 +49,17 @@ def require_hf_token(test_case):
         return test_case
 
 
+def skip_if_inference_only(test_case):
+    """
+    Decorator marking a test that should be excluded if the model is inference only.
+    """
+    REUSE_ARTIFACTS_PATH = os.environ.get("REUSE_ARTIFACTS_PATH", None)
+    if REUSE_ARTIFACTS_PATH is None:
+        return test_case
+    else:
+        return unittest.skip("test is inference only")(test_case)
+
+
 class BaseHubTest:
     class TestHub(unittest.TestCase):
         @require_hf_token
@@ -195,6 +206,7 @@ class BaseTest:
                 os.makedirs(SAVE_ARTIFACTS_PATH, exist_ok=True)
                 shutil.move(rbln_local_dir, os.path.join(SAVE_ARTIFACTS_PATH, rbln_local_dir))
 
+        @skip_if_inference_only
         def test_model_save_dir(self):
             self.assertTrue(os.path.exists(self.get_rbln_local_dir()), "model_save_dir does not work.")
 
@@ -254,17 +266,14 @@ class BaseTest:
                         **self.HF_CONFIG_KWARGS,
                     )
 
+        @skip_if_inference_only
         def test_save_load(self):
             with tempfile.TemporaryDirectory() as tmpdir:
                 self._inner_test_save_load(tmpdir)
 
+        @skip_if_inference_only
         def test_model_save_dir_load(self):
-            REUSE_ARTIFACTS_PATH = os.environ.get("REUSE_ARTIFACTS_PATH", None)
-            if REUSE_ARTIFACTS_PATH is None:
-                rbln_local_dir = self.get_rbln_local_dir()
-            else:
-                rbln_local_dir = os.path.join(REUSE_ARTIFACTS_PATH, self.get_rbln_local_dir())
-
+            rbln_local_dir = self.get_rbln_local_dir()
             with ContextRblnConfig(create_runtimes=False):
                 # Test model_save_dir
                 _ = self.RBLN_CLASS.from_pretrained(
