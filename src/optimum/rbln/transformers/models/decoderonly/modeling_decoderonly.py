@@ -435,37 +435,21 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         # Returns:
         #     RBLNDecoderOnlyModelConfig: The updated RBLN model configuration.
 
-        rbln_config.sliding_window = getattr(model_config, "sliding_window", None)
-        num_layers = model_config.num_hidden_layers
-
-        layer_types = getattr(model_config, "layer_types", None)
-        # BC -> the pattern used to be a simple int, and it's still present in configs on the Hub
-        sliding_window_pattern = getattr(model_config, "sliding_window_pattern", None)
-
+        rbln_config.sliding_window = model_config.sliding_window
         sliding_window_layers = []
-        if layer_types is not None:
-            sliding_window_layers = [
-                i for i, layer_type in enumerate(layer_types) if layer_type == "sliding_attention"
-            ]
-            if not sliding_window_layers and sliding_window_pattern is None and "full_attention" in layer_types:
-                sliding_window_pattern = layer_types.index("full_attention") + 1
 
-        if not sliding_window_layers and sliding_window_pattern is not None:
-            sliding_window_layers = [i for i in range(num_layers) if (i + 1) % sliding_window_pattern != 0]
-
-        if not sliding_window_layers and layer_types is None:
-            sliding_window_layers = list(range(num_layers))
+        for i in range(model_config.num_hidden_layers):
+            if hasattr(model_config, "layer_types"):
+                if model_config.layer_types[i] == "sliding_attention":
+                    sliding_window_layers.append(i)
+            else:
+                sliding_window_layers.append(i)
 
         rbln_config.sliding_window_layers = sliding_window_layers
 
-        if not sliding_window_layers:
-            rbln_config.cache_impl = "static"
-            rbln_config.sliding_window_layers = None
-        elif len(sliding_window_layers) == num_layers:
-            rbln_config.cache_impl = "sliding_window"
-        else:
-            rbln_config.cache_impl = "hybrid"
-
+        rbln_config.cache_impl = (
+            "sliding_window" if len(sliding_window_layers) == model_config.num_hidden_layers else "hybrid"
+        )
         return rbln_config
 
     @classmethod
@@ -549,12 +533,21 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         if rbln_config.max_seq_len is None:
             raise ValueError("`max_seq_len` should be specified.")
 
-        if getattr(model_config, "sliding_window", None) is not None and getattr(
-            model_config, "use_sliding_window", True
+        layer_types = getattr(model_config, "layer_types", None)
+        all_full_attention = layer_types is not None and all(t == "full_attention" for t in layer_types)
+
+        if (
+            getattr(model_config, "sliding_window", None) is not None
+            and getattr(model_config, "use_sliding_window", True)
+            and not all_full_attention
         ):
             rbln_config = cls._update_sliding_window_config(model_config, rbln_config)
             if rbln_config.sliding_window is not None:
                 validate_sliding_window(rbln_config)
+        elif all_full_attention:
+            rbln_config.cache_impl = "static"
+            rbln_config.sliding_window_layers = None
+            rbln_config.sliding_window = None
 
         rbln_config = cls._update_attention_config(model, model_config, rbln_config)
 
