@@ -14,12 +14,16 @@ env:
 
 jobs:
   auto-review:
-    runs-on: ubuntu-latest-rbln
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
           fetch-depth: 2
+      
+      - name: test
+        run: |
+          echo "Renovate_TOKEN: ${{ secrets.RENOVATE_TOKEN }}"
       
       - name: Check if review should run
         id: check
