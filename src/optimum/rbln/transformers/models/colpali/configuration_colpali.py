@@ -54,12 +54,14 @@ class RBLNColPaliForRetrievalConfig(RBLNModelConfig):
         self,
         batch_size: Optional[int] = None,
         vlm: Optional[RBLNModelConfig] = None,
+        output_hidden_states: Optional[bool] = None,
         **kwargs: Any,
     ):
         """
         Args:
             batch_size (Optional[int]): The batch size for the model.
             vlm (Optional[RBLNModelConfig]): Configuration for the VLM component.
+            output_hidden_states (Optional[bool]): Whether to output the hidden states of the decoder. Defaults to False.
             kwargs: Additional arguments passed to the parent RBLNModelConfig.
         Raises:
             ValueError: If batch_size is not a positive integer.
@@ -69,4 +71,7 @@ class RBLNColPaliForRetrievalConfig(RBLNModelConfig):
         if not isinstance(self.batch_size, int) or self.batch_size < 0:
             raise ValueError(f"batch_size must be a positive integer, got {self.batch_size}")
 
-        self.vlm = self.initialize_submodule_config(submodule_config=vlm, batch_size=batch_size)
+        self.output_hidden_states = output_hidden_states or False
+        self.vlm = self.initialize_submodule_config(
+            submodule_config=vlm, batch_size=batch_size, output_hidden_states=output_hidden_states
+        )

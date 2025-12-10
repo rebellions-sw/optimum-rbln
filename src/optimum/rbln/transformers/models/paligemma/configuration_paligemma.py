@@ -37,6 +37,7 @@ class RBLNPaliGemmaForConditionalGenerationConfig(RBLNModelConfig):
         batch_size: Optional[int] = None,
         vision_tower: Optional[RBLNModelConfig] = None,
         language_model: Optional[RBLNModelConfig] = None,
+        output_hidden_states: Optional[bool] = None,
         **kwargs: Any,
     ):
         """
@@ -48,6 +49,7 @@ class RBLNPaliGemmaForConditionalGenerationConfig(RBLNModelConfig):
             language_model (Optional[RBLNModelConfig]): Configuration for the language model component.
                 This can include settings specific to the language model, such as tensor parallelism or other text-related parameters.
                 If not provided, default settings will be used.
+            output_hidden_states (Optional[bool]): Whether to output the hidden states of the decoder. Defaults to False.
             kwargs: Additional arguments passed to the parent RBLNModelConfig.
         Raises:
             ValueError: If `batch_size` is not a positive integer.
@@ -59,6 +61,8 @@ class RBLNPaliGemmaForConditionalGenerationConfig(RBLNModelConfig):
 
         if self.batch_size != 1:
             logger.warning("Ignore batch_size for PaliGemma vision tower. It will be set to 1.")
+
+        self.output_hidden_states = output_hidden_states or False
 
         self.vision_tower = self.initialize_submodule_config(
             submodule_config=vision_tower,
@@ -83,6 +87,7 @@ class RBLNPaliGemmaModelConfig(RBLNModelConfig):
         batch_size: Optional[int] = None,
         vision_tower: Optional[RBLNModelConfig] = None,
         language_model: Optional[RBLNModelConfig] = None,
+        output_hidden_states: Optional[bool] = None,
         **kwargs: Any,
     ):
         """
@@ -94,6 +99,7 @@ class RBLNPaliGemmaModelConfig(RBLNModelConfig):
             language_model (Optional[RBLNModelConfig]): Configuration for the language model component.
                 This can include settings specific to the language model, such as tensor parallelism or other text-related parameters.
                 If not provided, default settings will be used.
+            output_hidden_states (Optional[bool]): Whether to output the hidden states of the decoder. Defaults to False.
             kwargs: Additional arguments passed to the parent RBLNModelConfig.
         Raises:
             ValueError: If `batch_size` is not a positive integer.
@@ -106,6 +112,7 @@ class RBLNPaliGemmaModelConfig(RBLNModelConfig):
         if self.batch_size != 1:
             logger.warning("Ignore batch_size for PaliGemma vision tower. It will be set to 1.")
 
+        self.output_hidden_states = output_hidden_states or False
         self.vision_tower = self.initialize_submodule_config(
             submodule_config=vision_tower,
             batch_size=1,  # vision_tower batch_size is always 1 in PaliGemma
@@ -118,4 +125,5 @@ class RBLNPaliGemmaModelConfig(RBLNModelConfig):
             use_position_ids=True,
             use_attention_mask=True,
             use_inputs_embeds=True,
+            output_hidden_states=output_hidden_states,
         )

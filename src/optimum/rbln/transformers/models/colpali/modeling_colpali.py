@@ -179,6 +179,7 @@ class RBLNColPaliForRetrieval(RBLNModel):
         input_ids: Optional[torch.LongTensor] = None,
         pixel_values: Optional[torch.FloatTensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
+        output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         **kwargs,
     ) -> Union[Tuple, ColPaliForRetrievalOutput]:
@@ -186,14 +187,24 @@ class RBLNColPaliForRetrieval(RBLNModel):
             pixel_values = pixel_values.to(dtype=self.dtype)
 
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.rbln_config.output_hidden_states
+        )
+        if output_hidden_states != self.rbln_config.output_hidden_states:
+            raise ValueError(
+                f"Variable output_hidden_states {output_hidden_states} is not equal to rbln_config.output_hidden_states {self.rbln_config.output_hidden_states} "
+                f"Please compile again with the correct argument."
+            )
 
         vlm_output = self.vlm_model(
             input_ids=input_ids,
             attention_mask=attention_mask,
             pixel_values=pixel_values,
+            output_hidden_states=True,
             return_dict=True,
             **kwargs,
         )
+        vlm_hidden_states = vlm_output.hidden_states if output_hidden_states else None
         vlm_image_hidden_states = vlm_output.image_hidden_states if pixel_values is not None else None
 
         last_hidden_states = vlm_output[0]
@@ -206,5 +217,6 @@ class RBLNColPaliForRetrieval(RBLNModel):
 
         return ColPaliForRetrievalOutput(
             embeddings=embeddings,
+            hidden_states=vlm_hidden_states,
             image_hidden_states=vlm_image_hidden_states,
         )

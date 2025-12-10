@@ -423,20 +423,33 @@ class RBLNPaliGemmaModel(RBLNModel):
         position_ids: Optional[torch.LongTensor] = None,
         token_type_ids: Optional[torch.LongTensor] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
+        output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         **kwargs,
     ):
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.rbln_config.output_hidden_states
+        )
+        if output_hidden_states != self.rbln_config.output_hidden_states:
+            raise ValueError(
+                f"Variable output_hidden_states {output_hidden_states} is not equal to rbln_config.output_hidden_states {self.rbln_config.output_hidden_states} "
+                f"Please compile again with the correct argument."
+            )
+
         inputs_embeds, image_features = self._preprocess_prefill(
             input_ids=input_ids, inputs_embeds=inputs_embeds, pixel_values=pixel_values
         )
 
-        last_hidden_states = self.language_model(
+        outputs = self.language_model(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
             position_ids=position_ids,
+            output_hidden_states=output_hidden_states,
         )
 
         return PaligemmaModelOutputWithPast(
-            last_hidden_state=last_hidden_states[0],
+            last_hidden_state=outputs.last_hidden_state,
             image_hidden_states=image_features if pixel_values is not None else None,
+            hidden_states=outputs.hidden_states if output_hidden_states else None,
         )
