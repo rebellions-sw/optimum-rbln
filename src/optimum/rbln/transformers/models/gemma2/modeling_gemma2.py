@@ -80,6 +80,18 @@ class RBLNGemma2Model(RBLNDecoderOnlyModel):
     """
     The Gemma2 Model transformer without a language modeling head.
     This model inherits from [`RBLNDecoderOnlyModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    A class to convert and run pre-trained transformers based Gemma2Model model on RBLN devices.
+    It implements the methods to convert a pre-trained transformers Gemma2Model model into a RBLN transformer model by:
+
+    - transferring the checkpoint weights of the original into an optimized RBLN graph,
+    - compiling the resulting graph using the RBLN compiler.
+
+    **Configuration:**
+    This model uses [`RBLNGemma2ModelConfig`] for configuration. When calling methods like `from_pretrained` or `from_model`,
+    the `rbln_config` parameter should be an instance of [`RBLNGemma2ModelConfig`] or a dictionary conforming to its structure.
+
+    See the [`RBLNGemma2ModelConfig`] class for all available configuration options.
     """
 
     _decoder_wrapper_cls = Gemma2Wrapper

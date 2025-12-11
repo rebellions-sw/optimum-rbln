@@ -57,6 +57,36 @@ class LoopVisionTower(LoopProcessor):
 
 
 class RBLNPaliGemmaForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixin):
+    """
+    RBLNPaliGemmaForConditionalGeneration is a multi-modal model that integrates vision and language processing capabilities,
+    optimized for RBLN NPUs. It is designed for conditional generation tasks that involve both image and text inputs.
+
+    This model inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    Important Note:
+        This model includes a Large Language Model (LLM) as a submodule. For optimal performance, it is highly recommended to use
+        tensor parallelism for the language model.  This can be achieved by using the `rbln_config` parameter in the
+        `from_pretrained` method. Refer to the `from_pretrained` documentation and the RBLNPaliGemmaForConditionalGeneration class for details.
+
+    Examples:
+        ```python
+        from optimum.rbln import RBLNPaliGemmaForConditionalGeneration
+
+        model = RBLNPaliGemmaForConditionalGeneration.from_pretrained(
+            "google/paligemma2-3b-mix-224",
+            export=True,
+            rbln_config={
+                "language_model": {
+                    "prefill_chunk_size": 8192,
+                }
+            },
+            rbln_tensor_parallel_size=4,
+        )
+
+        model.save_pretrained("compiled-paligemma2-3b-mix-224")
+        ```
+    """
+
     auto_model_class = AutoModelForVision2Seq
     _rbln_submodules = [
         {"name": "vision_tower"},
@@ -312,6 +342,36 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
 
 
 class RBLNPaliGemmaModel(RBLNModel):
+    """
+    RBLNPaliGemmaModel which consists of a vision backbone and a language model without language modeling head,
+    optimized for RBLN NPUs.
+
+    This model inherits from [`RBLNModel`]. Check the superclass documentation for the generic methods the library implements for all its models.
+
+    Important Note:
+        This model includes a Large Language Model (LLM) as a submodule. For optimal performance, it is highly recommended to use
+        tensor parallelism for the language model.  This can be achieved by using the `rbln_config` parameter in the
+        `from_pretrained` method. Refer to the `from_pretrained` documentation and the RBLNPaliGemmaModel class for details.
+
+    Examples:
+        ```python
+        from optimum.rbln import RBLNPaliGemmaModel
+
+        model = RBLNPaliGemmaModel.from_pretrained(
+            "google/paligemma2-3b-mix-224",
+            export=True,
+            rbln_config={
+                "language_model": {
+                    "prefill_chunk_size": 8192,
+                }
+            },
+            rbln_tensor_parallel_size=4,
+        )
+
+        model.save_pretrained("compiled-paligemma2-3b-mix-224")
+        ```
+    """
+
     _rbln_submodules = [
         {"name": "vision_tower"},
         {"name": "language_model"},
