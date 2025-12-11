@@ -97,8 +97,6 @@ def main(
         )
         print("\033[32m" + f"batch {i} : " + "\033[0m\n" + generated_texts)
 
-    breakpoint()
-
     if diff:
         from scipy import stats
 
