@@ -773,6 +773,7 @@ class RBLNQwen2_5_VLForConditionalGeneration(RBLNQwen2_5_VLModel, RBLNDecoderOnl
                 position_embed=position_embed,
             )
             logits = output.logits
+            all_hidden_states = output.hidden_states
 
         if not return_dict:
             return_value = (
