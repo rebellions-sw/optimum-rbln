@@ -47,7 +47,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.encode_target_tag.outputs.TARGET_TAG_ENCODED }}
+          ref: ${{ steps.get_target_tag.outputs.TARGET_TAG }}
           fetch-depth: 0
 
       - name: Get rebel-compiler version
