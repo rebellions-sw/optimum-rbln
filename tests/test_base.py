@@ -152,6 +152,10 @@ class BaseTest:
             if env_coverage.value < cls.TEST_LEVEL.value:
                 raise unittest.SkipTest(f"Skipped test : Test Coverage {env_coverage.name} < {cls.TEST_LEVEL.name}")
 
+            SAVE_ARTIFACTS_PATH = os.environ.get("SAVE_ARTIFACTS_PATH", None)
+            assert os.path.exists(SAVE_ARTIFACTS_PATH), f"SAVE_ARTIFACTS_PATH does not exist: {SAVE_ARTIFACTS_PATH}"
+            assert not os.path.exists(SAVE_ARTIFACTS_PATH), f"SAVE_ARTIFACTS_PATH is not empty: {SAVE_ARTIFACTS_PATH}"
+
             REUSE_ARTIFACTS_PATH = os.environ.get("REUSE_ARTIFACTS_PATH", None)
             if REUSE_ARTIFACTS_PATH is None:
                 if os.path.exists(cls.get_rbln_local_dir()):
