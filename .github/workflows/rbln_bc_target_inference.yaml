@@ -49,7 +49,7 @@ jobs:
       - name: Get reuse artifacts path
         id: get_reuse_artifacts_path
         run: |
-          echo "REUSE_ARTIFACTS_PATH=${{secrets.BC_BASE_PATH}}/${{steps.get_current_ref.outputs.CURRENT_REF}}" >> $GITHUB_OUTPUT
+          echo "REUSE_ARTIFACTS_PATH=${{vars.BC_BASE_PATH}}/${{steps.get_current_ref.outputs.CURRENT_REF}}" >> $GITHUB_OUTPUT
 
       - name: Checkout code
         uses: actions/checkout@v4

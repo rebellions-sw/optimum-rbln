@@ -18,6 +18,8 @@ on:
 jobs:
   get_bc_compile_info:
     runs-on: rebel-k8s-runner
+    env:
+      BC_BASE_PATH: ${{ vars.BC_BASE_PATH }}
     outputs:
       save_artifacts_path: ${{ steps.get_path.outputs.SAVE_ARTIFACTS_PATH }}
       rebel_compiler_version: ${{ steps.get_version.outputs.compiler_version }}
@@ -41,8 +43,6 @@ jobs:
 
       - name: Get save artifacts path
         id: get_path
-        env:
-          BC_BASE_PATH: ${{ secrets.BC_BASE_PATH }}
         run: |
           echo "SAVE_ARTIFACTS_PATH=${BC_BASE_PATH}/${{steps.encode_target_tag.outputs.TARGET_TAG_ENCODED}}" >> $GITHUB_OUTPUT
 

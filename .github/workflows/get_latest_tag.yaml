@@ -16,7 +16,7 @@ jobs:
       - name: Get latest tag
         id: get_latest
         env:
-          BC_BASE_PATH: ${{ secrets.BC_BASE_PATH }}
+          BC_BASE_PATH: ${{ vars.BC_BASE_PATH }}
         run: |
           set -eo pipefail
           if [ -z "$BC_BASE_PATH" ]; then
