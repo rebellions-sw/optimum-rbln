@@ -15,7 +15,7 @@
 import importlib
 import inspect
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, Type, Union
 
 import torch
 from transformers import AutoModelForVision2Seq, PaliGemmaForConditionalGeneration, PretrainedConfig, PreTrainedModel
@@ -35,7 +35,7 @@ from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyOutput
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
-    from transformers import PretrainedConfig
+    from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer, PretrainedConfig
 
 
 class LoopVisionTower(LoopProcessor):
@@ -75,6 +75,23 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
 
     def can_generate(self):
         return True
+
+    @classmethod
+    def _update_submodule_rbln_config(
+        cls,
+        submodule_name: str,
+        submodule_cls: Type["RBLNModel"],
+        model: "PreTrainedModel",
+        submodule_config: PretrainedConfig,
+        submodule_rbln_config: RBLNModelConfig,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+    ):
+        if submodule_name == "language_model":
+            submodule_config.use_sliding_window = False
+        else:
+            return submodule_rbln_config
+
+        return submodule_rbln_config
 
     @classmethod
     def _reconstruct_model_if_needed(cls, model: "PreTrainedModel"):
@@ -324,6 +341,23 @@ class RBLNPaliGemmaModel(RBLNModel):
 
     def get_input_embeddings(self):
         return self.language_model.get_input_embeddings()
+
+    @classmethod
+    def _update_submodule_rbln_config(
+        cls,
+        submodule_name: str,
+        submodule_cls: Type["RBLNModel"],
+        model: "PreTrainedModel",
+        submodule_config: PretrainedConfig,
+        submodule_rbln_config: RBLNModelConfig,
+        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+    ):
+        if submodule_name == "language_model":
+            submodule_config.use_sliding_window = False
+        else:
+            return submodule_rbln_config
+
+        return submodule_rbln_config
 
     @classmethod
     def save_torch_artifacts(

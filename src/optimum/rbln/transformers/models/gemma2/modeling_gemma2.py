@@ -12,14 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from transformers import PretrainedConfig
 
 from ....utils import logging
 from ...models.decoderonly import (
     RBLNDecoderOnlyModel,
     RBLNDecoderOnlyModelForCausalLM,
 )
-from .configuration_gemma2 import RBLNGemma2ForCausalLMConfig
 from .gemma2_architecture import Gemma2Wrapper
 
 
@@ -77,12 +75,6 @@ class RBLNGemma2ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
     _decoder_wrapper_cls = Gemma2Wrapper
 
-    @classmethod
-    def _update_sliding_window_config(cls, model_config: PretrainedConfig, rbln_config: RBLNGemma2ForCausalLMConfig):
-        rbln_config.cache_impl = "static"
-        rbln_config.sliding_window = None
-        return rbln_config
-
 
 class RBLNGemma2Model(RBLNDecoderOnlyModel):
     """
@@ -91,9 +83,3 @@ class RBLNGemma2Model(RBLNDecoderOnlyModel):
     """
 
     _decoder_wrapper_cls = Gemma2Wrapper
-
-    @classmethod
-    def _update_sliding_window_config(cls, model_config: PretrainedConfig, rbln_config: RBLNGemma2ForCausalLMConfig):
-        rbln_config.cache_impl = "static"
-        rbln_config.sliding_window = None
-        return rbln_config
