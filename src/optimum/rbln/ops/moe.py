@@ -121,7 +121,7 @@ def custom_moe_ff_fake(
 
 @torch.library.custom_op(
     "rbln_custom_ops::custom_moe_glu_mxfp4",
-    mutates_args=(),
+    mutates_args=(["hidden_states"]),
 )
 def custom_moe_glu_mxfp4(
     hidden_states: Tensor,
