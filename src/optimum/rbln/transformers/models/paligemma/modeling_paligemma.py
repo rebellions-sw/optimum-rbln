@@ -520,7 +520,22 @@ class RBLNPaliGemmaModel(RBLNModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         **kwargs,
-    ):
+    ) -> Union[Tuple, PaligemmaModelOutputWithPast]:
+        """
+        Forward pass for the RBLN-optimized PaliGemmaModel model.
+
+        Args:
+            input_ids (torch.LongTensor of shape (batch_size, sequence_length)) — Indices of input sequence tokens in the vocabulary.
+            pixel_values (torch.Tensor of shape (batch_size, num_channels, image_size, image_size)) — The tensors corresponding to the input images.
+            attention_mask (torch.Tensor of shape (batch_size, sequence_length)) — Mask to avoid performing attention on padding token indices.
+            position_ids (torch.LongTensor of shape (batch_size, sequence_length)) — Indices of positions of each input sequence tokens in the position embeddings.
+            token_type_ids (torch.LongTensor of shape (batch_size, sequence_length)) — Segment token indices to indicate first and second portions of the inputs.
+            output_hidden_states (bool, optional) — Whether or not to return the hidden states of all layers. See hidden_states under returned tensors for more detail.
+            return_dict (bool, optional) — Whether or not to return a ModelOutput instead of a plain tuple.
+
+        Returns:
+            PaligemmaModelOutputWithPast or tuple(torch.FloatTensor)
+        """
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.rbln_config.output_hidden_states

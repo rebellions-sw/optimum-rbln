@@ -183,6 +183,19 @@ class RBLNColPaliForRetrieval(RBLNModel):
         return_dict: Optional[bool] = None,
         **kwargs,
     ) -> Union[Tuple, ColPaliForRetrievalOutput]:
+        """
+        Forward pass for the RBLN-optimized ColPaliForRetrieval model.
+
+        Args:
+            input_ids (torch.LongTensor of shape (batch_size, sequence_length)) — Indices of input sequence tokens in the vocabulary.
+            pixel_values (torch.Tensor of shape (batch_size, num_channels, image_size, image_size)) — The tensors corresponding to the input images.
+            attention_mask (torch.Tensor of shape (batch_size, sequence_length)) — Mask to avoid performing attention on padding token indices.
+            output_hidden_states (bool, optional) — Whether or not to return the hidden states of all layers. See hidden_states under returned tensors for more detail.
+            return_dict (bool, optional) — Whether or not to return a ModelOutput instead of a plain tuple.
+
+        Returns:
+            ColPaliForRetrievalOutput or tuple(torch.FloatTensor)
+        """
         if pixel_values is not None:
             pixel_values = pixel_values.to(dtype=self.dtype)
 
