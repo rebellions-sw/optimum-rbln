@@ -30,6 +30,16 @@ on:
         required: false
         type: boolean
         default: true
+      save_artifacts_path:
+        description: "Path to save artifacts (default: empty string, which means not to save artifacts)"
+        required: false
+        type: string
+        default: ""
+      reuse_artifacts_path:
+        description: "Path to reuse artifacts (default: empty string, which means not to reuse artifacts)"
+        required: false
+        type: string
+        default: ""
 
 env:
   REBEL_PYPI_ENDPOINT: ${{ vars.REBEL_PYPI_INTERNAL_ENDPOINT }}
@@ -93,6 +103,10 @@ jobs:
               if [[ "${{ inputs.test_level }}" == "default" && "${{ matrix.test_type }}" != "cli-basic" ]]; then
                 SKIP=true
               fi
+              # Skip if BC test is running
+              if [[ "${{ inputs.reuse_artifacts_path }}" != "" || "${{ inputs.save_artifacts_path }}" != "" ]]; then
+                SKIP=true
+              fi
               ;;
           esac
           
@@ -125,6 +139,13 @@ jobs:
         env:
           OPTIMUM_RBLN_TEST_LEVEL: ${{ inputs.test_level }}
         run: |
+          if [ "${{ inputs.save_artifacts_path }}" != "" ]; then
+            export SAVE_ARTIFACTS_PATH="${{ inputs.save_artifacts_path }}"
+          fi
+          if [ "${{ inputs.reuse_artifacts_path }}" != "" ]; then
+            export REUSE_ARTIFACTS_PATH="${{ inputs.reuse_artifacts_path }}"
+          fi
+
           case "${{ matrix.test_type }}" in
             "config")
               uv run --no-sync pytest -n 1 tests/test_config.py -vv --durations 0
