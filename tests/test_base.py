@@ -177,7 +177,7 @@ class BaseTest:
 
         @classmethod
         def get_rbln_local_dir(cls):
-            return os.path.basename(cls.__name__) + "-artifact"
+            return os.path.basename(cls.__module__.split(".")[-1]) + "_" + os.path.basename(cls.__name__) + "-artifact"
 
         @classmethod
         def get_hf_auto_class(cls):
