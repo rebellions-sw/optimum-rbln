@@ -135,13 +135,9 @@ jobs:
           uv pip install --extra-index-url $PYPI_URL rebel-compiler==${{ inputs.rebel_compiler_version }}
 
       - name: Prepare artifact paths
-        if: steps.should_skip.outputs.skip != 'true'
         run: |
           if [ "${{ inputs.save_artifacts_path }}" != "" ]; then
             echo ${{ secrets.SECRET_TOKEN }} | sudo -S mkdir -p "${{ inputs.save_artifacts_path }}"
-          fi
-          if [ "${{ inputs.reuse_artifacts_path }}" != "" ]; then
-            echo ${{ secrets.SECRET_TOKEN }} | sudo -S mkdir -p "${{ inputs.reuse_artifacts_path }}"
           fi
 
       - name: Run tests
