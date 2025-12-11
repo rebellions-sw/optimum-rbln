@@ -22,7 +22,7 @@ jobs:
       save_artifacts_path: ${{ steps.get_path.outputs.SAVE_ARTIFACTS_PATH }}
       rebel_compiler_version: ${{ steps.get_version.outputs.compiler_version }}
       get_target_tag: ${{ steps.get_target_tag.outputs.TARGET_TAG }}
-    
+
     steps:
       - name: Get target tag
         id: get_target_tag
@@ -56,7 +56,7 @@ jobs:
           CUR_VERSION=$(grep rebel_compiler_version .github/version.yaml | cut -d ':' -f2 | tr -d ' ')
           echo "compiler_version=$CUR_VERSION" >> $GITHUB_OUTPUT
           echo "COMPILER_VERSION=$CUR_VERSION"
-  
+
   rbln-full-test:
     needs: get_bc_compile_info
     uses: ./.github/workflows/rbln_optimum_pytest.yaml
