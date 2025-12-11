@@ -1,4 +1,4 @@
-name: Optimum-rbln / Backward Compatibility Compile
+name: Optimum-rbln / BC target compile
 
 on:
   workflow_dispatch:

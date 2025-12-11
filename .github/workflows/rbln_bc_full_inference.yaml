@@ -1,4 +1,4 @@
-name: Optimum-rbln / Backward Compatibility Full Inference
+name: Optimum-rbln / BC full inference
 
 on:
   workflow_dispatch:
