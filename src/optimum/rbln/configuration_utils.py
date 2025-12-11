@@ -650,7 +650,14 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
 
         super().__setattr__(key, value)
 
-    @deprecate_kwarg(old_name="torch_dtype", new_name="dtype", version="0.10.0")
+    @deprecate_kwarg(
+        old_name="_torch_dtype",
+        new_name="dtype",
+        version="0.12.0",
+        deprecated_type=torch.dtype,
+        value_replacer=RBLNCompileConfig.normalize_dtype,
+        raise_if_greater_or_equal_version=False,
+    )
     def __init__(
         self,
         cls_name: Optional[str] = None,
@@ -714,9 +721,7 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
         self.tensor_parallel_size = tensor_parallel_size
 
         dtype = dtype if dtype is not None else _torch_dtype
-        if isinstance(dtype, torch.dtype):
-            dtype = RBLNCompileConfig.normalize_dtype(dtype)
-        elif isinstance(dtype, str):
+        if dtype is not None:
             dtype = RBLNCompileConfig.normalize_dtype(dtype)
         self._torch_dtype = dtype or "float32"
         self.optimum_rbln_version = optimum_rbln_version
@@ -794,6 +799,8 @@ class RBLNModelConfig(RBLNSerializableConfigProtocol):
                 serializable_map[key] = value._prepare_for_serialization()
             elif key == "_compile_cfgs":
                 serializable_map[key] = [cfg.asdict() for cfg in value]
+            elif isinstance(value, torch.dtype):
+                serializable_map[key] = RBLNCompileConfig.normalize_dtype(value)
             else:
                 serializable_map[key] = value
         return serializable_map
