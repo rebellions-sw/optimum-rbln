@@ -69,9 +69,9 @@ class RBLNPaliGemmaForConditionalGenerationConfig(RBLNModelConfig):
             batch_size=1,  # vision_tower batch_size is always 1 in PaliGemma
             force_kwargs=True,
         )
-
         self.language_model = self.initialize_submodule_config(
             submodule_config=language_model,
+            batch_size=batch_size,
             use_position_ids=True,
             use_attention_mask=True,
             use_inputs_embeds=True,
