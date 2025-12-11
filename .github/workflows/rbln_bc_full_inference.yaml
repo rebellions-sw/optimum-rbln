@@ -26,7 +26,7 @@ jobs:
       - name: Build backward-compat tag matrix
         id: build
         env:
-          BC_BASE_PATH: ${{ secrets.BC_BASE_PATH }}
+          BC_BASE_PATH: ${{ vars.BC_BASE_PATH }}
         run: |
           set -eo pipefail
           if [ -z "$BC_BASE_PATH" ]; then
