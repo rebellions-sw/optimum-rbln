@@ -80,6 +80,11 @@ jobs:
         run: |
           SKIP=false
           case "${{ matrix.test_type }}" in
+            "config")
+              if [[ "${{ inputs.save_artifacts_path }}" != "" || "${{ inputs.reuse_artifacts_path }}" != "" ]]; then
+                SKIP=true
+              fi
+              ;;
             "transformers")
               if [[ "$COMMIT_MESSAGE" == *"[skip-transformers]"* ]]; then
                 SKIP=true
