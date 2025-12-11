@@ -88,7 +88,12 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
     def setup_runtime(self):
         # Initialize resources to be used across Runtime instances (prefill and decode phases)
         page_table_manager = RBLNPageTableManager(self.rbln_config)
-        dec_attn_mask = torch.zeros(self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=self.dtype)
+        if self.rbln_config.use_position_ids:
+            dec_attn_mask = torch.zeros(self.rbln_config.batch_size, self.rbln_config.max_seq_len, dtype=self.dtype)
+        else:
+            dec_attn_mask = torch.zeros(
+                self.rbln_config.batch_size, 1, 1, self.rbln_config.max_seq_len, dtype=self.dtype
+            )
 
         common_kwargs = {
             "main_input_name": "inputs_embeds" if self.rbln_config.use_inputs_embeds else "input_ids",
@@ -120,7 +125,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
 
     @property
     def logits_last_dim(self):
-        return self.config.vocab_size if self.can_generate() else self.config.hidden_size
+        return self.config.hidden_size
 
     @classmethod
     def get_quantized_model(
@@ -435,10 +440,22 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         # Returns:
         #     RBLNDecoderOnlyModelConfig: The updated RBLN model configuration.
 
-        raise NotImplementedError(
-            "Subclasses must implement _update_sliding_window_config to configure sliding window attention settings. "
-            "See method docstring for required configuration details."
+        rbln_config.sliding_window = model_config.sliding_window
+        sliding_window_layers = []
+
+        for i in range(model_config.num_hidden_layers):
+            if hasattr(model_config, "layer_types"):
+                if model_config.layer_types[i] == "sliding_attention":
+                    sliding_window_layers.append(i)
+            else:
+                sliding_window_layers.append(i)
+
+        rbln_config.sliding_window_layers = sliding_window_layers
+
+        rbln_config.cache_impl = (
+            "sliding_window" if len(sliding_window_layers) == model_config.num_hidden_layers else "hybrid"
         )
+        return rbln_config
 
     @classmethod
     def _update_attention_config(
@@ -521,8 +538,13 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         if rbln_config.max_seq_len is None:
             raise ValueError("`max_seq_len` should be specified.")
 
-        if getattr(model_config, "sliding_window", None) is not None and getattr(
-            model_config, "use_sliding_window", True
+        layer_types = getattr(model_config, "layer_types", None)
+        all_full_attention = layer_types is not None and all(t == "full_attention" for t in layer_types)
+
+        if (
+            getattr(model_config, "sliding_window", None) is not None
+            and getattr(model_config, "use_sliding_window", True)
+            and not all_full_attention
         ):
             rbln_config = cls._update_sliding_window_config(model_config, rbln_config)
             if rbln_config.sliding_window is not None:
@@ -598,6 +620,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
         input_ids: Optional[torch.LongTensor] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.LongTensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
         position_embed: Optional[torch.Tensor] = None,
         output_hidden_states: Optional[bool] = None,
         **kwargs,
@@ -642,8 +665,10 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
             )
             cache_position = torch.arange(query_length, dtype=torch.int32).unsqueeze(0)
             outputs = self.prefill_decoder(
-                inputs[b_idx : b_idx + 1],
+                input_ids=inputs[b_idx : b_idx + 1] if inputs_embeds is None else None,
+                inputs_embeds=inputs[b_idx : b_idx + 1] if inputs_embeds is not None else None,
                 attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
+                position_ids=position_ids[b_idx : b_idx + 1] if position_ids is not None else None,
                 position_embed=position_embed[b_idx : b_idx + 1] if position_embed is not None else None,
                 cache_position=cache_position,
                 batch_idx=b_idx,
@@ -678,6 +703,10 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
     """
 
     auto_model_class = AutoModelForCausalLM
+
+    @property
+    def logits_last_dim(self):
+        return self.config.vocab_size
 
     def set_lora_int_ids(self, lora_int_ids: Optional[torch.Tensor]):
         if isinstance(lora_int_ids, int):
@@ -793,6 +822,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
                     input_ids=inputs[b_idx : b_idx + 1] if inputs_embeds is None else None,
                     inputs_embeds=inputs[b_idx : b_idx + 1] if inputs_embeds is not None else None,
                     attention_mask=attention_mask[b_idx] if attention_mask is not None else None,
+                    position_ids=position_ids[b_idx : b_idx + 1] if position_ids is not None else None,
                     cache_position=cache_position,
                     batch_idx=b_idx,
                     token_type_ids=token_type_ids[b_idx : b_idx + 1] if token_type_ids is not None else None,
