@@ -138,18 +138,10 @@ jobs:
         if: steps.should_skip.outputs.skip != 'true'
         run: |
           if [ "${{ inputs.save_artifacts_path }}" != "" ]; then
-            mkdir -p "${{ inputs.save_artifacts_path }}" || {
-              sudo mkdir -p "${{ inputs.save_artifacts_path }}"
-              sudo chown $(id -u):$(id -g) "${{ inputs.save_artifacts_path }}"
-              sudo chmod 775 "${{ inputs.save_artifacts_path }}"
-            }
+            echo ${{ secrets.SECRET_TOKEN }} | sudo -S mkdir -p "${{ inputs.save_artifacts_path }}"
           fi
           if [ "${{ inputs.reuse_artifacts_path }}" != "" ]; then
-            mkdir -p "${{ inputs.reuse_artifacts_path }}" || {
-              sudo mkdir -p "${{ inputs.reuse_artifacts_path }}"
-              sudo chown $(id -u):$(id -g) "${{ inputs.reuse_artifacts_path }}"
-              sudo chmod 775 "${{ inputs.reuse_artifacts_path }}"
-            }
+            echo ${{ secrets.SECRET_TOKEN }} | sudo -S mkdir -p "${{ inputs.reuse_artifacts_path }}"
           fi
 
       - name: Run tests
