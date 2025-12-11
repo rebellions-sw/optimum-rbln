@@ -135,14 +135,24 @@ jobs:
           uv pip install --extra-index-url $PYPI_URL rebel-compiler==${{ inputs.rebel_compiler_version }}
 
       - name: Prepare artifact paths
-        if: steps.should_skip.outputs.skip != 'true'
         run: |
-          if [ "${{ inputs.save_artifacts_path }}" != "" ]; then
-            echo ${{ secrets.SECRET_TOKEN }} | sudo -S mkdir -p "${{ inputs.save_artifacts_path }}"
-          fi
-          if [ "${{ inputs.reuse_artifacts_path }}" != "" ]; then
-            echo ${{ secrets.SECRET_TOKEN }} | sudo -S mkdir -p "${{ inputs.reuse_artifacts_path }}"
-          fi
+          ensure_dir() {
+            local path="$1"
+            if [ -z "$path" ]; then
+              return
+            fi
+
+            # Try as current user first
+            mkdir -p "$path" 2>/dev/null || {
+              # Fallback to sudo: create with current uid/gid and 775 perms
+              echo ${{ secrets.SECRET_TOKEN }} | sudo -S install -d -m 775 -o "$(id -u)" -g "$(id -g)" "$path"
+            }
+            # If dir already existed with other owner/perms, fix them
+            echo ${{ secrets.SECRET_TOKEN }} | sudo -S chown -R "$(id -u):$(id -g)" "$path"
+            echo ${{ secrets.SECRET_TOKEN }} | sudo -S chmod -R 775 "$path"
+          }
+
+          ensure_dir "${{ inputs.save_artifacts_path }}"
 
       - name: Run tests
         if: steps.should_skip.outputs.skip != 'true'
