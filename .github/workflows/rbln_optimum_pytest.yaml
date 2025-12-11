@@ -152,8 +152,9 @@ jobs:
             echo ${{ secrets.SECRET_TOKEN }} | sudo -S chmod -R 775 "$path"
           }
 
+          # Prepare both the target dir and its parent to avoid ownership issues
+          ensure_dir "$(dirname "${{ inputs.save_artifacts_path }}")"
           ensure_dir "${{ inputs.save_artifacts_path }}"
-
       - name: Run tests
         if: steps.should_skip.outputs.skip != 'true'
         env:
