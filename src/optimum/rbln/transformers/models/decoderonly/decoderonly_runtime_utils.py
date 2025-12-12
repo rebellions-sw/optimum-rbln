@@ -177,7 +177,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         dec_attn_mask: torch.Tensor,
         page_table_manager: RBLNPageTableManager,
         rbln_config: RBLNDecoderOnlyModelForCausalLMConfig,
-        config: "PreTrainedConfig" = None,
+        config: Optional["PreTrainedConfig"] = None,
         logits_last_dim: Optional[int] = None,
         **kwargs: Any,
     ) -> None:
@@ -391,9 +391,7 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
         # Initialize attention mask for chunked processing
         if self.rbln_config.use_attention_mask:
             if self.rbln_config.use_position_ids:
-                chunked_attention_mask = torch.zeros(
-                    1, self.rbln_config.max_seq_len, dtype=self.rbln_config.dtype
-                )
+                chunked_attention_mask = torch.zeros(1, self.rbln_config.max_seq_len, dtype=self.rbln_config.dtype)
             else:
                 chunked_attention_mask = torch.zeros(
                     1,
