@@ -55,8 +55,11 @@ jobs:
     runs-on: vm-ci-0
     strategy:
       fail-fast: ${{ inputs.fail_fast }}
-      matrix:
-        test_type: [config, transformers, diffusers, llm, cli-basic, cli-argument-parsing, cli-error-handling]
+      matrix: ${{ fromJson(
+        (inputs.reuse_artifacts_path != '' || inputs.save_artifacts_path != '') &&
+        '{"test_type":["transformers","diffusers","llm"]}' ||
+        '{"test_type":["config","transformers","diffusers","llm","cli-basic","cli-argument-parsing","cli-error-handling"]}'
+        )}}
     steps:
       - name: Checkout the optimum-rbln repository
         uses: actions/checkout@v4
