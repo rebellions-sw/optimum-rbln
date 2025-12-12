@@ -58,6 +58,15 @@ def skip_if_inference_only(test_case):
     else:
         return unittest.skip("test is inference only")(test_case)
 
+def skip_if_compile_only(test_case):
+    """
+    Decorator marking a test that should be excluded if the model is compile only.
+    """
+    SAVE_ARTIFACTS_PATH = os.environ.get("SAVE_ARTIFACTS_PATH", None)
+    if SAVE_ARTIFACTS_PATH is None:
+        return test_case
+    else:
+        return unittest.skip("test is compile only")(test_case)
 
 class BaseHubTest:
     class TestHub(unittest.TestCase):
@@ -170,9 +179,7 @@ class BaseTest:
                     if os.path.exists(compiled_model_path):
                         cls.model = cls.RBLN_CLASS.from_pretrained(compiled_model_path)
                     else:
-                        raise ValueError(f"Compiled model not found at: {compiled_model_path}")
-                else:
-                    raise ValueError(f"REUSE_ARTIFACTS_PATH does not exist: {REUSE_ARTIFACTS_PATH}")
+                        raise unittest.SkipTest(f"Compiled model not found at: {compiled_model_path}")
 
         @classmethod
         def get_rbln_local_dir(cls):
@@ -205,6 +212,8 @@ class BaseTest:
                 os.makedirs(SAVE_ARTIFACTS_PATH, exist_ok=True)
                 shutil.move(rbln_local_dir, os.path.join(SAVE_ARTIFACTS_PATH, rbln_local_dir))
 
+
+        @skip_if_compile_only
         @skip_if_inference_only
         def test_model_save_dir(self):
             self.assertTrue(os.path.exists(self.get_rbln_local_dir()), "model_save_dir does not work.")
@@ -215,6 +224,8 @@ class BaseTest:
         def postprocess(self, inputs, output):
             return output
 
+
+        @skip_if_compile_only
         def test_generate(self):
             inputs = self.get_inputs()
             if self.is_diffuser():
@@ -265,11 +276,13 @@ class BaseTest:
                         **self.HF_CONFIG_KWARGS,
                     )
 
+        @skip_if_compile_only
         @skip_if_inference_only
         def test_save_load(self):
             with tempfile.TemporaryDirectory() as tmpdir:
                 self._inner_test_save_load(tmpdir)
 
+        @skip_if_compile_only
         @skip_if_inference_only
         def test_model_save_dir_load(self):
             rbln_local_dir = self.get_rbln_local_dir()
@@ -281,6 +294,7 @@ class BaseTest:
                     **self.HF_CONFIG_KWARGS,
                 )
 
+        @skip_if_compile_only
         def test_automap(self):
             if self.RBLN_AUTO_CLASS is None:
                 self.skipTest("Skipping test because RBLN_AUTO_CLASS is None")
@@ -333,6 +347,8 @@ class DisallowedTestBase:
             if env_coverage.value < cls.TEST_LEVEL.value:
                 raise unittest.SkipTest(f"Skipped test : Test Coverage {env_coverage.name} < {cls.TEST_LEVEL.name}")
 
+        @skip_if_compile_only
+        @skip_if_inference_only
         def test_load(self):
             try:
                 _ = self.RBLN_CLASS.from_pretrained(
