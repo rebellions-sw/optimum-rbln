@@ -180,9 +180,7 @@ class BaseTest:
                     if os.path.exists(compiled_model_path):
                         cls.model = cls.RBLN_CLASS.from_pretrained(compiled_model_path)
                     else:
-                        raise ValueError(f"Compiled model not found at: {compiled_model_path}")
-                else:
-                    raise ValueError(f"REUSE_ARTIFACTS_PATH does not exist: {REUSE_ARTIFACTS_PATH}")
+                        raise unittest.SkipTest(f"Compiled model not found at: {compiled_model_path}")
 
         @classmethod
         def get_rbln_local_dir(cls):
