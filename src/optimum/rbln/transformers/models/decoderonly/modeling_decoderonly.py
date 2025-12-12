@@ -652,7 +652,7 @@ class RBLNDecoderOnlyModel(RBLNModel, RBLNDecoderOnlyFlashAttentionMixin):
                     self.rbln_config.batch_size,
                     inputs.shape[1],
                     self.config.hidden_size,
-                    dtype=self.rbln_config.torch_dtype,
+                    dtype=self.rbln_config.dtype,
                 )
                 for _ in range(self.config.num_hidden_layers + 1)
             )
@@ -810,7 +810,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
 
             all_hidden_states = (
                 tuple(
-                    torch.zeros(batch_size, input_len, self.config.hidden_size, dtype=self.rbln_config.torch_dtype)
+                    torch.zeros(batch_size, input_len, self.config.hidden_size, dtype=self.rbln_config.dtype)
                     for _ in range(self.config.num_hidden_layers + 1)
                 )
                 if self.rbln_config.output_hidden_states
