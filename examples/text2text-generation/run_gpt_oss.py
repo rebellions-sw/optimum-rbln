@@ -140,7 +140,7 @@ def main(
                     f"step {i}, batch {j} : {stats.pearsonr(r[j].detach().numpy().reshape(-1), g[j].detach().numpy().reshape(-1)).statistic}"
                 )
 
-    breakpoint()
+    # breakpoint()
 
 
 if __name__ == "__main__":
