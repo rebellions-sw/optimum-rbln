@@ -18,7 +18,6 @@ from optimum.rbln.configuration_utils import ContextRblnConfig
 def test_version_is_str():
     assert isinstance(__version__, str)
 
-
 class TestLevel(Enum):
     ESSENTIAL = 1
     DEFAULT = 2

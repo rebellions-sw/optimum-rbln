@@ -83,6 +83,11 @@ jobs:
         run: |
           SKIP=false
           case "${{ matrix.test_type }}" in
+            "config")
+              if [[ "${{ inputs.save_artifacts_path }}" != "" || "${{ inputs.reuse_artifacts_path }}" != "" ]]; then
+                SKIP=true
+              fi
+              ;;
             "transformers")
               if [[ "$COMMIT_MESSAGE" == *"[skip-transformers]"* ]]; then
                 SKIP=true
@@ -155,8 +160,9 @@ jobs:
             echo ${{ secrets.SECRET_TOKEN }} | sudo -S chmod -R 775 "$path"
           }
 
+          # Prepare both the target dir and its parent to avoid ownership issues
+          ensure_dir "$(dirname "${{ inputs.save_artifacts_path }}")"
           ensure_dir "${{ inputs.save_artifacts_path }}"
-
       - name: Run tests
         if: steps.should_skip.outputs.skip != 'true'
         env:
