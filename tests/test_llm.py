@@ -283,6 +283,7 @@ class TestBartModel(LLMTest.TestLLM):
         )
         return generated_text
 
+    @skip_if_inference_only
     def test_automap(self):
         # BartForConditionalGeneration -> RBLNBartForConditionalGeneration compile case
         with self.subTest():
@@ -312,9 +313,11 @@ class TestBartModel(LLMTest.TestLLM):
 
         # RBLNBartForSeq2SeqLM -> RBLNBartForCausalLM load case
         with self.subTest():
+            REUSE_ARTIFACTS_PATH = os.environ.get("REUSE_ARTIFACTS_PATH")
+            model_save_path = os.path.join(REUSE_ARTIFACTS_PATH, self.get_rbln_local_dir()) if REUSE_ARTIFACTS_PATH is not None else self.get_rbln_local_dir()           
             with pytest.raises(ValueError):
                 _ = RBLNAutoModelForCausalLM.from_pretrained(
-                    self.get_rbln_local_dir(),
+                    model_save_path,
                     export=False,
                     rbln_create_runtimes=False,
                     **self.HF_CONFIG_KWARGS,
