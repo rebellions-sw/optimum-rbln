@@ -33,7 +33,24 @@ jobs:
             echo "BC_BASE_PATH secret is required" >&2
             exit 1
           fi
-          matrix=$(python -c "import json, os, pathlib, sys; base=os.environ.get('BC_BASE_PATH'); if not base or not os.path.isdir(base): sys.exit(f'Base path not found: {base}'); tags=[p.name.replace('_','.') for p in sorted(pathlib.Path(base).iterdir()) if p.is_dir() and not p.name.startswith('.')]; if not tags: sys.exit('No tag directories found under BC_BASE_PATH'); print(json.dumps({'bc_tag': tags}))")
+          matrix=$(python - <<'PY'
+          import json, os, pathlib, sys
+
+          base = os.environ.get('BC_BASE_PATH')
+          if not base or not os.path.isdir(base):
+              sys.exit(f'Base path not found: {base}')
+
+          tags = [
+              p.name.replace('_', '.')
+              for p in sorted(pathlib.Path(base).iterdir())
+              if p.is_dir() and not p.name.startswith('.')
+          ]
+          if not tags:
+              sys.exit('No tag directories found under BC_BASE_PATH')
+
+          print(json.dumps({'bc_tag': tags}))
+          PY
+          )
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           echo "matrix=$matrix"
 
