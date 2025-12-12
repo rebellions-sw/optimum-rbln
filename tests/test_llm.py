@@ -283,7 +283,6 @@ class TestBartModel(LLMTest.TestLLM):
         )
         return generated_text
 
-    @skip_if_inference_only
     def test_automap(self):
         # BartForConditionalGeneration -> RBLNBartForConditionalGeneration compile case
         with self.subTest():
