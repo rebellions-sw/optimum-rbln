@@ -46,10 +46,18 @@ jobs:
           echo "current_ref=$CURRENT_REF" >> $GITHUB_OUTPUT
           echo "current_ref=$CURRENT_REF"
 
+      - name: encode target tag
+        id: encode_target_tag
+        run: |
+          TARGET_TAG_ENCODED="${{ steps.get_target_tag.outputs.TARGET_TAG }}"
+          TARGET_TAG_ENCODED="${TARGET_TAG_ENCODED//./_}"
+          echo "TARGET_TAG_ENCODED=$TARGET_TAG_ENCODED" >> $GITHUB_OUTPUT
+          echo "ENCODED TARGET TAG: $TARGET_TAG_ENCODED"
+
       - name: Get reuse artifacts path
         id: get_reuse_artifacts_path
         run: |
-          echo "REUSE_ARTIFACTS_PATH=${{vars.BC_BASE_PATH}}/${{steps.get_current_ref.outputs.CURRENT_REF}}" >> $GITHUB_OUTPUT
+          echo "REUSE_ARTIFACTS_PATH=${{vars.BC_BASE_PATH}}/${{steps.encode_target_tag.outputs.TARGET_TAG_ENCODED}}" >> $GITHUB_OUTPUT
 
       - name: Checkout code
         uses: actions/checkout@v4
