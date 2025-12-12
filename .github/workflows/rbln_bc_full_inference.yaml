@@ -19,7 +19,7 @@ on:
 
 jobs:
   collect-bc-tags:
-    runs-on: ubuntu-latest
+    runs-on: rebel-k8s-runner
     outputs:
       matrix: ${{ steps.build.outputs.matrix }}
     steps:
