@@ -60,7 +60,7 @@ class Qwen3MoeSparseMoeBlock(nn.Module):
         self.norm_topk_prob = model.gate.norm_topk_prob
         gate_weight = model.gate.weight
         gate = nn.Linear(gate_weight.shape[1], gate_weight.shape[0], bias=False)
-        gate.weight = nn.Parameter(gate_weight.detach().clone())
+        gate.weight = model.gate.weight
         self.gate = gate
         self.experts = Qwen3MoeMLP(model.experts, self.top_k, self.norm_topk_prob)
 
@@ -86,15 +86,15 @@ class Qwen3MoeMLP(nn.Module):
         self.num_experts = experts.num_experts
         self.hidden_size = experts.hidden_dim
         self.intermediate_size = experts.intermediate_dim
-        gate_up = experts.gate_up_proj.detach().clone()
+        gate_up = experts.gate_up_proj.detach()
         intermediate_size = gate_up.shape[1] // 2
         gate_stack = gate_up[:, :intermediate_size, :].contiguous()
         up_stack = gate_up[:, intermediate_size:, :].contiguous()
-        down_stack = experts.down_proj.detach().clone().contiguous()
+        down_stack = experts.down_proj.detach()
 
-        self.gate_proj = nn.Linear(self.hidden_size, self.num_experts * self.intermediate_size, bias=False)
-        self.up_proj = nn.Linear(self.hidden_size, self.num_experts * self.intermediate_size, bias=False)
-        self.down_proj = nn.Linear(self.num_experts * self.intermediate_size, self.hidden_size, bias=False)
+        self.gate_proj = nn.Linear(1, 1, bias=False)
+        self.up_proj = nn.Linear(1, 1, bias=False)
+        self.down_proj = nn.Linear(1, 1, bias=False)
         self.gate_proj.weight.data = gate_stack
         self.up_proj.weight.data = up_stack
         self.down_proj.weight.data = down_stack

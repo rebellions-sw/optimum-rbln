@@ -61,7 +61,7 @@ class Qwen3VLMoeSparseMoeBlock(nn.Module):
         self.top_k = model.gate.top_k
         gate_weight = model.gate.weight
         gate = nn.Linear(gate_weight.shape[1], gate_weight.shape[0], bias=False)
-        gate.weight = nn.Parameter(gate_weight.detach().clone())
+        gate.weight = model.gate.weight
         self.gate = gate
         self.experts = Qwen3VLMoeMLP(model.experts, self.top_k)
 
@@ -89,10 +89,10 @@ class Qwen3VLMoeMLP(nn.Module):
 
         # Fused Qwen3VLMoeTextExperts: gate_up_proj [E, 2I, H], down_proj [E, H, I].
         intermediate_dim = experts.intermediate_dim
-        gate_up = experts.gate_up_proj.detach().clone()
+        gate_up = experts.gate_up_proj.detach()
         self.gate_proj.weight = nn.Parameter(gate_up[:, :intermediate_dim, :].contiguous())
         self.up_proj.weight = nn.Parameter(gate_up[:, intermediate_dim:, :].contiguous())
-        self.down_proj.weight = nn.Parameter(experts.down_proj.detach().clone().contiguous())
+        self.down_proj.weight = nn.Parameter(experts.down_proj.detach())
 
     def forward(self, x: torch.Tensor, router_logits: torch.Tensor) -> torch.Tensor:
         masked_routing_weight = compute_masked_routing_weight_softmax_first(

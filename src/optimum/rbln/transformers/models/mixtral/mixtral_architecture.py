@@ -40,7 +40,7 @@ class MixtralSparseMoeBlock(nn.Module):
         self.top_k = model.top_k
         gate_weight = model.gate.weight
         gate = nn.Linear(gate_weight.shape[1], gate_weight.shape[0], bias=False)
-        gate.weight = nn.Parameter(gate_weight.detach().clone())
+        gate.weight = model.gate.weight
         self.gate = gate
         self.experts = MixtralBlockSparseTop2MLP(model.experts, self.top_k)
 
@@ -60,11 +60,11 @@ class MixtralBlockSparseTop2MLP(nn.Module):
         self.top_k = top_k
 
         # Fused MixtralExperts: gate_up_proj [E, 2I, H], down_proj [E, H, I].
-        gate_up = experts.gate_up_proj.detach().clone()
+        gate_up = experts.gate_up_proj.detach()
         intermediate_size = gate_up.shape[1] // 2
         self.w1_weight = nn.Parameter(gate_up[:, :intermediate_size, :].contiguous())
         self.w3_weight = nn.Parameter(gate_up[:, intermediate_size:, :].contiguous())
-        self.w2_weight = nn.Parameter(experts.down_proj.detach().clone().contiguous())
+        self.w2_weight = nn.Parameter(experts.down_proj.detach())
 
     def forward(self, x, router_logits):
         masked_routing_weight = compute_masked_routing_weight_softmax_first(

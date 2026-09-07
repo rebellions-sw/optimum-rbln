@@ -549,11 +549,11 @@ class Gemma4Experts(nn.Module):
 
         gate_w_op = gate_w.contiguous()
         up_w_op = up_w.contiguous()
-        down_w_op = down_w.contiguous().clone()
+        down_w_op = down_w.detach()
 
-        self.gate_proj = nn.Linear(self.hidden_size, self.num_experts * self.intermediate_size, bias=False)
-        self.up_proj = nn.Linear(self.hidden_size, self.num_experts * self.intermediate_size, bias=False)
-        self.down_proj = nn.Linear(self.num_experts * self.intermediate_size, self.hidden_size, bias=False)
+        self.gate_proj = nn.Linear(1, 1, bias=False)
+        self.up_proj = nn.Linear(1, 1, bias=False)
+        self.down_proj = nn.Linear(1, 1, bias=False)
         self.gate_proj.weight.data = gate_w_op
         self.up_proj.weight.data = up_w_op
         self.down_proj.weight.data = down_w_op
