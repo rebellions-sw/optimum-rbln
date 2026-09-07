@@ -498,6 +498,7 @@ class RBLNLlavaForConditionalGeneration(RBLNModel, RBLNImageIndexedBatchSortMixi
         inputs_sorted: bool = False,
         **kwargs,
     ) -> tuple | LlavaCausalLMOutputWithPast:
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         self._require_sorted_batch_inputs(inputs_embeds if inputs_embeds is not None else input_ids, inputs_sorted)
         # Prefill
         if cache_position is None:
