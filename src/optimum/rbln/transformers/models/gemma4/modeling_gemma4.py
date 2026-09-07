@@ -37,9 +37,9 @@ from ....utils.logging import get_logger
 from ...cache_utils import FullAttentionKVCacheMeta, SlidingWindowAttentionKVCacheMeta
 from ...modeling_attention_utils import validate_sliding_window
 from ...modeling_outputs import RBLNDecoderOnlyOutput
+from ...utils.multimodal_batch_sort import RBLNImageIndexedBatchSortMixin, _placeholder_run_counts
 from ...utils.rbln_runtime_wrapper import LoopProcessor
 from ..decoderonly.decoderonly_runtime_utils import RBLNPageTableManager
-from ..decoderonly.generation_decoderonly import RBLNDecoderOnlyGenerationMixin
 from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModelForCausalLM
 from .configuration_gemma4 import (
     DEFAULT_MAX_SOFT_TOKENS,
@@ -526,10 +526,10 @@ class RBLNGemma4ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         rbln_config: RBLNGemma4ForCausalLMConfig,
     ) -> None:
         # Pre-populates rbln_config.cache_metas with per-layer-heterogeneous KV shapes.
-        # Gemma4 mixes two layer kinds:
-        #   sliding_attention: head_dim=config.head_dim, num_kv=config.num_key_value_heads.
-        #   full_attention: head_dim=config.global_head_dim,
-        #     num_kv=config.num_global_key_value_heads (attention_k_eq_v=True) or num_key_value_heads.
+        # Gemma4 mixes two layer kinds whose head_dim/num_key_value_heads come from
+        # config.per_layer_config (transformers >=5.15 builds it from global_head_dim /
+        # num_global_key_value_heads; reading those top-level attributes raises
+        # AmbiguousGlobalPerLayerAttributeError).
         # Base get_input_info short-circuits on a non-empty cache_metas list and uses these entries
         # verbatim as compile-time KV cache input shapes — the only way to express per-layer
         # heterogeneous KV geometry in the current pipeline.
@@ -548,20 +548,13 @@ class RBLNGemma4ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
                 f"({model_config.num_hidden_layers})."
             )
 
-        head_dim_sliding = model_config.head_dim
-        num_kv_sliding = model_config.num_key_value_heads
-        head_dim_full = getattr(model_config, "global_head_dim", None) or head_dim_sliding
-        attention_k_eq_v = bool(getattr(model_config, "attention_k_eq_v", False))
-        num_kv_full = (
-            getattr(model_config, "num_global_key_value_heads", None) or num_kv_sliding
-            if attention_k_eq_v
-            else num_kv_sliding
-        )
+        per_layer_config = model_config.per_layer_config
 
         for layer_idx in range(model_config.num_hidden_layers):
             is_sliding = layer_types[layer_idx] == "sliding_attention"
-            num_kv = num_kv_sliding if is_sliding else num_kv_full
-            head_dim = head_dim_sliding if is_sliding else head_dim_full
+            layer_config = per_layer_config[layer_idx]
+            num_kv = layer_config.num_key_value_heads
+            head_dim = layer_config.head_dim
 
             meta_cls = SlidingWindowAttentionKVCacheMeta if is_sliding else FullAttentionKVCacheMeta
             for kv_offset, _ in enumerate(("key", "value")):
@@ -592,7 +585,7 @@ class RBLNGemma4ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         return rbln_config
 
 
-class RBLNGemma4ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixin):
+class RBLNGemma4ForConditionalGeneration(RBLNModel, RBLNImageIndexedBatchSortMixin):
     """
     Gemma4 model for image-text-to-text generation optimized for RBLN NPU.
 
@@ -624,6 +617,24 @@ class RBLNGemma4ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMix
         {"name": "vision_tower"},
         {"name": "language_model"},
     ]
+    _image_indexed_kwargs = ("pixel_values", "image_position_ids")
+    _batch_sortable_kwargs = RBLNImageIndexedBatchSortMixin._batch_sortable_kwargs + ("mm_token_type_ids",)
+
+    def _images_per_sample(self, input_ids: torch.LongTensor | None, kwargs: dict) -> list[int]:
+        return _placeholder_run_counts(input_ids, self._image_token_id)
+
+    def _sort_extra_generation_inputs(
+        self, input_ids: torch.LongTensor | None, kwargs: dict, sort_idx: torch.Tensor
+    ) -> None:
+        super()._sort_extra_generation_inputs(input_ids, kwargs, sort_idx)
+        pixel_values_videos = kwargs.get("pixel_values_videos")
+        if isinstance(pixel_values_videos, torch.Tensor) and pixel_values_videos.shape[0] > 0:
+            videos = self._collect_segment_kwargs(kwargs, ("pixel_values_videos", "video_position_ids"))
+            # (num_videos, num_frames, ...): every frame is its own run, separated by timestamp text
+            videos_per_sample = _placeholder_run_counts(
+                input_ids, getattr(self.config, "video_token_id", None), runs_per_segment=pixel_values_videos.shape[1]
+            )
+            self._permute_segment_kwargs(videos, kwargs, sort_idx, videos_per_sample)
 
     @staticmethod
     def _reject_unsupported_modalities(
@@ -944,9 +955,11 @@ class RBLNGemma4ForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMix
         video_position_ids: torch.Tensor | None = None,
         input_features: torch.Tensor | None = None,
         input_features_mask: torch.Tensor | None = None,
+        inputs_sorted: bool = False,
         **lm_kwargs: dict[str, Any],
     ) -> tuple | RBLNDecoderOnlyOutput:
         self._reject_unsupported_modalities(input_features, input_features_mask)
+        self._require_sorted_batch_inputs(inputs_embeds if inputs_embeds is not None else input_ids, inputs_sorted)
 
         output_hidden_states = (
             output_hidden_states
