@@ -820,7 +820,7 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
         is_prefill = model_inputs.get("cache_position") is None
         if is_prefill:
             lengths = model_inputs["generate_idx"].squeeze(-1).to(torch.int32)
-            sort_idx = torch.argsort(lengths, descending=True)
+            sort_idx = torch.argsort(lengths, descending=True, stable=True)
             unsort_idx = torch.argsort(sort_idx)
             self._rbln_sort_idx = sort_idx
             self._rbln_unsort_idx = unsort_idx

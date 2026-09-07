@@ -185,7 +185,8 @@ class RBLNDecoderOnlyGenerationMixin(GenerationMixin):
             if mask is not None
             else torch.full((batch_input.shape[0],), batch_input.shape[1], dtype=torch.long)
         )
-        sort_idx = torch.argsort(lengths, descending=True)
+        # stable: ties must break identically wherever the perm is recomputed from lengths
+        sort_idx = torch.argsort(lengths, descending=True, stable=True)
         if input_ids is not None:
             input_ids = input_ids.index_select(0, sort_idx)
         for name in self._batch_sortable_kwargs:
