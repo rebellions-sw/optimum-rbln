@@ -881,11 +881,12 @@ class RBLNDecoderOnlyModelForCausalLM(RBLNDecoderOnlyModel, RBLNDecoderOnlyGener
         position_ids: torch.Tensor | None = None,
         token_type_ids: torch.Tensor | None = None,
         lora_int_ids: torch.Tensor | None = None,
-        return_dict: torch.Tensor | None = None,
+        return_dict: bool | None = None,
         output_hidden_states: bool | None = None,
         inputs_sorted: bool = False,
         **kwargs,
     ) -> tuple[torch.FloatTensor]:
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         if self.rbln_config.use_lora and lora_int_ids is None:
             if self.lora_int_ids is None:
                 raise ValueError(
