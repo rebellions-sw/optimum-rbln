@@ -87,22 +87,27 @@ class RBLNGptOssExperts(nn.Module):
 
         self.register_buffer(
             "gate_proj_blocks",
-            gate_up_blocks[:, ::2, :, :].reshape(self.num_experts, self.intermediate_size, -1),
+            gate_up_blocks[:, ::2, :, :].reshape(self.num_experts, self.intermediate_size, -1).contiguous(),
         )
-        self.register_buffer("gate_proj_scales", gate_up_scales[:, ::2, :])
+        self.register_buffer("gate_proj_scales", gate_up_scales[:, ::2, :].contiguous())
         self.register_buffer(
             "gate_proj_bias",
-            model.gate_up_proj_bias.data[:, ::2].reshape(self.num_experts, self.intermediate_size),
+            model.gate_up_proj_bias.data[:, ::2].reshape(self.num_experts, self.intermediate_size).contiguous(),
         )
 
         self.register_buffer(
             "up_proj_blocks",
-            gate_up_blocks[:, 1::2, :, :].reshape(self.num_experts, self.intermediate_size, -1),
+            gate_up_blocks[:, 1::2, :, :].reshape(self.num_experts, self.intermediate_size, -1).contiguous(),
         )
-        self.register_buffer("up_proj_scales", gate_up_scales[:, 1::2, :])
+        self.register_buffer("up_proj_scales", gate_up_scales[:, 1::2, :].contiguous())
         self.register_buffer(
-            "up_proj_bias", model.gate_up_proj_bias.data[:, 1::2].reshape(self.num_experts, self.intermediate_size)
+            "up_proj_bias",
+            model.gate_up_proj_bias.data[:, 1::2].reshape(self.num_experts, self.intermediate_size).contiguous(),
         )
+        if hasattr(model, "gate_up_proj_blocks"):
+            model.gate_up_proj_blocks = None
+        else:
+            model.gate_up_proj = None
 
         self.register_buffer("down_proj_blocks", down_blocks.reshape(self.num_experts, self.hidden_size, -1))
         self.register_buffer("down_proj_scales", down_scales)
