@@ -14,8 +14,14 @@ from optimum.rbln.utils.runtime_utils import npu_is_cr13_or_later
 
 
 LENGTHS = torch.tensor([3, 7, 5, 7])
-SORT_IDX = torch.argsort(LENGTHS, descending=True)
+SORT_IDX = torch.argsort(LENGTHS, descending=True, stable=True)
 UNSORT_IDX = torch.argsort(SORT_IDX)
+
+
+def test_sort_idx_tie_break_is_stable():
+    # the executor reproduces this perm independently from recorded lengths; tied
+    # lengths must break the same way on both sides (original row order wins)
+    assert SORT_IDX.tolist() == [1, 3, 2, 0]
 
 
 def test_expand_batch_perm_idx():
