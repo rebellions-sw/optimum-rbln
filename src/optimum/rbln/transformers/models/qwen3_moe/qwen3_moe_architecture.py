@@ -93,12 +93,9 @@ class Qwen3MoeMLP(nn.Module):
         experts.gate_up_proj = None
         down_stack = experts.down_proj.detach()
 
-        self.gate_proj = nn.Linear(1, 1, bias=False)
-        self.up_proj = nn.Linear(1, 1, bias=False)
-        self.down_proj = nn.Linear(1, 1, bias=False)
-        self.gate_proj.weight.data = gate_stack
-        self.up_proj.weight.data = up_stack
-        self.down_proj.weight.data = down_stack
+        self.register_buffer("gate_proj_weight", gate_stack)
+        self.register_buffer("up_proj_weight", up_stack)
+        self.register_buffer("down_proj_weight", down_stack)
 
     def forward(self, x, router_logits):
         masked_routing_weight = compute_masked_routing_weight_softmax_first(
@@ -106,9 +103,9 @@ class Qwen3MoeMLP(nn.Module):
         )
         return torch.ops.rbln_custom_ops.custom_moe_glu(
             hidden_states=x,
-            gate_proj_weight=self.gate_proj.weight,
-            up_proj_weight=self.up_proj.weight,
-            down_proj_weight=self.down_proj.weight,
+            gate_proj_weight=self.gate_proj_weight,
+            up_proj_weight=self.up_proj_weight,
+            down_proj_weight=self.down_proj_weight,
             masked_routing_weight=masked_routing_weight,
             hidden_act="silu",
         )

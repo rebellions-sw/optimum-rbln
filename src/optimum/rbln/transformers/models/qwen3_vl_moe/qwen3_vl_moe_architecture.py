@@ -83,17 +83,13 @@ class Qwen3VLMoeMLP(nn.Module):
         self.top_k = top_k
         self.norm_topk_prob = True
 
-        self.gate_proj = nn.Linear(1, 1, bias=False)
-        self.up_proj = nn.Linear(1, 1, bias=False)
-        self.down_proj = nn.Linear(1, 1, bias=False)
-
         # Fused Qwen3VLMoeTextExperts: gate_up_proj [E, 2I, H], down_proj [E, H, I].
         intermediate_dim = experts.intermediate_dim
         gate_up = experts.gate_up_proj.detach()
-        self.gate_proj.weight = nn.Parameter(gate_up[:, :intermediate_dim, :].contiguous())
-        self.up_proj.weight = nn.Parameter(gate_up[:, intermediate_dim:, :].contiguous())
+        self.register_buffer("gate_proj_weight", gate_up[:, :intermediate_dim, :].contiguous())
+        self.register_buffer("up_proj_weight", gate_up[:, intermediate_dim:, :].contiguous())
         experts.gate_up_proj = None
-        self.down_proj.weight = nn.Parameter(experts.down_proj.detach())
+        self.register_buffer("down_proj_weight", experts.down_proj.detach())
 
     def forward(self, x: torch.Tensor, router_logits: torch.Tensor) -> torch.Tensor:
         masked_routing_weight = compute_masked_routing_weight_softmax_first(
@@ -101,9 +97,9 @@ class Qwen3VLMoeMLP(nn.Module):
         )
         return torch.ops.rbln_custom_ops.custom_moe_glu(
             hidden_states=x,
-            gate_proj_weight=self.gate_proj.weight,
-            up_proj_weight=self.up_proj.weight,
-            down_proj_weight=self.down_proj.weight,
+            gate_proj_weight=self.gate_proj_weight,
+            up_proj_weight=self.up_proj_weight,
+            down_proj_weight=self.down_proj_weight,
             masked_routing_weight=masked_routing_weight,
             hidden_act="silu",
         )

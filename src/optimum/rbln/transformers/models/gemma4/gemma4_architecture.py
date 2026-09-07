@@ -552,12 +552,9 @@ class Gemma4Experts(nn.Module):
         experts.gate_up_proj = None
         down_w_op = down_w.detach()
 
-        self.gate_proj = nn.Linear(1, 1, bias=False)
-        self.up_proj = nn.Linear(1, 1, bias=False)
-        self.down_proj = nn.Linear(1, 1, bias=False)
-        self.gate_proj.weight.data = gate_w_op
-        self.up_proj.weight.data = up_w_op
-        self.down_proj.weight.data = down_w_op
+        self.register_buffer("gate_proj_weight", gate_w_op)
+        self.register_buffer("up_proj_weight", up_w_op)
+        self.register_buffer("down_proj_weight", down_w_op)
 
     def forward(self, hidden_states: torch.Tensor, router_logits: torch.Tensor) -> torch.Tensor:
         masked_routing_weight = compute_masked_routing_weight_softmax_first(
@@ -567,9 +564,9 @@ class Gemma4Experts(nn.Module):
 
         return torch.ops.rbln_custom_ops.custom_moe_glu(
             hidden_states=hidden_states,
-            gate_proj_weight=self.gate_proj.weight,
-            up_proj_weight=self.up_proj.weight,
-            down_proj_weight=self.down_proj.weight,
+            gate_proj_weight=self.gate_proj_weight,
+            up_proj_weight=self.up_proj_weight,
+            down_proj_weight=self.down_proj_weight,
             masked_routing_weight=masked_routing_weight,
             hidden_act="gelu",
         )
