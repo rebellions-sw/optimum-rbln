@@ -167,6 +167,17 @@ def test_forward_sort_inputs_sorted_skips():
     assert model._rbln_sort_idx is None
 
 
+def test_runtime_decode_cache_position_guard():
+    from optimum.rbln.transformers.models.decoderonly.decoderonly_runtime_utils import (
+        _require_sorted_cache_position,
+    )
+
+    _require_sorted_cache_position(torch.tensor([[9], [7], [7], [3]], dtype=torch.int32))
+    _require_sorted_cache_position(torch.tensor([[5]], dtype=torch.int32))
+    with pytest.raises(ValueError, match="descending"):
+        _require_sorted_cache_position(torch.tensor([[3], [9], [7]], dtype=torch.int32))
+
+
 def test_requires_batch_sort_serialized():
     cfg = RBLNDecoderOnlyModelForCausalLMConfig(max_seq_len=1024, _requires_batch_sort=True, npu="RBLN-CR31")
     assert cfg.requires_batch_sort is True
