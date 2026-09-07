@@ -92,6 +92,7 @@ class Qwen3VLMoeMLP(nn.Module):
         gate_up = experts.gate_up_proj.detach()
         self.gate_proj.weight = nn.Parameter(gate_up[:, :intermediate_dim, :].contiguous())
         self.up_proj.weight = nn.Parameter(gate_up[:, intermediate_dim:, :].contiguous())
+        experts.gate_up_proj = None
         self.down_proj.weight = nn.Parameter(experts.down_proj.detach())
 
     def forward(self, x: torch.Tensor, router_logits: torch.Tensor) -> torch.Tensor:

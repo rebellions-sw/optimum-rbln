@@ -84,6 +84,7 @@ class Qwen2MoeMLP(nn.Module):
         self.down_proj = nn.Linear(1, 1, bias=False)
         self.gate_proj.weight = nn.Parameter(gate_up[:, :intermediate_dim, :].contiguous())
         self.up_proj.weight = nn.Parameter(gate_up[:, intermediate_dim:, :].contiguous())
+        experts.gate_up_proj = None
         self.down_proj.weight = nn.Parameter(experts.down_proj.detach())
 
     def forward(self, x, router_logits):

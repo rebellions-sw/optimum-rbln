@@ -90,6 +90,7 @@ class Qwen3MoeMLP(nn.Module):
         intermediate_size = gate_up.shape[1] // 2
         gate_stack = gate_up[:, :intermediate_size, :].contiguous()
         up_stack = gate_up[:, intermediate_size:, :].contiguous()
+        experts.gate_up_proj = None
         down_stack = experts.down_proj.detach()
 
         self.gate_proj = nn.Linear(1, 1, bias=False)

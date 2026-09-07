@@ -64,6 +64,7 @@ class MixtralBlockSparseTop2MLP(nn.Module):
         intermediate_size = gate_up.shape[1] // 2
         self.w1_weight = nn.Parameter(gate_up[:, :intermediate_size, :].contiguous())
         self.w3_weight = nn.Parameter(gate_up[:, intermediate_size:, :].contiguous())
+        experts.gate_up_proj = None
         self.w2_weight = nn.Parameter(experts.down_proj.detach())
 
     def forward(self, x, router_logits):
