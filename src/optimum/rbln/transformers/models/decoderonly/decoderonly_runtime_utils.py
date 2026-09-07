@@ -164,6 +164,17 @@ class RBLNPageTableManager:
         return block_tables, local_block_tables, is_external_block_tables
 
 
+def _require_sorted_cache_position(cache_position: torch.Tensor) -> None:
+    # last line of defense before the in-memory kernel: catches callers that bypass
+    # generate()/forward() (e.g. serving stacks driving the runtime directly)
+    lengths = cache_position.reshape(-1)
+    if not torch.all(lengths[:-1] >= lengths[1:]):
+        raise ValueError(
+            "This model was compiled with `requires_batch_sort`: decode batches must be sorted by "
+            f"sequence length (descending), but got cache_position {lengths.tolist()}."
+        )
+
+
 class RBLNRuntimeModel(RBLNPytorchRuntime):
     mandatory_members = ["main_input_name", "embed_tokens"]
 
@@ -293,6 +304,9 @@ class RBLNRuntimeModel(RBLNPytorchRuntime):
 
         if batch_size != cache_position.shape[0]:
             raise RuntimeError(f"Cache position size mismatch: got {cache_position.shape[0]}, expected {batch_size}.")
+
+        if batch_size > 1 and self.rbln_config.requires_batch_sort:
+            _require_sorted_cache_position(cache_position)
 
         if self.rbln_config.use_local_attention:
             local_block_tables = (
