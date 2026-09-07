@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from diffusers import Cosmos2TextToImagePipeline
 from diffusers.schedulers import EDMEulerScheduler
@@ -81,9 +81,9 @@ class RBLNCosmos2TextToImagePipeline(RBLNDiffusionMixin, Cosmos2TextToImagePipel
         model_id: str,
         *,
         export: bool = False,
-        safety_checker: Optional[RBLNCosmosSafetyChecker] = None,
-        rbln_config: Optional[Union[Dict[str, Any], RBLNCosmos2TextToImagePipelineConfig]] = None,
-        **kwargs: Dict[str, Any],
+        safety_checker: RBLNCosmosSafetyChecker | None = None,
+        rbln_config: dict[str, Any] | RBLNCosmos2TextToImagePipelineConfig | None = None,
+        **kwargs: dict[str, Any],
     ):
         rbln_config, kwargs = cls.get_rbln_config_class().initialize_from_kwargs(rbln_config, **kwargs)
         if safety_checker is None and export:
