@@ -96,9 +96,6 @@ packages = ["src/optimum"]
 allow-direct-references = true
 
 [tool.uv]
-# 0.11.25 changed lockfile serialization (redundant `environments` markers factored
-# out into `supported-markers`, astral-sh/uv#19933); older uv re-locking writes them
-# all back inline, producing a large noise diff. Gate every uv command on >= 0.11.25.
 required-version = ">=0.11.25"
 environments = [
     "sys_platform == 'linux' and platform_machine == 'x86_64' and platform_python_implementation == 'CPython'",
