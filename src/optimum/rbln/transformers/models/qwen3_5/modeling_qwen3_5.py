@@ -37,9 +37,11 @@ from ....modeling_rope_utils import build_qwen_mrope_lookup, np_cos, np_sin, qwe
 from ....utils import logging
 from ...cache_utils import FullAttentionKVCacheMeta, LinearAttentionCacheMeta
 from ...modeling_outputs import RBLNDecoderOnlyOutput, _validate_output_hidden_states
+from ...utils.multimodal_batch_sort import RBLNQwenVLBatchSortMixin
 from ..decoderonly.decoderonly_runtime_utils import RBLNPageTableManager
 from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModel, RBLNDecoderOnlyModelForCausalLM
 from .configuration_qwen3_5 import (
+    MAX_GDN_CHUNK_SIZE,
     RBLNQwen3_5ForConditionalGenerationConfig,  # noqa: F401
     RBLNQwen3_5ModelConfig,  # noqa: F401
     RBLNQwen3_5VisionModelConfig,  # noqa: F401
@@ -165,13 +167,17 @@ class RBLNQwen3_5TextModel(RBLNDecoderOnlyModel):
         rbln_config = super()._update_rbln_config(
             preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
         )
-        if rbln_config.gdn_chunk_size is None:
-            rbln_config.gdn_chunk_size = rbln_config.prefill_chunk_size
-        if rbln_config.gdn_chunk_size > 128:
+        if rbln_config.gdn_chunk_size > MAX_GDN_CHUNK_SIZE:
             raise ValueError(
-                f"gdn_chunk_size must be <= 128, got {rbln_config.gdn_chunk_size}. "
+                f"gdn_chunk_size must be <= {MAX_GDN_CHUNK_SIZE}, got {rbln_config.gdn_chunk_size}. "
                 "Larger GatedDeltaNet sub-chunk sizes are not supported yet — "
-                "set gdn_chunk_size to a value <= 128 that divides prefill_chunk_size."
+                f"set gdn_chunk_size to a value <= {MAX_GDN_CHUNK_SIZE} that divides prefill_chunk_size."
+            )
+        if rbln_config.prefill_chunk_size % rbln_config.gdn_chunk_size != 0:
+            raise ValueError(
+                f"gdn_chunk_size must divide prefill_chunk_size, got gdn_chunk_size="
+                f"{rbln_config.gdn_chunk_size} and prefill_chunk_size={rbln_config.prefill_chunk_size}. "
+                f"Set gdn_chunk_size to a divisor of prefill_chunk_size that is <= {MAX_GDN_CHUNK_SIZE}."
             )
         return rbln_config
 
@@ -557,13 +563,17 @@ class RBLNQwen3_5Model(RBLNDecoderOnlyModel):
         rbln_config = super()._update_rbln_config(
             preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
         )
-        if rbln_config.gdn_chunk_size is None:
-            rbln_config.gdn_chunk_size = rbln_config.prefill_chunk_size
-        if rbln_config.gdn_chunk_size > 128:
+        if rbln_config.gdn_chunk_size > MAX_GDN_CHUNK_SIZE:
             raise ValueError(
-                f"gdn_chunk_size must be <= 128, got {rbln_config.gdn_chunk_size}. "
+                f"gdn_chunk_size must be <= {MAX_GDN_CHUNK_SIZE}, got {rbln_config.gdn_chunk_size}. "
                 "Larger GatedDeltaNet sub-chunk sizes are not supported yet — "
-                "set gdn_chunk_size to a value <= 128 that divides prefill_chunk_size."
+                f"set gdn_chunk_size to a value <= {MAX_GDN_CHUNK_SIZE} that divides prefill_chunk_size."
+            )
+        if rbln_config.prefill_chunk_size % rbln_config.gdn_chunk_size != 0:
+            raise ValueError(
+                f"gdn_chunk_size must divide prefill_chunk_size, got gdn_chunk_size="
+                f"{rbln_config.gdn_chunk_size} and prefill_chunk_size={rbln_config.prefill_chunk_size}. "
+                f"Set gdn_chunk_size to a divisor of prefill_chunk_size that is <= {MAX_GDN_CHUNK_SIZE}."
             )
         return rbln_config
 
@@ -674,6 +684,7 @@ class RBLNQwen3_5Model(RBLNDecoderOnlyModel):
         output_hidden_states: bool | None = None,
         **kwargs,
     ) -> RBLNDecoderOnlyOutput:
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         output_hidden_states = _validate_output_hidden_states(output_hidden_states, self.rbln_config)
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids)
@@ -721,7 +732,7 @@ class RBLNQwen3_5Model(RBLNDecoderOnlyModel):
         return RBLNDecoderOnlyOutput(logits=logits, hidden_states=all_hidden_states)
 
 
-class RBLNQwen3_5ForConditionalGeneration(RBLNQwen3_5Model, RBLNDecoderOnlyModelForCausalLM):
+class RBLNQwen3_5ForConditionalGeneration(RBLNQwenVLBatchSortMixin, RBLNQwen3_5Model, RBLNDecoderOnlyModelForCausalLM):
     """
     RBLNQwen3_5ForConditionalGeneration is a multi-modal model that integrates vision and language processing capabilities,
     optimized for RBLN NPUs. It is designed for conditional generation tasks that involve both image and text inputs.
@@ -759,6 +770,8 @@ class RBLNQwen3_5ForConditionalGeneration(RBLNQwen3_5Model, RBLNDecoderOnlyModel
         ```
     """
 
+    _video_grid_rows_are_chunks = True
+
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
         self.rope_deltas = torch.zeros(self.rbln_config.batch_size)
@@ -786,6 +799,7 @@ class RBLNQwen3_5ForConditionalGeneration(RBLNQwen3_5Model, RBLNDecoderOnlyModel
         image_grid_thw=None,
         video_grid_thw=None,
         mm_token_type_ids=None,
+        inputs_sorted: bool = False,
         **kwargs,
     ):
         model_inputs = {}
@@ -813,6 +827,7 @@ class RBLNQwen3_5ForConditionalGeneration(RBLNQwen3_5Model, RBLNDecoderOnlyModel
                 "image_grid_thw": image_grid_thw,
                 "video_grid_thw": video_grid_thw,
                 "mm_token_type_ids": mm_token_type_ids,
+                "inputs_sorted": inputs_sorted,
             }
         )
         return model_inputs
@@ -854,8 +869,11 @@ class RBLNQwen3_5ForConditionalGeneration(RBLNQwen3_5Model, RBLNDecoderOnlyModel
         return_dict: bool | None = None,
         mm_token_type_ids: torch.IntTensor | None = None,
         output_hidden_states: bool | None = None,
+        inputs_sorted: bool = False,
         **kwargs,
     ) -> RBLNDecoderOnlyOutput:
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        self._require_sorted_batch_inputs(input_ids if input_ids is not None else inputs_embeds, inputs_sorted)
         output_hidden_states = _validate_output_hidden_states(output_hidden_states, self.rbln_config)
         text_config = self.config.get_text_config()
         if cache_position is None:  # prefill

@@ -455,3 +455,17 @@ def test_qwen_vl_parent_rejects_conflicting_vision_batch_size(parent_cls_name, v
 
 if __name__ == "__main__":
     pytest.main()
+
+
+def test_qwen3_5_gdn_chunk_size_default_is_decoupled_from_prefill():
+    from optimum.rbln import RBLNQwen3_5ForCausalLMConfig, RBLNQwen3_5ModelConfig
+    from optimum.rbln.transformers.models.qwen3_5.configuration_qwen3_5 import MAX_GDN_CHUNK_SIZE
+
+    for cls, kwargs in (
+        (RBLNQwen3_5ForCausalLMConfig, {}),
+        (RBLNQwen3_5ModelConfig, {"use_inputs_embeds": True}),
+    ):
+        assert cls(**kwargs).gdn_chunk_size == MAX_GDN_CHUNK_SIZE
+        assert cls(prefill_chunk_size=512, **kwargs).gdn_chunk_size == MAX_GDN_CHUNK_SIZE
+        # An explicit value is preserved.
+        assert cls(gdn_chunk_size=64, **kwargs).gdn_chunk_size == 64

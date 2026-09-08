@@ -48,6 +48,7 @@ class RBLNRuntimePixtralVisionModel(RBLNPytorchRuntime):
         **kwargs: Any,
     ) -> None:
         super().__init__(runtime, **kwargs)
+        self.config = config
         self.patch_positional_embedding = PixtralRotaryEmbedding(config)
         self.patch_size = config.patch_size
         self.image_size = config.image_size
@@ -62,6 +63,7 @@ class RBLNRuntimePixtralVisionModel(RBLNPytorchRuntime):
         return_dict: bool | None = None,
         **kwargs,
     ):
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         if pixel_values.shape[2] > self.max_image_size[0] or pixel_values.shape[3] > self.max_image_size[1]:
             raise ValueError("The height() and width of pixel_values can't be larger than max_image_size.")
 
