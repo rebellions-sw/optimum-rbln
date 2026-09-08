@@ -142,7 +142,7 @@ def rbln_chunk_gated_delta_rule(
         query = l2norm(query, dim=-1, eps=1e-6)
         key = l2norm(key, dim=-1, eps=1e-6)
     query, key, value, beta, g = [
-        x.transpose(1, 2).contiguous().to(initial_dtype) for x in (query, key, value, beta, g)
+        x.transpose(1, 2).contiguous().to(torch.float32) for x in (query, key, value, beta, g)
     ]
     scale = 1 / (query.shape[-1] ** 0.5)
     query = query * scale
@@ -171,7 +171,7 @@ def rbln_chunk_gated_delta_rule(
     # entry, so reshaping it to 4D (B, Hv, Dk, Dv) here is safe.
     last_recurrent_state = initial_state.reshape(
         initial_state.shape[0], query.shape[1], query.shape[-1], value.shape[-1]
-    )
+    ).to(torch.float32)
 
     # inter-chunk: sequential carry across sub-chunks.
     core_chunks = []
@@ -193,13 +193,13 @@ def rbln_chunk_gated_delta_rule(
 
     # concat sub-chunk outputs along seq
     core = torch.cat(core_chunks, dim=2)
-    core = core.transpose(1, 2).contiguous()
+    core = core.transpose(1, 2).contiguous().to(initial_dtype)
     # return the final state in the 3D cache layout (B, Hv*Dk, Dv) to match the static cache.
     last_recurrent_state = last_recurrent_state.reshape(
         last_recurrent_state.shape[0],
         last_recurrent_state.shape[1] * last_recurrent_state.shape[2],
         last_recurrent_state.shape[3],
-    )
+    ).to(initial_dtype)
     return core, last_recurrent_state
 
 
@@ -211,6 +211,8 @@ def rbln_recurrent_gated_delta_rule_step(query, key, value, g, beta, initial_sta
     cache and reshaped to 4D here only after a compute (``* g_t``).
     """
     initial_dtype = query.dtype
+    query, key, value, g, beta = [x.to(torch.float32) for x in (query, key, value, g, beta)]
+    initial_state = initial_state.to(torch.float32)
     batch_size, _, num_v_heads, k_head_dim = query.shape
     v_head_dim = value.shape[-1]
     q = query.reshape(batch_size, num_v_heads, k_head_dim)
@@ -374,7 +376,7 @@ class Qwen3_5GatedDeltaNet(nn.Module):
         value = value.reshape(batch_size, seq_len, -1, self.head_v_dim)
 
         beta = b.sigmoid()
-        g = -self.A_log.exp() * F.softplus(a + self.dt_bias)
+        g = -self.A_log.float().exp() * F.softplus(a.float() + self.dt_bias)
         if prefill:
             # padding tokens have nonzero q/k/v/g via biases; zero g/beta so they don't pollute the recurrent-state sum and its decay.
             g = g * valid_mask
@@ -575,6 +577,7 @@ class Qwen3_5Model(DecoderOnlyModel):
         recurrent_state_mask: torch.Tensor | None = None,
         valid_mask: torch.Tensor | None = None,
         batch_idx: torch.Tensor | None = None,  # prefill only: which max-batch cache slot this item uses
+        output_hidden_states: bool | None = None,
     ):
         if (input_ids is None) ^ (inputs_embeds is not None):
             raise ValueError("You must specify exactly one of input_ids or inputs_embeds.")
@@ -598,8 +601,11 @@ class Qwen3_5Model(DecoderOnlyModel):
         else:
             seq_positions = cache_position.amin(dim=1, keepdim=True)
 
+        all_hidden_states = () if output_hidden_states else None
         new_states: list[torch.Tensor] = []
         for layer_idx, layer in enumerate(self.layers):
+            if output_hidden_states:
+                all_hidden_states += (hidden_states,)
             if layer_idx in self.linear_attention_layers:
                 conv_state, recurrent_state = past_states[layer_idx]
                 slotted = batch_idx is not None
@@ -640,7 +646,9 @@ class Qwen3_5Model(DecoderOnlyModel):
                 )
 
         hidden_states = self.get_last_layernorm()(hidden_states)
-        return hidden_states, new_states
+        if output_hidden_states:
+            all_hidden_states += (hidden_states,)
+        return hidden_states, new_states, all_hidden_states
 
 
 class Qwen3_5ForCausalLM(DecoderOnlyForCausalLM):
@@ -662,8 +670,9 @@ class Qwen3_5ForCausalLM(DecoderOnlyForCausalLM):
         recurrent_state_mask: torch.Tensor | None = None,
         valid_mask: torch.Tensor | None = None,
         batch_idx: torch.Tensor | None = None,
+        output_hidden_states: bool | None = None,
     ):
-        hidden_states, new_states = self.model(
+        hidden_states, new_states, all_hidden_states = self.model(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
@@ -680,13 +689,14 @@ class Qwen3_5ForCausalLM(DecoderOnlyForCausalLM):
             recurrent_state_mask=recurrent_state_mask,
             valid_mask=valid_mask,
             batch_idx=batch_idx,
+            output_hidden_states=output_hidden_states,
         )
 
         if "prefill" in self.phase and query_position is not None:
             hidden_states = hidden_states[:, query_position.to(torch.int).unsqueeze(0)]
 
         logits = self.lm_head(hidden_states)
-        return logits, new_states
+        return logits, new_states, all_hidden_states
 
 
 class Qwen3_5_CausalLMWrapper(DecoderOnlyWrapper):
@@ -806,7 +816,7 @@ class Qwen3_5_CausalLMWrapper(DecoderOnlyWrapper):
             batch_idx,
         ) = self.prepare_forward_args(*args)
 
-        logits, new_states = self.model(
+        logits, new_states, all_hidden_states = self.model(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
@@ -823,9 +833,13 @@ class Qwen3_5_CausalLMWrapper(DecoderOnlyWrapper):
             recurrent_state_mask=recurrent_state_mask,
             valid_mask=valid_mask,
             batch_idx=batch_idx,
+            output_hidden_states=self.rbln_config.output_hidden_states,
         )
 
-        # Linear-attention state updates are returned so the runtime can persist them on the host.
+        # Linear-attention state updates are returned so the runtime can persist them on the host; the
+        # per-layer hidden states (n_layers + 1) trail last when output_hidden_states is requested.
+        if self.rbln_config.output_hidden_states:
+            return (logits, *new_states, *all_hidden_states)
         return (logits, *new_states)
 
 

@@ -29,15 +29,19 @@ from transformers.models.qwen3_5.modeling_qwen3_5 import (
     Qwen3_5VisionPatchEmbed,
     Qwen3_5VisionRotaryEmbedding,
 )
+from transformers.vision_utils import get_vision_interpolation_indices_and_weights
 
 from ....configuration_utils import RBLNCompileConfig
 from ....modeling import RBLNModel
+from ....modeling_rope_utils import build_qwen_mrope_lookup, np_cos, np_sin, qwen_vit_rot_pos_ids
 from ....utils import logging
 from ...cache_utils import FullAttentionKVCacheMeta, LinearAttentionCacheMeta
-from ...modeling_outputs import RBLNDecoderOnlyOutput
+from ...modeling_outputs import RBLNDecoderOnlyOutput, _validate_output_hidden_states
+from ...utils.multimodal_batch_sort import RBLNQwenVLBatchSortMixin
 from ..decoderonly.decoderonly_runtime_utils import RBLNPageTableManager
 from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyModel, RBLNDecoderOnlyModelForCausalLM
 from .configuration_qwen3_5 import (
+    MAX_GDN_CHUNK_SIZE,
     RBLNQwen3_5ForConditionalGenerationConfig,  # noqa: F401
     RBLNQwen3_5ModelConfig,  # noqa: F401
     RBLNQwen3_5VisionModelConfig,  # noqa: F401
@@ -163,13 +167,17 @@ class RBLNQwen3_5TextModel(RBLNDecoderOnlyModel):
         rbln_config = super()._update_rbln_config(
             preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
         )
-        if rbln_config.gdn_chunk_size is None:
-            rbln_config.gdn_chunk_size = rbln_config.prefill_chunk_size
-        if rbln_config.gdn_chunk_size > 128:
+        if rbln_config.gdn_chunk_size > MAX_GDN_CHUNK_SIZE:
             raise ValueError(
-                f"gdn_chunk_size must be <= 128, got {rbln_config.gdn_chunk_size}. "
+                f"gdn_chunk_size must be <= {MAX_GDN_CHUNK_SIZE}, got {rbln_config.gdn_chunk_size}. "
                 "Larger GatedDeltaNet sub-chunk sizes are not supported yet — "
-                "set gdn_chunk_size to a value <= 128 that divides prefill_chunk_size."
+                f"set gdn_chunk_size to a value <= {MAX_GDN_CHUNK_SIZE} that divides prefill_chunk_size."
+            )
+        if rbln_config.prefill_chunk_size % rbln_config.gdn_chunk_size != 0:
+            raise ValueError(
+                f"gdn_chunk_size must divide prefill_chunk_size, got gdn_chunk_size="
+                f"{rbln_config.gdn_chunk_size} and prefill_chunk_size={rbln_config.prefill_chunk_size}. "
+                f"Set gdn_chunk_size to a divisor of prefill_chunk_size that is <= {MAX_GDN_CHUNK_SIZE}."
             )
         return rbln_config
 
@@ -181,9 +189,6 @@ class RBLNQwen3_5TextModel(RBLNDecoderOnlyModel):
             # host and feeds them as position_emb, and the Text Model path derives contiguous positions from
             # cache_position (mRoPE degenerates to standard RoPE for text-only).
             raise NotImplementedError("use_position_ids is not supported for the Qwen3.5 model.")
-        # TODO(seinpark) : output_hidden_states isn't wired yet; planned as a follow-up.
-        if rbln_config.output_hidden_states:
-            raise NotImplementedError("output_hidden_states is not yet supported for the Qwen3.5 model.")
         num_attention_heads = getattr(text_config, "n_head", None) or text_config.num_attention_heads
         num_key_value_heads = getattr(text_config, "num_key_value_heads", None) or num_attention_heads
         num_hidden_layers = getattr(text_config, "n_layer", None) or text_config.num_hidden_layers
@@ -318,7 +323,6 @@ class RBLNQwen3_5VisionModel(RBLNModel):
     """
 
     auto_model_class = None
-    _supports_non_fp32 = True
     _tp_support = True
 
     def __post_init__(self, **kwargs):
@@ -330,11 +334,10 @@ class RBLNQwen3_5VisionModel(RBLNModel):
         self.spatial_merge_unit = config.spatial_merge_size * config.spatial_merge_size
 
         head_dim = config.hidden_size // config.num_heads
-        self.rotary_pos_emb = Qwen3_5VisionRotaryEmbedding(head_dim // 2)
         # Precompute the rotary cos/sin tables up to the largest ViT bucket
-        _freq_table = self.rotary_pos_emb(int(self.max_seq_len.max().item()))
-        self.rotary_cos_table = _freq_table.cos()
-        self.rotary_sin_table = _freq_table.sin()
+        _freq_table = Qwen3_5VisionRotaryEmbedding(head_dim // 2)(torch.arange(int(self.max_seq_len.max().item())))
+        self.rotary_cos_table = np_cos(_freq_table)
+        self.rotary_sin_table = np_sin(_freq_table)
 
         with no_init_weights():
             self.patch_embed = Qwen3_5VisionPatchEmbed(config=config)
@@ -402,101 +405,20 @@ class RBLNQwen3_5VisionModel(RBLNModel):
         return rbln_config
 
     def rot_pos_emb(self, grid_thw: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        merge_size = self.spatial_merge_size
-        device = self.rotary_cos_table.device
-
-        total_tokens = int(torch.prod(grid_thw, dim=1).sum().item())
-        pos_ids = torch.empty((total_tokens, 2), dtype=torch.long, device=device)
-
-        offset = 0
-        for num_frames, height, width in grid_thw:
-            merged_h, merged_w = height // merge_size, width // merge_size
-
-            block_rows = torch.arange(merged_h, device=device)
-            block_cols = torch.arange(merged_w, device=device)
-            intra_row = torch.arange(merge_size, device=device)
-            intra_col = torch.arange(merge_size, device=device)
-
-            row_idx = block_rows[:, None, None, None] * merge_size + intra_row[None, None, :, None]
-            col_idx = block_cols[None, :, None, None] * merge_size + intra_col[None, None, None, :]
-
-            row_idx = row_idx.expand(merged_h, merged_w, merge_size, merge_size).reshape(-1)
-            col_idx = col_idx.expand(merged_h, merged_w, merge_size, merge_size).reshape(-1)
-
-            coords = torch.stack((row_idx, col_idx), dim=-1)
-
-            if num_frames > 1:
-                coords = coords.repeat(num_frames, 1)
-
-            num_tokens = coords.shape[0]
-            pos_ids[offset : offset + num_tokens] = coords
-            offset += num_tokens
-
-        # Gather cos/sin from the tables precomputed at object creation
+        pos_ids = qwen_vit_rot_pos_ids(grid_thw, self.spatial_merge_size)
         cos = self.rotary_cos_table[pos_ids].flatten(1)
         sin = self.rotary_sin_table[pos_ids].flatten(1)
         return cos, sin
 
     def fast_pos_embed_interpolate(self, grid_thw: torch.Tensor) -> torch.Tensor:
-        grid_ts, grid_hs, grid_ws = grid_thw[:, 0], grid_thw[:, 1], grid_thw[:, 2]
-
-        idx_list = [[] for _ in range(4)]
-        weight_list = [[] for _ in range(4)]
-
-        for t, h, w in zip(grid_ts, grid_hs, grid_ws, strict=False):  # noqa: B007
-            h_idxs = torch.linspace(0, self.num_grid_per_side - 1, h)
-            w_idxs = torch.linspace(0, self.num_grid_per_side - 1, w)
-
-            h_idxs_floor = h_idxs.int()
-            w_idxs_floor = w_idxs.int()
-            h_idxs_ceil = (h_idxs.int() + 1).clip(max=self.num_grid_per_side - 1)
-            w_idxs_ceil = (w_idxs.int() + 1).clip(max=self.num_grid_per_side - 1)
-
-            dh = h_idxs - h_idxs_floor
-            dw = w_idxs - w_idxs_floor
-
-            base_h = h_idxs_floor * self.num_grid_per_side
-            base_h_ceil = h_idxs_ceil * self.num_grid_per_side
-
-            indices = [
-                (base_h[None].T + w_idxs_floor[None]).flatten(),
-                (base_h[None].T + w_idxs_ceil[None]).flatten(),
-                (base_h_ceil[None].T + w_idxs_floor[None]).flatten(),
-                (base_h_ceil[None].T + w_idxs_ceil[None]).flatten(),
-            ]
-
-            weights = [
-                ((1 - dh)[None].T * (1 - dw)[None]).flatten(),
-                ((1 - dh)[None].T * dw[None]).flatten(),
-                (dh[None].T * (1 - dw)[None]).flatten(),
-                (dh[None].T * dw[None]).flatten(),
-            ]
-
-            for i in range(4):
-                idx_list[i].extend(indices[i].tolist())
-                weight_list[i].extend(weights[i].tolist())
-
-        idx_tensor = torch.tensor(idx_list, dtype=torch.long, device=self.pos_embed.weight.device)
-        weight_tensor = torch.tensor(
-            weight_list, dtype=self.pos_embed.weight.dtype, device=self.pos_embed.weight.device
+        interp_indices, interp_weights = get_vision_interpolation_indices_and_weights(
+            grid_thw,
+            num_grid_per_side=self.num_grid_per_side,
+            mode="bilinear",
+            align_corners=True,
+            spatial_merge_size=self.spatial_merge_size,
         )
-        pos_embeds = self.pos_embed(idx_tensor) * weight_tensor[:, :, None]
-        patch_pos_embeds = pos_embeds[0] + pos_embeds[1] + pos_embeds[2] + pos_embeds[3]
-
-        patch_pos_embeds = patch_pos_embeds.split([h * w for h, w in zip(grid_hs, grid_ws, strict=False)])
-
-        patch_pos_embeds_permute = []
-        merge_size = self.spatial_merge_size
-        for pos_embed, t, h, w in zip(patch_pos_embeds, grid_ts, grid_hs, grid_ws, strict=False):
-            pos_embed = pos_embed.repeat(t, 1)
-            pos_embed = (
-                pos_embed.view(t, h // merge_size, merge_size, w // merge_size, merge_size, -1)
-                .permute(0, 1, 3, 2, 4, 5)
-                .flatten(0, 4)
-            )
-            patch_pos_embeds_permute.append(pos_embed)
-        patch_pos_embeds = torch.cat(patch_pos_embeds_permute)
-        return patch_pos_embeds
+        return (self.pos_embed(interp_indices) * interp_weights[:, :, None]).sum(1)
 
     @staticmethod
     def _pad_hidden_states(
@@ -603,7 +525,9 @@ class RBLNQwen3_5Model(RBLNDecoderOnlyModel):
             )
         super().__post_init__(**kwargs)
         self.visual = self.rbln_submodules[0] if self.rbln_submodules else None
-        self.rotary_emb = self._rotary_emb_class(self.config.text_config)
+        self.rotary_emb = build_qwen_mrope_lookup(
+            self._rotary_emb_class(self.config.text_config), self.rbln_config.max_seq_len
+        )
         if not self.can_generate():
             self.block_tables = torch.arange(self.rbln_config.kvcache_num_blocks, dtype=torch.int16)
 
@@ -620,6 +544,7 @@ class RBLNQwen3_5Model(RBLNDecoderOnlyModel):
                 self.config.text_config.vocab_size,
                 self.config.text_config.hidden_size,
                 getattr(self.config.text_config, "pad_token_id", None),
+                dtype=self.rbln_config.dtype,
             )
         return embed_tokens
 
@@ -638,13 +563,17 @@ class RBLNQwen3_5Model(RBLNDecoderOnlyModel):
         rbln_config = super()._update_rbln_config(
             preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
         )
-        if rbln_config.gdn_chunk_size is None:
-            rbln_config.gdn_chunk_size = rbln_config.prefill_chunk_size
-        if rbln_config.gdn_chunk_size > 128:
+        if rbln_config.gdn_chunk_size > MAX_GDN_CHUNK_SIZE:
             raise ValueError(
-                f"gdn_chunk_size must be <= 128, got {rbln_config.gdn_chunk_size}. "
+                f"gdn_chunk_size must be <= {MAX_GDN_CHUNK_SIZE}, got {rbln_config.gdn_chunk_size}. "
                 "Larger GatedDeltaNet sub-chunk sizes are not supported yet — "
-                "set gdn_chunk_size to a value <= 128 that divides prefill_chunk_size."
+                f"set gdn_chunk_size to a value <= {MAX_GDN_CHUNK_SIZE} that divides prefill_chunk_size."
+            )
+        if rbln_config.prefill_chunk_size % rbln_config.gdn_chunk_size != 0:
+            raise ValueError(
+                f"gdn_chunk_size must divide prefill_chunk_size, got gdn_chunk_size="
+                f"{rbln_config.gdn_chunk_size} and prefill_chunk_size={rbln_config.prefill_chunk_size}. "
+                f"Set gdn_chunk_size to a divisor of prefill_chunk_size that is <= {MAX_GDN_CHUNK_SIZE}."
             )
         return rbln_config
 
@@ -671,7 +600,7 @@ class RBLNQwen3_5Model(RBLNDecoderOnlyModel):
         **kwargs,
     ):
         batch_size = input_ids.shape[0]
-        inputs_embeds = self.embed_tokens(input_ids).to(self.rbln_config.dtype)
+        inputs_embeds = self.embed_tokens(input_ids)
 
         if pixel_values is not None:
             image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
@@ -752,8 +681,13 @@ class RBLNQwen3_5Model(RBLNDecoderOnlyModel):
         cache_position: torch.LongTensor | None = None,
         return_dict: bool | None = None,
         mm_token_type_ids: torch.IntTensor | None = None,
+        output_hidden_states: bool | None = None,
         **kwargs,
     ) -> RBLNDecoderOnlyOutput:
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        output_hidden_states = _validate_output_hidden_states(output_hidden_states, self.rbln_config)
+        if attention_mask is None:
+            attention_mask = torch.ones_like(input_ids)
         inputs_embeds, position_embed, rope_deltas = self._preprocess_prefill(
             input_ids,
             attention_mask,
@@ -766,9 +700,18 @@ class RBLNQwen3_5Model(RBLNDecoderOnlyModel):
         self.rope_deltas = rope_deltas
         batch_size, seq_len = inputs_embeds.shape[:2]
 
+        text_config = self.config.get_text_config()
+        all_hidden_states = (
+            tuple(
+                torch.zeros(batch_size, seq_len, text_config.hidden_size, dtype=self.rbln_config.dtype)
+                for _ in range(text_config.num_hidden_layers + 1)
+            )
+            if output_hidden_states
+            else None
+        )
         logits = []
         for b_idx in range(batch_size):
-            query_length = attention_mask[b_idx].sum(dim=-1).int().item()
+            query_length = attention_mask[b_idx].sum(dim=-1).int().item() if attention_mask is not None else seq_len
             cache_position = torch.arange(query_length, dtype=torch.int32).unsqueeze(0)
             output = self.prefill_decoder(
                 inputs_embeds=inputs_embeds[b_idx : b_idx + 1],
@@ -779,14 +722,17 @@ class RBLNQwen3_5Model(RBLNDecoderOnlyModel):
                 block_tables=self.block_tables,
             )
             logits.append(output.logits)
+            if output_hidden_states:
+                for l_idx in range(text_config.num_hidden_layers + 1):
+                    all_hidden_states[l_idx][b_idx].copy_(output.hidden_states[l_idx][0])
         logits = torch.cat(logits, dim=0)
 
         if not return_dict:
             return logits
-        return RBLNDecoderOnlyOutput(logits=logits)
+        return RBLNDecoderOnlyOutput(logits=logits, hidden_states=all_hidden_states)
 
 
-class RBLNQwen3_5ForConditionalGeneration(RBLNQwen3_5Model, RBLNDecoderOnlyModelForCausalLM):
+class RBLNQwen3_5ForConditionalGeneration(RBLNQwenVLBatchSortMixin, RBLNQwen3_5Model, RBLNDecoderOnlyModelForCausalLM):
     """
     RBLNQwen3_5ForConditionalGeneration is a multi-modal model that integrates vision and language processing capabilities,
     optimized for RBLN NPUs. It is designed for conditional generation tasks that involve both image and text inputs.
@@ -824,7 +770,7 @@ class RBLNQwen3_5ForConditionalGeneration(RBLNQwen3_5Model, RBLNDecoderOnlyModel
         ```
     """
 
-    _supports_non_fp32 = True
+    _video_grid_rows_are_chunks = True
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
@@ -853,6 +799,7 @@ class RBLNQwen3_5ForConditionalGeneration(RBLNQwen3_5Model, RBLNDecoderOnlyModel
         image_grid_thw=None,
         video_grid_thw=None,
         mm_token_type_ids=None,
+        inputs_sorted: bool = False,
         **kwargs,
     ):
         model_inputs = {}
@@ -880,6 +827,7 @@ class RBLNQwen3_5ForConditionalGeneration(RBLNQwen3_5Model, RBLNDecoderOnlyModel
                 "image_grid_thw": image_grid_thw,
                 "video_grid_thw": video_grid_thw,
                 "mm_token_type_ids": mm_token_type_ids,
+                "inputs_sorted": inputs_sorted,
             }
         )
         return model_inputs
@@ -894,7 +842,7 @@ class RBLNQwen3_5ForConditionalGeneration(RBLNQwen3_5Model, RBLNDecoderOnlyModel
                 f"Cache position size mismatch: got {cache_position.shape[0]}, expected {self.rbln_config.batch_size}."
             )
 
-        inputs_embeds = self.embed_tokens(input_ids).to(self.rbln_config.dtype)
+        inputs_embeds = self.embed_tokens(input_ids)
         position_embeds = []
         for b_idx in range(self.rbln_config.batch_size):
             delta = cache_position[b_idx] + self.rope_deltas[b_idx]
@@ -920,9 +868,19 @@ class RBLNQwen3_5ForConditionalGeneration(RBLNQwen3_5Model, RBLNDecoderOnlyModel
         generate_idx: torch.Tensor | None = None,
         return_dict: bool | None = None,
         mm_token_type_ids: torch.IntTensor | None = None,
+        output_hidden_states: bool | None = None,
+        inputs_sorted: bool = False,
         **kwargs,
     ) -> RBLNDecoderOnlyOutput:
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        self._require_sorted_batch_inputs(input_ids if input_ids is not None else inputs_embeds, inputs_sorted)
+        output_hidden_states = _validate_output_hidden_states(output_hidden_states, self.rbln_config)
+        text_config = self.config.get_text_config()
         if cache_position is None:  # prefill
+            if attention_mask is None:
+                attention_mask = torch.ones_like(input_ids)
+            if generate_idx is None:
+                generate_idx = attention_mask.sum(dim=-1, keepdim=True).int()
             inputs_embeds, position_embed, rope_deltas = self._preprocess_prefill(
                 input_ids,
                 attention_mask,
@@ -933,8 +891,16 @@ class RBLNQwen3_5ForConditionalGeneration(RBLNQwen3_5Model, RBLNDecoderOnlyModel
                 mm_token_type_ids=mm_token_type_ids,
             )
             self.rope_deltas = rope_deltas
-            batch_size = inputs_embeds.shape[0]
+            batch_size, seq_len = inputs_embeds.shape[:2]
 
+            all_hidden_states = (
+                tuple(
+                    torch.zeros(batch_size, seq_len, text_config.hidden_size, dtype=self.rbln_config.dtype)
+                    for _ in range(text_config.num_hidden_layers + 1)
+                )
+                if output_hidden_states
+                else None
+            )
             logits = []
             for b_idx in range(batch_size):
                 cache_pos = torch.arange(0, generate_idx[b_idx].item(), dtype=torch.int32).unsqueeze(0)
@@ -946,6 +912,9 @@ class RBLNQwen3_5ForConditionalGeneration(RBLNQwen3_5Model, RBLNDecoderOnlyModel
                     position_embed=position_embed[:, b_idx : b_idx + 1],
                 )
                 logits.append(output.logits)
+                if output_hidden_states:
+                    for l_idx in range(text_config.num_hidden_layers + 1):
+                        all_hidden_states[l_idx][b_idx].copy_(output.hidden_states[l_idx][0])
             logits = torch.cat(logits, dim=0)
         else:  # decode
             inputs_embeds, position_embed = self._preprocess_decoder(input_ids, cache_position)
@@ -955,7 +924,8 @@ class RBLNQwen3_5ForConditionalGeneration(RBLNQwen3_5Model, RBLNDecoderOnlyModel
                 position_embed=position_embed,
             )
             logits = output.logits
+            all_hidden_states = output.hidden_states
 
         if not return_dict:
             return logits, generate_idx
-        return RBLNDecoderOnlyOutput(logits=logits, generate_idx=generate_idx)
+        return RBLNDecoderOnlyOutput(logits=logits, generate_idx=generate_idx, hidden_states=all_hidden_states)

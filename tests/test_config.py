@@ -217,6 +217,17 @@ def test_submodule_config_object():
     assert model.rbln_config.language_model.batch_size == 2
 
 
+def test_logits_to_keep_zero_survives_construction_and_reload(tmp_path):
+    cfg = RBLNLlamaForCausalLMConfig(logits_to_keep=0)
+    assert cfg.logits_to_keep == 0
+
+    config_path = tmp_path / "rbln_config.json"
+    cfg.save(str(config_path))
+    assert RBLNLlamaForCausalLMConfig.from_pretrained(str(config_path)).logits_to_keep == 0
+
+    assert RBLNLlamaForCausalLMConfig().logits_to_keep == 1
+
+
 def test_num_devices_deprecated_alias():
     """`tensor_parallel_size` is the deprecated alias of `num_devices` and must still map through."""
     cfg = RBLNMistralForCausalLMConfig(num_devices=4)
@@ -248,6 +259,50 @@ def test_submodule_config_dict_deprecated_tensor_parallel_size():
     parent_tp = RBLNMistralForCausalLMConfig(num_devices=2)
     sub_inherit = parent_tp.initialize_submodule_config(submodule_config={"cls_name": "RBLNMistralForCausalLMConfig"})
     assert sub_inherit.num_devices == 2
+
+
+def _submodule_batch_size(sub):
+    return sub["batch_size"] if isinstance(sub, dict) else sub.batch_size
+
+
+@pytest.mark.parametrize(
+    "config_cls_name, lm_key",
+    [
+        ("RBLNGemma3ForConditionalGenerationConfig", "language_model"),
+        ("RBLNGemma4ForConditionalGenerationConfig", "language_model"),
+        ("RBLNLlavaForConditionalGenerationConfig", "language_model"),
+        ("RBLNLlavaNextForConditionalGenerationConfig", "language_model"),
+        ("RBLNBlip2ForConditionalGenerationConfig", "language_model"),
+        ("RBLNIdefics3ForConditionalGenerationConfig", "text_model"),
+    ],
+)
+def test_composite_vlm_batch_size_propagation(config_cls_name, lm_key):
+    """Regression: a top-level `batch_size` must reach the language-model submodule as a
+    soft default — a submodule-only `batch_size` must not conflict with the parent's unset
+    (None) value, and when both are set the submodule wins."""
+    import optimum.rbln
+
+    config_cls = getattr(optimum.rbln, config_cls_name)
+
+    cfg = config_cls(batch_size=2)
+    assert _submodule_batch_size(getattr(cfg, lm_key)) == 2
+
+    cfg = config_cls(**{lm_key: {"batch_size": 4}})
+    assert _submodule_batch_size(getattr(cfg, lm_key)) == 4
+
+    cfg = config_cls(batch_size=1, **{lm_key: {"batch_size": 4}})
+    assert _submodule_batch_size(getattr(cfg, lm_key)) == 4
+
+    cfg = config_cls(batch_size=4, **{lm_key: {"batch_size": 4}})
+    assert _submodule_batch_size(getattr(cfg, lm_key)) == 4
+
+
+def test_colqwen2_submodule_only_kwargs_no_conflict():
+    """Regression: `vlm`-only settings must not conflict with the parent's unset (None) kwargs."""
+    import optimum.rbln
+
+    cfg = optimum.rbln.RBLNColQwen2ForRetrievalConfig(vlm={"batch_size": 4, "output_hidden_states": True})
+    assert _submodule_batch_size(cfg.vlm) == 4
 
 
 @pytest.mark.parametrize(
@@ -366,5 +421,51 @@ def test_prefill_chunk_size_npu_wiring_e2e(tmp_path):
     assert reloaded_config.prefill_chunk_size == 512
 
 
+QWEN_VL_VISION_CONFIGS = [
+    ("RBLNQwen2VLForConditionalGenerationConfig", "RBLNQwen2VisionTransformerPretrainedModelConfig"),
+    ("RBLNQwen2_5_VLForConditionalGenerationConfig", "RBLNQwen2_5_VisionTransformerPretrainedModelConfig"),
+    ("RBLNQwen3VLForConditionalGenerationConfig", "RBLNQwen3VLVisionModelConfig"),
+    ("RBLNQwen3_5ForConditionalGenerationConfig", "RBLNQwen3_5VisionModelConfig"),
+    ("RBLNExaone4_5_ForConditionalGenerationConfig", "RBLNExaone4_5_VisionModelConfig"),
+]
+
+
+def _import_config(name):
+    import optimum.rbln
+
+    return getattr(optimum.rbln, name)
+
+
+@pytest.mark.parametrize("parent_cls_name, vision_cls_name", QWEN_VL_VISION_CONFIGS)
+def test_qwen_vl_parent_forces_vision_batch_size(parent_cls_name, vision_cls_name):
+    """The parent config forces batch_size=1 onto the visual submodule."""
+    parent_cls = _import_config(parent_cls_name)
+    config = parent_cls(max_seq_len=1024, visual={"cls_name": vision_cls_name, "max_seq_len": 256})
+    assert config.visual.batch_size == 1
+
+
+@pytest.mark.parametrize("parent_cls_name, vision_cls_name", QWEN_VL_VISION_CONFIGS)
+def test_qwen_vl_parent_rejects_conflicting_vision_batch_size(parent_cls_name, vision_cls_name):
+    """A submodule batch_size that conflicts with the forced value is caught by the parent's
+    force_kwargs check (before the vision config is even instantiated), not by the vision guard."""
+    parent_cls = _import_config(parent_cls_name)
+    with pytest.raises(ValueError):
+        parent_cls(max_seq_len=1024, visual={"cls_name": vision_cls_name, "max_seq_len": 256, "batch_size": 2})
+
+
 if __name__ == "__main__":
     pytest.main()
+
+
+def test_qwen3_5_gdn_chunk_size_default_is_decoupled_from_prefill():
+    from optimum.rbln import RBLNQwen3_5ForCausalLMConfig, RBLNQwen3_5ModelConfig
+    from optimum.rbln.transformers.models.qwen3_5.configuration_qwen3_5 import MAX_GDN_CHUNK_SIZE
+
+    for cls, kwargs in (
+        (RBLNQwen3_5ForCausalLMConfig, {}),
+        (RBLNQwen3_5ModelConfig, {"use_inputs_embeds": True}),
+    ):
+        assert cls(**kwargs).gdn_chunk_size == MAX_GDN_CHUNK_SIZE
+        assert cls(prefill_chunk_size=512, **kwargs).gdn_chunk_size == MAX_GDN_CHUNK_SIZE
+        # An explicit value is preserved.
+        assert cls(gdn_chunk_size=64, **kwargs).gdn_chunk_size == 64

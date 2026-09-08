@@ -19,8 +19,8 @@ import torch
 from torch import nn
 from transformers import PretrainedConfig, PreTrainedModel
 
+from ....modeling_rope_utils import ROPE_INIT_FUNCTIONS, np_cos, np_sin
 from ....utils import logging
-from ...modeling_rope_utils import ROPE_INIT_FUNCTIONS
 from .configuration_lora import RBLNLoRAConfig
 from .lora_architecture import LoRALinear
 
@@ -352,7 +352,9 @@ def build_image_prefill_swa_custom_op_args(model, position_ids, query_position):
         valid_q = q_idx < valid_input_len
         valid_kv = torch.logical_or(in_past, in_chunk)
         if model.phase == "image_prefill":
-            attn = valid_q & valid_kv & torch.logical_or(swa, in_chunk)
+            # transformers >=5.13 (#46850) clips the bidirectional image grant by the sliding window:
+            # sliding mask = AND(kv > q - window, OR(causal, blockwise bidirectional)).
+            attn = valid_q & valid_kv & torch.logical_or(swa, in_chunk & (gap < max_cache_len))
         else:
             attn = valid_q & valid_kv & swa
         attn_mask = torch.where(attn, 1.0, 0.0).to(model.rbln_config.dtype)
@@ -1316,8 +1318,8 @@ class RotaryEmbedding(nn.Module):
 
         emb = torch.cat((freqs, freqs), dim=-1)
 
-        cos = emb.cos() * attention_scaling
-        sin = emb.sin() * attention_scaling
+        cos = np_cos(emb) * attention_scaling
+        sin = np_sin(emb) * attention_scaling
 
         self.register_buffer("_cos_cached", cos, persistent=False)
         self.register_buffer("_sin_cached", sin, persistent=False)

@@ -33,8 +33,8 @@ from transformers.models.paligemma.modeling_paligemma import PaligemmaModelOutpu
 from ....configuration_utils import RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
+from ...utils.multimodal_batch_sort import RBLNImageIndexedBatchSortMixin
 from ...utils.rbln_runtime_wrapper import LoopProcessor
-from ..decoderonly.generation_decoderonly import RBLNDecoderOnlyGenerationMixin
 from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyOutput
 
 
@@ -62,7 +62,7 @@ class LoopVisionTower(LoopProcessor):
         )
 
 
-class RBLNPaliGemmaForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixin):
+class RBLNPaliGemmaForConditionalGeneration(RBLNModel, RBLNImageIndexedBatchSortMixin):
     """
     RBLNPaliGemmaForConditionalGeneration is a multi-modal model that integrates vision and language processing capabilities,
     optimized for RBLN NPUs. It is designed for conditional generation tasks that involve both image and text inputs.
@@ -93,6 +93,8 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
         {"name": "vision_tower"},
         {"name": "language_model"},
     ]
+    # one image per sample: pixel_values is batch-first (batch_size, C, H, W)
+    _batch_sortable_kwargs = RBLNImageIndexedBatchSortMixin._batch_sortable_kwargs + ("pixel_values",)
 
     def __getattr__(self, __name: str) -> Any:
         def redirect(func):
@@ -161,9 +163,9 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
 
         artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
         self.embed_tokens = self._create_embedding_layer()
-        self.embed_tokens.load_state_dict(artifacts["embed_tokens"])
+        self.embed_tokens.load_state_dict(artifacts["embed_tokens"], assign=True)
         self.multi_modal_projector = self._create_multi_modal_projector()
-        self.multi_modal_projector.load_state_dict(artifacts["multi_modal_projector"])
+        self.multi_modal_projector.load_state_dict(artifacts["multi_modal_projector"], assign=True)
 
         return super().__post_init__(**kwargs)
 
@@ -195,6 +197,7 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
                 self.config.text_config.vocab_size,
                 self.config.text_config.hidden_size,
                 self.config.text_config.pad_token_id,
+                dtype=self.rbln_config.dtype,
             )
         return embed_tokens
 
@@ -252,9 +255,9 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
             self.config.vision_config.num_image_tokens,
             self.config.vision_config.hidden_size,
         ]
-        vision_output = torch.empty(size=vision_output_size, dtype=torch.float32, device="cpu")
-        self.vision_tower(pixel_values, out=vision_output)
-        image_features = self.multi_modal_projector(vision_output)
+        vision_output = torch.empty(size=vision_output_size, dtype=self.rbln_config.vision_tower.dtype, device="cpu")
+        self.vision_tower(pixel_values.to(self.rbln_config.vision_tower.dtype), out=vision_output)
+        image_features = self.multi_modal_projector(vision_output.to(self.rbln_config.dtype))
         image_features = image_features / (self.config.text_config.hidden_size**0.5)
         return image_features
 
@@ -319,8 +322,11 @@ class RBLNPaliGemmaForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
         cache_position: torch.Tensor = None,
         generate_idx: torch.Tensor | None = None,
         return_dict: bool | None = None,
+        inputs_sorted: bool = False,
         **kwargs,
     ) -> tuple | RBLNDecoderOnlyOutput:
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        self._require_sorted_batch_inputs(inputs_embeds if inputs_embeds is not None else input_ids, inputs_sorted)
         # Prefill
         if cache_position is None:
             inputs_embeds = self._preprocess_prefill(
@@ -411,9 +417,9 @@ class RBLNPaliGemmaModel(RBLNModel):
 
         artifacts = torch.load(self.model_save_dir / self.subfolder / "torch_artifacts.pth", weights_only=False)
         self.embed_tokens = self._create_embedding_layer()
-        self.embed_tokens.load_state_dict(artifacts["embed_tokens"])
+        self.embed_tokens.load_state_dict(artifacts["embed_tokens"], assign=True)
         self.multi_modal_projector = self._create_multi_modal_projector()
-        self.multi_modal_projector.load_state_dict(artifacts["multi_modal_projector"])
+        self.multi_modal_projector.load_state_dict(artifacts["multi_modal_projector"], assign=True)
 
         return super().__post_init__(**kwargs)
 
@@ -456,6 +462,7 @@ class RBLNPaliGemmaModel(RBLNModel):
                 self.config.text_config.vocab_size,
                 self.config.text_config.hidden_size,
                 self.config.text_config.pad_token_id,
+                dtype=self.rbln_config.dtype,
             )
         return embed_tokens
 
@@ -470,9 +477,9 @@ class RBLNPaliGemmaModel(RBLNModel):
             self.config.vision_config.num_image_tokens,
             self.config.vision_config.hidden_size,
         ]
-        vision_output = torch.empty(size=vision_output_size, dtype=torch.float32, device="cpu")
-        self.vision_tower(pixel_values, out=vision_output)
-        image_features = self.multi_modal_projector(vision_output)
+        vision_output = torch.empty(size=vision_output_size, dtype=self.rbln_config.vision_tower.dtype, device="cpu")
+        self.vision_tower(pixel_values.to(self.rbln_config.vision_tower.dtype), out=vision_output)
+        image_features = self.multi_modal_projector(vision_output.to(self.rbln_config.dtype))
         image_features = image_features / (self.config.text_config.hidden_size**0.5)
         return image_features
 
