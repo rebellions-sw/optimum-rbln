@@ -7,6 +7,9 @@ from optimum.rbln import (
     RBLNAutoPipelineForImage2Image,
     # RBLNAutoPipelineForInpainting, FIXME: add inpainting tests
     RBLNAutoPipelineForText2Image,
+    RBLNCosmos2_5_PredictBasePipeline,
+    RBLNCosmos2TextToImagePipeline,
+    RBLNCosmos2VideoToWorldPipeline,
     RBLNKandinskyV22CombinedPipeline,
     RBLNKandinskyV22Img2ImgCombinedPipeline,
     RBLNStableDiffusion3Img2ImgPipeline,
@@ -336,6 +339,96 @@ class TestSVDImg2VidModel(BaseTest.TestModel):
             "height": 32,
             "num_frames": 2,
             "decode_chunk_size": 2,
+        },
+    }
+
+
+class _MockCosmosSafetyChecker:
+    def to(self, device=None, dtype=None):
+        return self
+
+    def check_text_safety(self, prompt):
+        return True
+
+    def check_video_safety(self, frames):
+        return frames
+
+
+class TestCosmos2_5PredictModel(BaseTest.TestModel):
+    RBLN_CLASS = RBLNCosmos2_5_PredictBasePipeline
+    # tiny-random pipeline mirroring nvidia/Cosmos-Predict2.5-2B (diffusers/base/post-trained):
+    # shrunk transformer/text encoder, real-architecture Wan VAE (the RBLN wrapper's cache
+    # shapes are tied to it), real tokenizer/scheduler configs.
+    HF_MODEL_ID = "rbln/tiny-cosmos-2.5-predict"
+    # goes into every from_pretrained call of the base test (initial export and reloads)
+    HF_CONFIG_KWARGS = {"safety_checker": _MockCosmosSafetyChecker()}
+    GENERATION_KWARGS = {
+        "prompt": "dance monkey",
+        "num_inference_steps": 2,
+        "generator": torch.manual_seed(42),
+        # 32x32 hits a compiler assert ("Invalid SHM stride size") in the Wan VAE graphs;
+        # 64x64 is the smallest verified resolution.
+        "height": 64,
+        "width": 64,
+        "num_frames": 5,
+        "output_type": "np",
+    }
+    RBLN_CLASS_KWARGS = {
+        "export": True,
+        "rbln_config": {
+            "height": 64,
+            "width": 64,
+            "num_frames": 5,
+        },
+    }
+
+
+class TestCosmos2Text2ImageModel(BaseTest.TestModel):
+    RBLN_CLASS = RBLNCosmos2TextToImagePipeline
+    # tiny-random pipeline mirroring nvidia/Cosmos-Predict2-2B-Text2Image (shrunk
+    # transformer/T5, real-architecture Wan VAE, real tokenizer/scheduler configs)
+    HF_MODEL_ID = "rbln/tiny-cosmos2-text2image"
+    HF_CONFIG_KWARGS = {"safety_checker": _MockCosmosSafetyChecker()}
+    GENERATION_KWARGS = {
+        "prompt": "dance monkey",
+        "num_inference_steps": 2,
+        "generator": torch.manual_seed(42),
+        "height": 64,
+        "width": 64,
+        "output_type": "np",
+    }
+    RBLN_CLASS_KWARGS = {
+        "export": True,
+        "rbln_config": {
+            "height": 64,
+            "width": 64,
+            "num_frames": 1,
+        },
+    }
+
+
+class TestCosmos2Video2WorldModel(BaseTest.TestModel):
+    RBLN_CLASS = RBLNCosmos2VideoToWorldPipeline
+    # tiny-random pipeline mirroring nvidia/Cosmos-Predict2-2B-Video2World
+    # (in_channels 17, rope_scale (1, 3, 3); otherwise same recipe as the t2i tiny)
+    HF_MODEL_ID = "rbln/tiny-cosmos2-video2world"
+    HF_CONFIG_KWARGS = {"safety_checker": _MockCosmosSafetyChecker()}
+    GENERATION_KWARGS = {
+        "prompt": "dance monkey",
+        "image": torch.randn(1, 3, 64, 64, generator=torch.manual_seed(42)).uniform_(0, 1),
+        "num_inference_steps": 2,
+        "generator": torch.manual_seed(42),
+        "height": 64,
+        "width": 64,
+        "num_frames": 9,
+        "output_type": "np",
+    }
+    RBLN_CLASS_KWARGS = {
+        "export": True,
+        "rbln_config": {
+            "height": 64,
+            "width": 64,
+            "num_frames": 9,
         },
     }
 
