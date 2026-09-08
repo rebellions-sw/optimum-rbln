@@ -16,7 +16,7 @@
 import torch
 from torch import nn
 
-from ...utils.moe import compute_masked_routing_weight_softmax_first
+from ...utils.moe import compute_masked_routing_weight_softmax_first, split_fused_experts
 from ..decoderonly.configuration_decoderonly import RBLNLoRAConfig
 from ..decoderonly.decoderonly_architecture import DecoderOnlyAttention, DecoderOnlyLayer, DecoderOnlyWrapper
 
@@ -77,12 +77,10 @@ class Qwen2MoeMLP(nn.Module):
 
         # Fused Qwen2MoeExperts: gate_up_proj [E, 2I, H], down_proj [E, H, I].
         self.num_experts = experts.num_experts
-        intermediate_dim = experts.intermediate_dim
-        gate_up = experts.gate_up_proj.detach()
-        self.register_buffer("gate_proj_weight", gate_up[:, :intermediate_dim, :].contiguous())
-        self.register_buffer("up_proj_weight", gate_up[:, intermediate_dim:, :].contiguous())
-        experts.gate_up_proj = None
-        self.register_buffer("down_proj_weight", experts.down_proj.detach())
+        gate, up, down = split_fused_experts(experts)
+        self.register_buffer("gate_proj_weight", gate)
+        self.register_buffer("up_proj_weight", up)
+        self.register_buffer("down_proj_weight", down)
 
     def forward(self, x, router_logits):
         masked_routing_weight = compute_masked_routing_weight_softmax_first(

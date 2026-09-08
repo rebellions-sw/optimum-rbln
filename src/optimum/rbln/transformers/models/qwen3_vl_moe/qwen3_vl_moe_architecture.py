@@ -16,7 +16,7 @@
 import torch
 import torch.nn as nn
 
-from ...utils.moe import compute_masked_routing_weight_softmax_first
+from ...utils.moe import compute_masked_routing_weight_softmax_first, split_fused_experts
 from ..decoderonly.configuration_lora import RBLNLoRAConfig
 from ..decoderonly.decoderonly_architecture import DecoderOnlyAttention, DecoderOnlyLayer
 from ..qwen3_vl.qwen3_vl_architecture import (
@@ -84,12 +84,10 @@ class Qwen3VLMoeMLP(nn.Module):
         self.norm_topk_prob = True
 
         # Fused Qwen3VLMoeTextExperts: gate_up_proj [E, 2I, H], down_proj [E, H, I].
-        intermediate_dim = experts.intermediate_dim
-        gate_up = experts.gate_up_proj.detach()
-        self.register_buffer("gate_proj_weight", gate_up[:, :intermediate_dim, :].contiguous())
-        self.register_buffer("up_proj_weight", gate_up[:, intermediate_dim:, :].contiguous())
-        experts.gate_up_proj = None
-        self.register_buffer("down_proj_weight", experts.down_proj.detach())
+        gate, up, down = split_fused_experts(experts)
+        self.register_buffer("gate_proj_weight", gate)
+        self.register_buffer("up_proj_weight", up)
+        self.register_buffer("down_proj_weight", down)
 
     def forward(self, x: torch.Tensor, router_logits: torch.Tensor) -> torch.Tensor:
         masked_routing_weight = compute_masked_routing_weight_softmax_first(

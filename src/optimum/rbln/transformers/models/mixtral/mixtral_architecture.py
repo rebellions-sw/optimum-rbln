@@ -16,7 +16,7 @@
 import torch
 from torch import nn
 
-from ...utils.moe import compute_masked_routing_weight_softmax_first
+from ...utils.moe import compute_masked_routing_weight_softmax_first, split_fused_experts
 from ..decoderonly.configuration_decoderonly import RBLNLoRAConfig
 from ..decoderonly.decoderonly_architecture import DecoderOnlyAttention, DecoderOnlyLayer, DecoderOnlyWrapper
 
@@ -60,12 +60,10 @@ class MixtralBlockSparseTop2MLP(nn.Module):
         self.top_k = top_k
 
         # Fused MixtralExperts: gate_up_proj [E, 2I, H], down_proj [E, H, I].
-        gate_up = experts.gate_up_proj.detach()
-        intermediate_size = gate_up.shape[1] // 2
-        self.w1_weight = nn.Parameter(gate_up[:, :intermediate_size, :].contiguous())
-        self.w3_weight = nn.Parameter(gate_up[:, intermediate_size:, :].contiguous())
-        experts.gate_up_proj = None
-        self.w2_weight = nn.Parameter(experts.down_proj.detach())
+        gate, up, down = split_fused_experts(experts)
+        self.w1_weight = nn.Parameter(gate)
+        self.w3_weight = nn.Parameter(up)
+        self.w2_weight = nn.Parameter(down)
 
     def forward(self, x, router_logits):
         masked_routing_weight = compute_masked_routing_weight_softmax_first(

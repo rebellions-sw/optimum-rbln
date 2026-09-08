@@ -20,7 +20,7 @@ import torch.nn as nn
 from transformers import PreTrainedModel
 from transformers.activations import ACT2FN
 
-from ...utils.moe import compute_masked_routing_weight_softmax_first
+from ...utils.moe import compute_masked_routing_weight_softmax_first, split_fused_experts
 from ..decoderonly.configuration_decoderonly import RBLNLoRAConfig
 from ..decoderonly.decoderonly_architecture import (
     DecoderOnlyAttention,
@@ -540,21 +540,12 @@ class Gemma4Experts(nn.Module):
         self.top_k = int(router.config.top_k_experts)
         self.norm_topk_prob = True
 
-        gate_up = experts.gate_up_proj
-        gate_w = gate_up[:, : self.intermediate_size, :]
-        up_w = gate_up[:, self.intermediate_size :, :]
-        down_w = experts.down_proj
-
         self.per_expert_scale = router.per_expert_scale.detach().clone().unsqueeze(1)
 
-        gate_w_op = gate_w.contiguous()
-        up_w_op = up_w.contiguous()
-        experts.gate_up_proj = None
-        down_w_op = down_w.detach()
-
-        self.register_buffer("gate_proj_weight", gate_w_op)
-        self.register_buffer("up_proj_weight", up_w_op)
-        self.register_buffer("down_proj_weight", down_w_op)
+        gate, up, down = split_fused_experts(experts)
+        self.register_buffer("gate_proj_weight", gate)
+        self.register_buffer("up_proj_weight", up)
+        self.register_buffer("down_proj_weight", down)
 
     def forward(self, hidden_states: torch.Tensor, router_logits: torch.Tensor) -> torch.Tensor:
         masked_routing_weight = compute_masked_routing_weight_softmax_first(
