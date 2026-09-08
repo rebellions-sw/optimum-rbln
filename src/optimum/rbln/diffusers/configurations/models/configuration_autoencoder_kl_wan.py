@@ -45,7 +45,9 @@ class RBLNAutoencoderKLWanConfig(RBLNModelConfig):
             num_frames (Optional[int]): The number of frames in the generated video. Defaults to 93.
             height (Optional[int]): The height in pixels of the generated video. Defaults to 704.
             width (Optional[int]): The width in pixels of the generated video. Defaults to 1280.
-            num_channels_latents (Optional[int]): The number of channels in latent space. Defaults to 24 (z_dim).
+            num_channels_latents (Optional[int]): The number of channels in latent space. The pipeline
+                hook sets it to the transformer's out_channels; a standalone compile falls back to the
+                VAE z_dim.
             vae_scale_factor_temporal (Optional[int]): The scaling factor between time space and latent space.
                 Determines how much shorter the latent representations are compared to the original videos.
             vae_scale_factor_spatial (Optional[int]): The scaling factor between pixel space and latent space.
@@ -74,7 +76,9 @@ class RBLNAutoencoderKLWanConfig(RBLNModelConfig):
         self.height = height or 704
         self.width = width or 1280
 
-        self.num_channels_latents = num_channels_latents or 24  # z_dim default
+        # The pipeline hook sets this to the transformer's out_channels; a standalone compile
+        # derives it from the VAE z_dim in _update_rbln_config.
+        self.num_channels_latents = num_channels_latents
         self.vae_scale_factor_temporal = vae_scale_factor_temporal
         self.vae_scale_factor_spatial = vae_scale_factor_spatial
         self.use_slicing = use_slicing or False

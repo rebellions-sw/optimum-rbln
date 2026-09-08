@@ -641,6 +641,8 @@ class RBLNAutoencoderKLWan(RBLNModel):
 
         # The pipeline hook fills these from the pipe; a standalone compile derives them from the
         # VAE architecture, the same way diffusers pipelines do.
+        if rbln_config.num_channels_latents is None:
+            rbln_config.num_channels_latents = model_config.z_dim
         if rbln_config.vae_scale_factor_temporal is None:
             rbln_config.vae_scale_factor_temporal = 2 ** sum(model_config.temperal_downsample)
         if rbln_config.vae_scale_factor_spatial is None:
