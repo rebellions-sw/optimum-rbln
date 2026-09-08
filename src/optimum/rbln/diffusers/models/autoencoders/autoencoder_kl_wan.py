@@ -639,8 +639,12 @@ class RBLNAutoencoderKLWan(RBLNModel):
             compile_cfgs.append(RBLNCompileConfig(compiled_model_name="encoder_0", input_info=vae_enc_0_input_info))
             compile_cfgs.append(RBLNCompileConfig(compiled_model_name="encoder_n", input_info=vae_enc_n_input_info))
 
-        rbln_config.vae_scale_factor_temporal = rbln_config.vae_scale_factor_temporal or 4  # tmp code
-        rbln_config.vae_scale_factor_spatial = rbln_config.vae_scale_factor_spatial or 8  # tmp code
+        # The pipeline hook fills these from the pipe; a standalone compile derives them from the
+        # VAE architecture, the same way diffusers pipelines do.
+        if rbln_config.vae_scale_factor_temporal is None:
+            rbln_config.vae_scale_factor_temporal = 2 ** sum(model_config.temperal_downsample)
+        if rbln_config.vae_scale_factor_spatial is None:
+            rbln_config.vae_scale_factor_spatial = 2 ** len(model_config.temperal_downsample)
 
         latent_height = rbln_config.height // rbln_config.vae_scale_factor_spatial
         latent_width = rbln_config.width // rbln_config.vae_scale_factor_spatial
