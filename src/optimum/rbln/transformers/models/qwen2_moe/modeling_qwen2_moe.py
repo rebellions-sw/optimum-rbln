@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM
+from ...utils.moe import release_checkpoint_mmap_
 from .qwen2_moe_architecture import Qwen2MoeWrapper
 
 
@@ -66,3 +67,7 @@ class RBLNQwen2MoeForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     """
 
     _decoder_wrapper_cls = Qwen2MoeWrapper
+
+    @classmethod
+    def get_pytorch_model(cls, *args, **kwargs):
+        return release_checkpoint_mmap_(super().get_pytorch_model(*args, **kwargs), "Qwen2MoeExperts")

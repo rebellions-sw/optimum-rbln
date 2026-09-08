@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM
+from ...utils.moe import release_checkpoint_mmap_
 from .mixtral_architecture import MixtralWrapper
 
 
@@ -66,3 +67,7 @@ class RBLNMixtralForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     """
 
     _decoder_wrapper_cls = MixtralWrapper
+
+    @classmethod
+    def get_pytorch_model(cls, *args, **kwargs):
+        return release_checkpoint_mmap_(super().get_pytorch_model(*args, **kwargs), "MixtralExperts")

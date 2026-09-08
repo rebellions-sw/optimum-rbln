@@ -52,3 +52,15 @@ def split_fused_experts(experts: nn.Module) -> tuple[Tensor, Tensor, Tensor]:
     up = gate_up[:, intermediate_dim:, :].contiguous()
     experts.gate_up_proj = None
     return gate, up, experts.down_proj.detach()
+
+
+def release_checkpoint_mmap_(model: nn.Module, experts_class: str) -> nn.Module:
+    # transformers rebuilds the experts at load (stack / transpose into new memory) but leaves every other
+    # weight as a view of the safetensors mmap, which keeps the whole checkpoint resident. Copy those out
+    # so the mapping is released.
+    for module in model.modules():
+        if module.__class__.__name__ == experts_class:
+            continue
+        for tensor in list(module.parameters(recurse=False)) + list(module.buffers(recurse=False)):
+            tensor.data = tensor.data.clone()
+    return model

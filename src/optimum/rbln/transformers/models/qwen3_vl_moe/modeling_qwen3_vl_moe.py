@@ -28,6 +28,7 @@ from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import (
 )
 
 from ....modeling_rope_utils import np_cos, np_sin
+from ...utils.moe import release_checkpoint_mmap_
 from ..decoderonly.decoderonly_runtime_utils import RBLNPageTableManager, RBLNRuntimeModel
 from ..qwen3_vl.modeling_qwen3_vl import (
     RBLNQwen3VLForConditionalGeneration,
@@ -90,6 +91,10 @@ class RBLNQwen3VLMoeModel(RBLNQwen3VLModel):
     _config_class = Qwen3VLMoeConfig
     _rotary_emb_class = Qwen3VLMoeTextRotaryEmbedding
     _get_rope_index_func = Qwen3VLMoeModel.get_rope_index
+
+    @classmethod
+    def get_pytorch_model(cls, *args, **kwargs):
+        return release_checkpoint_mmap_(super().get_pytorch_model(*args, **kwargs), "Qwen3VLMoeTextExperts")
 
     def setup_runtime(self):
         page_table_manager = RBLNPageTableManager(self.rbln_config)
