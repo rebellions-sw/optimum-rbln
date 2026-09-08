@@ -70,4 +70,4 @@ class RBLNQwen2MoeForCausalLM(RBLNDecoderOnlyModelForCausalLM):
 
     @classmethod
     def get_pytorch_model(cls, *args, **kwargs):
-        return release_checkpoint_mmap_(super().get_pytorch_model(*args, **kwargs), "Qwen2MoeExperts")
+        return release_checkpoint_mmap_(super().get_pytorch_model(*args, **kwargs))

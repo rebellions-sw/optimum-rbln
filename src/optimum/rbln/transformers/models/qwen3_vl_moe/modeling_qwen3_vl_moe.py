@@ -94,7 +94,7 @@ class RBLNQwen3VLMoeModel(RBLNQwen3VLModel):
 
     @classmethod
     def get_pytorch_model(cls, *args, **kwargs):
-        return release_checkpoint_mmap_(super().get_pytorch_model(*args, **kwargs), "Qwen3VLMoeTextExperts")
+        return release_checkpoint_mmap_(super().get_pytorch_model(*args, **kwargs))
 
     def setup_runtime(self):
         page_table_manager = RBLNPageTableManager(self.rbln_config)
@@ -143,4 +143,4 @@ class RBLNQwen3VLMoeForConditionalGeneration(RBLNQwen3VLForConditionalGeneration
 
     @classmethod
     def get_pytorch_model(cls, *args, **kwargs):
-        return release_checkpoint_mmap_(super().get_pytorch_model(*args, **kwargs), "Qwen3VLMoeTextExperts")
+        return release_checkpoint_mmap_(super().get_pytorch_model(*args, **kwargs))

@@ -42,13 +42,19 @@ def compute_masked_routing_weight_topk_first(router_logits: Tensor, top_k: int) 
     return masked  # [E, T]
 
 
-def release_checkpoint_mmap_(model: nn.Module, experts_class: str) -> nn.Module:
-    # transformers rebuilds the experts at load (stack / transpose into new memory) but leaves every other
-    # weight as a view of the safetensors mmap, which keeps the whole checkpoint resident. Copy those out
-    # so the mapping is released.
-    for module in model.modules():
-        if module.__class__.__name__ == experts_class:
-            continue
-        for tensor in list(module.parameters(recurse=False)) + list(module.buffers(recurse=False)):
+def release_checkpoint_mmap_(model: nn.Module) -> nn.Module:
+    # transformers leaves whatever it did not convert as a view of the safetensors mmap, which keeps the whole
+    # checkpoint resident. Copy everything out except the fused experts gate_up_proj: the wrapper splits it into
+    # gate/up copies and drops it, so once wrapped no view remains and the mapping is released. Dense models
+    # (no gate_up_proj) are left alone; there the mmap is the model itself.
+    tensors = [
+        (name, tensor)
+        for module in model.modules()
+        for name, tensor in list(module.named_parameters(recurse=False)) + list(module.named_buffers(recurse=False))
+    ]
+    if not any(name == "gate_up_proj" for name, _ in tensors):
+        return model
+    for name, tensor in tensors:
+        if name != "gate_up_proj":
             tensor.data = tensor.data.clone()
     return model
