@@ -14,6 +14,7 @@ from .models import (
 )
 from .pipelines import (
     RBLNCosmos2_5_PredictBasePipelineConfig,
+    RBLNCosmos2_5_TransferPipelineConfig,
     RBLNCosmos2TextToImagePipelineConfig,
     RBLNCosmos2VideoToWorldPipelineConfig,
     RBLNCosmosTextToWorldPipelineConfig,
