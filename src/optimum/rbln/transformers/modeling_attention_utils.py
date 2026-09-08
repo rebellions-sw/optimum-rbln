@@ -33,9 +33,6 @@ def set_default_values(
     npu: str | None = None,
 ) -> tuple[str, int, int, int]:
     if attn_impl is None:
-        # RBLN-CR13+ eager attention indexes the sequence axis with int16, so its ceiling is
-        # 32767 — an unset attn_impl at >=32k would default into a config the target can never
-        # compile. Switch it to flash attention, like the kvcache_partition_len switch below.
         if max_seq_len is not None and max_seq_len >= DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH:
             npu = npu or rebel.get_npu_name(0)
             if npu_is_cr13_or_later(npu):
@@ -100,7 +97,6 @@ def validate_attention_method(
         if max_seq_len >= DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH and npu_is_cr13_or_later(
             npu or rebel.get_npu_name(0)
         ):
-            # int16 sequence indexing: 32768 passes the generic bound but cannot compile on CR13+.
             max_eager_seq_len = DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH - 1
         if max_seq_len > max_eager_seq_len:
             raise ValueError(
