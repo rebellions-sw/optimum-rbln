@@ -1,12 +1,25 @@
+import glob
 import json
 import os
+import struct
+import tempfile
 import unittest
 import warnings
 
 import pytest
 import torch
 from PIL import Image
-from transformers import AutoConfig, AutoProcessor, AutoTokenizer
+from transformers import (
+    AutoConfig,
+    AutoProcessor,
+    AutoTokenizer,
+    MixtralConfig,
+    MixtralForCausalLM,
+    Qwen2MoeConfig,
+    Qwen2MoeForCausalLM,
+    Qwen3MoeConfig,
+    Qwen3MoeForCausalLM,
+)
 
 from optimum.rbln import (
     RBLNAutoModel,
@@ -28,6 +41,7 @@ from optimum.rbln import (
     RBLNLoRAAdapterConfig,
     RBLNMistralForCausalLM,
     RBLNMistralModel,
+    RBLNMixtralForCausalLM,
     RBLNOPTForCausalLM,
     RBLNOPTModel,
     RBLNPegasusForConditionalGeneration,
@@ -1286,6 +1300,91 @@ class TestDisallowedLlama_4(DisallowedTestBase.DisallowedTest):
     HF_MODEL_ID = "afmck/testing-llama-tiny"
     HF_CONFIG_KWARGS = {"num_hidden_layers": 1, "max_position_embeddings": 1024}
     RBLN_CLASS_KWARGS = {"rbln_config": {"attn_impl": "flash_attn", "kvcache_partition_len": 2048}}
+
+
+class TestReleaseCheckpointMmap(unittest.TestCase):
+    # transformers stacks per-expert checkpoint tensors into new memory but leaves the other weights as views of
+    # the safetensors mmap; get_pytorch_model must clone those views so the checkpoint is unmapped.
+    TINY = {
+        "vocab_size": 256,
+        "hidden_size": 64,
+        "num_hidden_layers": 2,
+        "num_attention_heads": 4,
+        "num_key_value_heads": 2,
+        "max_position_embeddings": 64,
+    }
+    FAMILIES = [
+        (
+            Qwen3MoeForCausalLM,
+            RBLNQwen3MoeForCausalLM,
+            Qwen3MoeConfig(
+                **TINY,
+                intermediate_size=128,
+                moe_intermediate_size=128,
+                num_experts=16,
+                num_experts_per_tok=2,
+                decoder_sparse_step=1,
+            ),
+            "model.layers.0.mlp.experts.0.gate_proj.weight",
+        ),
+        (
+            Qwen2MoeForCausalLM,
+            RBLNQwen2MoeForCausalLM,
+            Qwen2MoeConfig(
+                **TINY,
+                intermediate_size=128,
+                moe_intermediate_size=128,
+                shared_expert_intermediate_size=128,
+                num_experts=16,
+                num_experts_per_tok=2,
+                decoder_sparse_step=1,
+            ),
+            "model.layers.0.mlp.experts.0.gate_proj.weight",
+        ),
+        (
+            MixtralForCausalLM,
+            RBLNMixtralForCausalLM,
+            MixtralConfig(**TINY, intermediate_size=128, num_local_experts=16, num_experts_per_tok=2),
+            "model.layers.0.block_sparse_moe.experts.0.w1.weight",
+        ),
+    ]
+
+    @staticmethod
+    def _checkpoint_ranges():
+        ranges = []
+        for line in open("/proc/self/maps"):
+            parts = line.split()
+            if len(parts) >= 6 and (parts[5].endswith(".safetensors") or "/blobs/" in parts[5]):
+                start, end = parts[0].split("-")
+                ranges.append((int(start, 16), int(end, 16)))
+        return ranges
+
+    @classmethod
+    def _file_backed(cls, model):
+        ranges = cls._checkpoint_ranges()
+        return [
+            name
+            for name, t in list(model.named_parameters()) + list(model.named_buffers())
+            if any(s <= t.untyped_storage().data_ptr() < e for s, e in ranges)
+        ]
+
+    @staticmethod
+    def _safetensors_keys(directory):
+        path = glob.glob(f"{directory}/*.safetensors")[0]
+        header_len = struct.unpack("<Q", open(path, "rb").read(8))[0]
+        return json.loads(open(path, "rb").read()[8 : 8 + header_len]).keys()
+
+    def test_per_expert_checkpoint_is_unmapped(self):
+        for hf_cls, rbln_cls, config, expert_key in self.FAMILIES:
+            with self.subTest(hf_cls.__name__), tempfile.TemporaryDirectory() as tmp:
+                src = hf_cls(config).eval()
+                src.save_pretrained(tmp)
+                self.assertIn(expert_key, self._safetensors_keys(tmp))
+
+                model = rbln_cls.get_pytorch_model(tmp)
+                self.assertEqual(self._file_backed(model), [])
+                for (name, p), (_, q) in zip(model.named_parameters(), src.named_parameters(), strict=True):
+                    self.assertTrue(torch.equal(p, q), name)
 
 
 if __name__ == "__main__":
