@@ -1389,6 +1389,22 @@ class TestReleaseCheckpointMmap(unittest.TestCase):
                 for (name, p), (_, q) in zip(model.named_parameters(), src.named_parameters(), strict=True):
                     self.assertTrue(torch.equal(p, q), name)
 
+    def test_fused_checkpoint_keeps_only_gate_up_mapped(self):
+        # A checkpoint already in the fused layout loads every weight as a view. Everything but gate_up_proj is
+        # copied out at load; gate_up_proj is left for the wrapper, which splits and drops it, releasing the mapping.
+        hf_cls, rbln_cls, config, _ = self.FAMILIES[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            src = hf_cls(config).eval()
+            save_file({k: v.contiguous() for k, v in src.state_dict().items()}, f"{tmp}/model.safetensors")
+            src.config.save_pretrained(tmp)
+
+            model = rbln_cls.get_pytorch_model(tmp)
+            remaining = self._file_backed(model)
+            self.assertTrue(remaining and all(name.endswith("experts.gate_up_proj") for name in remaining), remaining)
+            for layer in model.model.layers:
+                layer.mlp.experts.gate_up_proj = None
+            self.assertEqual(self._checkpoint_ranges(), [])
+
     def test_qwen3_vl_moe_hub_layout_is_unmapped(self):
         # Hub checkpoints store the experts transposed ([E, H, 2I] / [E, I, H]); transformers transposes them into
         # new memory at load, leaving only the other weights as mmap views.
