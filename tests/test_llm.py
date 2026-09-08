@@ -14,6 +14,8 @@ from transformers import (
     AutoConfig,
     AutoProcessor,
     AutoTokenizer,
+    Gemma4ForCausalLM,
+    Gemma4TextConfig,
     MixtralConfig,
     MixtralForCausalLM,
     Qwen2MoeConfig,
@@ -34,6 +36,7 @@ from optimum.rbln import (
     RBLNExaoneForCausalLM,
     RBLNGemma3ForCausalLM,
     RBLNGemma3ForConditionalGeneration,
+    RBLNGemma4ForCausalLM,
     RBLNGPT2LMHeadModel,
     RBLNGPT2Model,
     RBLNIdefics3ForConditionalGeneration,
@@ -1392,18 +1395,42 @@ class TestReleaseCheckpointMmap(unittest.TestCase):
     def test_fused_checkpoint_keeps_only_gate_up_mapped(self):
         # A checkpoint already in the fused layout loads every weight as a view. Everything but gate_up_proj is
         # copied out at load; gate_up_proj is left for the wrapper, which splits and drops it, releasing the mapping.
-        hf_cls, rbln_cls, config, _ = self.FAMILIES[0]
-        with tempfile.TemporaryDirectory() as tmp:
-            src = hf_cls(config).eval()
-            save_file({k: v.contiguous() for k, v in src.state_dict().items()}, f"{tmp}/model.safetensors")
-            src.config.save_pretrained(tmp)
+        gemma4 = Gemma4TextConfig(
+            **self.TINY,
+            head_dim=16,
+            intermediate_size=128,
+            enable_moe_block=True,
+            num_experts=8,
+            top_k_experts=2,
+            moe_intermediate_size=64,
+            sliding_window=32,
+            layer_types=["full_attention", "sliding_attention"],
+            vocab_size_per_layer_input=256,
+            hidden_size_per_layer_input=16,
+        )
+        cases = [
+            (self.FAMILIES[0][0], self.FAMILIES[0][1], self.FAMILIES[0][2], "Qwen3MoeExperts", "fused dump"),
+            (Gemma4ForCausalLM, RBLNGemma4ForCausalLM, gemma4, "Gemma4TextExperts", "save_pretrained"),
+        ]
+        for hf_cls, rbln_cls, config, experts_cls, how in cases:
+            with self.subTest(hf_cls.__name__), tempfile.TemporaryDirectory() as tmp:
+                src = hf_cls(config).eval()
+                if how == "save_pretrained":  # Gemma4 checkpoints are natively fused
+                    src.save_pretrained(tmp)
+                else:
+                    save_file({k: v.contiguous() for k, v in src.state_dict().items()}, f"{tmp}/model.safetensors")
+                    src.config.save_pretrained(tmp)
+                self.assertTrue(any(k.endswith("experts.gate_up_proj") for k in self._safetensors_keys(tmp)))
 
-            model = rbln_cls.get_pytorch_model(tmp)
-            remaining = self._file_backed(model)
-            self.assertTrue(remaining and all(name.endswith("experts.gate_up_proj") for name in remaining), remaining)
-            for layer in model.model.layers:
-                layer.mlp.experts.gate_up_proj = None
-            self.assertEqual(self._checkpoint_ranges(), [])
+                model = rbln_cls.get_pytorch_model(tmp)
+                remaining = self._file_backed(model)
+                self.assertTrue(
+                    remaining and all(name.endswith("experts.gate_up_proj") for name in remaining), remaining
+                )
+                for module in model.modules():
+                    if module.__class__.__name__ == experts_cls:
+                        module.gate_up_proj = None
+                self.assertEqual(self._checkpoint_ranges(), [])
 
     def test_qwen3_vl_moe_hub_layout_is_unmapped(self):
         # Hub checkpoints store the experts transposed ([E, H, 2I] / [E, I, H]); transformers transposes them into
