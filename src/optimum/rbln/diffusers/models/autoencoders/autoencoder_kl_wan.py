@@ -49,9 +49,6 @@ logger = get_logger(__name__)
 # feat_cache index order. depth 2 = diffusers CACHE_T; depth 1 = the temporal-downsample
 # time_convs, which cache a single frame.
 #
-# The first chunk only produces depth-1 caches, but E0/EN (and D0/DN) share static buffers,
-# so first-chunk caches are pre-padded to the steady-state depth.
-#
 # Cache index 0 is not stored in static DRAM: it feeds conv_in together with the graph input,
 # so it is passed between chunks as runtime I/O (see _update_rbln_config).
 _CACHE_SPECS = {
@@ -83,46 +80,6 @@ def get_cache_size(kind: Literal["enc", "dec"], height: int = 704, width: int = 
     return [
         [1, channels, depth, height // divisor, width // divisor] for channels, depth, divisor in _CACHE_SPECS[kind]
     ]
-
-
-""" AutoencoderKLWan encode logic 참고용
-def clear_cache(self):
-    # Use cached conv counts for decoder and encoder to avoid re-iterating modules each call
-    self._conv_num = self._cached_conv_counts["decoder"]
-    self._conv_idx = [0]
-    self._feat_map = [None] * self._conv_num
-    # cache encode
-    self._enc_conv_num = self._cached_conv_counts["encoder"]
-    self._enc_conv_idx = [0]
-    self._enc_feat_map = [None] * self._enc_conv_num
-
-def _encode(self, x: torch.Tensor):
-    _, _, num_frame, height, width = x.shape
-
-    self.clear_cache()
-    if self.config.patch_size is not None:
-        x = patchify(x, patch_size=self.config.patch_size)
-
-    if self.use_tiling and (width > self.tile_sample_min_width or height > self.tile_sample_min_height):
-        return self.tiled_encode(x)
-
-    iter_ = 1 + (num_frame - 1) // 4
-    for i in range(iter_):
-        self._enc_conv_idx = [0]
-        if i == 0:
-            out = self.encoder(x[:, :, :1, :, :], feat_cache=self._enc_feat_map, feat_idx=self._enc_conv_idx)
-        else:
-            out_ = self.encoder(
-                x[:, :, 1 + 4 * (i - 1) : 1 + 4 * i, :, :],
-                feat_cache=self._enc_feat_map,
-                feat_idx=self._enc_conv_idx,
-            )
-            out = torch.cat([out, out_], 2)
-
-    enc = self.quant_conv(out)
-    self.clear_cache()
-    return enc
-"""
 
 
 # Shared static feat-caches are stored flat: (n, c, d, h, w) -> (n, c, d, h*w). With h*w as the
