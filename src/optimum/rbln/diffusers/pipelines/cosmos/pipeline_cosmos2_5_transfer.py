@@ -24,7 +24,7 @@ from ....utils.logging import get_logger
 from ...configurations.pipelines.configuration_cosmos import RBLNCosmos2_5_TransferPipelineConfig
 from ...modeling_diffusers import RBLNDiffusionMixin
 from ...models.autoencoders.autoencoder_kl_wan import RBLNAutoencoderKLWan
-from ...models.controlnet_cosmos import RBLNCosmosControlNetModel
+from ...models.controlnets.controlnet_cosmos import RBLNCosmosControlNetModel
 from ...models.transformers.transformer_cosmos import RBLNCosmosTransformer3DModel
 from .cosmos_guardrail import RBLNCosmosSafetyChecker
 
