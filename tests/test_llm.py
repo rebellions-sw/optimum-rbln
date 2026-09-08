@@ -9,6 +9,7 @@ import warnings
 import pytest
 import torch
 from PIL import Image
+from safetensors.torch import save_file
 from transformers import (
     AutoConfig,
     AutoProcessor,
@@ -19,6 +20,8 @@ from transformers import (
     Qwen2MoeForCausalLM,
     Qwen3MoeConfig,
     Qwen3MoeForCausalLM,
+    Qwen3VLMoeConfig,
+    Qwen3VLMoeForConditionalGeneration,
 )
 
 from optimum.rbln import (
@@ -1385,6 +1388,47 @@ class TestReleaseCheckpointMmap(unittest.TestCase):
                 self.assertEqual(self._file_backed(model), [])
                 for (name, p), (_, q) in zip(model.named_parameters(), src.named_parameters(), strict=True):
                     self.assertTrue(torch.equal(p, q), name)
+
+    def test_qwen3_vl_moe_hub_layout_is_unmapped(self):
+        # Hub checkpoints store the experts transposed ([E, H, 2I] / [E, I, H]); transformers transposes them into
+        # new memory at load, leaving only the other weights as mmap views.
+        text = dict(
+            self.TINY,
+            intermediate_size=128,
+            moe_intermediate_size=128,
+            num_experts=8,
+            num_experts_per_tok=2,
+            decoder_sparse_step=1,
+            rope_scaling={"rope_type": "default", "mrope_section": [8, 4, 4]},
+        )
+        vision = {
+            "depth": 1,
+            "hidden_size": 32,
+            "intermediate_size": 64,
+            "num_heads": 2,
+            "out_hidden_size": 64,
+            "patch_size": 14,
+            "spatial_merge_size": 2,
+            "temporal_patch_size": 2,
+            "deepstack_visual_indexes": [0],
+        }
+        src = Qwen3VLMoeForConditionalGeneration(Qwen3VLMoeConfig(text_config=text, vision_config=vision)).eval()
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dict = {
+                k: (
+                    v.transpose(1, 2).contiguous()
+                    if k.endswith(("experts.gate_up_proj", "experts.down_proj"))
+                    else v.contiguous()
+                )
+                for k, v in src.state_dict().items()
+            }
+            save_file(state_dict, f"{tmp}/model.safetensors")
+            src.config.save_pretrained(tmp)
+
+            model = RBLNQwen3VLMoeForConditionalGeneration.get_pytorch_model(tmp)
+            self.assertEqual(self._file_backed(model), [])
+            for (name, p), (_, q) in zip(model.named_parameters(), src.named_parameters(), strict=True):
+                self.assertTrue(torch.equal(p, q), name)
 
 
 if __name__ == "__main__":
