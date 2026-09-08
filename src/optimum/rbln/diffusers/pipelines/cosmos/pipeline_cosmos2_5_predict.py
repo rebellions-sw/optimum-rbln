@@ -41,12 +41,7 @@ class RBLNCosmos2_5_PredictBasePipeline(RBLNDiffusionMixin, Cosmos2_5_PredictBas
 
     original_class = Cosmos2_5_PredictBasePipeline
     _submodules = ["text_encoder", "transformer", "vae"]
-    # _submodules = ["text_encoder", "transformer"]
-    # _submodules = ["text_encoder"]
-    # _submodules = ["transformer"]
-    # _submodules = ["vae"]
-    # _optional_submodules = ["safety_checker"]
-    _optional_submodules = []
+    _optional_submodules = ["safety_checker"]
 
     def __init__(
         self,
@@ -58,8 +53,7 @@ class RBLNCosmos2_5_PredictBasePipeline(RBLNDiffusionMixin, Cosmos2_5_PredictBas
         safety_checker: RBLNCosmosSafetyChecker = None,
     ):
         if safety_checker is None:
-            # safety_checker = RBLNCosmosSafetyChecker()
-            safety_checker = None
+            safety_checker = RBLNCosmosSafetyChecker()
 
         super().__init__(
             text_encoder=text_encoder,
@@ -105,8 +99,7 @@ class RBLNCosmos2_5_PredictBasePipeline(RBLNDiffusionMixin, Cosmos2_5_PredictBas
     ):
         rbln_config, kwargs = cls.get_rbln_config_class().initialize_from_kwargs(rbln_config, **kwargs)
         if safety_checker is None and export:
-            # safety_checker = RBLNCosmosSafetyChecker(rbln_config=rbln_config.safety_checker)
-            safety_checker = None
+            safety_checker = RBLNCosmosSafetyChecker(rbln_config=rbln_config.safety_checker)
 
         return super().from_pretrained(
             model_id, export=export, safety_checker=safety_checker, rbln_config=rbln_config, **kwargs
