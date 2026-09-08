@@ -58,6 +58,7 @@ logger = logging.get_logger(__name__)
 
 MAX_GDN_CHUNK_SIZE = 128
 
+
 def _qwen3_5_build_compile_context(compile_config, example_inputs):
     def is_static_state(name: str) -> bool:
         if "past_key_values" in name:
