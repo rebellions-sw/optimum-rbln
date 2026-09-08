@@ -466,9 +466,6 @@ def test_qwen3_5_gdn_chunk_size_default_is_decoupled_from_prefill():
         (RBLNQwen3_5ForCausalLMConfig, {}),
         (RBLNQwen3_5ModelConfig, {"use_inputs_embeds": True}),
     ):
-        # The default is a fixed 128 (the GatedDeltaNet kernel cap), independent of
-        # prefill_chunk_size — deriving it from prefill made the default invalid on
-        # NPUs whose prefill default exceeds the cap.
         assert cls(**kwargs).gdn_chunk_size == MAX_GDN_CHUNK_SIZE
         assert cls(prefill_chunk_size=512, **kwargs).gdn_chunk_size == MAX_GDN_CHUNK_SIZE
         # An explicit value is preserved.
