@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, List, Optional, Union
+from typing import Any
 
 from ....configuration_utils import RBLNModelConfig
-from ....utils.deprecation import deprecate_kwarg
 from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelConfig, RBLNDecoderOnlyModelForCausalLMConfig
 
 
@@ -34,14 +33,14 @@ class RBLNQwen3VLForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausalLMC
     def __init__(
         self,
         use_inputs_embeds: bool = True,
-        visual: Optional[RBLNModelConfig] = None,
+        visual: RBLNModelConfig | None = None,
         _load_visual_runtime: bool = True,
         **kwargs: Any,
     ):
         """
         Args:
             use_inputs_embeds (bool): Whether or not to use `inputs_embeds` as input. Defaults to `True`.
-            visual (Optional[RBLNModelConfig]): Configuration for the vision encoder component.
+            visual (RBLNModelConfig | None): Configuration for the vision encoder component.
             _load_visual_runtime (bool): Whether to create runtime for the visual encoder submodule.
                 Set to ``False`` on decoder-only nodes in a disaggregated encoder setup to skip
                 loading the visual encoder's compiled model (.rbln) and torch artifacts entirely.
@@ -60,7 +59,7 @@ class RBLNQwen3VLForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausalLMC
                 "visual encoder runs locally (_load_visual_runtime=True) or embeddings are "
                 "received from an encoder node (_load_visual_runtime=False)."
             )
-        self.visual = self.initialize_submodule_config(submodule_config=visual)
+        self.visual = self.initialize_submodule_config(submodule_config=visual, batch_size=1, force_kwargs=True)
         self._load_visual_runtime = _load_visual_runtime
 
 
@@ -68,7 +67,7 @@ class RBLNQwen3VLModelConfig(RBLNDecoderOnlyModelConfig):
     submodules = ["visual"]
     subclass_non_save_attributes = ["_load_visual_runtime", "memory_budget"]
 
-    def __init__(self, visual: Optional[RBLNModelConfig] = None, _load_visual_runtime: bool = True, **kwargs: Any):
+    def __init__(self, visual: RBLNModelConfig | None = None, _load_visual_runtime: bool = True, **kwargs: Any):
         super().__init__(**kwargs)
         if not getattr(self, "use_inputs_embeds", True):
             raise ValueError(
@@ -77,7 +76,7 @@ class RBLNQwen3VLModelConfig(RBLNDecoderOnlyModelConfig):
                 "visual encoder runs locally (_load_visual_runtime=True) or embeddings are "
                 "received from an encoder node (_load_visual_runtime=False)."
             )
-        self.visual = self.initialize_submodule_config(submodule_config=visual)
+        self.visual = self.initialize_submodule_config(submodule_config=visual, batch_size=1, force_kwargs=True)
         self._load_visual_runtime = _load_visual_runtime
 
 
@@ -89,23 +88,30 @@ class RBLNQwen3VLVisionModelConfig(RBLNModelConfig):
     RBLN-optimized Qwen3-VL vision transformer models for processing images and videos.
     """
 
-    @deprecate_kwarg(old_name="max_seq_lens", new_name="max_seq_len", version="0.11.0")
-    def __init__(self, max_seq_len: Union[int, List[int]] = None, **kwargs: Any):
+    def __init__(self, max_seq_len: int | list[int] = None, batch_size: int | None = None, **kwargs: Any):
         """
         Args:
-            max_seq_len (Optional[Union[int, List[int]]]): Maximum sequence lengths for Vision
+            max_seq_len (int | list[int] | None): Maximum sequence lengths for Vision
                 Transformer attention. Can be an integer or list of integers, each indicating
                 the number of patches in a sequence for an image or video. For example, an image
                 of 224x224 pixels with patch size 16 and spatial_merge_size 2 yields
                 (224/16/2) * (224/16/2) = 49 merged patches. RBLN optimization runs inference
                 per image or video frame, so set `max_seq_len` to match the maximum expected
                 resolution to reduce computation. If not provided, a `ValueError` is raised.
+            batch_size (int | None): the vision encoder runs one image at a time (the parent config forces
+                this by default), so only `batch_size=1` is supported. Defaults to 1.
             kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If `max_seq_len` is None or not provided.
+            ValueError: If `batch_size` is not 1.
         """
         super().__init__(**kwargs)
+
+        batch_size = batch_size or 1
+        if batch_size != 1:
+            raise ValueError(f"The Qwen3-VL vision encoder only supports batch_size=1, got {batch_size}.")
+        self.batch_size = batch_size
 
         if max_seq_len is not None:
             if isinstance(max_seq_len, int):

@@ -1,8 +1,7 @@
 import logging
 import math
-import os
 from collections import defaultdict
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING
 
 import rebel
 
@@ -19,27 +18,30 @@ logger = get_logger()
 
 DEFAULT_FLASH_ATTN_PARTITION_LENGTH = 16_384
 DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH = 32_768
-MIN_FLASH_ATTN_MAX_SEQ_LEN = 8192
-MIN_FLASH_ATTN_PARTITION_LENGTH = 4096
+MIN_FLASH_ATTN_MAX_SEQ_LEN = 2048
+MIN_FLASH_ATTN_PARTITION_LENGTH = 1024
 MAX_FLASH_ATTN_PARTITION_LENGTH = 32_768
 MAX_SLIDING_WINDOW_SIZE = 32_768
 
 
-def _should_skip_attn_validation() -> bool:
-    # Escape hatch read at call time so it can be toggled per-process (e.g. by external scripts
-    # like rbln-executor or k-perf). When enabled, attention/sliding-window constraints are not
-    # enforced — invalid configurations may still fail at compile or runtime.
-    return os.environ.get("RBLN_SKIP_ATTN_VALIDATION", "0") == "1"
-
-
 def set_default_values(
-    attn_impl: Optional[str] = None,
-    kvcache_partition_len: Optional[int] = None,
-    kvcache_block_size: Optional[int] = None,
-    max_seq_len: Optional[int] = None,
-) -> Tuple[str, int, int]:
+    attn_impl: str | None = None,
+    kvcache_partition_len: int | None = None,
+    kvcache_block_size: int | None = None,
+    max_seq_len: int | None = None,
+    prefill_chunk_size: int | None = None,
+    npu: str | None = None,
+) -> tuple[str, int, int, int]:
     if attn_impl is None:
         attn_impl = "eager"
+
+    if prefill_chunk_size is None:
+        # RBLN-CR NPUs use a larger prefill chunk for better prefill performance.
+        # Prefer the target NPU pinned on the config; fall back to the locally attached device.
+        npu = npu or rebel.get_npu_name(0)
+        prefill_chunk_size = 512 if "RBLN-CR" in (npu or "") else 128
+    if prefill_chunk_size % 64 != 0 or prefill_chunk_size <= 0:
+        raise ValueError("`prefill_chunk_size` must be a positive integer divisible by 64.")
 
     if kvcache_partition_len is not None:
         if attn_impl == "eager":
@@ -59,17 +61,10 @@ def set_default_values(
         else:
             kvcache_block_size = kvcache_partition_len
 
-    return attn_impl, kvcache_partition_len, kvcache_block_size
+    return attn_impl, kvcache_partition_len, kvcache_block_size, prefill_chunk_size
 
 
 def validate_attention_method(attn_impl: str, kvcache_partition_len: int, kvcache_block_size: int, max_seq_len: int):
-    if _should_skip_attn_validation():
-        logger.warning(
-            "Skipping `validate_attention_method` because `RBLN_SKIP_ATTN_VALIDATION=1`. "
-            "Invalid configurations may still fail at compile or runtime."
-        )
-        return
-
     if attn_impl not in ["eager", "flash_attn"]:
         raise ValueError(f"Unknown `attn_impl` : {attn_impl}. (Available : 'eager', 'flash_attn`)")
 
@@ -79,8 +74,8 @@ def validate_attention_method(attn_impl: str, kvcache_partition_len: int, kvcach
 
     # Constraints of flash attention:
     # 1. `max_seq_len` should be multiple of `partition_len`.
-    # 2. 4k <= `partition_len` <= 32k.
-    # 3. `max_seq_len` should be larger then 8k.
+    # 2. 1k <= `partition_len` <= 32k.
+    # 3. `max_seq_len` should be at least 2048 (2 * minimum partition length).
     if attn_impl == "eager" and max_seq_len > DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH:
         raise ValueError(
             f"`max_seq_len` is set to {max_seq_len}, "
@@ -122,13 +117,6 @@ def validate_attention_method(attn_impl: str, kvcache_partition_len: int, kvcach
 
 
 def validate_sliding_window(rbln_config: "RBLNDecoderOnlyModelForCausalLMConfig"):
-    if _should_skip_attn_validation():
-        logger.warning(
-            "Skipping `validate_sliding_window` because `RBLN_SKIP_ATTN_VALIDATION=1`. "
-            "Invalid configurations may still fail at compile or runtime."
-        )
-        return
-
     if rbln_config.sliding_window > MAX_SLIDING_WINDOW_SIZE - rbln_config.prefill_chunk_size:
         raise ValueError(
             f"Sliding window size ({rbln_config.sliding_window}) must be less than {MAX_SLIDING_WINDOW_SIZE} - prefill_chunk_size ({MAX_SLIDING_WINDOW_SIZE - rbln_config.prefill_chunk_size})"
@@ -168,7 +156,7 @@ def format_byte_size(nbytes: int) -> str:
         return f"{nbytes / 1024**3:.2f} GB"
 
 
-def _resolve_memory_budget(memory_budget: Optional[object], available_total: int) -> int:
+def _resolve_memory_budget(memory_budget: object | None, available_total: int) -> int:
     """Resolve `memory_budget` to usable DRAM bytes (system reserve excluded), capped at available_total.
 
     None -> available_total; a float in (0, 1] (or a "80%" string) -> that fraction of it;
@@ -224,8 +212,10 @@ class RBLNDecoderOnlyFlashAttentionMixin:
         )
         if rbln_config.kvcache_num_blocks < rbln_config.num_min_blocks:
             raise ValueError(
-                "Memory is not enough for full sequence length. "
-                "Please consider decreasing `max_seq_len` to reduce the number of blocks."
+                f"Insufficient memory for the required KV cache: only {rbln_config.kvcache_num_blocks} blocks "
+                f"can be allocated, but at least {rbln_config.num_min_blocks} blocks are required. Consider "
+                f"reducing `max_seq_len` or `batch_size` (currently {rbln_config.batch_size}) to lower the "
+                f"memory requirement."
             )
         cls.multiply_kv_cache_num_blocks(
             compiled_models=compiled_models, rbln_config=rbln_config, multiplier=rbln_config.kvcache_num_blocks
@@ -263,11 +253,11 @@ class RBLNDecoderOnlyFlashAttentionMixin:
         cls,
         compiled_models: dict[str, rebel.RBLNCompiledModel],
         rbln_config: "RBLNDecoderOnlyModelForCausalLMConfig",
-    ) -> Tuple[dict[Tuple[int, int], int], dict[str, list[list[int]]], int, set[Tuple[int, int]]]:
+    ) -> tuple[dict[tuple[int, int], int], dict[str, list[list[int]]], int, set[tuple[int, int]]]:
         # Returns non-KV alloc, KV sizes, per-chiplet DRAM budget, and the (node, chiplet)
         # buckets to check. ATOM reports one chiplet, so it shares the per-chiplet path.
-        alloc_without_dram: dict[Tuple[int, int], int] = defaultdict(int)
-        chiplets: set[Tuple[int, int]] = set()
+        alloc_without_dram: dict[tuple[int, int], int] = defaultdict(int)
+        chiplets: set[tuple[int, int]] = set()
 
         for compiled_model in compiled_models.values():
             for key, alloc_per_chiplet in compiled_model.get_alloc_per_chiplet_by_key().items():
@@ -295,17 +285,17 @@ class RBLNDecoderOnlyFlashAttentionMixin:
     def _search_num_kvcache_blocks(
         cls,
         rbln_config: "RBLNDecoderOnlyModelForCausalLMConfig",
-        alloc_without_dram: dict[Tuple[int, int], int],
+        alloc_without_dram: dict[tuple[int, int], int],
         kvcache_tensor_sizes: dict[str, list[list[int]]],
         available_per_chiplet: int,
-        chiplets: set[Tuple[int, int]],
+        chiplets: set[tuple[int, int]],
         current_blocks: int = 1,
     ) -> int:
-        remaining_dram_at_chiplet: dict[Tuple[int, int], int] = {
+        remaining_dram_at_chiplet: dict[tuple[int, int], int] = {
             key: available_per_chiplet - alloc_without_dram.get(key, 0) for key in chiplets
         }
 
-        def check_memory_fits(multiplier: int) -> Tuple[bool, dict[Tuple[int, int], int]]:
+        def check_memory_fits(multiplier: int) -> tuple[bool, dict[tuple[int, int], int]]:
             # Fits only if every chiplet bucket has room.
             kvcache_sizes = cls._kvcache_bytes_per_chiplet(
                 kvcache_tensor_sizes, rbln_config, multiplier, current_blocks
@@ -354,13 +344,13 @@ class RBLNDecoderOnlyFlashAttentionMixin:
         rbln_config: "RBLNDecoderOnlyModelForCausalLMConfig",
         num_blocks: int,
         current_blocks: int = 1,
-    ) -> dict[Tuple[int, int], int]:
+    ) -> dict[tuple[int, int], int]:
         # Per-(node, chiplet) kv-cache bytes at `num_blocks`. `kvcache_tensor_sizes` reflects the
         # buffers' current block count (`current_blocks`), so a resizable tensor's per-block bytes
         # are size // current_blocks, rescaled to num_blocks; others are fixed. Each 2MB-aligned
         # after scaling, so bytes grow non-linearly.
-        can_resize = {meta.name: meta.can_resize for meta in rbln_config.kvcache_metas}
-        sizes: dict[Tuple[int, int], int] = defaultdict(int)
+        can_resize = {meta.name: meta.can_resize for meta in rbln_config.cache_metas}
+        sizes: dict[tuple[int, int], int] = defaultdict(int)
         for key, sizes_at_node in kvcache_tensor_sizes.items():
             resizable = can_resize[key]
             for node_id, sizes_at_chiplet in enumerate(sizes_at_node):
@@ -397,11 +387,7 @@ class RBLNDecoderOnlyFlashAttentionMixin:
     ):
         for compiled_model in compiled_models.values():
             compiled_model.exp_multiply_buffer_size(
-                {
-                    kvcache_meta.name: multiplier
-                    for kvcache_meta in rbln_config.kvcache_metas
-                    if kvcache_meta.can_resize
-                }
+                {cache_meta.name: multiplier for cache_meta in rbln_config.cache_metas if cache_meta.can_resize}
             )
 
     @classmethod
@@ -413,11 +399,11 @@ class RBLNDecoderOnlyFlashAttentionMixin:
     ):
         """Resize an already-compiled artifact's kv-cache to `target` blocks.
 
-        The saved buffers hold `per_block * current` bytes, where `current` is the
-        block count resolved at compile time (`rbln_config.kvcache_num_blocks`).
-        Scaling by the rational ratio `target / current` yields `per_block * target`
-        exactly, so `exp_rescale_buffer_size` never rejects the ratio for a
-        block-size-1 baseline.
+        The saved buffers hold `per_block * current` bytes, where `current` is the block
+        count the artifact currently carries (`rbln_config.kvcache_num_blocks`): the count
+        resolved at compile time, or the target of an earlier rescale. Scaling by the
+        rational ratio `target / current` yields `per_block * target` exactly, so
+        `exp_rescale_buffer_size` never rejects the ratio for a block-size-1 baseline.
         """
         current = rbln_config.kvcache_num_blocks
         if current <= 0:
@@ -439,9 +425,9 @@ class RBLNDecoderOnlyFlashAttentionMixin:
                 )
         if target > current:
             logger.warning(
-                f"Requested kvcache_num_blocks={target} exceeds the block count chosen at compile "
-                f"time to fit device DRAM ({current}); the model may fail to allocate at runtime. "
-                "Proceeding without a device-fit check."
+                f"Requested kvcache_num_blocks={target} exceeds the artifact's current block count "
+                f"({current}), which was sized to fit device DRAM; the model may fail to allocate at "
+                "runtime. Proceeding without a device-fit check."
             )
         if target > rbln_config.num_full_blocks:
             logger.warning(
@@ -451,9 +437,5 @@ class RBLNDecoderOnlyFlashAttentionMixin:
             )
         for compiled_model in compiled_models.values():
             compiled_model.exp_rescale_buffer_size(
-                {
-                    kvcache_meta.name: (target, current)
-                    for kvcache_meta in rbln_config.kvcache_metas
-                    if kvcache_meta.can_resize
-                }
+                {cache_meta.name: (target, current) for cache_meta in rbln_config.cache_metas if cache_meta.can_resize}
             )

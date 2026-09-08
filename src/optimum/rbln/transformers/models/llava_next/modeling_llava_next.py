@@ -14,8 +14,9 @@
 
 import importlib
 import inspect
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
 import torch
@@ -36,8 +37,8 @@ from transformers.models.llava_next.modeling_llava_next import (
 from ....configuration_utils import RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
 from ....utils.logging import get_logger
+from ...utils.multimodal_batch_sort import RBLNImageIndexedBatchSortMixin, _placeholder_run_counts
 from ...utils.rbln_runtime_wrapper import LoopProcessor
-from ..decoderonly.generation_decoderonly import RBLNDecoderOnlyGenerationMixin
 from ..decoderonly.modeling_decoderonly import RBLNDecoderOnlyOutput
 
 
@@ -93,7 +94,7 @@ class LoopProjector(LoopProcessor):
         return output[0]
 
 
-class RBLNLlavaNextForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGenerationMixin):
+class RBLNLlavaNextForConditionalGeneration(RBLNModel, RBLNImageIndexedBatchSortMixin):
     """
     RBLNLlavaNextForConditionalGeneration is a multi-modal model that combines vision and language processing capabilities,
     optimized for RBLN NPUs. It is designed for conditional generation tasks that involve both image and text inputs.
@@ -129,6 +130,11 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
         {"name": "vision_tower"},
         {"name": "language_model"},
     ]
+    # pixel_values is (num_images, num_patches, C, H, W); image_sizes is (num_images, 2)
+    _image_indexed_kwargs = ("pixel_values", "image_sizes")
+
+    def _images_per_sample(self, input_ids: torch.LongTensor | None, kwargs: dict) -> list[int]:
+        return _placeholder_run_counts(input_ids, self._image_token_id)
 
     def __getattr__(self, __name: str) -> Any:
         def redirect(func):
@@ -201,10 +207,10 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
     @classmethod
     def _update_rbln_config(
         cls,
-        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+        preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"] | None,
         model: Optional["PreTrainedModel"] = None,
         model_config: Optional["PretrainedConfig"] = None,
-        rbln_config: Optional[RBLNModelConfig] = None,
+        rbln_config: RBLNModelConfig | None = None,
     ) -> RBLNModelConfig:
         feature_size = model_config.vision_config.hidden_size
 
@@ -219,7 +225,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
             (
                 "image_features",
                 [rbln_config.vision_tower.batch_size, selected_image_feature_dim, feature_size],
-                "float32",
+                rbln_config.dtype,
             )
         ]
         rbln_compile_config = RBLNCompileConfig(input_info=input_info)
@@ -235,6 +241,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
         cache_position=None,
         image_sizes=None,
         generate_idx=None,
+        inputs_sorted=False,
         **kwargs,
     ):
         is_prefill_phase = generate_idx is None
@@ -271,6 +278,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
                 "pixel_values": pixel_values,
                 "cache_position": cache_position,
                 "generate_idx": generate_idx,
+                "inputs_sorted": inputs_sorted,
             }
         )
         return model_inputs
@@ -284,7 +292,7 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
         self,
         pixel_values: torch.FloatTensor,
         image_sizes: torch.Tensor,
-        vision_feature_layer: Union[int, List[int]],
+        vision_feature_layer: int | list[int],
         vision_feature_select_strategy: str,
     ):
         # ! infer image_num_patches from image_sizes
@@ -306,15 +314,19 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
         pooler_out_size = [pixel_values.shape[0] * pixel_values.shape[1], self.config.vision_config.hidden_size]
         vision_out_buffer = []
         for _ in range(self.config.vision_config.num_hidden_layers + 2):
-            vision_out_buffer.append(torch.empty(size=vision_out_size, dtype=torch.float32, device="cpu"))
-        vision_out_buffer.insert(1, torch.empty(size=pooler_out_size, dtype=torch.float32, device="cpu"))
+            vision_out_buffer.append(
+                torch.empty(size=vision_out_size, dtype=self.rbln_config.vision_tower.dtype, device="cpu")
+            )
+        vision_out_buffer.insert(
+            1, torch.empty(size=pooler_out_size, dtype=self.rbln_config.vision_tower.dtype, device="cpu")
+        )
 
         projector_out_size = [
             pixel_values.shape[0] * pixel_values.shape[1],
             (self.config.vision_config.image_size // self.config.vision_config.patch_size) ** 2,
             self.config.text_config.hidden_size,
         ]
-        projector_out_buffer = [torch.empty(size=projector_out_size, dtype=torch.float32, device="cpu")]
+        projector_out_buffer = [torch.empty(size=projector_out_size, dtype=self.rbln_config.dtype, device="cpu")]
 
         if pixel_values.dim() == 5:
             # stacked if input is (batch_size, num_patches, num_channels, height, width)
@@ -326,7 +338,9 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
             # otherwise has to be stacked from list of (num_patches, num_channels, height, width)
             raise ValueError(f"pixel_values of shape {pixel_values.shape}, expect to be of 4 or 5 dimensions")
 
-        image_features = self.vision_tower(pixel_values, output_hidden_states=True, out=vision_out_buffer)
+        image_features = self.vision_tower(
+            pixel_values.to(self.rbln_config.vision_tower.dtype), output_hidden_states=True, out=vision_out_buffer
+        )
         # If we have one vision feature layer, return the corresponding hidden states,
         # otherwise, select the hidden states of each feature layer and concatenate them
         if isinstance(vision_feature_layer, int):
@@ -340,7 +354,9 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
         elif vision_feature_select_strategy == "full":
             selected_image_feature = selected_image_feature
 
-        image_features = self.multi_modal_projector(selected_image_feature, out=projector_out_buffer)
+        image_features = self.multi_modal_projector(
+            selected_image_feature.to(self.rbln_config.dtype), out=projector_out_buffer
+        )
         image_features = torch.split(image_features, image_num_patches, dim=0)
         return image_features
 
@@ -399,10 +415,10 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
         self,
         input_ids: torch.LongTensor = None,
         pixel_values: torch.FloatTensor = None,
-        image_sizes: Optional[torch.LongTensor] = None,
-        inputs_embeds: Optional[torch.FloatTensor] = None,
-        vision_feature_layer: Optional[int] = None,
-        vision_feature_select_strategy: Optional[str] = None,
+        image_sizes: torch.LongTensor | None = None,
+        inputs_embeds: torch.FloatTensor | None = None,
+        vision_feature_layer: int | None = None,
+        vision_feature_select_strategy: str | None = None,
         **kwargs,
     ):
         vision_feature_layer = (
@@ -454,13 +470,16 @@ class RBLNLlavaNextForConditionalGeneration(RBLNModel, RBLNDecoderOnlyGeneration
         input_ids: torch.LongTensor = None,
         attention_mask: torch.LongTensor = None,
         pixel_values: torch.FloatTensor = None,
-        image_sizes: Optional[torch.LongTensor] = None,
-        inputs_embeds: Optional[torch.FloatTensor] = None,
+        image_sizes: torch.LongTensor | None = None,
+        inputs_embeds: torch.FloatTensor | None = None,
         cache_position: torch.Tensor = None,
-        generate_idx: Optional[torch.Tensor] = None,
-        return_dict: Optional[bool] = None,
+        generate_idx: torch.Tensor | None = None,
+        return_dict: bool | None = None,
+        inputs_sorted: bool = False,
         **kwargs,
-    ) -> Union[Tuple, RBLNDecoderOnlyOutput]:
+    ) -> tuple | RBLNDecoderOnlyOutput:
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        self._require_sorted_batch_inputs(inputs_embeds if inputs_embeds is not None else input_ids, inputs_sorted)
         # Prefill
         if cache_position is None:
             inputs_embeds = self._preprocess_prefill(

@@ -100,7 +100,7 @@ class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     _decoder_wrapper_cls = RBLNGptOssWrapper
 
     @staticmethod
-    def _get_dtype(dtype: Union[str, torch.dtype] = None, torch_dtype: Union[str, torch.dtype] = None):
+    def _get_dtype(dtype: str | torch.dtype = None, torch_dtype: str | torch.dtype = None):
         # For BC on torch_dtype argument
         if torch_dtype is not None:
             logger.warning_once("`torch_dtype` is deprecated! Use `dtype` instead!")
@@ -118,10 +118,10 @@ class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         cls,
         model_id: str,
         *args,
-        rbln_config: Optional[RBLNDecoderOnlyModelConfig] = None,
-        dtype: Union[str, torch.dtype] = None,
-        torch_dtype: Union[str, torch.dtype] = None,
-        config: Optional[PretrainedConfig] = None,
+        rbln_config: RBLNDecoderOnlyModelConfig | None = None,
+        dtype: str | torch.dtype = None,
+        torch_dtype: str | torch.dtype = None,
+        config: PretrainedConfig | None = None,
         **kwargs,
     ) -> PreTrainedModel:
         dtype = cls._get_dtype(dtype, torch_dtype)
@@ -132,8 +132,10 @@ class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
         if config is None:
             config, kwargs = AutoConfig.from_pretrained(model_id, return_unused_kwargs=True)
 
+        config_dtype = config.dtype
         with no_init_weights():
             model = AutoModelForCausalLM.from_config(config, dtype=dtype, **kwargs)
+        config.dtype = config_dtype
 
         _replace_with_mxfp4_linear(model, config)
         model.load_state_dict(state_dict, strict=False)
@@ -154,10 +156,10 @@ class RBLNGptOssForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     @classmethod
     def _update_rbln_config(
         cls,
-        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]] = None,
+        preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"] | None = None,
         model: Optional["PreTrainedModel"] = None,
         model_config: Optional["PretrainedConfig"] = None,
-        rbln_config: Optional[RBLNDecoderOnlyModelForCausalLMConfig] = None,
+        rbln_config: RBLNDecoderOnlyModelForCausalLMConfig | None = None,
     ) -> RBLNDecoderOnlyModelForCausalLMConfig:
         rbln_config = super()._update_rbln_config(preprocessors, model, model_config, rbln_config)
 

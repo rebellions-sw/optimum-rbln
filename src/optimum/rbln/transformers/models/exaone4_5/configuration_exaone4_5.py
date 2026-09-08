@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, List, Optional, Union
+from typing import Any
 
 from ....configuration_utils import RBLNModelConfig
 from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelConfig, RBLNDecoderOnlyModelForCausalLMConfig
@@ -32,13 +32,13 @@ class RBLNExaone4_5_ForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausal
     def __init__(
         self,
         use_inputs_embeds: bool = True,
-        visual: Optional[RBLNModelConfig] = None,
+        visual: RBLNModelConfig | None = None,
         **kwargs: Any,
     ):
         """
         Args:
             use_inputs_embeds (bool): Whether or not to use `inputs_embeds` as input. Defaults to `True`.
-            visual (Optional[RBLNModelConfig]): Configuration for the vision encoder component.
+            visual (RBLNModelConfig | None): Configuration for the vision encoder component.
             kwargs: Additional arguments passed to the parent `RBLNDecoderOnlyModelForCausalLMConfig`.
 
         Raises:
@@ -50,7 +50,7 @@ class RBLNExaone4_5_ForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausal
                 "RBLNExaone4_5_ForConditionalGenerationConfig does not allow `use_inputs_embeds=False` "
                 "because multimodal prefill requires embedding replacement."
             )
-        self.visual = visual
+        self.visual = self.initialize_submodule_config(submodule_config=visual, batch_size=1, force_kwargs=True)
 
 
 class RBLNExaone4_5_ModelConfig(RBLNDecoderOnlyModelConfig):
@@ -60,9 +60,9 @@ class RBLNExaone4_5_ModelConfig(RBLNDecoderOnlyModelConfig):
 
     submodules = ["visual"]
 
-    def __init__(self, visual: Optional[RBLNModelConfig] = None, **kwargs: Any):
+    def __init__(self, visual: RBLNModelConfig | None = None, **kwargs: Any):
         super().__init__(**kwargs)
-        self.visual = self.initialize_submodule_config(submodule_config=visual)
+        self.visual = self.initialize_submodule_config(submodule_config=visual, batch_size=1, force_kwargs=True)
 
 
 class RBLNExaone4_5_VisionModelConfig(RBLNModelConfig):
@@ -74,19 +74,27 @@ class RBLNExaone4_5_VisionModelConfig(RBLNModelConfig):
     mechanisms for processing images and videos.
     """
 
-    def __init__(self, max_seq_len: Union[int, List[int]] = None, **kwargs: Any):
+    def __init__(self, max_seq_len: int | list[int] = None, batch_size: int | None = None, **kwargs: Any):
         """
         Args:
-            max_seq_len (Optional[Union[int, List[int]]]): Maximum sequence lengths for Vision
+            max_seq_len (int | list[int] | None): Maximum sequence lengths for Vision
                 Transformer attention. Can be an integer or list of integers, each indicating
                 the number of patches in a sequence for an image or video. For window-based
                 attention, `max_seq_len` must be a multiple of `(window_size / patch_size)^2`.
+            batch_size (int | None): the vision encoder runs one image at a time (the parent config forces
+                this by default), so only `batch_size=1` is supported. Defaults to 1.
             kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
             ValueError: If `max_seq_len` is None or not provided.
+            ValueError: If `batch_size` is not 1.
         """
         super().__init__(**kwargs)
+
+        batch_size = batch_size or 1
+        if batch_size != 1:
+            raise ValueError(f"The EXAONE-4.5 vision encoder only supports batch_size=1, got {batch_size}.")
+        self.batch_size = batch_size
 
         if max_seq_len is not None:
             if isinstance(max_seq_len, int):

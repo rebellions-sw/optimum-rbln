@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import types
-from typing import TYPE_CHECKING, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import torch
 import torch.nn.functional as F
@@ -74,7 +74,7 @@ def get_attn_mask(self, height, width, dtype, device):
         mask_windows = window_partition(img_mask, self.window_size)
         mask_windows = mask_windows.view(-1, self.window_size * self.window_size)
         attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
-        attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-100.0)).masked_fill(attn_mask == 0, float(0.0))
+        attn_mask = attn_mask.masked_fill(attn_mask != 0, (-100.0)).masked_fill(attn_mask == 0, 0.0)
     else:
         attn_mask = None
     return attn_mask
@@ -88,15 +88,12 @@ class _SwinEncoder(torch.nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        input_dimensions: Tuple[int, int],
-        head_mask: Optional[torch.FloatTensor] = None,
-        output_attentions: Optional[bool] = False,
-        output_hidden_states: Optional[bool] = False,
-        output_hidden_states_before_downsampling: Optional[bool] = False,
-        always_partition: Optional[bool] = False,
-        return_dict: Optional[bool] = True,
+        input_dimensions: tuple[int, int],
+        output_attentions: bool | None = False,
+        output_hidden_states: bool | None = False,
+        output_hidden_states_before_downsampling: bool | None = False,
+        always_partition: bool | None = False,
     ):
-        all_hidden_states = () if output_hidden_states else None
         all_reshaped_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
 
@@ -105,52 +102,35 @@ class _SwinEncoder(torch.nn.Module):
             # rearrange b (h w) c -> b c h w
             reshaped_hidden_state = hidden_states.view(batch_size, *input_dimensions, hidden_size)
             reshaped_hidden_state = reshaped_hidden_state.permute(0, 3, 1, 2)
-            all_hidden_states += (hidden_states,)
             all_reshaped_hidden_states += (reshaped_hidden_state,)
 
-        for _, layer_module in enumerate(self.layers):
-            layer_outputs = layer_module(hidden_states, input_dimensions, output_attentions, always_partition)
+        for layer_module in self.layers:
+            hidden_states, reshaped_hidden_state, attn_weights = layer_module(
+                hidden_states,
+                input_dimensions,
+                always_partition=always_partition,
+                output_hidden_states_before_downsampling=output_hidden_states_before_downsampling,
+                output_attentions=output_attentions,
+            )
 
-            hidden_states = layer_outputs[0]
-            hidden_states_before_downsampling = layer_outputs[1]
-            output_dimensions = layer_outputs[2]
-
-            input_dimensions = (output_dimensions[-2], output_dimensions[-1])
-
-            if output_hidden_states and output_hidden_states_before_downsampling:
-                batch_size, _, hidden_size = hidden_states_before_downsampling.shape
-                # rearrange b (h w) c -> b c h w
-                # here we use the original (not downsampled) height and width
-                reshaped_hidden_state = hidden_states_before_downsampling.view(
-                    batch_size, *(output_dimensions[0], output_dimensions[1]), hidden_size
-                )
-                reshaped_hidden_state = reshaped_hidden_state.permute(0, 3, 1, 2)
-                all_hidden_states += (hidden_states_before_downsampling,)
+            if output_hidden_states:
                 all_reshaped_hidden_states += (reshaped_hidden_state,)
-            elif output_hidden_states and not output_hidden_states_before_downsampling:
-                batch_size, _, hidden_size = hidden_states.shape
-                # rearrange b (h w) c -> b c h w
-                reshaped_hidden_state = hidden_states.view(batch_size, *input_dimensions, hidden_size)
-                reshaped_hidden_state = reshaped_hidden_state.permute(0, 3, 1, 2)
-                all_hidden_states += (hidden_states,)
-                all_reshaped_hidden_states += (reshaped_hidden_state,)
-
             if output_attentions:
-                all_self_attentions += layer_outputs[3:]
+                all_self_attentions += (attn_weights,)
+            if layer_module.downsample is not None:
+                input_dimensions = ((input_dimensions[0] + 1) // 2, (input_dimensions[1] + 1) // 2)
 
-        return tuple(
-            v
-            for v in [hidden_states, all_hidden_states, all_self_attentions, all_reshaped_hidden_states]
-            if v is not None
-        )
+        return tuple(v for v in [hidden_states, all_self_attentions, all_reshaped_hidden_states] if v is not None)
 
 
 class _SwinBackbone(torch.nn.Module):
     def __init__(self, model: "SwinBackbone", output_hidden_states: bool, output_attentions: bool):
         super().__init__()
         self.model = model
-        self.embeddings = model.embeddings
-        self.encoder = model.encoder
+        # transformers >=5.9 nests the embeddings/encoder inside a SwinModel (`model.swin`).
+        swin = getattr(model, "swin", model)
+        self.embeddings = swin.embeddings
+        self.encoder = swin.encoder
         self.stage_names = model.stage_names
         self.out_features = model.out_features
         self.hidden_states_norms = model.hidden_states_norms
@@ -165,12 +145,10 @@ class _SwinBackbone(torch.nn.Module):
         outputs = _SwinEncoder(self.encoder)(
             embedding_output,
             input_dimensions,
-            head_mask=None,
             output_attentions=self.output_attentions,
             output_hidden_states=True,
             output_hidden_states_before_downsampling=True,
             always_partition=True,
-            return_dict=False,
         )
 
         hidden_states = outputs[-1]
@@ -189,10 +167,12 @@ class _SwinBackbone(torch.nn.Module):
         output = (feature_maps,)
 
         if self.output_hidden_states:
-            output += (outputs[1],)
+            # transformers >=5.9 BackboneOutput.hidden_states carries the reshaped
+            # (B, C, H, W) per-stage states.
+            output += (hidden_states,)
 
         if self.output_attentions:
-            output += (outputs[2],)
+            output += (outputs[1],)
 
         return output
 
@@ -200,9 +180,14 @@ class _SwinBackbone(torch.nn.Module):
 class RBLNSwinBackbone(RBLNModel):
     @classmethod
     def _wrap_model_if_needed(cls, model: torch.nn.Module, rbln_config: RBLNSwinBackboneConfig) -> torch.nn.Module:
-        for layer in model.encoder.layers:
+        encoder = getattr(model, "swin", model).encoder
+        for layer in encoder.layers:
             for block in layer.blocks:
                 block.get_attn_mask = types.MethodType(get_attn_mask, block)
+
+        if rbln_config.output_attentions:
+            # sdpa (the transformers >=5.9 default for swin) returns attn_weights=None.
+            model.set_attn_implementation("eager")
 
         wrapper_cfg = {
             "output_hidden_states": rbln_config.output_hidden_states,
@@ -215,7 +200,7 @@ class RBLNSwinBackbone(RBLNModel):
         cls,
         model: "PreTrainedModel",
         rbln_config: RBLNModelConfig,
-        preprocessors: Optional[Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"]],
+        preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"] | None,
     ):
         for processor in preprocessors:
             if rbln_config.image_size is None and hasattr(processor, "image_processor"):
@@ -241,7 +226,7 @@ class RBLNSwinBackbone(RBLNModel):
         preprocessors: Union["AutoFeatureExtractor", "AutoProcessor", "AutoTokenizer"],
         model: Optional["PreTrainedModel"] = None,
         model_config: "SwinConfig" = None,
-        rbln_config: Optional[RBLNSwinBackboneConfig] = None,
+        rbln_config: RBLNSwinBackboneConfig | None = None,
     ) -> RBLNSwinBackboneConfig:
         if rbln_config.image_size is None:
             for processor in preprocessors:
@@ -259,7 +244,7 @@ class RBLNSwinBackbone(RBLNModel):
                     rbln_config.image_height,
                     rbln_config.image_width,
                 ],
-                "float32",
+                rbln_config.dtype,
             ),
         ]
 
@@ -268,12 +253,12 @@ class RBLNSwinBackbone(RBLNModel):
 
     def forward(
         self,
-        pixel_values: Optional[torch.FloatTensor] = None,
+        pixel_values: torch.FloatTensor | None = None,
         return_dict: bool = True,
         output_attentions: bool = None,
         output_hidden_states: bool = None,
         **kwargs,
-    ) -> Union[Tuple, BackboneOutput]:
+    ) -> tuple | BackboneOutput:
         """
         Forward pass for the RBLN-optimized Swin backbone model.
 

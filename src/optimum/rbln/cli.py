@@ -19,7 +19,6 @@ import json
 import shutil
 import sys
 from pathlib import Path
-from typing import Optional
 
 import rebel
 from huggingface_hub import hf_hub_download
@@ -154,16 +153,16 @@ def _label(text: str) -> str:
 
 EXAMPLES_TEXT = r"""
 Quick start examples
-  1) Compile a Llama chat model for causal LM
-     optimum-rbln-cli --output-dir ./compiled_llama \
-       --model-id meta-llama/Llama-2-7b-chat-hf \
-       --batch-size 2 --tensor-parallel-size 4
+  1) Compile a Qwen3 chat model for causal LM
+     optimum-rbln-cli --output-dir ./compiled_qwen3 \
+       --model-id Qwen/Qwen3-4B \
+       --batch_size 1 --max_seq_len 8192 --num_devices 4
 
   2) Compile with explicit class (Auto sequence classification)
      optimum-rbln-cli --output-dir ./compiled_bert \
        --class RBLNAutoModelForSequenceClassification \
        --model-id bert-base-uncased \
-       --batch-size 8 --max-seq-len 512
+       --batch_size 8 --max_seq_len 512
 
   3) Pass nested rbln_config with dot-notation (e.g., for diffusion)
      optimum-rbln-cli --output-dir ./compiled_sd \
@@ -171,10 +170,10 @@ Quick start examples
        --unet.batch_size 2 --vae.batch_size 1
 
   4) Pass HuggingFace model arguments with --hf-* prefix
-     optimum-rbln-cli --output-dir ./compiled_llama \
-       --model-id meta-llama/Llama-2-7b-chat-hf \
+     optimum-rbln-cli --output-dir ./compiled_qwen3 \
+       --model-id Qwen/Qwen3-4B \
        --hf-trust-remote-code true --hf-dtype bfloat16 \
-       --batch-size 2 --tensor-parallel-size 4
+       --batch_size 1 --num_devices 4
 
 Notes
   - Any extra --key value pairs not defined above are collected into rbln_config
@@ -327,12 +326,12 @@ def _read_json_from_model_id(
     model_id: str,
     filename: str,
     *,
-    hf_token: Optional[str] = None,
-    hf_revision: Optional[str] = None,
-    hf_cache_dir: Optional[str] = None,
+    hf_token: str | None = None,
+    hf_revision: str | None = None,
+    hf_cache_dir: str | None = None,
     hf_force_download: bool = False,
     hf_local_files_only: bool = False,
-) -> Optional[dict]:
+) -> dict | None:
     """Read a JSON file (e.g., config.json or model_index.json) from a local path or the HuggingFace Hub.
 
     Args:
@@ -377,12 +376,12 @@ def _read_json_from_model_id(
 def _infer_rbln_class_from_model_id(
     model_id: str,
     *,
-    hf_token: Optional[str] = None,
-    hf_revision: Optional[str] = None,
-    hf_cache_dir: Optional[str] = None,
+    hf_token: str | None = None,
+    hf_revision: str | None = None,
+    hf_cache_dir: str | None = None,
     hf_force_download: bool = False,
     hf_local_files_only: bool = False,
-) -> Optional[str]:
+) -> str | None:
     """Infer RBLN class name from model files by prefixing discovered class with 'RBLN'.
 
     Order of precedence:
@@ -427,9 +426,9 @@ def _infer_rbln_class_from_model_id(
 def _handle_kvcache_num_blocks(
     model_id: str,
     get: bool,
-    set_value: Optional[int],
-    output_dir: Optional[str] = None,
-    set_memory_budget: Optional[str] = None,
+    set_value: int | None,
+    output_dir: str | None = None,
+    set_memory_budget: str | None = None,
 ) -> None:
     """Read or set kvcache_num_blocks on an already-compiled local artifact directory.
 
@@ -442,7 +441,6 @@ def _handle_kvcache_num_blocks(
     rbln_config.json is the source of truth for the current block count.
     """
     from .transformers.modeling_attention_utils import RBLNDecoderOnlyFlashAttentionMixin
-    from .transformers.models.decoderonly.configuration_decoderonly import KVCacheMeta
 
     src_dir = Path(model_id)
     if not (src_dir.exists() and src_dir.is_dir()):
@@ -452,7 +450,7 @@ def _handle_kvcache_num_blocks(
 
     config_cls, _ = load_config(model_id)
     rbln_config = config_cls.from_pretrained(model_id)
-    if not (hasattr(rbln_config, "kvcache_num_blocks") and hasattr(rbln_config, "kvcache_metas")):
+    if not (hasattr(rbln_config, "kvcache_num_blocks") and hasattr(rbln_config, "cache_metas")):
         raise ValueError(
             f"The model at '{model_id}' ({config_cls.__name__}) does not expose a top-level "
             "resizable kv-cache. Only decoder-only causal LM artifacts are supported."
@@ -465,10 +463,6 @@ def _handle_kvcache_num_blocks(
     compiled_models = {p.stem: rebel.RBLNCompiledModel(p) for p in sorted(src_dir.glob("*.rbln"))}
     if not compiled_models:
         raise FileNotFoundError(f"No .rbln compiled models found in '{model_id}'.")
-
-    rbln_config.kvcache_metas = [
-        m if isinstance(m, KVCacheMeta) else KVCacheMeta(**m) for m in rbln_config.kvcache_metas
-    ]
 
     if set_value is not None:
         target = set_value
@@ -703,7 +697,7 @@ def main():
 
     try:
         # Resolve or infer model class for compilation
-        resolved_class_name: Optional[str] = args.model_class
+        resolved_class_name: str | None = args.model_class
         if not resolved_class_name:
             resolved_class_name = _infer_rbln_class_from_model_id(
                 args.model_id,

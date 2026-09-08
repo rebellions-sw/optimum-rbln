@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Union
 
 import rebel
 import torch
 from diffusers import CosmosTransformer3DModel
+from diffusers.models.embeddings import Timesteps
 from diffusers.models.modeling_outputs import Transformer2DModelOutput
 from diffusers.models.transformers.transformer_cosmos import (
     CosmosEmbedding,
@@ -29,6 +31,7 @@ from torchvision import transforms
 
 from ....configuration_utils import DEFAULT_COMPILED_MODEL_NAME, RBLNCompileConfig, RBLNModelConfig
 from ....modeling import RBLNModel
+from ....modeling_rope_utils import np_cos, np_sin
 from ....utils.logging import get_logger
 from ...configurations import RBLNCosmosTransformer3DModelConfig
 
@@ -40,6 +43,50 @@ if TYPE_CHECKING:
 
 
 logger = get_logger(__name__)
+
+
+class RBLNCosmosRotaryPosEmbed(CosmosRotaryPosEmbed):
+    def forward(self, hidden_states: torch.Tensor, fps: int | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+        _, _, num_frames, height, width = hidden_states.shape
+        pe_size = [num_frames // self.patch_size[0], height // self.patch_size[1], width // self.patch_size[2]]
+
+        h_theta = 10000.0 * self.h_ntk_factor
+        w_theta = 10000.0 * self.w_ntk_factor
+        t_theta = 10000.0 * self.t_ntk_factor
+
+        seq = torch.arange(max(self.max_size), dtype=torch.float32)
+        dim_h_range = torch.arange(0, self.dim_h, 2, dtype=torch.float32)[: (self.dim_h // 2)] / self.dim_h
+        dim_w_range = torch.arange(0, self.dim_w, 2, dtype=torch.float32)[: (self.dim_w // 2)] / self.dim_w
+        dim_t_range = torch.arange(0, self.dim_t, 2, dtype=torch.float32)[: (self.dim_t // 2)] / self.dim_t
+        h_spatial_freqs = 1.0 / (h_theta**dim_h_range)
+        w_spatial_freqs = 1.0 / (w_theta**dim_w_range)
+        temporal_freqs = 1.0 / (t_theta**dim_t_range)
+
+        emb_h = torch.outer(seq[: pe_size[1]], h_spatial_freqs)[None, :, None, :].repeat(pe_size[0], 1, pe_size[2], 1)
+        emb_w = torch.outer(seq[: pe_size[2]], w_spatial_freqs)[None, None, :, :].repeat(pe_size[0], pe_size[1], 1, 1)
+        if fps is None:
+            emb_t = torch.outer(seq[: pe_size[0]], temporal_freqs)
+        else:
+            emb_t = torch.outer(seq[: pe_size[0]] / fps * self.base_fps, temporal_freqs)
+        emb_t = emb_t[:, None, None, :].repeat(1, pe_size[1], pe_size[2], 1)
+
+        freqs = torch.cat([emb_t, emb_h, emb_w] * 2, dim=-1).flatten(0, 2).float()
+        return np_cos(freqs), np_sin(freqs)
+
+
+class RBLNTimesteps(Timesteps):
+    def forward(self, timesteps: torch.Tensor) -> torch.Tensor:
+        half_dim = self.num_channels // 2
+        exponent = -math.log(10000) * torch.arange(half_dim, dtype=torch.float32)
+        exponent = exponent / (half_dim - self.downscale_freq_shift)
+        emb = self.scale * (timesteps[:, None].float() * torch.exp(exponent)[None, :])
+
+        emb = torch.cat([np_sin(emb), np_cos(emb)], dim=-1)
+        if self.flip_sin_to_cos:
+            emb = torch.cat([emb[:, half_dim:], emb[:, :half_dim]], dim=-1)
+        if self.num_channels % 2 == 1:
+            emb = torch.nn.functional.pad(emb, (0, 1, 0, 0))
+        return emb
 
 
 class CosmosTransformer3DModelWrapper(torch.nn.Module):
@@ -65,8 +112,8 @@ class CosmosTransformer3DModelWrapper(torch.nn.Module):
         temb: torch.Tensor,
         image_rotary_emb_0: torch.Tensor,
         image_rotary_emb_1: torch.Tensor,
-        extra_pos_emb: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.Tensor] = None,
+        extra_pos_emb: torch.Tensor | None = None,
+        attention_mask: torch.Tensor | None = None,
         return_dict: bool = False,
     ):
         image_rotary_emb = [image_rotary_emb_0, image_rotary_emb_1]
@@ -115,7 +162,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         patch_embed_in_channels = (
             self.config.in_channels + 1 if self.config.concat_padding_mask else self.config.in_channels
         )
-        self.rope = CosmosRotaryPosEmbed(
+        self.rope = RBLNCosmosRotaryPosEmbed(
             hidden_size=self.config.attention_head_dim,
             max_size=self.config.max_size,
             patch_size=self.config.patch_size,
@@ -131,19 +178,26 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
                 patch_size=self.config.patch_size,
             )
             self.learnable_pos_embed.load_state_dict(artifacts["learnable_pos_embed"])
+            self.learnable_pos_embed.to(self.rbln_config.dtype)
         self.patch_embed = CosmosPatchEmbed(patch_embed_in_channels, hidden_size, self.config.patch_size, bias=False)
         self.patch_embed.load_state_dict(artifacts["patch_embed"])
+        self.patch_embed.to(self.rbln_config.dtype)
         self.time_embed = CosmosEmbedding(hidden_size, hidden_size)
+        time_proj = self.time_embed.time_proj
+        self.time_embed.time_proj = RBLNTimesteps(
+            time_proj.num_channels, time_proj.flip_sin_to_cos, time_proj.downscale_freq_shift, time_proj.scale
+        )
         self.time_embed.load_state_dict(artifacts["time_embed"])
+        self.time_embed.to(self.rbln_config.dtype)
 
     def compute_embedding(
         self,
         hidden_states: torch.Tensor,
         timestep: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        fps: Optional[int] = None,
-        condition_mask: Optional[torch.Tensor] = None,
-        padding_mask: Optional[torch.Tensor] = None,
+        attention_mask: torch.Tensor | None = None,
+        fps: int | None = None,
+        condition_mask: torch.Tensor | None = None,
+        padding_mask: torch.Tensor | None = None,
     ):
         batch_size, num_channels, num_frames, height, width = hidden_states.shape
 
@@ -250,7 +304,7 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
                     hidden_dim,
                     hidden_size,
                 ],
-                "float32",
+                rbln_config.dtype,
             ),
             (
                 "encoder_hidden_states",
@@ -259,13 +313,13 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
                     rbln_config.max_seq_len,
                     rbln_config.embedding_dim,
                 ],
-                "float32",
+                rbln_config.dtype,
             ),
-            ("embedded_timestep", [rbln_config.batch_size, hidden_size], "float32"),
-            ("temb", [1, hidden_size * 3], "float32"),
+            ("embedded_timestep", [rbln_config.batch_size, hidden_size], rbln_config.dtype),
+            ("temb", [1, hidden_size * 3], rbln_config.dtype),
             ("image_rotary_emb_0", [hidden_dim, attention_head_dim], "float32"),
             ("image_rotary_emb_1", [hidden_dim, attention_head_dim], "float32"),
-            ("extra_pos_emb", [rbln_config.batch_size, hidden_dim, hidden_size], "float32"),
+            ("extra_pos_emb", [rbln_config.batch_size, hidden_dim, hidden_size], rbln_config.dtype),
         ]
 
         compile_config = RBLNCompileConfig(input_info=input_info)
@@ -275,9 +329,9 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
     @classmethod
     def _create_runtimes(
         cls,
-        compiled_models: List[rebel.RBLNCompiledModel],
+        compiled_models: list[rebel.RBLNCompiledModel],
         rbln_config: RBLNModelConfig,
-    ) -> List[rebel.Runtime]:
+    ) -> list[rebel.Runtime]:
         if DEFAULT_COMPILED_MODEL_NAME not in rbln_config.device_map:
             cls._raise_missing_compiled_file_error([DEFAULT_COMPILED_MODEL_NAME])
 
@@ -297,12 +351,12 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
         hidden_states: torch.Tensor,
         timestep: torch.Tensor,
         encoder_hidden_states: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        fps: Optional[int] = None,
-        condition_mask: Optional[torch.Tensor] = None,
-        padding_mask: Optional[torch.Tensor] = None,
+        attention_mask: torch.Tensor | None = None,
+        fps: int | None = None,
+        condition_mask: torch.Tensor | None = None,
+        padding_mask: torch.Tensor | None = None,
         return_dict: bool = True,
-    ) -> Union[Transformer2DModelOutput, Tuple]:
+    ) -> Transformer2DModelOutput | tuple:
         """
         Forward pass for the RBLN-optimized CosmosTransformer3DModel.
 
@@ -310,13 +364,13 @@ class RBLNCosmosTransformer3DModel(RBLNModel):
             hidden_states (torch.Tensor): The currently predicted image embeddings.
             timestep (torch.Tensor): Current denoising step.
             encoder_hidden_states (torch.Tensor): Conditional embeddings (embeddings computed from the input conditions such as prompts) to use.
-            fps: (Optional[int]): Frames per second for the video being generated.
-            condition_mask (Optional[torch.Tensor]): Tensor of condition mask.
-            padding_mask (Optional[torch.Tensor]): Tensor of padding mask.
+            fps: (int | None): Frames per second for the video being generated.
+            condition_mask (torch.Tensor | None): Tensor of condition mask.
+            padding_mask (torch.Tensor | None): Tensor of padding mask.
             return_dict (bool): Whether or not to return a [`~diffusers.models.modeling_output.Transformer2DModelOutput`] instead of a plain tuple.
 
         Returns:
-            (Union[`~diffusers.models.modeling_output.Transformer2DModelOutput`, Tuple])
+            (`~diffusers.models.modeling_output.Transformer2DModelOutput` | tuple)
         """
         (
             hidden_states,
