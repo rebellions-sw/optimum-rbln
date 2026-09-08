@@ -461,7 +461,6 @@ def test_qwen3_5_gdn_chunk_size_default_is_decoupled_from_prefill():
     from optimum.rbln import RBLNQwen3_5ForCausalLMConfig, RBLNQwen3_5ModelConfig
     from optimum.rbln.transformers.models.qwen3_5.configuration_qwen3_5 import MAX_GDN_CHUNK_SIZE
 
-    # The multimodal config only constructs with use_inputs_embeds=True.
     for cls, kwargs in (
         (RBLNQwen3_5ForCausalLMConfig, {}),
         (RBLNQwen3_5ModelConfig, {"use_inputs_embeds": True}),
