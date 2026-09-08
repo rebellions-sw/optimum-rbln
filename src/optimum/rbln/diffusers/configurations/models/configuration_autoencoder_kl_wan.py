@@ -81,8 +81,6 @@ class RBLNAutoencoderKLWanConfig(RBLNModelConfig):
         self.height = height
         self.width = width
 
-        # The pipeline hook sets this to the transformer's out_channels; a standalone compile
-        # derives it from the VAE z_dim in _update_rbln_config.
         self.num_channels_latents = num_channels_latents
         self.vae_scale_factor_temporal = vae_scale_factor_temporal
         self.vae_scale_factor_spatial = vae_scale_factor_spatial
