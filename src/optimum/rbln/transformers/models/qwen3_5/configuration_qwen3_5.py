@@ -18,6 +18,11 @@ from ....configuration_utils import RBLNModelConfig
 from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelConfig, RBLNDecoderOnlyModelForCausalLMConfig
 
 
+# The GatedDeltaNet prefill sub-chunk kernel supports at most this width, on every
+# NPU tier — so it is the gdn_chunk_size default, independent of prefill_chunk_size.
+MAX_GDN_CHUNK_SIZE = 128
+
+
 class RBLNQwen3_5ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
     """
     Configuration class for RBLN Qwen3.5 (text backbone) causal language models.
@@ -52,13 +57,13 @@ class RBLNQwen3_5ForCausalLMConfig(RBLNDecoderOnlyModelForCausalLMConfig):
         Args:
             gdn_chunk_size (Optional[int]): GatedDeltaNet prefill sub-chunk size. Each prefill window
                 is split into `prefill_chunk_size // gdn_chunk_size` sub-chunks processed by the chunked
-                delta rule. Must divide `prefill_chunk_size`. Defaults to 128.
+                delta rule. Must divide `prefill_chunk_size`. Defaults to `MAX_GDN_CHUNK_SIZE` (128).
             linear_attention_layers (list[int] | None): The linear_attention (GatedDeltaNet)
                 layer indices, populated automatically from `layer_types` at compile time (not user-set).
             kwargs: Additional arguments passed to `RBLNDecoderOnlyModelForCausalLMConfig`.
         """
         super().__init__(**kwargs)
-        self.gdn_chunk_size = 128 if gdn_chunk_size is None else gdn_chunk_size
+        self.gdn_chunk_size = MAX_GDN_CHUNK_SIZE if gdn_chunk_size is None else gdn_chunk_size
         self.linear_attention_layers = linear_attention_layers or []
 
 
@@ -80,13 +85,13 @@ class RBLNQwen3_5TextModelConfig(RBLNDecoderOnlyModelConfig):
         Args:
             gdn_chunk_size (Optional[int]): GatedDeltaNet prefill sub-chunk size. Each prefill window
                 is split into `prefill_chunk_size // gdn_chunk_size` sub-chunks processed by the chunked
-                delta rule. Must divide `prefill_chunk_size`. Defaults to 128.
+                delta rule. Must divide `prefill_chunk_size`. Defaults to `MAX_GDN_CHUNK_SIZE` (128).
             linear_attention_layers (list[int] | None): The linear_attention (GatedDeltaNet)
                 layer indices, populated automatically from `layer_types` at compile time (not user-set).
             kwargs: Additional arguments passed to `RBLNDecoderOnlyModelConfig`.
         """
         super().__init__(**kwargs)
-        self.gdn_chunk_size = 128 if gdn_chunk_size is None else gdn_chunk_size
+        self.gdn_chunk_size = MAX_GDN_CHUNK_SIZE if gdn_chunk_size is None else gdn_chunk_size
         self.linear_attention_layers = linear_attention_layers or []
 
 
@@ -149,7 +154,7 @@ class RBLNQwen3_5ModelConfig(RBLNDecoderOnlyModelConfig):
         Args:
             gdn_chunk_size (Optional[int]): GatedDeltaNet prefill sub-chunk size. Each prefill window is
                 split into `prefill_chunk_size // gdn_chunk_size` sub-chunks processed by the chunked
-                delta rule. Must divide `prefill_chunk_size`. Defaults to 128.
+                delta rule. Must divide `prefill_chunk_size`. Defaults to `MAX_GDN_CHUNK_SIZE` (128).
             linear_attention_layers (list[int] | None): The linear_attention (GatedDeltaNet)
                 layer indices, populated automatically from `layer_types` at compile time (not user-set).
             visual (Optional[RBLNModelConfig]): Configuration for the vision encoder submodule.
@@ -169,7 +174,7 @@ class RBLNQwen3_5ModelConfig(RBLNDecoderOnlyModelConfig):
         # The vision encoder runs one image at a time, so force batch_size=1 on the submodule.
         self.visual = self.initialize_submodule_config(submodule_config=visual, force_kwargs=True, batch_size=1)
         self._load_visual_runtime = _load_visual_runtime
-        self.gdn_chunk_size = 128 if gdn_chunk_size is None else gdn_chunk_size
+        self.gdn_chunk_size = MAX_GDN_CHUNK_SIZE if gdn_chunk_size is None else gdn_chunk_size
         self.linear_attention_layers = linear_attention_layers or []
 
 
@@ -212,7 +217,7 @@ class RBLNQwen3_5ForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausalLMC
         Args:
             gdn_chunk_size (Optional[int]): GatedDeltaNet prefill sub-chunk size. Each prefill window is
                 split into `prefill_chunk_size // gdn_chunk_size` sub-chunks. Must divide
-                `prefill_chunk_size`. Defaults to 128. See rbln_chunk_gated_delta_rule.
+                `prefill_chunk_size`. Defaults to `MAX_GDN_CHUNK_SIZE` (128). See rbln_chunk_gated_delta_rule.
             linear_attention_layers (list[int] | None): The linear_attention (GatedDeltaNet)
                 layer indices, populated automatically from `layer_types` at compile time (not user-set).
             use_inputs_embeds (bool): Must be True — the vision encoder output is injected into inputs_embeds.
@@ -234,5 +239,5 @@ class RBLNQwen3_5ForConditionalGenerationConfig(RBLNDecoderOnlyModelForCausalLMC
         # The vision encoder runs one image at a time, so force batch_size=1 on the submodule.
         self.visual = self.initialize_submodule_config(submodule_config=visual, force_kwargs=True, batch_size=1)
         self._load_visual_runtime = _load_visual_runtime
-        self.gdn_chunk_size = 128 if gdn_chunk_size is None else gdn_chunk_size
+        self.gdn_chunk_size = MAX_GDN_CHUNK_SIZE if gdn_chunk_size is None else gdn_chunk_size
         self.linear_attention_layers = linear_attention_layers or []
