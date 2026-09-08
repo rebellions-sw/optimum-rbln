@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import torch
-from torch import Tensor
+from torch import Tensor, nn
 
 
 def compute_masked_routing_weight_softmax_first(router_logits: Tensor, top_k: int, renormalize: bool) -> Tensor:
@@ -40,3 +40,15 @@ def compute_masked_routing_weight_topk_first(router_logits: Tensor, top_k: int) 
     masked = torch.zeros_like(router_logits_t, dtype=router_logits.dtype)
     masked.scatter_(0, topk_ids, topk_weights)
     return masked  # [E, T]
+
+
+def release_checkpoint_mmap_(model: nn.Module, experts_class: str) -> nn.Module:
+    # transformers rebuilds the experts at load (stack / transpose into new memory) but leaves every other
+    # weight as a view of the safetensors mmap, which keeps the whole checkpoint resident. Copy those out
+    # so the mapping is released.
+    for module in model.modules():
+        if module.__class__.__name__ == experts_class:
+            continue
+        for tensor in list(module.parameters(recurse=False)) + list(module.buffers(recurse=False)):
+            tensor.data = tensor.data.clone()
+    return model
