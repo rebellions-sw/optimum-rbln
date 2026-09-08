@@ -2,6 +2,7 @@ import glob
 import json
 import os
 import struct
+import sys
 import tempfile
 import unittest
 import warnings
@@ -1308,6 +1309,7 @@ class TestDisallowedLlama_4(DisallowedTestBase.DisallowedTest):
     RBLN_CLASS_KWARGS = {"rbln_config": {"attn_impl": "flash_attn", "kvcache_partition_len": 2048}}
 
 
+@unittest.skipUnless(sys.platform == "linux", "reads /proc/self/maps")
 class TestReleaseCheckpointMmap(unittest.TestCase):
     # transformers stacks per-expert checkpoint tensors into new memory but leaves the other weights as views of
     # the safetensors mmap; get_pytorch_model must clone those views so the checkpoint is unmapped.
@@ -1389,6 +1391,7 @@ class TestReleaseCheckpointMmap(unittest.TestCase):
 
                 model = rbln_cls.get_pytorch_model(tmp)
                 self.assertEqual(self._file_backed(model), [])
+                self.assertEqual(self._checkpoint_ranges(), [])
                 for (name, p), (_, q) in zip(model.named_parameters(), src.named_parameters(), strict=True):
                     self.assertTrue(torch.equal(p, q), name)
 
@@ -1470,6 +1473,7 @@ class TestReleaseCheckpointMmap(unittest.TestCase):
 
             model = RBLNQwen3VLMoeForConditionalGeneration.get_pytorch_model(tmp)
             self.assertEqual(self._file_backed(model), [])
+            self.assertEqual(self._checkpoint_ranges(), [])
             for (name, p), (_, q) in zip(model.named_parameters(), src.named_parameters(), strict=True):
                 self.assertTrue(torch.equal(p, q), name)
 
