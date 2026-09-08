@@ -403,6 +403,70 @@ class TestPrefillChunkSizeDefault:
             self._resolve(prefill_chunk_size=invalid_chunk_size, npu="RBLN-CA22")
 
 
+class TestCRTierEagerSeqLenLimit:
+    """RBLN-CR13+ eager attention tops out at max_seq_len 32767 (int16 sequence indexing):
+    an unset `attn_impl` at >=32768 defaults to flash_attn, an explicit 'eager' is rejected
+    up front instead of crashing the native compiler."""
+
+    @staticmethod
+    def _defaults(max_seq_len=32768, npu=None, **kwargs):
+        from optimum.rbln.transformers.modeling_attention_utils import set_default_values
+
+        return set_default_values(max_seq_len=max_seq_len, npu=npu, **kwargs)
+
+    @staticmethod
+    def _validate(attn_impl="eager", max_seq_len=32768, npu=None):
+        from optimum.rbln.transformers.modeling_attention_utils import validate_attention_method
+
+        block_size = 16384 if attn_impl == "flash_attn" else max_seq_len
+        partition_len = 16384 if attn_impl == "flash_attn" else None
+        validate_attention_method(
+            attn_impl=attn_impl,
+            kvcache_partition_len=partition_len,
+            kvcache_block_size=block_size,
+            max_seq_len=max_seq_len,
+            npu=npu,
+        )
+
+    def test_unset_attn_impl_upgrades_to_flash_on_cr13(self):
+        attn_impl, partition_len, block_size, _ = self._defaults(npu="RBLN-CR13")
+        assert attn_impl == "flash_attn"
+        assert partition_len == 16384
+        assert block_size == 16384
+
+    def test_unset_attn_impl_stays_eager_on_non_cr(self):
+        attn_impl, _, _, _ = self._defaults(npu="RBLN-CA22")
+        assert attn_impl == "eager"
+
+    def test_unset_attn_impl_stays_eager_below_the_limit(self):
+        attn_impl, _, _, _ = self._defaults(max_seq_len=16384, npu="RBLN-CR13")
+        assert attn_impl == "eager"
+
+    def test_unset_attn_impl_uses_attached_npu(self, monkeypatch):
+        monkeypatch.setattr(rebel, "get_npu_name", lambda *args: "RBLN-CR13")
+        attn_impl, _, _, _ = self._defaults()
+        assert attn_impl == "flash_attn"
+
+    def test_explicit_flash_is_untouched(self):
+        attn_impl, partition_len, _, _ = self._defaults(attn_impl="flash_attn", npu="RBLN-CR13")
+        assert attn_impl == "flash_attn"
+        assert partition_len == 16384
+
+    def test_explicit_eager_32k_rejected_on_cr13(self):
+        with pytest.raises(ValueError, match="32767"):
+            self._validate(npu="RBLN-CR13")
+
+    def test_explicit_eager_32k_allowed_on_non_cr(self):
+        self._validate(npu="RBLN-CA22")
+
+    def test_explicit_eager_below_the_limit_allowed_on_cr13(self):
+        self._validate(max_seq_len=16384, npu="RBLN-CR13")
+
+    def test_eager_above_generic_limit_still_rejected_anywhere(self):
+        with pytest.raises(ValueError, match="exceeds the limit"):
+            self._validate(max_seq_len=65536, npu="RBLN-CA22")
+
+
 @pytest.mark.skip(reason="Compilation fails: cross-compiling for RBLN-CR03 on a CA25 runner, need to fix it")
 def test_prefill_chunk_size_npu_wiring_e2e(tmp_path):
     """Compile-time wiring: `rbln_config.npu` flows through `_update_attention_config` into the

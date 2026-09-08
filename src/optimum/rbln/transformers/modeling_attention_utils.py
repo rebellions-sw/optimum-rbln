@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import rebel
 
 from ..utils.logging import get_logger
-from ..utils.runtime_utils import get_available_dram_per_chiplet, parse_byte_size
+from ..utils.runtime_utils import get_available_dram_per_chiplet, npu_is_cr13_or_later, parse_byte_size
 
 
 if TYPE_CHECKING:
@@ -33,7 +33,20 @@ def set_default_values(
     npu: str | None = None,
 ) -> tuple[str, int, int, int]:
     if attn_impl is None:
-        attn_impl = "eager"
+        # RBLN-CR13+ eager attention indexes the sequence axis with int16, so its ceiling is
+        # 32767 — an unset attn_impl at >=32k would default into a config the target can never
+        # compile. Switch it to flash attention, like the kvcache_partition_len switch below.
+        if max_seq_len is not None and max_seq_len >= DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH:
+            npu = npu or rebel.get_npu_name(0)
+            if npu_is_cr13_or_later(npu):
+                attn_impl = "flash_attn"
+                logger.warning(
+                    f"`attn_impl` was not explicitly set and `max_seq_len` ({max_seq_len}) exceeds the "
+                    f"eager-attention limit ({DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH - 1}) on {npu}. "
+                    "`attn_impl` has been automatically set to 'flash_attn'."
+                )
+        if attn_impl is None:
+            attn_impl = "eager"
 
     if prefill_chunk_size is None:
         # RBLN-CR NPUs use a larger prefill chunk for better prefill performance.
@@ -64,7 +77,13 @@ def set_default_values(
     return attn_impl, kvcache_partition_len, kvcache_block_size, prefill_chunk_size
 
 
-def validate_attention_method(attn_impl: str, kvcache_partition_len: int, kvcache_block_size: int, max_seq_len: int):
+def validate_attention_method(
+    attn_impl: str,
+    kvcache_partition_len: int,
+    kvcache_block_size: int,
+    max_seq_len: int,
+    npu: str | None = None,
+):
     if attn_impl not in ["eager", "flash_attn"]:
         raise ValueError(f"Unknown `attn_impl` : {attn_impl}. (Available : 'eager', 'flash_attn`)")
 
@@ -76,13 +95,20 @@ def validate_attention_method(attn_impl: str, kvcache_partition_len: int, kvcach
     # 1. `max_seq_len` should be multiple of `partition_len`.
     # 2. 1k <= `partition_len` <= 32k.
     # 3. `max_seq_len` should be at least 2048 (2 * minimum partition length).
-    if attn_impl == "eager" and max_seq_len > DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH:
-        raise ValueError(
-            f"`max_seq_len` is set to {max_seq_len}, "
-            f"which exceeds the limit of {DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH} for 'eager' attention. "
-            f"Please reduce the `max_seq_len` to {DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH} or lower,"
-            " or consider switching `attn_impl` to 'flash_attn' for larger sequence lengths."
-        )
+    if attn_impl == "eager":
+        max_eager_seq_len = DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH
+        if max_seq_len >= DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH and npu_is_cr13_or_later(
+            npu or rebel.get_npu_name(0)
+        ):
+            # int16 sequence indexing: 32768 passes the generic bound but cannot compile on CR13+.
+            max_eager_seq_len = DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH - 1
+        if max_seq_len > max_eager_seq_len:
+            raise ValueError(
+                f"`max_seq_len` is set to {max_seq_len}, "
+                f"which exceeds the limit of {max_eager_seq_len} for 'eager' attention on this target. "
+                f"Please reduce the `max_seq_len` to {max_eager_seq_len} or lower,"
+                " or consider switching `attn_impl` to 'flash_attn' for larger sequence lengths."
+            )
 
     if attn_impl == "flash_attn":
         if max_seq_len // kvcache_partition_len < 2 or max_seq_len % kvcache_partition_len != 0:
