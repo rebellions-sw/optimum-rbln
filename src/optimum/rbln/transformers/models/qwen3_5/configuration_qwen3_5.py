@@ -18,8 +18,6 @@ from ....configuration_utils import RBLNModelConfig
 from ..decoderonly.configuration_decoderonly import RBLNDecoderOnlyModelConfig, RBLNDecoderOnlyModelForCausalLMConfig
 
 
-# The GatedDeltaNet prefill sub-chunk kernel supports at most this width, on every
-# NPU tier — so it is the gdn_chunk_size default, independent of prefill_chunk_size.
 MAX_GDN_CHUNK_SIZE = 128
 
 
