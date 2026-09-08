@@ -763,7 +763,6 @@ class RBLNQwen2_5_VLForConditionalGeneration(
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         self._require_sorted_batch_inputs(input_ids if input_ids is not None else inputs_embeds, inputs_sorted)
         output_hidden_states = _validate_output_hidden_states(output_hidden_states, self.rbln_config)
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         # Prefill
         if cache_position is None:
             if attention_mask is None:
