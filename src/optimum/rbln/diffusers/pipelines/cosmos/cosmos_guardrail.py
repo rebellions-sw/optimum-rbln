@@ -346,10 +346,6 @@ class RBLNQwen3Guard(Qwen3Guard):
         self.model.save_pretrained(cache_dir)
         self.tokenizer.save_pretrained(cache_dir)
 
-    # extract_label_and_categories / is_safe are inherited from the upstream Qwen3Guard:
-    # RBLN models expose `.device` (cpu) and a no-op `.to()`, so the upstream implementation
-    # runs unchanged on the compiled model.
-
 
 class RBLNCosmosSafetyChecker(CosmosSafetyChecker):
     """

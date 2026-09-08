@@ -228,8 +228,7 @@ class RBLNCosmos2VideoToWorldPipelineConfig(RBLNCosmos2PipelineBaseConfig):
 class RBLNCosmos2_5_PredictBasePipelineConfig(RBLNModelConfig):
     """Config for Cosmos-Predict2.5 Pipeline"""
 
-    # submodules = ["text_encoder", "transformer", "vae", "safety_checker"]
-    submodules = ["text_encoder", "transformer", "vae"]
+    submodules = ["text_encoder", "transformer", "vae", "safety_checker"]
     _vae_uses_encoder = True
     _default_height = 704
     _default_width = 1280
@@ -300,13 +299,13 @@ class RBLNCosmos2_5_PredictBasePipelineConfig(RBLNModelConfig):
             width=width,
             num_frames=num_frames,
         )
-        # self.safety_checker = self.initialize_submodule_config(
-        #     safety_checker,
-        #     cls_name="RBLNCosmosSafetyCheckerConfig",
-        #     batch_size=batch_size,
-        #     height=height,
-        #     width=width,
-        # )
+        self.safety_checker = self.initialize_submodule_config(
+            safety_checker,
+            cls_name="RBLNCosmosSafetyCheckerConfig",
+            batch_size=batch_size,
+            height=height,
+            width=width,
+        )
 
     @property
     def batch_size(self):
