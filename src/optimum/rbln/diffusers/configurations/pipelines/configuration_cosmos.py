@@ -89,7 +89,7 @@ class RBLNCosmosPipelineBaseConfig(RBLNModelConfig):
             vae,
             cls_name="RBLNAutoencoderKLCosmosConfig",
             batch_size=batch_size,
-            uses_encoder=self.__class__._vae_uses_encoder,
+            uses_encoder=self._vae_uses_encoder,
             height=height,
             width=width,
             num_frames=num_frames,
@@ -126,6 +126,9 @@ class RBLNCosmosVideoToWorldPipelineConfig(RBLNCosmosPipelineBaseConfig):
 class RBLNCosmos2PipelineBaseConfig(RBLNModelConfig):
     submodules = ["text_encoder", "transformer", "vae", "safety_checker"]
     _vae_uses_encoder = False
+    _default_height = 704
+    _default_width = 1280
+    _default_num_frames = 93
 
     def __init__(
         self,
@@ -161,6 +164,9 @@ class RBLNCosmos2PipelineBaseConfig(RBLNModelConfig):
         super().__init__(**kwargs)
 
         max_seq_len = max_seq_len or 512
+        height = height if height is not None else self._default_height
+        width = width if width is not None else self._default_width
+        num_frames = num_frames if num_frames is not None else self._default_num_frames
 
         self.text_encoder = self.initialize_submodule_config(
             text_encoder,
@@ -176,13 +182,13 @@ class RBLNCosmos2PipelineBaseConfig(RBLNModelConfig):
             height=height,
             width=width,
             num_frames=num_frames,
-            uses_per_frame_timestep=self.__class__._vae_uses_encoder,  # predict2: only v2w feeds per-frame timesteps
+            uses_per_frame_timestep=self._vae_uses_encoder,  # predict2: only v2w feeds per-frame timesteps
         )
         self.vae = self.initialize_submodule_config(
             vae,
             cls_name="RBLNAutoencoderKLWanConfig",
             batch_size=batch_size,
-            uses_encoder=self.__class__._vae_uses_encoder,
+            uses_encoder=self._vae_uses_encoder,
             height=height,
             width=width,
             num_frames=num_frames,
@@ -208,6 +214,9 @@ class RBLNCosmos2TextToImagePipelineConfig(RBLNCosmos2PipelineBaseConfig):
     """Config for Cosmos-Predict2 Text2Image Pipeline"""
 
     _vae_uses_encoder = False
+    _default_height = 768
+    _default_width = 1360
+    _default_num_frames = 1
 
 
 class RBLNCosmos2VideoToWorldPipelineConfig(RBLNCosmos2PipelineBaseConfig):
@@ -221,11 +230,10 @@ class RBLNCosmos2_5_PredictBasePipelineConfig(RBLNModelConfig):
 
     # submodules = ["text_encoder", "transformer", "vae", "safety_checker"]
     submodules = ["text_encoder", "transformer", "vae"]
-    # submodules = ["text_encoder", "transformer"]
-    # submodules = ["vae"]
-    # submodules = ["transformer"]
-    # submodules = ["text_encoder"]
     _vae_uses_encoder = True
+    _default_height = 704
+    _default_width = 1280
+    _default_num_frames = 93
 
     def __init__(
         self,
@@ -261,6 +269,9 @@ class RBLNCosmos2_5_PredictBasePipelineConfig(RBLNModelConfig):
         super().__init__(**kwargs)
 
         max_seq_len = max_seq_len or 512
+        height = height if height is not None else self._default_height
+        width = width if width is not None else self._default_width
+        num_frames = num_frames if num_frames is not None else self._default_num_frames
 
         self.text_encoder = self.initialize_submodule_config(
             text_encoder,
@@ -284,7 +295,7 @@ class RBLNCosmos2_5_PredictBasePipelineConfig(RBLNModelConfig):
             vae,
             cls_name="RBLNAutoencoderKLWanConfig",
             batch_size=batch_size,
-            uses_encoder=self.__class__._vae_uses_encoder,
+            uses_encoder=self._vae_uses_encoder,
             height=height,
             width=width,
             num_frames=num_frames,

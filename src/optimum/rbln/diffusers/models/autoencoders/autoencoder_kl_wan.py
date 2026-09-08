@@ -544,6 +544,14 @@ class RBLNAutoencoderKLWan(RBLNModel):
         model_config: "PretrainedConfig",
         rbln_config: RBLNAutoencoderKLWanConfig,
     ) -> RBLNAutoencoderKLWanConfig:
+        missing = [key for key in ("height", "width", "num_frames") if getattr(rbln_config, key) is None]
+        if missing:
+            raise ValueError(
+                f"{', '.join(f'`{key}`' for key in missing)} must be specified to compile the Wan VAE. "
+                "Compiling through a pipeline fills them with that pipeline's defaults; a standalone "
+                "compile must pass them in rbln_config."
+            )
+
         batch_size = 1 if rbln_config.use_slicing else rbln_config.batch_size
         compile_cfgs = []
         if rbln_config.uses_encoder:

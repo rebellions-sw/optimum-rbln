@@ -42,9 +42,12 @@ class RBLNAutoencoderKLWanConfig(RBLNModelConfig):
             batch_size (Optional[int]): The batch size for inference. Defaults to 1.
             uses_encoder (Optional[bool]): Whether to include the encoder part of the VAE in the model.
                 When False, only the decoder is used (for latent-to-video conversion).
-            num_frames (Optional[int]): The number of frames in the generated video. Defaults to 93.
-            height (Optional[int]): The height in pixels of the generated video. Defaults to 704.
-            width (Optional[int]): The width in pixels of the generated video. Defaults to 1280.
+            num_frames (Optional[int]): The number of frames in the generated video. Filled by the
+                pipeline config (per-pipeline diffusers default); required for a standalone compile.
+            height (Optional[int]): The height in pixels of the generated video. Filled by the
+                pipeline config (per-pipeline diffusers default); required for a standalone compile.
+            width (Optional[int]): The width in pixels of the generated video. Filled by the
+                pipeline config (per-pipeline diffusers default); required for a standalone compile.
             num_channels_latents (Optional[int]): The number of channels in latent space. The pipeline
                 hook sets it to the transformer's out_channels; a standalone compile falls back to the
                 VAE z_dim.
@@ -72,9 +75,11 @@ class RBLNAutoencoderKLWanConfig(RBLNModelConfig):
             self.batch_size = 1
 
         self.uses_encoder = uses_encoder
-        self.num_frames = num_frames or 93
-        self.height = height or 704
-        self.width = width or 1280
+        # No size defaults here: each pipeline config supplies its own diffusers-default
+        # height/width/num_frames, and a standalone compile must pass them explicitly.
+        self.num_frames = num_frames
+        self.height = height
+        self.width = width
 
         # The pipeline hook sets this to the transformer's out_channels; a standalone compile
         # derives it from the VAE z_dim in _update_rbln_config.
