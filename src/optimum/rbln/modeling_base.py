@@ -91,6 +91,11 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
         AutoConfig.register(self.model_type, AutoConfig)
         if hasattr(self.auto_model_class, "register"):
             self.auto_model_class.register(AutoConfig, self.__class__)
+            # transformers >=5.10 `_LazyAutoMapping.register` silently skips keys defined inside
+            # transformers itself (the "remote code with native config" guard)
+            model_mapping = getattr(self.auto_model_class, "_model_mapping", None)
+            if model_mapping is not None and AutoConfig not in model_mapping._extra_content:
+                model_mapping._extra_content[AutoConfig] = self.__class__
 
         # copied from tranformers PreTrainedModel __init__
         if self.can_generate():
@@ -238,7 +243,9 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
             if len(cls._rbln_submodules) > 0:
                 if rbln_submodules is None:
-                    rbln_submodules = cls._load_submodules(model_save_dir=model_id, rbln_config=rbln_config, **kwargs)
+                    rbln_submodules = cls._load_submodules(
+                        model_save_dir=model_path_subfolder, rbln_config=rbln_config, **kwargs
+                    )
             elif rbln_submodules is None:
                 rbln_submodules = []
 
@@ -522,6 +529,13 @@ class RBLNBaseModel(SubModulesMixin, PushToHubMixin, PreTrainedModel):
 
     def can_generate(self):
         return False
+
+    def get_experts_implementation(self):
+        # Required by GenerationMixin._optimize_model_for_decode (transformers >=5.9).
+        return {"": None}
+
+    def set_experts_implementation(self, experts_implementation):
+        pass
 
     def to(self, *args, **kwargs):
         return self

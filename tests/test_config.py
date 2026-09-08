@@ -217,6 +217,17 @@ def test_submodule_config_object():
     assert model.rbln_config.language_model.batch_size == 2
 
 
+def test_logits_to_keep_zero_survives_construction_and_reload(tmp_path):
+    cfg = RBLNLlamaForCausalLMConfig(logits_to_keep=0)
+    assert cfg.logits_to_keep == 0
+
+    config_path = tmp_path / "rbln_config.json"
+    cfg.save(str(config_path))
+    assert RBLNLlamaForCausalLMConfig.from_pretrained(str(config_path)).logits_to_keep == 0
+
+    assert RBLNLlamaForCausalLMConfig().logits_to_keep == 1
+
+
 def test_num_devices_deprecated_alias():
     """`tensor_parallel_size` is the deprecated alias of `num_devices` and must still map through."""
     cfg = RBLNMistralForCausalLMConfig(num_devices=4)
@@ -408,6 +419,38 @@ def test_prefill_chunk_size_npu_wiring_e2e(tmp_path):
     model.save_pretrained(str(tmp_path))
     reloaded_config = RBLNLlamaForCausalLMConfig.from_pretrained(str(tmp_path))
     assert reloaded_config.prefill_chunk_size == 512
+
+
+QWEN_VL_VISION_CONFIGS = [
+    ("RBLNQwen2VLForConditionalGenerationConfig", "RBLNQwen2VisionTransformerPretrainedModelConfig"),
+    ("RBLNQwen2_5_VLForConditionalGenerationConfig", "RBLNQwen2_5_VisionTransformerPretrainedModelConfig"),
+    ("RBLNQwen3VLForConditionalGenerationConfig", "RBLNQwen3VLVisionModelConfig"),
+    ("RBLNQwen3_5ForConditionalGenerationConfig", "RBLNQwen3_5VisionModelConfig"),
+    ("RBLNExaone4_5_ForConditionalGenerationConfig", "RBLNExaone4_5_VisionModelConfig"),
+]
+
+
+def _import_config(name):
+    import optimum.rbln
+
+    return getattr(optimum.rbln, name)
+
+
+@pytest.mark.parametrize("parent_cls_name, vision_cls_name", QWEN_VL_VISION_CONFIGS)
+def test_qwen_vl_parent_forces_vision_batch_size(parent_cls_name, vision_cls_name):
+    """The parent config forces batch_size=1 onto the visual submodule."""
+    parent_cls = _import_config(parent_cls_name)
+    config = parent_cls(max_seq_len=1024, visual={"cls_name": vision_cls_name, "max_seq_len": 256})
+    assert config.visual.batch_size == 1
+
+
+@pytest.mark.parametrize("parent_cls_name, vision_cls_name", QWEN_VL_VISION_CONFIGS)
+def test_qwen_vl_parent_rejects_conflicting_vision_batch_size(parent_cls_name, vision_cls_name):
+    """A submodule batch_size that conflicts with the forced value is caught by the parent's
+    force_kwargs check (before the vision config is even instantiated), not by the vision guard."""
+    parent_cls = _import_config(parent_cls_name)
+    with pytest.raises(ValueError):
+        parent_cls(max_seq_len=1024, visual={"cls_name": vision_cls_name, "max_seq_len": 256, "batch_size": 2})
 
 
 if __name__ == "__main__":

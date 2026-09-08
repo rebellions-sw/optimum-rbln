@@ -126,6 +126,7 @@ class RBLNBlip2VisionModel(RBLNModel):
         Returns:
             BaseModelOutputWithPooling or tuple(torch.FloatTensor): The model outputs. If return_dict=False is passed, returns a tuple of tensors. Otherwise, returns a BaseModelOutputWithPooling object.
         """
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         batch_size = pixel_values.shape[0]
         outputs = []
         for i in range(batch_size):
@@ -257,6 +258,7 @@ class RBLNBlip2QFormerModel(RBLNModel):
         Returns:
             BaseModelOutputWithPoolingAndCrossAttentions or tuple(torch.FloatTensor): The model outputs. If `return_dict=False` is passed, returns a tuple of tensors. Otherwise, returns a `BaseModelOutputWithPoolingAndCrossAttentions` object.
         """
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         batch_size = query_embeds.shape[0]
         outputs = []
         for i in range(batch_size):
