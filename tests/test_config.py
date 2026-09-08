@@ -412,3 +412,20 @@ def test_prefill_chunk_size_npu_wiring_e2e(tmp_path):
 
 if __name__ == "__main__":
     pytest.main()
+
+
+def test_qwen3_5_gdn_chunk_size_default_is_decoupled_from_prefill():
+    from optimum.rbln import RBLNQwen3_5ForCausalLMConfig, RBLNQwen3_5ModelConfig
+
+    # The multimodal config only constructs with use_inputs_embeds=True.
+    for cls, kwargs in (
+        (RBLNQwen3_5ForCausalLMConfig, {}),
+        (RBLNQwen3_5ModelConfig, {"use_inputs_embeds": True}),
+    ):
+        # The default is a fixed 128 (the GatedDeltaNet kernel cap), independent of
+        # prefill_chunk_size — deriving it from prefill made the default invalid on
+        # NPUs whose prefill default exceeds the cap.
+        assert cls(**kwargs).gdn_chunk_size == 128
+        assert cls(prefill_chunk_size=512, **kwargs).gdn_chunk_size == 128
+        # An explicit value is preserved.
+        assert cls(gdn_chunk_size=64, **kwargs).gdn_chunk_size == 64

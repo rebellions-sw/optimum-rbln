@@ -164,13 +164,17 @@ class RBLNQwen3_5TextModel(RBLNDecoderOnlyModel):
         rbln_config = super()._update_rbln_config(
             preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
         )
-        if rbln_config.gdn_chunk_size is None:
-            rbln_config.gdn_chunk_size = rbln_config.prefill_chunk_size
         if rbln_config.gdn_chunk_size > 128:
             raise ValueError(
                 f"gdn_chunk_size must be <= 128, got {rbln_config.gdn_chunk_size}. "
                 "Larger GatedDeltaNet sub-chunk sizes are not supported yet — "
                 "set gdn_chunk_size to a value <= 128 that divides prefill_chunk_size."
+            )
+        if rbln_config.prefill_chunk_size % rbln_config.gdn_chunk_size != 0:
+            raise ValueError(
+                f"gdn_chunk_size must divide prefill_chunk_size, got gdn_chunk_size="
+                f"{rbln_config.gdn_chunk_size} and prefill_chunk_size={rbln_config.prefill_chunk_size}. "
+                "Set gdn_chunk_size to a divisor of prefill_chunk_size that is <= 128."
             )
         return rbln_config
 
@@ -607,13 +611,17 @@ class RBLNQwen3_5Model(RBLNDecoderOnlyModel):
         rbln_config = super()._update_rbln_config(
             preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
         )
-        if rbln_config.gdn_chunk_size is None:
-            rbln_config.gdn_chunk_size = rbln_config.prefill_chunk_size
         if rbln_config.gdn_chunk_size > 128:
             raise ValueError(
                 f"gdn_chunk_size must be <= 128, got {rbln_config.gdn_chunk_size}. "
                 "Larger GatedDeltaNet sub-chunk sizes are not supported yet — "
                 "set gdn_chunk_size to a value <= 128 that divides prefill_chunk_size."
+            )
+        if rbln_config.prefill_chunk_size % rbln_config.gdn_chunk_size != 0:
+            raise ValueError(
+                f"gdn_chunk_size must divide prefill_chunk_size, got gdn_chunk_size="
+                f"{rbln_config.gdn_chunk_size} and prefill_chunk_size={rbln_config.prefill_chunk_size}. "
+                "Set gdn_chunk_size to a divisor of prefill_chunk_size that is <= 128."
             )
         return rbln_config
 
