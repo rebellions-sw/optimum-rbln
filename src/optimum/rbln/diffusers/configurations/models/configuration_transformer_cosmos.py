@@ -53,9 +53,6 @@ class RBLNCosmosTransformer3DModelConfig(RBLNModelConfig):
             latent_width (int | None): The width in pixels in latent space.
             uses_per_frame_timestep (bool | None): Whether the pipeline feeds a per-frame timestep
                 tensor ([B, 1, T, 1, 1]; conditioning frames at t=0) instead of a per-batch scalar.
-                Decides the compiled shapes of embedded_timestep/temb. When None, inferred from the
-                model config (Cosmos-Predict2.5, fingerprinted by use_crossattn_projection, is
-                always per-frame; older families default to per-batch).
             kwargs: Additional arguments passed to the parent RBLNModelConfig.
 
         Raises:
