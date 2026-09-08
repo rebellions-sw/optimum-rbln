@@ -140,3 +140,7 @@ class RBLNQwen3VLMoeForConditionalGeneration(RBLNQwen3VLForConditionalGeneration
     _decoder_wrapper_cls = Qwen3VLMoe_LanguageModelWrapper
     _use_rotary_emb = False
     _rbln_submodules = [{"name": "visual"}]
+
+    @classmethod
+    def get_pytorch_model(cls, *args, **kwargs):
+        return release_checkpoint_mmap_(super().get_pytorch_model(*args, **kwargs), "Qwen3VLMoeTextExperts")
