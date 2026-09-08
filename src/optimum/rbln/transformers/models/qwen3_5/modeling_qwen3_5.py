@@ -56,6 +56,8 @@ from .qwen3_5_runtime_utils import RBLNQwen3_5RuntimeModel
 logger = logging.get_logger(__name__)
 
 
+MAX_GDN_CHUNK_SIZE = 128
+
 def _qwen3_5_build_compile_context(compile_config, example_inputs):
     def is_static_state(name: str) -> bool:
         if "past_key_values" in name:
@@ -167,12 +169,12 @@ class RBLNQwen3_5TextModel(RBLNDecoderOnlyModel):
             preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
         )
         if rbln_config.gdn_chunk_size is None:
-            rbln_config.gdn_chunk_size = rbln_config.prefill_chunk_size
-        if rbln_config.gdn_chunk_size > 128:
+            rbln_config.gdn_chunk_size = MAX_GDN_CHUNK_SIZE
+        if rbln_config.gdn_chunk_size > MAX_GDN_CHUNK_SIZE:
             raise ValueError(
-                f"gdn_chunk_size must be <= 128, got {rbln_config.gdn_chunk_size}. "
+                f"gdn_chunk_size must be <= {MAX_GDN_CHUNK_SIZE}, got {rbln_config.gdn_chunk_size}. "
                 "Larger GatedDeltaNet sub-chunk sizes are not supported yet — "
-                "set gdn_chunk_size to a value <= 128 that divides prefill_chunk_size."
+                f"set gdn_chunk_size to a value <= {MAX_GDN_CHUNK_SIZE} that divides prefill_chunk_size."
             )
         return rbln_config
 
@@ -559,12 +561,12 @@ class RBLNQwen3_5Model(RBLNDecoderOnlyModel):
             preprocessors=preprocessors, model=model, model_config=model_config, rbln_config=rbln_config
         )
         if rbln_config.gdn_chunk_size is None:
-            rbln_config.gdn_chunk_size = rbln_config.prefill_chunk_size
-        if rbln_config.gdn_chunk_size > 128:
+            rbln_config.gdn_chunk_size = MAX_GDN_CHUNK_SIZE
+        if rbln_config.gdn_chunk_size > MAX_GDN_CHUNK_SIZE:
             raise ValueError(
-                f"gdn_chunk_size must be <= 128, got {rbln_config.gdn_chunk_size}. "
+                f"gdn_chunk_size must be <= {MAX_GDN_CHUNK_SIZE}, got {rbln_config.gdn_chunk_size}. "
                 "Larger GatedDeltaNet sub-chunk sizes are not supported yet — "
-                "set gdn_chunk_size to a value <= 128 that divides prefill_chunk_size."
+                f"set gdn_chunk_size to a value <= {MAX_GDN_CHUNK_SIZE} that divides prefill_chunk_size."
             )
         return rbln_config
 
