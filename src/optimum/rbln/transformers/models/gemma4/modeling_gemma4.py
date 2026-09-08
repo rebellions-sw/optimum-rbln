@@ -37,6 +37,7 @@ from ....utils.logging import get_logger
 from ...cache_utils import FullAttentionKVCacheMeta, SlidingWindowAttentionKVCacheMeta
 from ...modeling_attention_utils import validate_sliding_window
 from ...modeling_outputs import RBLNDecoderOnlyOutput
+from ...utils.moe import release_checkpoint_mmap_
 from ...utils.multimodal_batch_sort import RBLNImageIndexedBatchSortMixin, _placeholder_run_counts
 from ...utils.rbln_runtime_wrapper import LoopProcessor
 from ..decoderonly.decoderonly_runtime_utils import RBLNPageTableManager
@@ -248,6 +249,10 @@ class RBLNGemma4ForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     """
 
     _decoder_wrapper_cls = Gemma4ForCausalLMWrapper
+
+    @classmethod
+    def get_pytorch_model(cls, *args, **kwargs):
+        return release_checkpoint_mmap_(super().get_pytorch_model(*args, **kwargs))
 
     @classmethod
     def get_input_info(
@@ -635,6 +640,10 @@ class RBLNGemma4ForConditionalGeneration(RBLNModel, RBLNImageIndexedBatchSortMix
                 input_ids, getattr(self.config, "video_token_id", None), runs_per_segment=pixel_values_videos.shape[1]
             )
             self._permute_segment_kwargs(videos, kwargs, sort_idx, videos_per_sample)
+
+    @classmethod
+    def get_pytorch_model(cls, *args, **kwargs):
+        return release_checkpoint_mmap_(super().get_pytorch_model(*args, **kwargs))
 
     @staticmethod
     def _reject_unsupported_modalities(
