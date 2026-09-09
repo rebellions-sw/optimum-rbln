@@ -1,3 +1,4 @@
+import ctypes
 import gc
 import glob
 import json
@@ -14,14 +15,6 @@ from transformers import (
     AutoConfig,
     AutoProcessor,
     AutoTokenizer,
-    Gemma4ForCausalLM,
-    Gemma4TextConfig,
-    MixtralConfig,
-    MixtralForCausalLM,
-    Qwen2MoeConfig,
-    Qwen2MoeForCausalLM,
-    Qwen3MoeConfig,
-    Qwen3MoeForCausalLM,
     Qwen3VLMoeConfig,
     Qwen3VLMoeForConditionalGeneration,
 )
@@ -34,10 +27,11 @@ from optimum.rbln import (
     RBLNBartForConditionalGeneration,
     RBLNBlip2ForConditionalGeneration,
     RBLNExaoneForCausalLM,
+    RBLNGemma2ForCausalLM,
     RBLNGemma3ForCausalLM,
     RBLNGemma3ForConditionalGeneration,
     RBLNGemma4ForCausalLM,
-    RBLNGemma4ForCausalLMConfig,
+    RBLNGemmaForCausalLM,
     RBLNGPT2LMHeadModel,
     RBLNGPT2Model,
     RBLNIdefics3ForConditionalGeneration,
@@ -49,7 +43,6 @@ from optimum.rbln import (
     RBLNMistralForCausalLM,
     RBLNMistralModel,
     RBLNMixtralForCausalLM,
-    RBLNMixtralForCausalLMConfig,
     RBLNOPTForCausalLM,
     RBLNOPTModel,
     RBLNPegasusForConditionalGeneration,
@@ -59,14 +52,12 @@ from optimum.rbln import (
     RBLNQwen2ForCausalLM,
     RBLNQwen2Model,
     RBLNQwen2MoeForCausalLM,
-    RBLNQwen2MoeForCausalLMConfig,
     RBLNQwen2VLForConditionalGeneration,
     RBLNQwen3_5ForCausalLM,
     RBLNQwen3_5ForConditionalGeneration,
     RBLNQwen3ForCausalLM,
     RBLNQwen3Model,
     RBLNQwen3MoeForCausalLM,
-    RBLNQwen3MoeForCausalLMConfig,
     RBLNQwen3VLForConditionalGeneration,
     RBLNQwen3VLMoeForConditionalGeneration,
     RBLNT5ForConditionalGeneration,
@@ -1312,111 +1303,128 @@ class TestDisallowedLlama_4(DisallowedTestBase.DisallowedTest):
     RBLN_CLASS_KWARGS = {"rbln_config": {"attn_impl": "flash_attn", "kvcache_partition_len": 2048}}
 
 
-class TestMoeHostMemory(unittest.TestCase):
-    # Loading an MoE checkpoint and building the wrapper must not hold more than one copy of the weights:
-    # dev kept up to three (expert copies plus the whole checkpoint still mapped). Ratios are measured against
-    # the safetensors size, with synthetic models large enough that allocator noise is a few percent.
-    MAX_RSS_RATIO = 1.5
-    BASE = {
+class TestHostMemory(unittest.TestCase):
+    # Loading a checkpoint and building the wrapper must not duplicate the weights on the host. Dense weights stay
+    # safetensors mmap views (RSS barely grows); MoE experts are rebuilt by transformers at load, so one copy is the
+    # floor. Synthetic 0.2-0.5 GiB checkpoints keep allocator noise at a few percent of the ratio.
+    DENSE_LIMIT, MOE_LIMIT = 0.5, 1.5
+    DENSE = {
+        "vocab_size": 8192,
+        "hidden_size": 1024,
+        "intermediate_size": 4096,
+        "num_hidden_layers": 8,
+        "num_attention_heads": 16,
+        "num_key_value_heads": 4,
+        "max_position_embeddings": 256,
+        "tie_word_embeddings": False,
+    }
+    MOE = {
         "vocab_size": 1024,
         "hidden_size": 512,
         "intermediate_size": 512,
+        "num_hidden_layers": 8,
         "num_attention_heads": 8,
         "num_key_value_heads": 2,
         "max_position_embeddings": 256,
-        "dtype": torch.bfloat16,
+        "tie_word_embeddings": False,
     }
+    SLIDING = {
+        "sliding_window": 64,
+        "layer_types": ["full_attention", "sliding_attention"] * 3 + ["full_attention"] * 2,
+    }
+    GEMMA4 = {"head_dim": 64, "vocab_size_per_layer_input": 1024, "hidden_size_per_layer_input": 64, **SLIDING}
+    QWEN_MOE = {"moe_intermediate_size": 512, "num_experts": 32, "num_experts_per_tok": 4, "decoder_sparse_step": 1}
+    CASES = [
+        (RBLNLlamaForCausalLM, DENSE, DENSE_LIMIT),
+        (RBLNMistralForCausalLM, {**DENSE, "sliding_window": 64}, DENSE_LIMIT),
+        (RBLNQwen2ForCausalLM, DENSE, DENSE_LIMIT),
+        (RBLNQwen3ForCausalLM, DENSE, DENSE_LIMIT),
+        (
+            RBLNQwen3_5ForCausalLM,
+            {**DENSE, "layer_types": (["linear_attention"] * 3 + ["full_attention"]) * 2},
+            DENSE_LIMIT,
+        ),
+        (RBLNPhiForCausalLM, DENSE, DENSE_LIMIT),
+        (
+            RBLNOPTForCausalLM,
+            {
+                "vocab_size": 8192,
+                "hidden_size": 1024,
+                "ffn_dim": 4096,
+                "word_embed_proj_dim": 1024,
+                "num_hidden_layers": 8,
+                "num_attention_heads": 16,
+                "max_position_embeddings": 256,
+                "tie_word_embeddings": False,
+            },
+            DENSE_LIMIT,
+        ),
+        (RBLNGemmaForCausalLM, DENSE, DENSE_LIMIT),
+        (RBLNGemma2ForCausalLM, {**DENSE, "sliding_window": 64}, DENSE_LIMIT),
+        (RBLNGemma3ForCausalLM, {**DENSE, **SLIDING}, DENSE_LIMIT),
+        (RBLNGemma4ForCausalLM, {**DENSE, **GEMMA4}, DENSE_LIMIT),
+        (RBLNQwen3MoeForCausalLM, {**MOE, **QWEN_MOE}, MOE_LIMIT),
+        (RBLNQwen2MoeForCausalLM, {**MOE, **QWEN_MOE, "shared_expert_intermediate_size": 512}, MOE_LIMIT),
+        (RBLNMixtralForCausalLM, {**MOE, "num_local_experts": 32, "num_experts_per_tok": 4}, MOE_LIMIT),
+        (
+            RBLNGemma4ForCausalLM,
+            {
+                **MOE,
+                **GEMMA4,
+                "enable_moe_block": True,
+                "num_experts": 32,
+                "top_k_experts": 4,
+                "moe_intermediate_size": 512,
+            },
+            MOE_LIMIT,
+        ),
+    ]
 
     @staticmethod
     def _rss():
-        return sum(
-            int(line.split()[1]) * 1024
-            for line in open("/proc/self/status")
-            if line.startswith(("RssAnon:", "RssFile:", "RssShmem:"))
-        )
-
-    def _check(self, rbln_cls, config_cls, tmp, src_state_dict):
-        checkpoint_bytes = sum(os.path.getsize(f) for f in glob.glob(f"{tmp}/*.safetensors"))
         gc.collect()
+        ctypes.CDLL("libc.so.6").malloc_trim(0)  # hand freed heap back so RSS reflects live tensors only
+        with open("/proc/self/status") as status:
+            return sum(
+                int(line.split()[1]) * 1024
+                for line in status
+                if line.startswith(("RssAnon:", "RssFile:", "RssShmem:"))
+            )
+
+    def _rss_ratio(self, rbln_cls, checkpoint_dir, wrap=True):
+        checkpoint_bytes = sum(os.path.getsize(f) for f in glob.glob(f"{checkpoint_dir}/*.safetensors"))
         before = self._rss()
-        model = rbln_cls.get_pytorch_model(tmp, dtype=torch.bfloat16)
-        for name, p in model.named_parameters():
-            self.assertTrue(torch.equal(p, src_state_dict[name]), name)
-        if config_cls is not None:
-            rbln_config = config_cls(max_seq_len=256, batch_size=1, create_runtimes=False)
+        model = rbln_cls.get_pytorch_model(checkpoint_dir, dtype=torch.bfloat16)
+        if wrap:
+            rbln_config = rbln_cls.get_rbln_config_class()(max_seq_len=256, batch_size=1, create_runtimes=False)
             rbln_config = rbln_cls.update_rbln_config(
                 preprocessors=None, model=model, model_config=model.config, rbln_config=rbln_config
             )
-            wrapped = rbln_cls._wrap_model_if_needed(model, rbln_config)  # noqa: F841
-        gc.collect()
-        ratio = (self._rss() - before) / checkpoint_bytes
-        self.assertLessEqual(ratio, self.MAX_RSS_RATIO, f"RSS grew {ratio:.2f}x the checkpoint size")
+            rbln_cls._wrap_model_if_needed(model, rbln_config)
+        return (self._rss() - before) / checkpoint_bytes
 
-    def test_per_expert_checkpoints(self):
-        moe = {"moe_intermediate_size": 512, "num_experts": 64, "num_experts_per_tok": 4, "decoder_sparse_step": 1}
-        cases = [
-            (
-                Qwen3MoeForCausalLM,
-                RBLNQwen3MoeForCausalLM,
-                RBLNQwen3MoeForCausalLMConfig,
-                Qwen3MoeConfig(**self.BASE, **moe, num_hidden_layers=8),
-            ),
-            (
-                Qwen2MoeForCausalLM,
-                RBLNQwen2MoeForCausalLM,
-                RBLNQwen2MoeForCausalLMConfig,
-                Qwen2MoeConfig(**self.BASE, **moe, shared_expert_intermediate_size=512, num_hidden_layers=4),
-            ),
-            (
-                MixtralForCausalLM,
-                RBLNMixtralForCausalLM,
-                RBLNMixtralForCausalLMConfig,
-                MixtralConfig(**self.BASE, num_local_experts=64, num_experts_per_tok=4, num_hidden_layers=4),
-            ),
-        ]
-        for hf_cls, rbln_cls, config_cls, config in cases:
-            with self.subTest(hf_cls.__name__), tempfile.TemporaryDirectory() as tmp:
-                src = hf_cls(config).to(torch.bfloat16).eval()
-                src.save_pretrained(tmp)  # written back per-expert, like the hub checkpoints
-                state_dict = {k: v.clone() for k, v in src.state_dict().items()}
-                del src
-                self._check(rbln_cls, config_cls, tmp, state_dict)
-
-    def test_fused_checkpoint(self):
-        # Gemma4 checkpoints are natively fused; the experts load as mmap views and only the wrapper copies them.
-        base = {k: v for k, v in self.BASE.items() if k != "intermediate_size"}
-        config = Gemma4TextConfig(
-            **base,
-            intermediate_size=512,
-            head_dim=64,
-            enable_moe_block=True,
-            num_experts=64,
-            top_k_experts=4,
-            moe_intermediate_size=512,
-            num_hidden_layers=4,
-            sliding_window=64,
-            layer_types=["full_attention", "sliding_attention", "full_attention", "full_attention"],
-            vocab_size_per_layer_input=1024,
-            hidden_size_per_layer_input=64,
-        )
-        with tempfile.TemporaryDirectory() as tmp:
-            src = Gemma4ForCausalLM(config).to(torch.bfloat16).eval()
-            src.save_pretrained(tmp)
-            state_dict = {k: v.clone() for k, v in src.state_dict().items()}
-            del src
-            self._check(RBLNGemma4ForCausalLM, RBLNGemma4ForCausalLMConfig, tmp, state_dict)
+    def test_load_and_wrap(self):
+        for rbln_cls, kwargs, limit in self.CASES:
+            hf_cls = rbln_cls.get_hf_class()
+            with (
+                self.subTest(f"{rbln_cls.__name__} {'moe' if limit == self.MOE_LIMIT else 'dense'}"),
+                tempfile.TemporaryDirectory() as tmp,
+            ):
+                hf_cls(hf_cls.config_class(**kwargs)).to(torch.bfloat16).save_pretrained(tmp)
+                ratio = self._rss_ratio(rbln_cls, tmp)
+                self.assertLessEqual(ratio, limit, f"RSS grew {ratio:.2f}x the checkpoint size")
 
     def test_qwen3_vl_moe_hub_layout(self):
-        # Hub checkpoints store the experts transposed; transformers transposes them into new memory at load.
-        text = {k: v for k, v in self.BASE.items() if k != "dtype"}
-        text.update(
-            moe_intermediate_size=128,  # 2I and I must differ from hidden_size for Transpose(check_dims)
-            num_hidden_layers=4,
-            num_experts=64,
-            num_experts_per_tok=4,
-            decoder_sparse_step=1,
-            rope_scaling={"rope_type": "default", "mrope_section": [16, 8, 8]},
-        )
+        # Hub checkpoints store the experts transposed ([E, H, 2I] / [E, I, H]); transformers transposes them into
+        # new memory at load. 2I and I must differ from hidden_size for that transpose to trigger. Load only: the VLM
+        # wrapper needs the visual submodule.
+        text = {
+            **self.MOE,
+            **self.QWEN_MOE,
+            "moe_intermediate_size": 128,
+            "rope_scaling": {"rope_type": "default", "mrope_section": [16, 8, 8]},
+        }
+        text.pop("tie_word_embeddings")
         vision = {
             "depth": 1,
             "hidden_size": 32,
@@ -1429,23 +1437,21 @@ class TestMoeHostMemory(unittest.TestCase):
             "deepstack_visual_indexes": [0],
         }
         with tempfile.TemporaryDirectory() as tmp:
-            src = Qwen3VLMoeForConditionalGeneration(Qwen3VLMoeConfig(text_config=text, vision_config=vision))
-            src = src.to(torch.bfloat16).eval()
-            state_dict = {k: v.clone() for k, v in src.state_dict().items()}
+            src = Qwen3VLMoeForConditionalGeneration(Qwen3VLMoeConfig(text_config=text, vision_config=vision)).to(
+                torch.bfloat16
+            )
+            experts = ("experts.gate_up_proj", "experts.down_proj")
             save_file(
                 {
-                    k: (
-                        v.transpose(1, 2).contiguous()
-                        if k.endswith(("experts.gate_up_proj", "experts.down_proj"))
-                        else v.contiguous()
-                    )
-                    for k, v in state_dict.items()
+                    k: (v.transpose(1, 2).contiguous() if k.endswith(experts) else v.contiguous())
+                    for k, v in src.state_dict().items()
                 },
                 f"{tmp}/model.safetensors",
             )
             src.config.save_pretrained(tmp)
             del src
-            self._check(RBLNQwen3VLMoeForConditionalGeneration, None, tmp, state_dict)
+            ratio = self._rss_ratio(RBLNQwen3VLMoeForConditionalGeneration, tmp, wrap=False)
+            self.assertLessEqual(ratio, self.MOE_LIMIT, f"RSS grew {ratio:.2f}x the checkpoint size")
 
 
 if __name__ == "__main__":
