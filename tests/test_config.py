@@ -467,7 +467,7 @@ class TestAttentionLimits:
         assert limits.default_flash_partition_len <= limits.max_flash_partition_len
         assert limits.min_flash_max_seq_len == 2 * limits.min_flash_partition_len
 
-    @pytest.mark.parametrize("npu,prefill_chunk_size,bound", [("RBLN-CA22", 128, 32_640), ("RBLN-CR13", 512, 15_872)])
+    @pytest.mark.parametrize("npu,prefill_chunk_size,bound", [("RBLN-CA22", 128, 32_640), ("RBLN-CR13", 512, 32_255)])
     def test_sliding_window_bound(self, npu, prefill_chunk_size, bound):
         from optimum.rbln.transformers.modeling_attention_utils import validate_sliding_window
 
