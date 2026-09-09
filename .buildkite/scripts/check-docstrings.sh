@@ -11,8 +11,9 @@ else
   files=$(git diff --name-only "origin/${base}...HEAD" | grep '\.py$' | grep '^src/' || true)
 fi
 
+# modeling_t5.py links to ../../../index.md, which the throwaway mkdocs project
+# cannot resolve; drop this once the link is absolute.
 exclude=(
-  src/optimum/rbln/transformers/models/llava_next/modeling_llava_next.py
   src/optimum/rbln/transformers/models/t5/modeling_t5.py
 )
 selected=()
