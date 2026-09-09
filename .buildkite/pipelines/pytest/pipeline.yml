@@ -17,9 +17,12 @@ _secrets: &secrets
   HF_TOKEN: HF_TOKEN
   HF_HOME: HF_HOME
 
+# --reinstall-package: the editable wheel may already sit in the shared uv cache,
+# built by another pod. Rebuilding here runs the hatch-vcs hook that writes the
+# gitignored src/optimum/rbln/__version__.py into this checkout.
 _sync: &sync |
   echo '--- :package: uv sync'
-  uv sync --locked --python 3.12 --group tests
+  uv sync --locked --python 3.12 --group tests --reinstall-package optimum-rbln
   bash .buildkite/scripts/install-rebel-compiler.sh
 
 _cpu: &cpu
