@@ -1,7 +1,7 @@
+import gc
 import glob
 import json
 import os
-import struct
 import sys
 import tempfile
 import unittest
@@ -38,6 +38,7 @@ from optimum.rbln import (
     RBLNGemma3ForCausalLM,
     RBLNGemma3ForConditionalGeneration,
     RBLNGemma4ForCausalLM,
+    RBLNGemma4ForCausalLMConfig,
     RBLNGPT2LMHeadModel,
     RBLNGPT2Model,
     RBLNIdefics3ForConditionalGeneration,
@@ -49,6 +50,7 @@ from optimum.rbln import (
     RBLNMistralForCausalLM,
     RBLNMistralModel,
     RBLNMixtralForCausalLM,
+    RBLNMixtralForCausalLMConfig,
     RBLNOPTForCausalLM,
     RBLNOPTModel,
     RBLNPegasusForConditionalGeneration,
@@ -58,12 +60,14 @@ from optimum.rbln import (
     RBLNQwen2ForCausalLM,
     RBLNQwen2Model,
     RBLNQwen2MoeForCausalLM,
+    RBLNQwen2MoeForCausalLMConfig,
     RBLNQwen2VLForConditionalGeneration,
     RBLNQwen3_5ForCausalLM,
     RBLNQwen3_5ForConditionalGeneration,
     RBLNQwen3ForCausalLM,
     RBLNQwen3Model,
     RBLNQwen3MoeForCausalLM,
+    RBLNQwen3MoeForCausalLMConfig,
     RBLNQwen3VLForConditionalGeneration,
     RBLNQwen3VLMoeForConditionalGeneration,
     RBLNT5ForConditionalGeneration,
@@ -1309,175 +1313,141 @@ class TestDisallowedLlama_4(DisallowedTestBase.DisallowedTest):
     RBLN_CLASS_KWARGS = {"rbln_config": {"attn_impl": "flash_attn", "kvcache_partition_len": 2048}}
 
 
-@unittest.skipUnless(sys.platform == "linux", "reads /proc/self/maps")
-class TestReleaseCheckpointMmap(unittest.TestCase):
-    # transformers stacks per-expert checkpoint tensors into new memory but leaves the other weights as views of
-    # the safetensors mmap; get_pytorch_model must clone those views so the checkpoint is unmapped.
-    TINY = {
-        "vocab_size": 256,
-        "hidden_size": 64,
-        "num_hidden_layers": 2,
-        "num_attention_heads": 4,
+@unittest.skipUnless(sys.platform == "linux", "reads /proc/self/status")
+class TestMoeHostMemory(unittest.TestCase):
+    # Loading an MoE checkpoint and building the wrapper must not hold more than one copy of the weights:
+    # dev kept up to three (expert copies plus the whole checkpoint still mapped). Ratios are measured against
+    # the safetensors size, with synthetic models large enough that allocator noise is a few percent.
+    MAX_RSS_RATIO = 1.5
+    BASE = {
+        "vocab_size": 1024,
+        "hidden_size": 512,
+        "intermediate_size": 512,
+        "num_attention_heads": 8,
         "num_key_value_heads": 2,
-        "max_position_embeddings": 64,
+        "max_position_embeddings": 256,
+        "dtype": torch.bfloat16,
     }
-    FAMILIES = [
-        (
-            Qwen3MoeForCausalLM,
-            RBLNQwen3MoeForCausalLM,
-            Qwen3MoeConfig(
-                **TINY,
-                intermediate_size=128,
-                moe_intermediate_size=128,
-                num_experts=16,
-                num_experts_per_tok=2,
-                decoder_sparse_step=1,
-            ),
-            "model.layers.0.mlp.experts.0.gate_proj.weight",
-        ),
-        (
-            Qwen2MoeForCausalLM,
-            RBLNQwen2MoeForCausalLM,
-            Qwen2MoeConfig(
-                **TINY,
-                intermediate_size=128,
-                moe_intermediate_size=128,
-                shared_expert_intermediate_size=128,
-                num_experts=16,
-                num_experts_per_tok=2,
-                decoder_sparse_step=1,
-            ),
-            "model.layers.0.mlp.experts.0.gate_proj.weight",
-        ),
-        (
-            MixtralForCausalLM,
-            RBLNMixtralForCausalLM,
-            MixtralConfig(**TINY, intermediate_size=128, num_local_experts=16, num_experts_per_tok=2),
-            "model.layers.0.block_sparse_moe.experts.0.w1.weight",
-        ),
-    ]
 
     @staticmethod
-    def _checkpoint_ranges(directory):
-        # Other tests in the same process keep their own checkpoints mapped, so look only at ours.
-        directory = os.path.realpath(directory)
-        ranges = []
-        for line in open("/proc/self/maps"):
-            parts = line.split()
-            if len(parts) >= 6 and parts[5].startswith(directory + "/"):
-                start, end = parts[0].split("-")
-                ranges.append((int(start, 16), int(end, 16)))
-        return ranges
-
-    @classmethod
-    def _file_backed(cls, model, directory):
-        ranges = cls._checkpoint_ranges(directory)
-        return [
-            name
-            for name, t in list(model.named_parameters()) + list(model.named_buffers())
-            if any(s <= t.untyped_storage().data_ptr() < e for s, e in ranges)
-        ]
-
-    @staticmethod
-    def _safetensors_keys(directory):
-        path = glob.glob(f"{directory}/*.safetensors")[0]
-        header_len = struct.unpack("<Q", open(path, "rb").read(8))[0]
-        return json.loads(open(path, "rb").read()[8 : 8 + header_len]).keys()
-
-    def test_per_expert_checkpoint_is_unmapped(self):
-        for hf_cls, rbln_cls, config, expert_key in self.FAMILIES:
-            with self.subTest(hf_cls.__name__), tempfile.TemporaryDirectory() as tmp:
-                src = hf_cls(config).eval()
-                src.save_pretrained(tmp)
-                self.assertIn(expert_key, self._safetensors_keys(tmp))
-
-                model = rbln_cls.get_pytorch_model(tmp)
-                self.assertEqual(self._file_backed(model, tmp), [])
-                self.assertEqual(self._checkpoint_ranges(tmp), [])
-                for (name, p), (_, q) in zip(model.named_parameters(), src.named_parameters(), strict=True):
-                    self.assertTrue(torch.equal(p, q), name)
-
-    def test_fused_checkpoint_keeps_only_gate_up_mapped(self):
-        # A checkpoint already in the fused layout loads every weight as a view. Everything but gate_up_proj is
-        # copied out at load; gate_up_proj is left for the wrapper, which splits and drops it, releasing the mapping.
-        gemma4 = Gemma4TextConfig(
-            **self.TINY,
-            head_dim=16,
-            intermediate_size=128,
-            enable_moe_block=True,
-            num_experts=8,
-            top_k_experts=2,
-            moe_intermediate_size=64,
-            sliding_window=32,
-            layer_types=["full_attention", "sliding_attention"],
-            vocab_size_per_layer_input=256,
-            hidden_size_per_layer_input=16,
+    def _rss():
+        return sum(
+            int(line.split()[1]) * 1024
+            for line in open("/proc/self/status")
+            if line.startswith(("RssAnon:", "RssFile:", "RssShmem:"))
         )
+
+    def _check(self, rbln_cls, config_cls, tmp, src_state_dict):
+        checkpoint_bytes = sum(os.path.getsize(f) for f in glob.glob(f"{tmp}/*.safetensors"))
+        gc.collect()
+        before = self._rss()
+        model = rbln_cls.get_pytorch_model(tmp, dtype=torch.bfloat16)
+        for name, p in model.named_parameters():
+            self.assertTrue(torch.equal(p, src_state_dict[name]), name)
+        if config_cls is not None:
+            rbln_config = config_cls(max_seq_len=256, batch_size=1, create_runtimes=False)
+            rbln_config = rbln_cls.update_rbln_config(
+                preprocessors=None, model=model, model_config=model.config, rbln_config=rbln_config
+            )
+            wrapped = rbln_cls._wrap_model_if_needed(model, rbln_config)  # noqa: F841
+        gc.collect()
+        ratio = (self._rss() - before) / checkpoint_bytes
+        self.assertLessEqual(ratio, self.MAX_RSS_RATIO, f"RSS grew {ratio:.2f}x the checkpoint size")
+
+    def test_per_expert_checkpoints(self):
+        moe = {"moe_intermediate_size": 512, "num_experts": 64, "num_experts_per_tok": 4, "decoder_sparse_step": 1}
         cases = [
-            (self.FAMILIES[0][0], self.FAMILIES[0][1], self.FAMILIES[0][2], "Qwen3MoeExperts", "fused dump"),
-            (Gemma4ForCausalLM, RBLNGemma4ForCausalLM, gemma4, "Gemma4TextExperts", "save_pretrained"),
+            (
+                Qwen3MoeForCausalLM,
+                RBLNQwen3MoeForCausalLM,
+                RBLNQwen3MoeForCausalLMConfig,
+                Qwen3MoeConfig(**self.BASE, **moe, num_hidden_layers=8),
+            ),
+            (
+                Qwen2MoeForCausalLM,
+                RBLNQwen2MoeForCausalLM,
+                RBLNQwen2MoeForCausalLMConfig,
+                Qwen2MoeConfig(**self.BASE, **moe, shared_expert_intermediate_size=512, num_hidden_layers=4),
+            ),
+            (
+                MixtralForCausalLM,
+                RBLNMixtralForCausalLM,
+                RBLNMixtralForCausalLMConfig,
+                MixtralConfig(**self.BASE, num_local_experts=64, num_experts_per_tok=4, num_hidden_layers=4),
+            ),
         ]
-        for hf_cls, rbln_cls, config, experts_cls, how in cases:
+        for hf_cls, rbln_cls, config_cls, config in cases:
             with self.subTest(hf_cls.__name__), tempfile.TemporaryDirectory() as tmp:
-                src = hf_cls(config).eval()
-                if how == "save_pretrained":  # Gemma4 checkpoints are natively fused
-                    src.save_pretrained(tmp)
-                else:
-                    save_file({k: v.contiguous() for k, v in src.state_dict().items()}, f"{tmp}/model.safetensors")
-                    src.config.save_pretrained(tmp)
-                self.assertTrue(any(k.endswith("experts.gate_up_proj") for k in self._safetensors_keys(tmp)))
+                src = hf_cls(config).to(torch.bfloat16).eval()
+                src.save_pretrained(tmp)  # written back per-expert, like the hub checkpoints
+                state_dict = {k: v.clone() for k, v in src.state_dict().items()}
+                del src
+                self._check(rbln_cls, config_cls, tmp, state_dict)
 
-                model = rbln_cls.get_pytorch_model(tmp)
-                remaining = self._file_backed(model, tmp)
-                self.assertTrue(
-                    remaining and all(name.endswith("experts.gate_up_proj") for name in remaining), remaining
-                )
-                for module in model.modules():
-                    if module.__class__.__name__ == experts_cls:
-                        module.gate_up_proj = None
-                self.assertEqual(self._checkpoint_ranges(tmp), [])
+    def test_fused_checkpoint(self):
+        # Gemma4 checkpoints are natively fused; the experts load as mmap views and only the wrapper copies them.
+        base = {k: v for k, v in self.BASE.items() if k != "intermediate_size"}
+        config = Gemma4TextConfig(
+            **base,
+            intermediate_size=512,
+            head_dim=64,
+            enable_moe_block=True,
+            num_experts=64,
+            top_k_experts=4,
+            moe_intermediate_size=512,
+            num_hidden_layers=4,
+            sliding_window=64,
+            layer_types=["full_attention", "sliding_attention", "full_attention", "full_attention"],
+            vocab_size_per_layer_input=1024,
+            hidden_size_per_layer_input=64,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Gemma4ForCausalLM(config).to(torch.bfloat16).eval()
+            src.save_pretrained(tmp)
+            state_dict = {k: v.clone() for k, v in src.state_dict().items()}
+            del src
+            self._check(RBLNGemma4ForCausalLM, RBLNGemma4ForCausalLMConfig, tmp, state_dict)
 
-    def test_qwen3_vl_moe_hub_layout_is_unmapped(self):
-        # Hub checkpoints store the experts transposed ([E, H, 2I] / [E, I, H]); transformers transposes them into
-        # new memory at load, leaving only the other weights as mmap views.
-        text = dict(
-            self.TINY,
-            intermediate_size=128,
-            moe_intermediate_size=128,
-            num_experts=8,
-            num_experts_per_tok=2,
+    def test_qwen3_vl_moe_hub_layout(self):
+        # Hub checkpoints store the experts transposed; transformers transposes them into new memory at load.
+        text = {k: v for k, v in self.BASE.items() if k != "dtype"}
+        text.update(
+            moe_intermediate_size=128,  # 2I and I must differ from hidden_size for Transpose(check_dims)
+            num_hidden_layers=4,
+            num_experts=64,
+            num_experts_per_tok=4,
             decoder_sparse_step=1,
-            rope_scaling={"rope_type": "default", "mrope_section": [8, 4, 4]},
+            rope_scaling={"rope_type": "default", "mrope_section": [16, 8, 8]},
         )
         vision = {
             "depth": 1,
             "hidden_size": 32,
             "intermediate_size": 64,
             "num_heads": 2,
-            "out_hidden_size": 64,
+            "out_hidden_size": 512,
             "patch_size": 14,
             "spatial_merge_size": 2,
             "temporal_patch_size": 2,
             "deepstack_visual_indexes": [0],
         }
-        src = Qwen3VLMoeForConditionalGeneration(Qwen3VLMoeConfig(text_config=text, vision_config=vision)).eval()
         with tempfile.TemporaryDirectory() as tmp:
-            state_dict = {
-                k: (
-                    v.transpose(1, 2).contiguous()
-                    if k.endswith(("experts.gate_up_proj", "experts.down_proj"))
-                    else v.contiguous()
-                )
-                for k, v in src.state_dict().items()
-            }
-            save_file(state_dict, f"{tmp}/model.safetensors")
+            src = Qwen3VLMoeForConditionalGeneration(Qwen3VLMoeConfig(text_config=text, vision_config=vision))
+            src = src.to(torch.bfloat16).eval()
+            state_dict = {k: v.clone() for k, v in src.state_dict().items()}
+            save_file(
+                {
+                    k: (
+                        v.transpose(1, 2).contiguous()
+                        if k.endswith(("experts.gate_up_proj", "experts.down_proj"))
+                        else v.contiguous()
+                    )
+                    for k, v in state_dict.items()
+                },
+                f"{tmp}/model.safetensors",
+            )
             src.config.save_pretrained(tmp)
-
-            model = RBLNQwen3VLMoeForConditionalGeneration.get_pytorch_model(tmp)
-            self.assertEqual(self._file_backed(model, tmp), [])
-            self.assertEqual(self._checkpoint_ranges(tmp), [])
-            for (name, p), (_, q) in zip(model.named_parameters(), src.named_parameters(), strict=True):
-                self.assertTrue(torch.equal(p, q), name)
+            del src
+            self._check(RBLNQwen3VLMoeForConditionalGeneration, None, tmp, state_dict)
 
 
 if __name__ == "__main__":
