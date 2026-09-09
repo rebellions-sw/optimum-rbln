@@ -23,6 +23,13 @@ _secrets: &secrets
 _sync: &sync |
   echo '--- :package: uv sync'
   uv sync --locked --python 3.12 --group tests --reinstall-package optimum-rbln
+  uv --version
+  if [ ! -f src/optimum/rbln/__version__.py ]; then
+    echo "hatch-vcs did not write src/optimum/rbln/__version__.py into this checkout"
+    find /workspace /root /tmp -name __version__.py -path '*optimum/rbln*' 2>/dev/null | head
+    uv run --no-sync python -c "import importlib.metadata as m, pathlib; pathlib.Path('src/optimum/rbln/__version__.py').write_text('__version__ = version = %r\n' % m.version('optimum-rbln'))"
+    cat src/optimum/rbln/__version__.py
+  fi
   bash .buildkite/scripts/install-rebel-compiler.sh
 
 _cpu: &cpu
