@@ -51,7 +51,7 @@ class RBLNT5EncoderModel(RBLNTransformerEncoderForFeatureExtraction):
 
     Important Note:
         This model supports various sizes of the T5EncoderModel. For optimal performance, it is highly recommended to adjust the tensor parallelism setting
-        based on the model size. Please refer to the [Optimum RBLN Overview](../../../index.md) for guidance on choosing the appropriate tensor parallelism size for your model.
+        based on the model size. Please refer to the [Optimum RBLN Overview](https://docs.rbln.ai/software/optimum/optimum_rbln.html) for guidance on choosing the appropriate tensor parallelism size for your model.
 
     Examples:
         ```python
@@ -96,7 +96,7 @@ class RBLNT5ForConditionalGeneration(RBLNModelForSeq2SeqLM):
 
     Important Note:
         This model supports various sizes of the T5ForConditionalGeneration. For optimal performance, it is highly recommended to adjust the tensor parallelism setting
-        based on the model size. Please refer to the [Optimum RBLN Overview](../../../index.md) for guidance on choosing the appropriate tensor parallelism size for your model.
+        based on the model size. Please refer to the [Optimum RBLN Overview](https://docs.rbln.ai/software/optimum/optimum_rbln.html) for guidance on choosing the appropriate tensor parallelism size for your model.
 
 
     Examples:

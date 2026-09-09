@@ -78,10 +78,7 @@ jobs:
         FILES='${{ steps.changed-files.outputs.files }}'
         
         # Exclude files (hardcoded)
-        EXCLUDE_FILES=(
-          "src/optimum/rbln/transformers/models/llava_next/modeling_llava_next.py"
-          "src/optimum/rbln/transformers/models/t5/modeling_t5.py"
-        )
+        EXCLUDE_FILES=()
         
         # Filter out excluded files
         FILTERED_FILES=""
