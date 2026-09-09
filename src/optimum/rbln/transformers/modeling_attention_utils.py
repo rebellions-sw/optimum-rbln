@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import rebel
 
 from ..utils.logging import get_logger
-from ..utils.runtime_utils import get_available_dram_per_chiplet, parse_byte_size
+from ..utils.runtime_utils import get_available_dram_per_chiplet, parse_byte_size, resolve_npu_or_none
 
 
 if TYPE_CHECKING:
@@ -17,16 +17,13 @@ if TYPE_CHECKING:
 logger = get_logger()
 
 
-MAX_SLIDING_WINDOW_SIZE = 32_768
-
-
 @dataclass(frozen=True)
 class AttentionLimits:
     """Bounds on the extent of the KV cache's dynamic axis for one NPU family.
 
-    `set_default_values` derives that extent from `max_seq_len` for eager attention and from
-    `kvcache_partition_len` for flash attention, so the device limit bounds a different
-    parameter in each mode.
+    The bounded parameter differs per attention mode, because that is what each mode makes the
+    cache's dynamic axis: `max_seq_len` for eager, `kvcache_partition_len` for flash attention,
+    and `sliding_window` for a sliding-window cache.
     """
 
     name: str
@@ -34,6 +31,7 @@ class AttentionLimits:
     min_flash_partition_len: int
     max_flash_partition_len: int
     default_flash_partition_len: int
+    max_sliding_window: int
 
     @property
     def min_flash_max_seq_len(self) -> int:
@@ -47,6 +45,7 @@ ATOM_ATTENTION_LIMITS = AttentionLimits(
     min_flash_partition_len=1_024,
     max_flash_partition_len=32_768,
     default_flash_partition_len=16_384,
+    max_sliding_window=32_768,
 )
 
 REBEL_ATTENTION_LIMITS = AttentionLimits(
@@ -55,20 +54,26 @@ REBEL_ATTENTION_LIMITS = AttentionLimits(
     min_flash_partition_len=1_024,
     max_flash_partition_len=16_384,
     default_flash_partition_len=8_192,
+    max_sliding_window=16_384,
 )
 
 
 def get_attention_limits(npu: str | None = None) -> AttentionLimits:
-    """Attention limits of the target NPU, falling back to the attached device.
+    """Attention limits of the target NPU. ATOM accepts twice the extent REBEL does.
 
-    ATOM accepts twice the dynamic-axis extent REBEL does, so the two families carry separate
-    limits. When the family cannot be resolved — compiling on a host without an NPU and without
-    `npu` pinned on the config — the wider ATOM limits apply and the compiler stays the backstop.
+    With no NPU to name — compiling on a host without one and without `npu` pinned on the config —
+    the wider ATOM limits apply and the compiler stays the backstop. A named-but-unknown NPU is a
+    different case and raises: inheriting the wider limits there is exactly the silent compiler
+    abort this guard exists to prevent.
     """
-    npu = npu or (rebel.get_npu_name(0) if rebel.npu_is_available(0) else None)
-    if npu is not None and npu.startswith("RBLN-CR"):
+    npu = resolve_npu_or_none(npu)
+    if npu is None:
+        return ATOM_ATTENTION_LIMITS
+    if npu.startswith("RBLN-CR"):
         return REBEL_ATTENTION_LIMITS
-    return ATOM_ATTENTION_LIMITS
+    if npu.startswith("RBLN-CA"):
+        return ATOM_ATTENTION_LIMITS
+    raise ValueError(f"Unknown npu name: {npu}")
 
 
 def set_default_values(
@@ -82,10 +87,12 @@ def set_default_values(
     if attn_impl is None:
         attn_impl = "eager"
 
+    # Resolve once: the prefill-chunk default and the attention limits below both read it, and
+    # resolving at each use made the result depend on which arguments the caller happened to pass.
+    npu = resolve_npu_or_none(npu)
+
     if prefill_chunk_size is None:
         # RBLN-CR NPUs use a larger prefill chunk for better prefill performance.
-        # Prefer the target NPU pinned on the config; fall back to the locally attached device.
-        npu = npu or rebel.get_npu_name(0)
         prefill_chunk_size = 512 if "RBLN-CR" in (npu or "") else 128
     if prefill_chunk_size % 64 != 0 or prefill_chunk_size <= 0:
         raise ValueError("`prefill_chunk_size` must be a positive integer divisible by 64.")
@@ -117,23 +124,14 @@ def validate_attention_method(
     kvcache_block_size: int,
     max_seq_len: int,
     npu: str | None = None,
-):
+) -> None:
     if attn_impl not in ["eager", "flash_attn"]:
         raise ValueError(f"Unknown `attn_impl` : {attn_impl}. (Available : 'eager', 'flash_attn`)")
 
     limits = get_attention_limits(npu)
 
-    ## Checking Constraints...
     # The device bounds the extent of the KV cache's dynamic axis, which eager attention sets to
     # `max_seq_len` and flash attention to `kvcache_partition_len`. ATOM allows 32k, REBEL 16k.
-
-    # Constraint of eager attention:
-    # - `max_seq_len` <= `limits.max_eager_seq_len`
-
-    # Constraints of flash attention:
-    # 1. `max_seq_len` should be multiple of `partition_len`.
-    # 2. `limits.min_flash_partition_len` <= `partition_len` <= `limits.max_flash_partition_len`.
-    # 3. `max_seq_len` should be at least twice the minimum partition length.
     if attn_impl == "eager" and max_seq_len > limits.max_eager_seq_len:
         raise ValueError(
             f"`max_seq_len` is set to {max_seq_len}, "
@@ -174,10 +172,16 @@ def validate_attention_method(
             )
 
 
-def validate_sliding_window(rbln_config: "RBLNDecoderOnlyModelForCausalLMConfig"):
-    if rbln_config.sliding_window > MAX_SLIDING_WINDOW_SIZE - rbln_config.prefill_chunk_size:
+def validate_sliding_window(rbln_config: "RBLNDecoderOnlyModelForCausalLMConfig") -> None:
+    # A sliding-window cache makes `sliding_window` the dynamic axis, so the same per-family limit
+    # bounds it, less the prefill chunk in flight.
+    limits = get_attention_limits(rbln_config.npu)
+    max_sliding_window = limits.max_sliding_window - rbln_config.prefill_chunk_size
+    if rbln_config.sliding_window > max_sliding_window:
         raise ValueError(
-            f"Sliding window size ({rbln_config.sliding_window}) must be less than {MAX_SLIDING_WINDOW_SIZE} - prefill_chunk_size ({MAX_SLIDING_WINDOW_SIZE - rbln_config.prefill_chunk_size})"
+            f"Sliding window size ({rbln_config.sliding_window}) must be at most {max_sliding_window} on "
+            f"{limits.name} (`max_sliding_window` {limits.max_sliding_window} - `prefill_chunk_size` "
+            f"{rbln_config.prefill_chunk_size})."
         )
 
     if rbln_config.cache_impl == "sliding_window" and rbln_config.use_attention_mask:
