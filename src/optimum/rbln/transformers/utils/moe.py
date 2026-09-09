@@ -59,3 +59,9 @@ def release_checkpoint_mmap_(model: nn.Module) -> nn.Module:
         for name, buffer in module.named_buffers(recurse=False):
             setattr(module, name, buffer.detach().clone())
     return model
+
+
+class RBLNMoeLoadMixin:
+    @classmethod
+    def get_pytorch_model(cls, *args, **kwargs):
+        return release_checkpoint_mmap_(super().get_pytorch_model(*args, **kwargs))
