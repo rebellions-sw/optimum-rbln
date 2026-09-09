@@ -54,7 +54,7 @@ REBEL_ATTENTION_LIMITS = AttentionLimits(
     min_flash_partition_len=1_024,
     max_flash_partition_len=16_384,
     default_flash_partition_len=8_192,
-    max_sliding_window=16_384,
+    max_sliding_window=32_767,
 )
 
 
