@@ -87,8 +87,6 @@ def set_default_values(
     if attn_impl is None:
         attn_impl = "eager"
 
-    # Resolve once: the prefill-chunk default and the attention limits below both read it, and
-    # resolving at each use made the result depend on which arguments the caller happened to pass.
     npu = resolve_npu_or_none(npu)
 
     if prefill_chunk_size is None:
@@ -130,8 +128,6 @@ def validate_attention_method(
 
     limits = get_attention_limits(npu)
 
-    # The device bounds the extent of the KV cache's dynamic axis, which eager attention sets to
-    # `max_seq_len` and flash attention to `kvcache_partition_len`. ATOM allows 32k, REBEL 16k.
     if attn_impl == "eager" and max_seq_len > limits.max_eager_seq_len:
         raise ValueError(
             f"`max_seq_len` is set to {max_seq_len}, "
@@ -173,8 +169,6 @@ def validate_attention_method(
 
 
 def validate_sliding_window(rbln_config: "RBLNDecoderOnlyModelForCausalLMConfig") -> None:
-    # A sliding-window cache makes `sliding_window` the dynamic axis, so the same per-family limit
-    # bounds it, less the prefill chunk in flight.
     limits = get_attention_limits(rbln_config.npu)
     max_sliding_window = limits.max_sliding_window - rbln_config.prefill_chunk_size
     if rbln_config.sliding_window > max_sliding_window:

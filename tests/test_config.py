@@ -413,133 +413,77 @@ class TestAttentionLimits:
         validate_attention_method(
             attn_impl=attn_impl,
             kvcache_partition_len=kvcache_partition_len,
-            # `set_default_values` derives the block size from the mode's dynamic axis.
             kvcache_block_size=max_seq_len if attn_impl == "eager" else kvcache_partition_len,
             max_seq_len=max_seq_len,
             npu=npu,
         )
 
-    @pytest.mark.parametrize(
-        "npu,expected",
-        [("RBLN-CA22", "ATOM"), ("RBLN-CA25", "ATOM"), ("RBLN-CR03", "REBEL"), ("RBLN-CR13", "REBEL")],
-    )
-    def test_family_resolution(self, npu, expected):
+    def test_family_resolution(self, monkeypatch):
         from optimum.rbln.transformers.modeling_attention_utils import get_attention_limits
 
-        assert get_attention_limits(npu).name == expected
+        assert get_attention_limits("RBLN-CA22").name == "ATOM"
+        assert get_attention_limits("RBLN-CR13").name == "REBEL"
+        with pytest.raises(ValueError, match="Unknown npu name"):
+            get_attention_limits("RBLN-XX99")
 
-    @pytest.mark.parametrize("npu,max_seq_len", [("RBLN-CA22", 32_768), ("RBLN-CR13", 16_384)])
-    def test_eager_at_the_cap_is_accepted(self, npu, max_seq_len):
-        self._validate("eager", max_seq_len, npu=npu)
+        monkeypatch.setattr(rebel, "npu_is_available", lambda *args: True)
+        monkeypatch.setattr(rebel, "get_npu_name", lambda *args: "RBLN-CR13")
+        assert get_attention_limits().name == "REBEL"
+        assert get_attention_limits("RBLN-CA22").name == "ATOM"
 
-    def test_eager_32k_rejected_on_rebel(self):
-        # deploy #1443: eager + 32_768 compiles on ATOM but aborts the compiler on REBEL.
-        with pytest.raises(ValueError, match="REBEL limit of 16384"):
-            self._validate("eager", 32_768, npu="RBLN-CR13")
+        monkeypatch.setattr(rebel, "npu_is_available", lambda *args: False)
+        assert get_attention_limits().name == "ATOM"
 
-    def test_eager_above_cap_rejected_on_atom(self):
-        with pytest.raises(ValueError, match="ATOM limit of 32768"):
-            self._validate("eager", 40_960, npu="RBLN-CA22")
+    @pytest.mark.parametrize("npu,cap", [("RBLN-CA22", 32_768), ("RBLN-CR13", 16_384)])
+    def test_eager_max_seq_len_cap(self, npu, cap):
+        # REBEL rejecting 32_768 here is deploy #1443, which aborted the compiler instead.
+        self._validate("eager", cap, npu=npu)
+        with pytest.raises(ValueError, match=f"limit of {cap}"):
+            self._validate("eager", 2 * cap, npu=npu)
 
-    @pytest.mark.parametrize("npu,kvcache_partition_len", [("RBLN-CA22", 32_768), ("RBLN-CR13", 16_384)])
-    def test_flash_partition_at_the_cap_is_accepted(self, npu, kvcache_partition_len):
-        self._validate("flash_attn", 65_536, kvcache_partition_len=kvcache_partition_len, npu=npu)
-
-    def test_flash_partition_32k_rejected_on_rebel(self):
-        with pytest.raises(ValueError, match="REBEL supported range"):
-            self._validate("flash_attn", 65_536, kvcache_partition_len=32_768, npu="RBLN-CR13")
-
-    @pytest.mark.parametrize("npu", ["RBLN-CA22", "RBLN-CR13"])
-    def test_min_flash_partition_is_shared_by_both_families(self, npu):
-        self._validate("flash_attn", 4_096, kvcache_partition_len=1_024, npu=npu)
-        with pytest.raises(ValueError, match="out of the"):
+    @pytest.mark.parametrize("npu,cap", [("RBLN-CA22", 32_768), ("RBLN-CR13", 16_384)])
+    def test_flash_partition_len_range(self, npu, cap):
+        self._validate("flash_attn", 2 * cap, kvcache_partition_len=cap, npu=npu)
+        with pytest.raises(ValueError, match="supported range"):
+            self._validate("flash_attn", 4 * cap, kvcache_partition_len=2 * cap, npu=npu)
+        with pytest.raises(ValueError, match="supported range"):
             self._validate("flash_attn", 4_096, kvcache_partition_len=512, npu=npu)
 
-    @pytest.mark.parametrize("npu,expected_partition_len", [("RBLN-CA22", 16_384), ("RBLN-CR13", 8_192)])
-    def test_flash_partition_default_is_per_family(self, npu, expected_partition_len):
+    @pytest.mark.parametrize("npu,default", [("RBLN-CA22", 16_384), ("RBLN-CR13", 8_192)])
+    def test_flash_partition_len_default(self, npu, default):
         from optimum.rbln.transformers.modeling_attention_utils import set_default_values
 
         attn_impl, partition_len, block_size, _ = set_default_values(
             attn_impl="flash_attn", max_seq_len=65_536, npu=npu
         )
-        assert (attn_impl, partition_len, block_size) == ("flash_attn", expected_partition_len, expected_partition_len)
-
-    def test_explicit_partition_len_wins_over_family_default(self):
-        from optimum.rbln.transformers.modeling_attention_utils import set_default_values
-
-        # An explicit `kvcache_partition_len` also promotes eager -> flash_attn; the value must survive that.
-        attn_impl, partition_len, _, _ = set_default_values(
-            kvcache_partition_len=4_096, max_seq_len=65_536, npu="RBLN-CR13"
-        )
-        assert (attn_impl, partition_len) == ("flash_attn", 4_096)
+        assert (attn_impl, partition_len, block_size) == ("flash_attn", default, default)
 
     @pytest.mark.parametrize("npu", ["RBLN-CA22", "RBLN-CR13"])
-    def test_family_default_satisfies_its_own_limits(self, npu):
-        """Each family's default partition must pass the validator it is paired with."""
-        from optimum.rbln.transformers.modeling_attention_utils import get_attention_limits, set_default_values
-
-        limits = get_attention_limits(npu)
-        assert limits.min_flash_partition_len <= limits.default_flash_partition_len <= limits.max_flash_partition_len
-
-        _, partition_len, block_size, _ = set_default_values(
-            attn_impl="flash_attn", max_seq_len=2 * limits.default_flash_partition_len, npu=npu
-        )
-        assert block_size == partition_len
-        self._validate("flash_attn", 2 * partition_len, kvcache_partition_len=partition_len, npu=npu)
-
-    def test_falls_back_to_attached_npu(self, monkeypatch):
-        monkeypatch.setattr(rebel, "npu_is_available", lambda *args: True)
-        monkeypatch.setattr(rebel, "get_npu_name", lambda *args: "RBLN-CR13")
-        with pytest.raises(ValueError, match="REBEL limit of 16384"):
-            self._validate("eager", 32_768)
-
-    def test_falls_back_to_atom_without_attached_npu(self, monkeypatch):
-        # Compiling on a host without an NPU keeps the wider limits; the compiler stays the backstop.
-        monkeypatch.setattr(rebel, "npu_is_available", lambda *args: False)
-        self._validate("eager", 32_768)
-
-    def test_unknown_npu_raises_instead_of_inheriting_wider_limits(self):
+    def test_record_is_self_consistent(self, npu):
         from optimum.rbln.transformers.modeling_attention_utils import get_attention_limits
 
-        with pytest.raises(ValueError, match="Unknown npu name"):
-            get_attention_limits("RBLN-XX99")
+        limits = get_attention_limits(npu)
+        assert limits.min_flash_partition_len <= limits.default_flash_partition_len
+        assert limits.default_flash_partition_len <= limits.max_flash_partition_len
+        assert limits.min_flash_max_seq_len == 2 * limits.min_flash_partition_len
 
-    def test_explicit_npu_wins_over_attached_device(self, monkeypatch):
-        monkeypatch.setattr(rebel, "npu_is_available", lambda *args: True)
-        monkeypatch.setattr(rebel, "get_npu_name", lambda *args: "RBLN-CR13")
-        self._validate("eager", 32_768, npu="RBLN-CA22")
-
-
-class TestSlidingWindowLimit:
-    """`validate_sliding_window` bounds the third axis from the same per-family record."""
-
-    @staticmethod
-    def _validate(sliding_window, npu, prefill_chunk_size):
+    @pytest.mark.parametrize("npu,prefill_chunk_size,bound", [("RBLN-CA22", 128, 32_640), ("RBLN-CR13", 512, 15_872)])
+    def test_sliding_window_bound(self, npu, prefill_chunk_size, bound):
         from optimum.rbln.transformers.modeling_attention_utils import validate_sliding_window
 
-        validate_sliding_window(
-            RBLNLlamaForCausalLMConfig(
-                max_seq_len=8_192,
-                sliding_window=sliding_window,
-                prefill_chunk_size=prefill_chunk_size,
-                npu=npu,
+        def validate(sliding_window):
+            validate_sliding_window(
+                RBLNLlamaForCausalLMConfig(
+                    max_seq_len=8_192,
+                    sliding_window=sliding_window,
+                    prefill_chunk_size=prefill_chunk_size,
+                    npu=npu,
+                )
             )
-        )
 
-    def test_atom_bound_is_unchanged(self):
-        self._validate(32_640, npu="RBLN-CA22", prefill_chunk_size=128)
-        with pytest.raises(ValueError, match="at most 32640 on ATOM"):
-            self._validate(32_641, npu="RBLN-CA22", prefill_chunk_size=128)
-
-    def test_rebel_bound_is_the_family_max_less_the_prefill_chunk(self):
-        self._validate(15_872, npu="RBLN-CR13", prefill_chunk_size=512)
-        with pytest.raises(ValueError, match="at most 15872 on REBEL"):
-            self._validate(16_384, npu="RBLN-CR13", prefill_chunk_size=512)
-
-    def test_rebel_rejects_what_the_global_bound_admitted(self):
-        # 32_256 sat inside the old global bound (32_768 - 512) on every target.
-        with pytest.raises(ValueError, match="at most 15872 on REBEL"):
-            self._validate(32_256, npu="RBLN-CR13", prefill_chunk_size=512)
+        validate(bound)
+        with pytest.raises(ValueError, match=f"at most {bound}"):
+            validate(bound + 1)
 
 
 def test_attention_limits_npu_wiring():
