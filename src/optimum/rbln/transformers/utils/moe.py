@@ -52,3 +52,28 @@ def split_fused_experts(experts: nn.Module) -> tuple[Tensor, Tensor, Tensor]:
     up = gate_up[:, intermediate_dim:, :].contiguous()
     experts.gate_up_proj = None
     return gate, up, experts.down_proj.detach()
+
+
+def release_checkpoint_mmap_(model: nn.Module) -> nn.Module:
+    # transformers leaves whatever it did not convert as a view of the safetensors mmap, which keeps the whole
+    # checkpoint resident. Copy everything out except the fused experts gate_up_proj: the wrapper splits it into
+    # gate/up copies and drops it, so once wrapped no view remains and the mapping is released. Dense models
+    # (no gate_up_proj) are left alone; there the mmap is the model itself.
+    modules = list(model.modules())
+    if not any("gate_up_proj" in module._parameters for module in modules):
+        return model
+    for module in modules:
+        for name, param in module.named_parameters(recurse=False):
+            if name != "gate_up_proj":
+                param.data = param.data.clone()
+        # Buffers are installed as the mmap view itself (no Parameter wrap), and a view keeps its base alive
+        # through `.data` swaps, so replace the buffer object instead.
+        for name, buffer in module.named_buffers(recurse=False):
+            setattr(module, name, buffer.detach().clone())
+    return model
+
+
+class RBLNMoeLoadMixin:
+    @classmethod
+    def get_pytorch_model(cls, *args, **kwargs):
+        return release_checkpoint_mmap_(super().get_pytorch_model(*args, **kwargs))
