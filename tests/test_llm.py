@@ -1338,7 +1338,6 @@ with tempfile.TemporaryDirectory() as tmp:
 """
 
 
-@unittest.skipUnless(sys.platform == "linux", "reads /proc/self/status")
 class TestHostMemory(unittest.TestCase):
     # Loading a checkpoint and building the wrapper must not duplicate the weights on the host. Dense weights stay
     # safetensors mmap views (RSS growth ~0); MoE experts are rebuilt into new memory at load, so one copy (~1x)
