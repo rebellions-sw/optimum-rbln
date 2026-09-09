@@ -2,7 +2,6 @@ import gc
 import glob
 import json
 import os
-import sys
 import tempfile
 import unittest
 import warnings
@@ -1313,7 +1312,6 @@ class TestDisallowedLlama_4(DisallowedTestBase.DisallowedTest):
     RBLN_CLASS_KWARGS = {"rbln_config": {"attn_impl": "flash_attn", "kvcache_partition_len": 2048}}
 
 
-@unittest.skipUnless(sys.platform == "linux", "reads /proc/self/status")
 class TestMoeHostMemory(unittest.TestCase):
     # Loading an MoE checkpoint and building the wrapper must not hold more than one copy of the weights:
     # dev kept up to three (expert copies plus the whole checkpoint still mapped). Ratios are measured against
