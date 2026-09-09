@@ -278,7 +278,9 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
                 # Larger batch size should be at the beginning of the list.
                 self.decoder_batch_sizes.sort(reverse=True)
 
-        self.cache_metas: list[CacheMeta] = cache_metas or []
+        self.cache_metas: list[CacheMeta] = [
+            CacheMeta.from_serialized(meta) if isinstance(meta, dict) else meta for meta in cache_metas or []
+        ]
 
     @staticmethod
     def validate_phases_type(phases: list[PhaseType]):
