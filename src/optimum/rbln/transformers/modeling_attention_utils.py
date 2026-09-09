@@ -1,6 +1,7 @@
 import logging
 import math
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import rebel
@@ -17,11 +18,55 @@ logger = get_logger()
 
 
 DEFAULT_FLASH_ATTN_PARTITION_LENGTH = 16_384
-DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH = 32_768
-MIN_FLASH_ATTN_MAX_SEQ_LEN = 2048
-MIN_FLASH_ATTN_PARTITION_LENGTH = 1024
-MAX_FLASH_ATTN_PARTITION_LENGTH = 32_768
 MAX_SLIDING_WINDOW_SIZE = 32_768
+
+
+@dataclass(frozen=True)
+class AttentionLimits:
+    """Bounds on the extent of the KV cache's dynamic axis for one NPU family.
+
+    `set_default_values` derives that extent from `max_seq_len` for eager attention and from
+    `kvcache_partition_len` for flash attention, so the device limit bounds a different
+    parameter in each mode.
+    """
+
+    name: str
+    max_eager_seq_len: int
+    min_flash_partition_len: int
+    max_flash_partition_len: int
+
+    @property
+    def min_flash_max_seq_len(self) -> int:
+        # Flash attention needs at least two partitions.
+        return 2 * self.min_flash_partition_len
+
+
+ATOM_ATTENTION_LIMITS = AttentionLimits(
+    name="ATOM",
+    max_eager_seq_len=32_768,
+    min_flash_partition_len=1_024,
+    max_flash_partition_len=32_768,
+)
+
+REBEL_ATTENTION_LIMITS = AttentionLimits(
+    name="REBEL",
+    max_eager_seq_len=16_384,
+    min_flash_partition_len=1_024,
+    max_flash_partition_len=16_384,
+)
+
+
+def get_attention_limits(npu: str | None = None) -> AttentionLimits:
+    """Attention limits of the target NPU, falling back to the attached device.
+
+    ATOM accepts twice the dynamic-axis extent REBEL does, so the two families carry separate
+    limits. When the family cannot be resolved — compiling on a host without an NPU and without
+    `npu` pinned on the config — the wider ATOM limits apply and the compiler stays the backstop.
+    """
+    npu = npu or (rebel.get_npu_name(0) if rebel.npu_is_available(0) else None)
+    if npu is not None and npu.startswith("RBLN-CR"):
+        return REBEL_ATTENTION_LIMITS
+    return ATOM_ATTENTION_LIMITS
 
 
 def set_default_values(
@@ -64,23 +109,34 @@ def set_default_values(
     return attn_impl, kvcache_partition_len, kvcache_block_size, prefill_chunk_size
 
 
-def validate_attention_method(attn_impl: str, kvcache_partition_len: int, kvcache_block_size: int, max_seq_len: int):
+def validate_attention_method(
+    attn_impl: str,
+    kvcache_partition_len: int,
+    kvcache_block_size: int,
+    max_seq_len: int,
+    npu: str | None = None,
+):
     if attn_impl not in ["eager", "flash_attn"]:
         raise ValueError(f"Unknown `attn_impl` : {attn_impl}. (Available : 'eager', 'flash_attn`)")
 
+    limits = get_attention_limits(npu)
+
     ## Checking Constraints...
+    # The device bounds the extent of the KV cache's dynamic axis, which eager attention sets to
+    # `max_seq_len` and flash attention to `kvcache_partition_len`. ATOM allows 32k, REBEL 16k.
+
     # Constraint of eager attention:
-    # - `max_seq_len` <= 32k
+    # - `max_seq_len` <= `limits.max_eager_seq_len`
 
     # Constraints of flash attention:
     # 1. `max_seq_len` should be multiple of `partition_len`.
-    # 2. 1k <= `partition_len` <= 32k.
-    # 3. `max_seq_len` should be at least 2048 (2 * minimum partition length).
-    if attn_impl == "eager" and max_seq_len > DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH:
+    # 2. `limits.min_flash_partition_len` <= `partition_len` <= `limits.max_flash_partition_len`.
+    # 3. `max_seq_len` should be at least twice the minimum partition length.
+    if attn_impl == "eager" and max_seq_len > limits.max_eager_seq_len:
         raise ValueError(
             f"`max_seq_len` is set to {max_seq_len}, "
-            f"which exceeds the limit of {DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH} for 'eager' attention. "
-            f"Please reduce the `max_seq_len` to {DEFAULT_MAX_EAGER_ATTN_SEQUENCE_LENGTH} or lower,"
+            f"which exceeds the {limits.name} limit of {limits.max_eager_seq_len} for 'eager' attention. "
+            f"Please reduce the `max_seq_len` to {limits.max_eager_seq_len} or lower,"
             " or consider switching `attn_impl` to 'flash_attn' for larger sequence lengths."
         )
 
@@ -90,16 +146,16 @@ def validate_attention_method(attn_impl: str, kvcache_partition_len: int, kvcach
                 f"`max_seq_len` ({max_seq_len}) must be a multiple of `kvcache_partition_len` ({kvcache_partition_len}) "
                 f"when using 'flash_attn'. Please adjust either value to meet this requirement."
             )
-        elif not (MIN_FLASH_ATTN_PARTITION_LENGTH <= kvcache_partition_len <= MAX_FLASH_ATTN_PARTITION_LENGTH):
+        elif not (limits.min_flash_partition_len <= kvcache_partition_len <= limits.max_flash_partition_len):
             raise ValueError(
-                f"`kvcache_partition_len` ({kvcache_partition_len}) is out of the supported range for 'flash_attn' "
-                f"({MIN_FLASH_ATTN_PARTITION_LENGTH} <= `kvcache_partition_len` <= {MAX_FLASH_ATTN_PARTITION_LENGTH}). "
-                f"Please provide a valid value within this range."
+                f"`kvcache_partition_len` ({kvcache_partition_len}) is out of the {limits.name} supported range "
+                f"for 'flash_attn' ({limits.min_flash_partition_len} <= `kvcache_partition_len` <= "
+                f"{limits.max_flash_partition_len}). Please provide a valid value within this range."
             )
-        elif max_seq_len < MIN_FLASH_ATTN_MAX_SEQ_LEN:
+        elif max_seq_len < limits.min_flash_max_seq_len:
             raise ValueError(
                 f"`max_seq_len` ({max_seq_len}) is too small for 'flash_attn'. The minimum "
-                f"supported value is {MIN_FLASH_ATTN_MAX_SEQ_LEN}. Please increase `max_seq_len` to meet "
+                f"supported value is {limits.min_flash_max_seq_len}. Please increase `max_seq_len` to meet "
                 "this requirement, or consider switching `attn_impl` to 'eager' for shorter lengths."
             )
 

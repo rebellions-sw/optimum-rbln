@@ -403,6 +403,88 @@ class TestPrefillChunkSizeDefault:
             self._resolve(prefill_chunk_size=invalid_chunk_size, npu="RBLN-CA22")
 
 
+class TestAttentionLimits:
+    """Per-NPU-family bounds on the extent of the KV cache's dynamic axis (ATOM 32k / REBEL 16k)."""
+
+    @staticmethod
+    def _validate(attn_impl, max_seq_len, kvcache_partition_len=None, npu=None):
+        from optimum.rbln.transformers.modeling_attention_utils import validate_attention_method
+
+        validate_attention_method(
+            attn_impl=attn_impl,
+            kvcache_partition_len=kvcache_partition_len,
+            # `set_default_values` derives the block size from the mode's dynamic axis.
+            kvcache_block_size=max_seq_len if attn_impl == "eager" else kvcache_partition_len,
+            max_seq_len=max_seq_len,
+            npu=npu,
+        )
+
+    @pytest.mark.parametrize(
+        "npu,expected",
+        [("RBLN-CA22", "ATOM"), ("RBLN-CA25", "ATOM"), ("RBLN-CR03", "REBEL"), ("RBLN-CR13", "REBEL")],
+    )
+    def test_family_resolution(self, npu, expected):
+        from optimum.rbln.transformers.modeling_attention_utils import get_attention_limits
+
+        assert get_attention_limits(npu).name == expected
+
+    @pytest.mark.parametrize("npu,max_seq_len", [("RBLN-CA22", 32768), ("RBLN-CR13", 16384)])
+    def test_eager_at_the_cap_is_accepted(self, npu, max_seq_len):
+        self._validate("eager", max_seq_len, npu=npu)
+
+    def test_eager_32k_rejected_on_rebel(self):
+        # deploy #1443: eager + 32768 compiles on ATOM but aborts the compiler on REBEL.
+        with pytest.raises(ValueError, match="REBEL limit of 16384"):
+            self._validate("eager", 32768, npu="RBLN-CR13")
+
+    def test_eager_above_cap_rejected_on_atom(self):
+        with pytest.raises(ValueError, match="ATOM limit of 32768"):
+            self._validate("eager", 40960, npu="RBLN-CA22")
+
+    @pytest.mark.parametrize("npu,kvcache_partition_len", [("RBLN-CA22", 32768), ("RBLN-CR13", 16384)])
+    def test_flash_partition_at_the_cap_is_accepted(self, npu, kvcache_partition_len):
+        self._validate("flash_attn", 65536, kvcache_partition_len=kvcache_partition_len, npu=npu)
+
+    def test_flash_partition_32k_rejected_on_rebel(self):
+        with pytest.raises(ValueError, match="REBEL supported range"):
+            self._validate("flash_attn", 65536, kvcache_partition_len=32768, npu="RBLN-CR13")
+
+    @pytest.mark.parametrize("npu", ["RBLN-CA22", "RBLN-CR13"])
+    def test_min_flash_partition_is_shared_by_both_families(self, npu):
+        self._validate("flash_attn", 4096, kvcache_partition_len=1024, npu=npu)
+        with pytest.raises(ValueError, match="out of the"):
+            self._validate("flash_attn", 4096, kvcache_partition_len=512, npu=npu)
+
+    def test_falls_back_to_attached_npu(self, monkeypatch):
+        monkeypatch.setattr(rebel, "npu_is_available", lambda *args: True)
+        monkeypatch.setattr(rebel, "get_npu_name", lambda *args: "RBLN-CR13")
+        with pytest.raises(ValueError, match="REBEL limit of 16384"):
+            self._validate("eager", 32768)
+
+    def test_falls_back_to_atom_without_attached_npu(self, monkeypatch):
+        # Compiling on a host without an NPU keeps the wider limits; the compiler stays the backstop.
+        monkeypatch.setattr(rebel, "npu_is_available", lambda *args: False)
+        self._validate("eager", 32768)
+
+    def test_explicit_npu_wins_over_attached_device(self, monkeypatch):
+        monkeypatch.setattr(rebel, "npu_is_available", lambda *args: True)
+        monkeypatch.setattr(rebel, "get_npu_name", lambda *args: "RBLN-CR13")
+        self._validate("eager", 32768, npu="RBLN-CA22")
+
+
+def test_attention_limits_npu_wiring():
+    """Compile-time wiring: `rbln_config.npu` flows through `_update_attention_config` into the
+    NPU-aware limits. `update_rbln_config` runs before `get_compiled_model`, so pinning a REBEL
+    target rejects eager 32k without compiling anything."""
+    with pytest.raises(ValueError, match="REBEL limit of 16384"):
+        RBLNLlamaForCausalLM.from_pretrained(
+            "afmck/testing-llama-tiny",
+            export=True,
+            num_hidden_layers=1,
+            rbln_config={"npu": "RBLN-CR03", "create_runtimes": False, "max_seq_len": 32768},
+        )
+
+
 @pytest.mark.skip(reason="Compilation fails: cross-compiling for RBLN-CR03 on a CA25 runner, need to fix it")
 def test_prefill_chunk_size_npu_wiring_e2e(tmp_path):
     """Compile-time wiring: `rbln_config.npu` flows through `_update_attention_config` into the
