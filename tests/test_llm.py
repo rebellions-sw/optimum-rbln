@@ -1,30 +1,17 @@
-import gc
-import glob
 import json
 import os
+import subprocess
 import sys
-import tempfile
 import unittest
 import warnings
 
 import pytest
 import torch
 from PIL import Image
-from safetensors.torch import save_file
 from transformers import (
     AutoConfig,
     AutoProcessor,
     AutoTokenizer,
-    Gemma4ForCausalLM,
-    Gemma4TextConfig,
-    MixtralConfig,
-    MixtralForCausalLM,
-    Qwen2MoeConfig,
-    Qwen2MoeForCausalLM,
-    Qwen3MoeConfig,
-    Qwen3MoeForCausalLM,
-    Qwen3VLMoeConfig,
-    Qwen3VLMoeForConditionalGeneration,
 )
 
 from optimum.rbln import (
@@ -37,8 +24,6 @@ from optimum.rbln import (
     RBLNExaoneForCausalLM,
     RBLNGemma3ForCausalLM,
     RBLNGemma3ForConditionalGeneration,
-    RBLNGemma4ForCausalLM,
-    RBLNGemma4ForCausalLMConfig,
     RBLNGPT2LMHeadModel,
     RBLNGPT2Model,
     RBLNIdefics3ForConditionalGeneration,
@@ -49,8 +34,6 @@ from optimum.rbln import (
     RBLNLoRAAdapterConfig,
     RBLNMistralForCausalLM,
     RBLNMistralModel,
-    RBLNMixtralForCausalLM,
-    RBLNMixtralForCausalLMConfig,
     RBLNOPTForCausalLM,
     RBLNOPTModel,
     RBLNPegasusForConditionalGeneration,
@@ -60,14 +43,12 @@ from optimum.rbln import (
     RBLNQwen2ForCausalLM,
     RBLNQwen2Model,
     RBLNQwen2MoeForCausalLM,
-    RBLNQwen2MoeForCausalLMConfig,
     RBLNQwen2VLForConditionalGeneration,
     RBLNQwen3_5ForCausalLM,
     RBLNQwen3_5ForConditionalGeneration,
     RBLNQwen3ForCausalLM,
     RBLNQwen3Model,
     RBLNQwen3MoeForCausalLM,
-    RBLNQwen3MoeForCausalLMConfig,
     RBLNQwen3VLForConditionalGeneration,
     RBLNQwen3VLMoeForConditionalGeneration,
     RBLNT5ForConditionalGeneration,
@@ -1313,113 +1294,131 @@ class TestDisallowedLlama_4(DisallowedTestBase.DisallowedTest):
     RBLN_CLASS_KWARGS = {"rbln_config": {"attn_impl": "flash_attn", "kvcache_partition_len": 2048}}
 
 
+# Runs in its own process so the RSS delta is not polluted by whatever the previous case freed.
+_HOST_MEMORY_CASE = """
+import ctypes, gc, glob, inspect, json, os, sys, tempfile, torch
+from safetensors.torch import save_file
+import optimum.rbln
+libc = ctypes.CDLL("libc.so.6")
+def rss():
+    gc.collect(); libc.malloc_trim(0)
+    return sum(int(l.split()[1]) * 1024 for l in open("/proc/self/status") if l.startswith(("RssAnon:", "RssFile:", "RssShmem:")))
+name, kwargs, transpose_experts, wrap = sys.argv[1], json.loads(sys.argv[2]), sys.argv[3] == "1", sys.argv[4] == "1"
+cls = getattr(optimum.rbln, name); hf_cls = cls.get_hf_class(); config_cls = hf_cls.config_class
+if all(isinstance(v, dict) for v in kwargs.values()):
+    config = config_cls(**kwargs)
+else:
+    config = config_cls(**{k: v for k, v in kwargs.items() if k in inspect.signature(config_cls.__init__).parameters})
+with tempfile.TemporaryDirectory() as tmp:
+    src = hf_cls(config).to(torch.bfloat16).eval()
+    state_dict = {k: v.clone() for k, v in src.state_dict().items()}
+    if transpose_experts:  # hub layout of Qwen3-VL-MoE: experts stored as [E, H, 2I] / [E, I, H]
+        save_file({k: (v.transpose(1, 2).contiguous() if k.endswith(("experts.gate_up_proj", "experts.down_proj")) else v.contiguous()) for k, v in state_dict.items()}, f"{tmp}/model.safetensors")
+        src.config.save_pretrained(tmp)
+    else:
+        src.save_pretrained(tmp)
+    del src
+    checkpoint_bytes = sum(os.path.getsize(f) for f in glob.glob(f"{tmp}/*.safetensors"))
+    before = rss()
+    model = cls.get_pytorch_model(tmp, dtype=torch.bfloat16)
+    moe = any(n.endswith("gate_up_proj") for n, _ in model.named_parameters())
+    after_load = rss()
+    if wrap:
+        rbln_config = cls.get_rbln_config_class()(max_seq_len=256, batch_size=1, create_runtimes=False)
+        rbln_config = cls.update_rbln_config(preprocessors=None, model=model, model_config=model.config, rbln_config=rbln_config)
+        wrapped = cls._wrap_model_if_needed(model, rbln_config)
+    after_wrap = rss()
+    # compared last against a stock load (same parameter names): reading the weights faults the mmap pages in
+    # and would inflate the RSS figures
+    reference = dict(hf_cls.from_pretrained(tmp, dtype=torch.bfloat16).named_parameters())
+    def same(n, p):  # some RBLN loaders regroup modules (e.g. OPT fc1/fc2 under mlp), so fall back to matching by value
+        return torch.equal(p, reference[n]) if n in reference else any(torch.equal(p, q) for q in reference.values() if q.shape == p.shape)
+    weights_equal = all(same(n, p) for n, p in model.named_parameters())
+    print("RESULT " + json.dumps({"moe": moe, "weights_equal": weights_equal, "load": (after_load - before) / checkpoint_bytes, "load_wrap": (after_wrap - before) / checkpoint_bytes}))
+"""
+
+
 @unittest.skipUnless(sys.platform == "linux", "reads /proc/self/status")
-class TestMoeHostMemory(unittest.TestCase):
-    # Loading an MoE checkpoint and building the wrapper must not hold more than one copy of the weights:
-    # dev kept up to three (expert copies plus the whole checkpoint still mapped). Ratios are measured against
-    # the safetensors size, with synthetic models large enough that allocator noise is a few percent.
-    MAX_RSS_RATIO = 1.5
-    BASE = {
+class TestHostMemory(unittest.TestCase):
+    # Loading a checkpoint and building the wrapper must not duplicate the weights on the host. Dense weights stay
+    # safetensors mmap views (RSS growth ~0); MoE experts are rebuilt into new memory at load, so one copy (~1x)
+    # is the floor. dev held up to three copies for MoE. Ratios are RSS growth over the checkpoint size, measured
+    # on synthetic ~0.2-0.5 GiB models where allocator noise is a few percent.
+    MAX_RATIO = {"dense": 0.5, "moe": 1.5}
+    DENSE = {
+        "vocab_size": 8192,
+        "hidden_size": 1024,
+        "intermediate_size": 4096,
+        "num_hidden_layers": 8,
+        "num_attention_heads": 16,
+        "num_key_value_heads": 4,
+        "max_position_embeddings": 256,
+        "tie_word_embeddings": False,
+    }
+    MOE = {
         "vocab_size": 1024,
         "hidden_size": 512,
         "intermediate_size": 512,
+        "num_hidden_layers": 8,
         "num_attention_heads": 8,
         "num_key_value_heads": 2,
         "max_position_embeddings": 256,
-        "dtype": torch.bfloat16,
+        "tie_word_embeddings": False,
     }
-
-    @staticmethod
-    def _rss():
-        return sum(
-            int(line.split()[1]) * 1024
-            for line in open("/proc/self/status")
-            if line.startswith(("RssAnon:", "RssFile:", "RssShmem:"))
-        )
-
-    def _check(self, rbln_cls, config_cls, tmp, src_state_dict):
-        checkpoint_bytes = sum(os.path.getsize(f) for f in glob.glob(f"{tmp}/*.safetensors"))
-        gc.collect()
-        before = self._rss()
-        model = rbln_cls.get_pytorch_model(tmp, dtype=torch.bfloat16)
-        for name, p in model.named_parameters():
-            self.assertTrue(torch.equal(p, src_state_dict[name]), name)
-        if config_cls is not None:
-            rbln_config = config_cls(max_seq_len=256, batch_size=1, create_runtimes=False)
-            rbln_config = rbln_cls.update_rbln_config(
-                preprocessors=None, model=model, model_config=model.config, rbln_config=rbln_config
-            )
-            wrapped = rbln_cls._wrap_model_if_needed(model, rbln_config)  # noqa: F841
-        gc.collect()
-        ratio = (self._rss() - before) / checkpoint_bytes
-        self.assertLessEqual(ratio, self.MAX_RSS_RATIO, f"RSS grew {ratio:.2f}x the checkpoint size")
-
-    def test_per_expert_checkpoints(self):
-        moe = {"moe_intermediate_size": 512, "num_experts": 64, "num_experts_per_tok": 4, "decoder_sparse_step": 1}
-        cases = [
-            (
-                Qwen3MoeForCausalLM,
-                RBLNQwen3MoeForCausalLM,
-                RBLNQwen3MoeForCausalLMConfig,
-                Qwen3MoeConfig(**self.BASE, **moe, num_hidden_layers=8),
-            ),
-            (
-                Qwen2MoeForCausalLM,
-                RBLNQwen2MoeForCausalLM,
-                RBLNQwen2MoeForCausalLMConfig,
-                Qwen2MoeConfig(**self.BASE, **moe, shared_expert_intermediate_size=512, num_hidden_layers=4),
-            ),
-            (
-                MixtralForCausalLM,
-                RBLNMixtralForCausalLM,
-                RBLNMixtralForCausalLMConfig,
-                MixtralConfig(**self.BASE, num_local_experts=64, num_experts_per_tok=4, num_hidden_layers=4),
-            ),
-        ]
-        for hf_cls, rbln_cls, config_cls, config in cases:
-            with self.subTest(hf_cls.__name__), tempfile.TemporaryDirectory() as tmp:
-                src = hf_cls(config).to(torch.bfloat16).eval()
-                src.save_pretrained(tmp)  # written back per-expert, like the hub checkpoints
-                state_dict = {k: v.clone() for k, v in src.state_dict().items()}
-                del src
-                self._check(rbln_cls, config_cls, tmp, state_dict)
-
-    def test_fused_checkpoint(self):
-        # Gemma4 checkpoints are natively fused; the experts load as mmap views and only the wrapper copies them.
-        base = {k: v for k, v in self.BASE.items() if k != "intermediate_size"}
-        config = Gemma4TextConfig(
-            **base,
-            intermediate_size=512,
-            head_dim=64,
-            enable_moe_block=True,
-            num_experts=64,
-            top_k_experts=4,
-            moe_intermediate_size=512,
-            num_hidden_layers=4,
-            sliding_window=64,
-            layer_types=["full_attention", "sliding_attention", "full_attention", "full_attention"],
-            vocab_size_per_layer_input=1024,
-            hidden_size_per_layer_input=64,
-        )
-        with tempfile.TemporaryDirectory() as tmp:
-            src = Gemma4ForCausalLM(config).to(torch.bfloat16).eval()
-            src.save_pretrained(tmp)
-            state_dict = {k: v.clone() for k, v in src.state_dict().items()}
-            del src
-            self._check(RBLNGemma4ForCausalLM, RBLNGemma4ForCausalLMConfig, tmp, state_dict)
-
-    def test_qwen3_vl_moe_hub_layout(self):
-        # Hub checkpoints store the experts transposed; transformers transposes them into new memory at load.
-        text = {k: v for k, v in self.BASE.items() if k != "dtype"}
-        text.update(
-            moe_intermediate_size=128,  # 2I and I must differ from hidden_size for Transpose(check_dims)
-            num_hidden_layers=4,
-            num_experts=64,
-            num_experts_per_tok=4,
-            decoder_sparse_step=1,
-            rope_scaling={"rope_type": "default", "mrope_section": [16, 8, 8]},
-        )
-        vision = {
+    SLIDING = {
+        "sliding_window": 64,
+        "layer_types": ["full_attention", "sliding_attention"] * 3 + ["full_attention"] * 2,
+    }
+    GEMMA4 = {"head_dim": 64, "vocab_size_per_layer_input": 1024, "hidden_size_per_layer_input": 64, **SLIDING}
+    CASES = {
+        "RBLNLlamaForCausalLM": DENSE,
+        "RBLNMistralForCausalLM": {**DENSE, "sliding_window": 64},
+        "RBLNQwen2ForCausalLM": DENSE,
+        "RBLNQwen3ForCausalLM": DENSE,
+        "RBLNQwen3_5ForCausalLM": {**DENSE, "layer_types": (["linear_attention"] * 3 + ["full_attention"]) * 2},
+        "RBLNPhiForCausalLM": DENSE,
+        "RBLNOPTForCausalLM": {**DENSE, "ffn_dim": 4096, "word_embed_proj_dim": 1024},
+        "RBLNGemmaForCausalLM": DENSE,
+        "RBLNGemma2ForCausalLM": {**DENSE, "sliding_window": 64},
+        "RBLNGemma3ForCausalLM": {**DENSE, **SLIDING},
+        "RBLNGemma4ForCausalLM": {**DENSE, **GEMMA4},
+        "RBLNQwen3MoeForCausalLM": {
+            **MOE,
+            "moe_intermediate_size": 512,
+            "num_experts": 32,
+            "num_experts_per_tok": 4,
+            "decoder_sparse_step": 1,
+        },
+        "RBLNQwen2MoeForCausalLM": {
+            **MOE,
+            "moe_intermediate_size": 512,
+            "shared_expert_intermediate_size": 512,
+            "num_experts": 32,
+            "num_experts_per_tok": 4,
+            "decoder_sparse_step": 1,
+        },
+        "RBLNMixtralForCausalLM": {**MOE, "num_local_experts": 32, "num_experts_per_tok": 4},
+        "RBLNGemma4ForCausalLM[moe]": {
+            **MOE,
+            **GEMMA4,
+            "enable_moe_block": True,
+            "num_experts": 32,
+            "top_k_experts": 4,
+            "moe_intermediate_size": 512,
+        },
+    }
+    # Qwen3-VL-MoE hub checkpoints store the experts transposed; 2I and I must differ from hidden_size so that
+    # transformers' Transpose(check_dims=True) actually transposes them. Load only (the VLM wrapper needs the visual submodule).
+    VL_MOE = {
+        "text_config": {
+            **MOE,
+            "moe_intermediate_size": 128,
+            "num_experts": 32,
+            "num_experts_per_tok": 4,
+            "decoder_sparse_step": 1,
+            "rope_scaling": {"rope_type": "default", "mrope_section": [16, 8, 8]},
+        },
+        "vision_config": {
             "depth": 1,
             "hidden_size": 32,
             "intermediate_size": 64,
@@ -1429,25 +1428,43 @@ class TestMoeHostMemory(unittest.TestCase):
             "spatial_merge_size": 2,
             "temporal_patch_size": 2,
             "deepstack_visual_indexes": [0],
-        }
-        with tempfile.TemporaryDirectory() as tmp:
-            src = Qwen3VLMoeForConditionalGeneration(Qwen3VLMoeConfig(text_config=text, vision_config=vision))
-            src = src.to(torch.bfloat16).eval()
-            state_dict = {k: v.clone() for k, v in src.state_dict().items()}
-            save_file(
-                {
-                    k: (
-                        v.transpose(1, 2).contiguous()
-                        if k.endswith(("experts.gate_up_proj", "experts.down_proj"))
-                        else v.contiguous()
-                    )
-                    for k, v in state_dict.items()
-                },
-                f"{tmp}/model.safetensors",
+        },
+    }
+
+    def _run(self, name, kwargs, transpose_experts=False, wrap=True):
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                _HOST_MEMORY_CASE,
+                name,
+                json.dumps(kwargs),
+                str(int(transpose_experts)),
+                str(int(wrap)),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+        lines = [line for line in proc.stdout.splitlines() if line.startswith("RESULT ")]
+        self.assertTrue(lines, f"{name} case failed:\n{proc.stderr[-2000:]}")
+        result = json.loads(lines[-1][len("RESULT ") :])
+        self.assertTrue(result["weights_equal"], f"{name}: loaded weights differ from the checkpoint")
+        limit = self.MAX_RATIO["moe" if result["moe"] else "dense"]
+        for stage in ("load", "load_wrap") if wrap else ("load",):
+            self.assertLessEqual(
+                result[stage],
+                limit,
+                f"{name}: RSS grew {result[stage]:.2f}x the checkpoint at {stage} (limit {limit}x)",
             )
-            src.config.save_pretrained(tmp)
-            del src
-            self._check(RBLNQwen3VLMoeForConditionalGeneration, None, tmp, state_dict)
+
+    def test_decoder_only_families(self):
+        for name, kwargs in self.CASES.items():
+            with self.subTest(name):
+                self._run(name.split("[")[0], kwargs)
+
+    def test_qwen3_vl_moe_hub_layout(self):
+        self._run("RBLNQwen3VLMoeForConditionalGeneration", self.VL_MOE, transpose_experts=True, wrap=False)
 
 
 if __name__ == "__main__":
