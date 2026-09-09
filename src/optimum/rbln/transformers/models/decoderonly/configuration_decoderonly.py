@@ -165,7 +165,7 @@ class RBLNDecoderOnlyModelConfig(RBLNModelConfig):
             - When using `"flash_attn"`, `max_seq_len` must be a multiple of `kvcache_partition_len`
                 and at least twice its value (`max_seq_len >= 2 * kvcache_partition_len`).
             - If `attn_impl` is `"flash_attn"` and `kvcache_partition_len` is `None`, it defaults to
-                16,384.
+                the target NPU's default — 16,384 on ATOM (`RBLN-CA`) and 8,192 on REBEL (`RBLN-CR`).
 
 
         KV Cache Number of Blocks:

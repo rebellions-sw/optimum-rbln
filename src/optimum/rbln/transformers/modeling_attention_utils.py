@@ -17,7 +17,6 @@ if TYPE_CHECKING:
 logger = get_logger()
 
 
-DEFAULT_FLASH_ATTN_PARTITION_LENGTH = 16_384
 MAX_SLIDING_WINDOW_SIZE = 32_768
 
 
@@ -34,6 +33,7 @@ class AttentionLimits:
     max_eager_seq_len: int
     min_flash_partition_len: int
     max_flash_partition_len: int
+    default_flash_partition_len: int
 
     @property
     def min_flash_max_seq_len(self) -> int:
@@ -46,6 +46,7 @@ ATOM_ATTENTION_LIMITS = AttentionLimits(
     max_eager_seq_len=32_768,
     min_flash_partition_len=1_024,
     max_flash_partition_len=32_768,
+    default_flash_partition_len=16_384,
 )
 
 REBEL_ATTENTION_LIMITS = AttentionLimits(
@@ -53,6 +54,7 @@ REBEL_ATTENTION_LIMITS = AttentionLimits(
     max_eager_seq_len=16_384,
     min_flash_partition_len=1_024,
     max_flash_partition_len=16_384,
+    default_flash_partition_len=8_192,
 )
 
 
@@ -98,7 +100,7 @@ def set_default_values(
             )
 
     if kvcache_partition_len is None and attn_impl == "flash_attn":
-        kvcache_partition_len = DEFAULT_FLASH_ATTN_PARTITION_LENGTH
+        kvcache_partition_len = get_attention_limits(npu).default_flash_partition_len
 
     if kvcache_block_size is None:
         if attn_impl == "eager":

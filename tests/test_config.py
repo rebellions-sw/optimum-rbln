@@ -455,6 +455,38 @@ class TestAttentionLimits:
         with pytest.raises(ValueError, match="out of the"):
             self._validate("flash_attn", 4096, kvcache_partition_len=512, npu=npu)
 
+    @pytest.mark.parametrize("npu,expected_partition_len", [("RBLN-CA22", 16384), ("RBLN-CR13", 8192)])
+    def test_flash_partition_default_is_per_family(self, npu, expected_partition_len):
+        from optimum.rbln.transformers.modeling_attention_utils import set_default_values
+
+        attn_impl, partition_len, block_size, _ = set_default_values(
+            attn_impl="flash_attn", max_seq_len=65536, npu=npu
+        )
+        assert (attn_impl, partition_len, block_size) == ("flash_attn", expected_partition_len, expected_partition_len)
+
+    def test_explicit_partition_len_wins_over_family_default(self):
+        from optimum.rbln.transformers.modeling_attention_utils import set_default_values
+
+        # An explicit `kvcache_partition_len` also promotes eager -> flash_attn; the value must survive that.
+        attn_impl, partition_len, _, _ = set_default_values(
+            kvcache_partition_len=4096, max_seq_len=65536, npu="RBLN-CR13"
+        )
+        assert (attn_impl, partition_len) == ("flash_attn", 4096)
+
+    @pytest.mark.parametrize("npu", ["RBLN-CA22", "RBLN-CR13"])
+    def test_family_default_satisfies_its_own_limits(self, npu):
+        """Each family's default partition must pass the validator it is paired with."""
+        from optimum.rbln.transformers.modeling_attention_utils import get_attention_limits, set_default_values
+
+        limits = get_attention_limits(npu)
+        assert limits.min_flash_partition_len <= limits.default_flash_partition_len <= limits.max_flash_partition_len
+
+        _, partition_len, block_size, _ = set_default_values(
+            attn_impl="flash_attn", max_seq_len=2 * limits.default_flash_partition_len, npu=npu
+        )
+        assert block_size == partition_len
+        self._validate("flash_attn", 2 * partition_len, kvcache_partition_len=partition_len, npu=npu)
+
     def test_falls_back_to_attached_npu(self, monkeypatch):
         monkeypatch.setattr(rebel, "npu_is_available", lambda *args: True)
         monkeypatch.setattr(rebel, "get_npu_name", lambda *args: "RBLN-CR13")
