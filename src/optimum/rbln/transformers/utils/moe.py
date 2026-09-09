@@ -42,6 +42,18 @@ def compute_masked_routing_weight_topk_first(router_logits: Tensor, top_k: int) 
     return masked  # [E, T]
 
 
+def split_fused_experts(experts: nn.Module) -> tuple[Tensor, Tensor, Tensor]:
+    # HF packs gate|up along dim 1 of gate_up_proj [E, 2I, H]; custom_moe_glu takes them separately, so the
+    # halves are copied to be contiguous while down_proj [E, H, I] is shared. The fused tensor is released
+    # afterwards: the HF experts module is not run once wrapped, and keeping it would double host memory.
+    gate_up = experts.gate_up_proj.detach()
+    intermediate_dim = gate_up.shape[1] // 2
+    gate = gate_up[:, :intermediate_dim, :].contiguous()
+    up = gate_up[:, intermediate_dim:, :].contiguous()
+    experts.gate_up_proj = None
+    return gate, up, experts.down_proj.detach()
+
+
 def release_checkpoint_mmap_(model: nn.Module) -> nn.Module:
     # transformers leaves whatever it did not convert as a view of the safetensors mmap, which keeps the whole
     # checkpoint resident. Copy everything out except the fused experts gate_up_proj: the wrapper splits it into
