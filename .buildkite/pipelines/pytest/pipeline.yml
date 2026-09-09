@@ -1,0 +1,109 @@
+# optimum-rbln PR pytest suites, uploaded by .buildkite/pr.yml.
+# Mirrors the GHA matrix in .github/workflows/rbln_optimum_pytest.yaml (test_level=default).
+
+notify:
+  - github_commit_status:
+      context: "[OB] Optimum-RBLN pytest"
+
+env:
+  UV_CACHE_DIR: "/mnt/uv_cache"
+  UV_LINK_MODE: "symlink"
+  UV_INDEX_STRATEGY: "unsafe-best-match"
+  OPTIMUM_RBLN_TEST_LEVEL: "default"
+
+_secrets: &secrets
+  UV_INDEX_REBELLIONS_USERNAME: REBEL_SW_DEV_USERNAME
+  UV_INDEX_REBELLIONS_PASSWORD: REBEL_SW_DEV_PASSWORD
+  HF_TOKEN: HF_TOKEN
+  HF_HOME: HF_HOME
+
+_sync: &sync |
+  echo '--- :package: uv sync'
+  uv sync --locked --python 3.12 --group tests
+  bash .buildkite/scripts/install-rebel-compiler.sh
+
+_cpu: &cpu
+  cpu:
+    requests: "4"
+    limits: "4"
+  memory:
+    requests: "32Gi"
+    limits: "32Gi"
+
+_npu: &npu
+  npu:
+    count: 1
+    product: "RBLN-CA25"
+
+steps:
+  - label: ":pytest: config"
+    image: "${DEVTOOLS_DOCKER_IMAGE}"
+    resources: *cpu
+    secrets: *secrets
+    timeout_in_minutes: 60
+    command:
+      - *sync
+      - "bash .buildkite/scripts/run-suite.sh config"
+
+  - label: ":pytest: cli-basic"
+    image: "${DEVTOOLS_DOCKER_IMAGE}"
+    resources: *cpu
+    secrets: *secrets
+    timeout_in_minutes: 60
+    command:
+      - *sync
+      - "bash .buildkite/scripts/run-suite.sh cli-basic"
+
+  - label: ":pytest: transformers"
+    image: "${DEVTOOLS_DOCKER_IMAGE}"
+    resources: *npu
+    secrets: *secrets
+    timeout_in_minutes: 120
+    command:
+      - *sync
+      - "bash .buildkite/scripts/run-suite.sh transformers"
+
+  - label: ":pytest: diffusers"
+    image: "${DEVTOOLS_DOCKER_IMAGE}"
+    resources: *npu
+    secrets: *secrets
+    timeout_in_minutes: 120
+    command:
+      - *sync
+      - "bash .buildkite/scripts/run-suite.sh diffusers"
+
+  - label: ":pytest: llm 1/4"
+    image: "${DEVTOOLS_DOCKER_IMAGE}"
+    resources: *npu
+    secrets: *secrets
+    timeout_in_minutes: 120
+    command:
+      - *sync
+      - "bash .buildkite/scripts/run-suite.sh llm 1"
+
+  - label: ":pytest: llm 2/4"
+    image: "${DEVTOOLS_DOCKER_IMAGE}"
+    resources: *npu
+    secrets: *secrets
+    timeout_in_minutes: 120
+    command:
+      - *sync
+      - "bash .buildkite/scripts/run-suite.sh llm 2"
+
+  - label: ":pytest: llm 3/4"
+    image: "${DEVTOOLS_DOCKER_IMAGE}"
+    resources: *npu
+    secrets: *secrets
+    timeout_in_minutes: 120
+    command:
+      - *sync
+      - "bash .buildkite/scripts/run-suite.sh llm 3"
+
+  - label: ":pytest: llm 4/4"
+    image: "${DEVTOOLS_DOCKER_IMAGE}"
+    resources: *npu
+    secrets: *secrets
+    timeout_in_minutes: 120
+    command:
+      - *sync
+      - "bash .buildkite/scripts/run-suite.sh llm 4"

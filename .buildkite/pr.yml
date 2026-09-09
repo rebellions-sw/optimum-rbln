@@ -1,0 +1,21 @@
+# Entry pipeline for PR builds. Gates run first; the pytest pipeline is uploaded
+# only after they pass, with --git-diff-base so if_changed can be used later.
+steps:
+  - label: ":closed_lock_with_key: team-member gate"
+    image: "${DEVTOOLS_DOCKER_IMAGE}"
+    secrets:
+      - GIT_PAT
+    command:
+      - "bash .buildkite/scripts/gate-team-member.sh"
+
+  - wait: ~
+
+  - label: ":sparkles: upload pytest"
+    checkout:
+      sparse:
+        paths:
+          - .buildkite
+    command: |
+      TARGET_BRANCH=$${BUILDKITE_PULL_REQUEST_BASE_BRANCH:-dev}
+      git fetch origin $$TARGET_BRANCH
+      buildkite-agent pipeline upload .buildkite/pipelines/pytest/pipeline.yml --git-diff-base origin/$$TARGET_BRANCH
