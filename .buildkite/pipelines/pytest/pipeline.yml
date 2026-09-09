@@ -17,28 +17,17 @@ _secrets: &secrets
   HF_TOKEN: HF_TOKEN
   HF_HOME: HF_HOME
 
-# --reinstall-package: the editable wheel may already sit in the shared uv cache,
-# built by another pod. Rebuilding here runs the hatch-vcs hook that writes the
-# gitignored src/optimum/rbln/__version__.py into this checkout.
+# Pods share UV_CACHE_DIR, so steps building the same commit at the same time can
+# end up reusing one pod's editable build. Only that pod then has the gitignored
+# src/optimum/rbln/__version__.py the hatch-vcs hook writes; the other pods write
+# it here from the installed metadata (the code only reads __version__).
 _sync: &sync |
   echo '--- :package: uv sync'
   uv sync --locked --python 3.12 --group tests --reinstall-package optimum-rbln
-  uv --version
   if [ ! -f src/optimum/rbln/__version__.py ]; then
-    echo "hatch-vcs did not write src/optimum/rbln/__version__.py into this checkout"
-    find /workspace /root /tmp -name __version__.py -path '*optimum/rbln*' 2>/dev/null | head
     uv run --no-sync python -c "import importlib.metadata as m, pathlib; pathlib.Path('src/optimum/rbln/__version__.py').write_text('__version__ = version = %r\n' % m.version('optimum-rbln'))"
-    cat src/optimum/rbln/__version__.py
   fi
   bash .buildkite/scripts/install-rebel-compiler.sh
-
-_cpu: &cpu
-  cpu:
-    requests: "4"
-    limits: "4"
-  memory:
-    requests: "32Gi"
-    limits: "32Gi"
 
 _npu: &npu
   npu:
@@ -48,7 +37,7 @@ _npu: &npu
 steps:
   - label: ":pytest: config"
     image: "${DEVTOOLS_DOCKER_IMAGE}"
-    resources: *cpu
+    resources: *npu
     secrets: *secrets
     timeout_in_minutes: 60
     command:
@@ -57,7 +46,7 @@ steps:
 
   - label: ":pytest: cli-basic"
     image: "${DEVTOOLS_DOCKER_IMAGE}"
-    resources: *cpu
+    resources: *npu
     secrets: *secrets
     timeout_in_minutes: 60
     command:
