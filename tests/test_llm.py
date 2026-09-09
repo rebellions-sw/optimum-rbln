@@ -1358,18 +1358,20 @@ class TestReleaseCheckpointMmap(unittest.TestCase):
     ]
 
     @staticmethod
-    def _checkpoint_ranges():
+    def _checkpoint_ranges(directory):
+        # Other tests in the same process keep their own checkpoints mapped, so look only at ours.
+        directory = os.path.realpath(directory)
         ranges = []
         for line in open("/proc/self/maps"):
             parts = line.split()
-            if len(parts) >= 6 and (parts[5].endswith(".safetensors") or "/blobs/" in parts[5]):
+            if len(parts) >= 6 and parts[5].startswith(directory + "/"):
                 start, end = parts[0].split("-")
                 ranges.append((int(start, 16), int(end, 16)))
         return ranges
 
     @classmethod
-    def _file_backed(cls, model):
-        ranges = cls._checkpoint_ranges()
+    def _file_backed(cls, model, directory):
+        ranges = cls._checkpoint_ranges(directory)
         return [
             name
             for name, t in list(model.named_parameters()) + list(model.named_buffers())
@@ -1390,8 +1392,8 @@ class TestReleaseCheckpointMmap(unittest.TestCase):
                 self.assertIn(expert_key, self._safetensors_keys(tmp))
 
                 model = rbln_cls.get_pytorch_model(tmp)
-                self.assertEqual(self._file_backed(model), [])
-                self.assertEqual(self._checkpoint_ranges(), [])
+                self.assertEqual(self._file_backed(model, tmp), [])
+                self.assertEqual(self._checkpoint_ranges(tmp), [])
                 for (name, p), (_, q) in zip(model.named_parameters(), src.named_parameters(), strict=True):
                     self.assertTrue(torch.equal(p, q), name)
 
@@ -1426,14 +1428,14 @@ class TestReleaseCheckpointMmap(unittest.TestCase):
                 self.assertTrue(any(k.endswith("experts.gate_up_proj") for k in self._safetensors_keys(tmp)))
 
                 model = rbln_cls.get_pytorch_model(tmp)
-                remaining = self._file_backed(model)
+                remaining = self._file_backed(model, tmp)
                 self.assertTrue(
                     remaining and all(name.endswith("experts.gate_up_proj") for name in remaining), remaining
                 )
                 for module in model.modules():
                     if module.__class__.__name__ == experts_cls:
                         module.gate_up_proj = None
-                self.assertEqual(self._checkpoint_ranges(), [])
+                self.assertEqual(self._checkpoint_ranges(tmp), [])
 
     def test_qwen3_vl_moe_hub_layout_is_unmapped(self):
         # Hub checkpoints store the experts transposed ([E, H, 2I] / [E, I, H]); transformers transposes them into
@@ -1472,8 +1474,8 @@ class TestReleaseCheckpointMmap(unittest.TestCase):
             src.config.save_pretrained(tmp)
 
             model = RBLNQwen3VLMoeForConditionalGeneration.get_pytorch_model(tmp)
-            self.assertEqual(self._file_backed(model), [])
-            self.assertEqual(self._checkpoint_ranges(), [])
+            self.assertEqual(self._file_backed(model, tmp), [])
+            self.assertEqual(self._checkpoint_ranges(tmp), [])
             for (name, p), (_, q) in zip(model.named_parameters(), src.named_parameters(), strict=True):
                 self.assertTrue(torch.equal(p, q), name)
 
