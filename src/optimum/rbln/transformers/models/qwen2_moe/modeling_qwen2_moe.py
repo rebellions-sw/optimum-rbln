@@ -13,11 +13,11 @@
 # limitations under the License.
 
 from ...models.decoderonly import RBLNDecoderOnlyModelForCausalLM
-from ...utils.moe import release_checkpoint_mmap_
+from ...utils.moe import RBLNMoeLoadMixin
 from .qwen2_moe_architecture import Qwen2MoeWrapper
 
 
-class RBLNQwen2MoeForCausalLM(RBLNDecoderOnlyModelForCausalLM):
+class RBLNQwen2MoeForCausalLM(RBLNMoeLoadMixin, RBLNDecoderOnlyModelForCausalLM):
     """
     The Qwen2MoE is a Mixture-of-Experts (MoE) variant of Qwen2, available as a base model and an aligned chat model.
     This model inherits from [`RBLNDecoderOnlyModelForCausalLM`]. Check the superclass documentation for the generic methods the library implements for all its models.
@@ -67,7 +67,3 @@ class RBLNQwen2MoeForCausalLM(RBLNDecoderOnlyModelForCausalLM):
     """
 
     _decoder_wrapper_cls = Qwen2MoeWrapper
-
-    @classmethod
-    def get_pytorch_model(cls, *args, **kwargs):
-        return release_checkpoint_mmap_(super().get_pytorch_model(*args, **kwargs))
