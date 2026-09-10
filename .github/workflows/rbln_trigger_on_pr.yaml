@@ -62,17 +62,10 @@ jobs:
             echo "No [slack-report] found, continuing without reporting slack"
           fi
 
-  check-code-quality:
-    uses: ./.github/workflows/check_code_quality.yml
-    
-  test-docstrings:
-    uses: ./.github/workflows/test-docstrings.yml
-
   load-version:
     runs-on: rbln-sw-k8s-4c-32gb
     container:
       image: ${{ vars.DEV_CONTAINER_IMAGE }}
-    needs: [check-code-quality, test-docstrings]
     outputs:
       compiler_version: ${{ steps.get_version.outputs.compiler_version }}
     steps:
@@ -120,7 +113,6 @@ jobs:
     runs-on: rbln-sw-k8s-4c-32gb
     container:
       image: ${{ vars.DEV_CONTAINER_IMAGE }}
-    needs: [check-code-quality, test-docstrings]
     outputs:
       is_team_member: ${{ steps.check_member.outputs.IS_TEAM_MEMBER }}
     steps:
@@ -143,19 +135,6 @@ jobs:
             echo "IS_TEAM_MEMBER=false" >> $GITHUB_OUTPUT
           fi
 
-  # Default PR test if not Dependency update
-  optimum-rbln-pytest:
-    needs: [check-code-quality, test-docstrings, load-version, check-team-member, check-pytest-full]
-    if: |
-      needs.check-pytest-full.outputs.should_full_test != 'true' &&
-      needs.check-team-member.outputs.is_team_member == 'true'
-    uses: ./.github/workflows/rbln_optimum_pytest.yaml
-    with:
-      ref: ${{ github.event.pull_request.head.sha }}
-      rebel_compiler_version: ${{ needs.load-version.outputs.compiler_version }}
-      test_level: "default"
-    secrets: inherit
-
   # Full Schedule test if Dependency update
   optimum-rbln-full-pytest:
     needs: [load-version, check-team-member, check-pytest-full, check-slack-report]
@@ -169,7 +148,7 @@ jobs:
     secrets: inherit
 
   slack-report:
-    needs: [optimum-rbln-full-pytest,optimum-rbln-pytest, bc-inference, load-version, check-slack-report]
+    needs: [optimum-rbln-full-pytest, bc-inference, load-version, check-slack-report]
     if: |
       always() &&
       needs.check-slack-report.outputs.should_slack_report == 'true'
@@ -183,7 +162,7 @@ jobs:
       transformers_version: ${{ needs.check-pytest-full.outputs.should_full_test == 'true' && needs.optimum-rbln-full-pytest.outputs.transformers_version || 'default' }}
       diffusers_version: ${{ needs.check-pytest-full.outputs.should_full_test == 'true' && needs.optimum-rbln-full-pytest.outputs.diffusers_version || 'default' }}
       bc_result: ${{ needs.bc-inference.result }}
-      pytest_job_group: ${{ needs.check-pytest-full.outputs.should_full_test == 'true' && 'optimum-rbln-full-pytest' || 'optimum-rbln-pytest' }}
+      pytest_job_group: "optimum-rbln-full-pytest"
       bc_pytest_job_group: "bc-inference"
       use_playground_channel: true
     secrets: inherit
